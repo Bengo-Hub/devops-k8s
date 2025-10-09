@@ -1,0 +1,72 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: erp-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: erp.rules
+    interval: 30s
+    rules:
+    # API Health
+    - alert: ERPAPIDown
+      expr: up{job="erp-api"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "ERP API is down"
+        description: "ERP API has been down for more than 2 minutes"
+
+    # UI Health
+    - alert: ERPUIDown
+      expr: up{job="erp-ui"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "ERP UI is down"
+        description: "ERP UI has been down for more than 2 minutes"
+
+    # High CPU
+    - alert: HighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{namespace="erp"}[5m]) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage in ERP namespace"
+        description: "CPU usage is above 80% for 5 minutes"
+
+    # High Memory
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{namespace="erp"} / container_spec_memory_limit_bytes{namespace="erp"} > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage in ERP namespace"
+        description: "Memory usage is above 90% for 5 minutes"
+
+    # Pod Restarts
+    - alert: PodRestartingTooOften
+      expr: rate(kube_pod_container_status_restarts_total{namespace="erp"}[15m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod restarting too often"
+        description: "Pod {{ $labels.pod }} is restarting frequently"
+
+    # HPA at Max
+    - alert: HPAMaxedOut
+      expr: kube_horizontalpodautoscaler_status_current_replicas{namespace="erp"} == kube_horizontalpodautoscaler_spec_max_replicas{namespace="erp"}
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "HPA has reached maximum replicas"
+        description: "HPA {{ $labels.horizontalpodautoscaler }} is at max capacity"
+

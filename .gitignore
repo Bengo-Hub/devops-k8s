@@ -1,0 +1,33 @@
+# Kubernetes secrets
+**/secrets/
+**/*-secret.yaml
+**/kube-config
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Helm
+charts/**/charts/
+charts/**/tmpcharts/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
