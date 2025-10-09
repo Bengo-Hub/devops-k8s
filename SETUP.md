@@ -10,26 +10,92 @@ Prerequisites
 - Helm 3 installed locally
 - GitHub organization secrets configured
 
-Step 1: Initial VPS Setup
+Step 1: Choose Kubernetes Distribution
+---------------------------------------
+
+**Read First:** `docs/k8s-comparison.md` to decide between k3s and kubeadm.
+
+**Quick Recommendation:**
+- **4-8GB VPS:** Use k3s (recommended for most users)
+- **16GB+ VPS or multi-node:** Use kubeadm
+
+Step 2: Initial VPS Setup
 -------------------------
 
-Follow `docs/contabo-setup.md` for complete VPS preparation including:
+### Option A: k3s (Recommended for Contabo 4-8GB VPS)
+
+Follow `docs/contabo-setup.md` for complete setup including:
 - SSH key configuration
 - Docker installation
-- k3s (Kubernetes) installation
+- k3s (lightweight Kubernetes) installation
 - NGINX Ingress Controller
 - Basic firewall setup
 
-Quick command reference:
+**Pros:** Lower resource usage, faster setup, simpler operations
+**Best for:** Single-node VPS deployments
+
+### Option B: kubeadm (For larger VPS or multi-node)
+
+Follow `docs/contabo-setup-kubeadm.md` for complete setup including:
+- SSH key configuration
+- containerd installation
+- Full Kubernetes with kubeadm
+- Calico or Flannel CNI
+- NGINX Ingress Controller
+
+**Pros:** Full upstream K8s, better for multi-node, more community support
+**Best for:** Enterprise production, multi-node clusters
+
+Quick command reference (k3s):
 ```bash
 # SSH into VPS
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 
-# Run initial setup (from contabo-setup.md)
-# Update, install Docker, install k3s, etc.
+# Install k3s
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 ```
 
-Step 2: Install Core Infrastructure
+Quick command reference (kubeadm):
+```bash
+# SSH into VPS
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
+
+# Follow full guide in docs/contabo-setup-kubeadm.md
+# Requires containerd, kubeadm, kubelet, kubectl installation
+```
+
+Step 3: Install Databases
+-------------------------
+
+The ERP system requires PostgreSQL and Redis. Choose your deployment strategy:
+
+### Option A: In-Cluster Databases (Recommended) ⭐
+
+```bash
+# Install PostgreSQL + Redis into cluster
+./scripts/install-databases.sh
+
+# This will output connection credentials
+# Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml with the passwords
+# Apply the secret
+kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+```
+
+**Pros:** Auto-scaling, health checks, K8s-managed persistence
+**See:** `docs/database-setup.md` for detailed guide
+
+### Option B: External VPS Databases
+
+```bash
+# SSH into VPS and install manually
+# See docs/database-setup.md Option 2
+
+# Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+# with external database connection strings
+kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+```
+
+Step 4: Install Core Infrastructure
 -----------------------------------
 
 ### cert-manager (TLS Certificates)
@@ -64,7 +130,7 @@ kubectl apply -f manifests/monitoring/erp-alerts.yaml
 kubectl apply -f manifests/monitoring/alertmanager-config.yaml
 ```
 
-Step 3: Configure Argo CD Repository
+Step 5: Configure Argo CD Repository
 ------------------------------------
 
 ```bash
@@ -80,7 +146,7 @@ argocd repo add git@github.com:codevertex/devops-k8s.git \
   --ssh-private-key-path ~/.ssh/argocd_deploy_key
 ```
 
-Step 4: Deploy Applications
+Step 6: Deploy Applications
 ---------------------------
 
 ### Deploy ERP API
@@ -106,7 +172,7 @@ kubectl get pods -n erp
 kubectl apply -f apps/root-app.yaml
 ```
 
-Step 5: Configure DNS
+Step 7: Configure DNS
 ---------------------
 
 Point these domains to your VPS IP:
@@ -117,7 +183,7 @@ Point these domains to your VPS IP:
 
 cert-manager will automatically provision TLS certificates.
 
-Step 6: Verify Deployment
+Step 8: Verify Deployment
 -------------------------
 
 ```bash
@@ -137,7 +203,7 @@ curl https://erpapi.masterspace.co.ke/api/v1/core/health/
 curl https://erp.masterspace.co.ke/health
 ```
 
-Step 7: Configure Monitoring
+Step 9: Configure Monitoring
 ----------------------------
 
 ### Access Grafana
@@ -165,7 +231,7 @@ Edit `manifests/monitoring/alertmanager-config.yaml` and update:
 - `auth_password` with Gmail app password
 - Apply: `kubectl apply -f manifests/monitoring/alertmanager-config.yaml`
 
-Step 8: GitHub Actions Setup
+Step 10: GitHub Actions Setup
 ----------------------------
 
 Ensure these organization secrets are set:

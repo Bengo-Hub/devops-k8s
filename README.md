@@ -11,7 +11,9 @@ Quick Links
 -----------
 - **Getting Started**
   - docs overview: docs/README.md
-  - Contabo VPS setup (SSH, Docker, K8s): docs/contabo-setup.md
+  - **K8s choice (k3s vs kubeadm):** docs/k8s-comparison.md ⭐
+  - Contabo VPS with k3s (recommended): docs/contabo-setup.md
+  - Contabo VPS with kubeadm (alternative): docs/contabo-setup-kubeadm.md
   - hosting environments and providers: docs/hosting.md
   - onboarding a repo: docs/onboarding.md
 
@@ -22,6 +24,7 @@ Quick Links
   - environments and secrets: docs/env-vars.md
 
 - **Infrastructure**
+  - **database setup (PostgreSQL + Redis):** docs/database-setup.md
   - certificates and domains: docs/certificates.md
   - API gateway and ingress: docs/domains-gateway.md
   - image registry and SBOM: docs/image-registry.md

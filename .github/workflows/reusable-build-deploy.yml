@@ -40,6 +40,21 @@ on:
         required: false
         type: string
         default: default
+      # Database automation (optional)
+      setup_databases:
+        required: false
+        type: boolean
+        default: false
+      db_types:
+        description: "Comma-separated list of databases to setup (postgres,redis,mongo,mysql)"
+        required: false
+        type: string
+        default: "postgres,redis"
+      env_secret_name:
+        description: "Kubernetes Secret name to create/update with DB URLs"
+        required: false
+        type: string
+        default: "app-env"
       provider:
         required: false
         type: string
@@ -84,6 +99,15 @@ on:
       SSH_PRIVATE_KEY:
         required: false
       DOCKER_SSH_KEY:
+        required: false
+      # Optional DB credentials (auto-generated if not provided)
+      POSTGRES_PASSWORD:
+        required: false
+      REDIS_PASSWORD:
+        required: false
+      MONGO_PASSWORD:
+        required: false
+      MYSQL_PASSWORD:
         required: false
       CONTABO_CLIENT_ID:
         required: false
@@ -160,6 +184,72 @@ jobs:
       - name: Push image
         if: ${{ inputs.deploy }}
         run: docker push "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+
+      - name: Setup databases (optional)
+        if: ${{ inputs.deploy && inputs.setup_databases }}
+        env:
+          NS: ${{ inputs.namespace }}
+          DB_TYPES: ${{ inputs.db_types }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        run: |
+          set -e
+          echo "Setting up databases in namespace ${NS}: ${DB_TYPES}"
+          kubectl get ns "${NS}" >/dev/null 2>&1 || kubectl create ns "${NS}"
+          # Tools
+          sudo apt-get update -y && sudo apt-get install -y jq curl
+          # Generate passwords if not provided
+          gen_pwd() { openssl rand -hex 16; }
+          : "${POSTGRES_PASSWORD:=$(gen_pwd)}"; : "${REDIS_PASSWORD:=$(gen_pwd)}"; : "${MONGO_PASSWORD:=$(gen_pwd)}"; : "${MYSQL_PASSWORD:=$(gen_pwd)}"
+          echo "::group::Install Helm repos"
+          helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
+          helm repo update >/dev/null 2>&1 || true
+          echo "::endgroup::"
+          # Parse db types
+          SAVEIFS=$IFS; IFS=','; set -f; types=($DB_TYPES); IFS=$SAVEIFS; set +f
+          for db in "${types[@]}"; do
+            db=$(echo "$db" | xargs)
+            if [ "$db" = "postgres" ]; then
+              echo "Installing PostgreSQL..."
+              helm upgrade --install postgresql bitnami/postgresql -n "$NS" \
+                --set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD" \
+                --set global.postgresql.auth.database="appdb" \
+                --wait
+              export POSTGRES_URL="postgresql://postgres:${POSTGRES_PASSWORD}@postgresql.${NS}.svc.cluster.local:5432/appdb"
+            elif [ "$db" = "redis" ]; then
+              echo "Installing Redis..."
+              helm upgrade --install redis bitnami/redis -n "$NS" \
+                --set global.redis.password="$REDIS_PASSWORD" \
+                --wait
+              export REDIS_URL="redis://:${REDIS_PASSWORD}@redis-master.${NS}.svc.cluster.local:6379/0"
+            elif [ "$db" = "mongo" ] || [ "$db" = "mongodb" ]; then
+              echo "Installing MongoDB..."
+              helm upgrade --install mongodb bitnami/mongodb -n "$NS" \
+                --set auth.rootPassword="$MONGO_PASSWORD" \
+                --wait
+              export MONGO_URL="mongodb://root:${MONGO_PASSWORD}@mongodb.${NS}.svc.cluster.local:27017/?authSource=admin"
+            elif [ "$db" = "mysql" ]; then
+              echo "Installing MySQL..."
+              helm upgrade --install mysql bitnami/mysql -n "$NS" \
+                --set auth.rootPassword="$MYSQL_PASSWORD" \
+                --wait
+              export MYSQL_URL="mysql://root:${MYSQL_PASSWORD}@mysql.${NS}.svc.cluster.local:3306/appdb"
+            fi
+          done
+          echo "Creating/updating env secret ${NS}/${{ inputs.env_secret_name }}"
+          # Build literals dynamically
+          LITS=""
+          [ -n "$POSTGRES_URL" ] && LITS="$LITS --from-literal=DATABASE_URL=$POSTGRES_URL"
+          [ -n "$REDIS_URL" ] && LITS="$LITS --from-literal=REDIS_URL=$REDIS_URL --from-literal=CELERY_BROKER_URL=$REDIS_URL --from-literal=CELERY_RESULT_BACKEND=$REDIS_URL"
+          [ -n "$MONGO_URL" ] && LITS="$LITS --from-literal=MONGO_URL=$MONGO_URL"
+          [ -n "$MYSQL_URL" ] && LITS="$LITS --from-literal=MYSQL_URL=$MYSQL_URL"
+          if [ -n "$LITS" ]; then
+            kubectl -n "$NS" create secret generic "${{ inputs.env_secret_name }}" $LITS --dry-run=client -o yaml | kubectl apply -f -
+          else
+            echo "No DB URLs were generated; skipping secret creation"
+          fi
 
       - name: Contabo API bootstrap (ensure instance ready)
         if: ${{ inputs.deploy && inputs.provider == 'contabo' && inputs.contabo_api }}
