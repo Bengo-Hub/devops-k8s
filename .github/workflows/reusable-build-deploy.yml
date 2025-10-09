@@ -124,6 +124,10 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      REG_USER: ${{ secrets.REGISTRY_USERNAME }}
+      REG_PASS: ${{ secrets.REGISTRY_PASSWORD }}
+      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -144,12 +148,12 @@ jobs:
           fi
 
       - name: Log in to registry (optional)
-        if: ${{ secrets.REGISTRY_USERNAME != '' && secrets.REGISTRY_PASSWORD != '' }}
+        if: ${{ env.REG_USER != '' && env.REG_PASS != '' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ inputs.registry_server }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
+          username: ${{ env.REG_USER }}
+          password: ${{ env.REG_PASS }}
 
       - name: Derive short SHA
         id: vars
@@ -294,9 +298,7 @@ jobs:
           git push
 
       - name: Apply kube secrets (optional)
-        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
-        env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+        if: ${{ inputs.deploy && env.KUBE_CONFIG_B64 != '' }}
         run: |
           mkdir -p ~/.kube
           echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
@@ -306,9 +308,8 @@ jobs:
           fi
 
       - name: Ensure default JWT secret (when KUBE_CONFIG provided)
-        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        if: ${{ inputs.deploy && env.KUBE_CONFIG_B64 != '' }}
         env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
           NS: ${{ inputs.namespace }}
           SECRET_NAME: ${{ inputs.env_secret_name }}
         run: |
