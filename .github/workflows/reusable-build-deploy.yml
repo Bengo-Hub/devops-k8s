@@ -305,6 +305,27 @@ jobs:
             kubectl apply -f kubeSecrets/devENV.yaml || true
           fi
 
+      - name: Ensure default JWT secret (when KUBE_CONFIG provided)
+        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+          NS: ${{ inputs.namespace }}
+          SECRET_NAME: ${{ inputs.env_secret_name }}
+        run: |
+          set -e
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
+          JWT=$(openssl rand -hex 32)
+          if kubectl -n "$NS" get secret "$SECRET_NAME" >/dev/null 2>&1; then
+            # Patch only if key missing
+            if ! kubectl -n "$NS" get secret "$SECRET_NAME" -o jsonpath='{.data.JWT_SECRET}' >/dev/null 2>&1; then
+              kubectl -n "$NS" patch secret "$SECRET_NAME" -p "{\"stringData\":{\"JWT_SECRET\":\"$JWT\"}}"
+            fi
+          else
+            kubectl -n "$NS" create secret generic "$SECRET_NAME" --from-literal=JWT_SECRET="$JWT"
+          fi
+
       - name: SSH deploy to VPS (optional)
         if: ${{ inputs.ssh_deploy || (inputs.provider == 'contabo' && inputs.contabo_api && steps.vars.outputs.short_sha != '' ) }}
         uses: appleboy/ssh-action@v1.2.0

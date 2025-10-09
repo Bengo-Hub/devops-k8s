@@ -40,4 +40,10 @@ Kube Config
 -----------
 Provide `KUBE_CONFIG` (base64) as an org/repo secret for the workflow to apply secrets automatically.
 
+Defaults and Auto-generation
+----------------------------
+- If `KUBE_CONFIG` is missing, cluster operations (kubectl, secret apply) are skipped.
+- If `JWT_SECRET` is missing in the target Kubernetes Secret (`env_secret_name`), the workflow will generate a 64-hex random value and create/patch the secret with `JWT_SECRET`.
+- Database passwords (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MONGO_PASSWORD`, `MYSQL_PASSWORD`) are auto-generated when `setup_databases: true` and the corresponding secrets are not provided.
+
 
