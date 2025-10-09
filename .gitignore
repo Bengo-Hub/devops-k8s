@@ -15,6 +15,7 @@ charts/**/tmpcharts/
 
 # Environment files
 .env
+*.env
 .env.*
 !.env.example
 
@@ -31,3 +32,5 @@ Thumbs.db
 # Logs
 *.log
 
+# Contabo
+contabo_auth_token.sh

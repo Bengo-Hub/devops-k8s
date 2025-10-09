@@ -13,6 +13,11 @@ Contabo API (optional, for provider=contabo):
 - CONTABO_CLIENT_SECRET: OAuth2 client secret
 - CONTABO_API_USERNAME: Contabo account username
 - CONTABO_API_PASSWORD: Contabo account password
+- Optional inputs (can be set in workflow `with:`; defaults shown):
+  - contabo_instance_id (default: 202846760)
+  - contabo_ip (default: 77.237.232.66)
+  - contabo_datacenter (default: European Union 2)
+  - contabo_region (default: EU)
 
 Database automation (optional; auto-generated if omitted):
 - POSTGRES_PASSWORD: PostgreSQL superuser password

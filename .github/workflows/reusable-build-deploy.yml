@@ -66,6 +66,7 @@ on:
       contabo_instance_id:
         required: false
         type: string
+        default: "202846760"
       contabo_ip:
         required: false
         type: string
@@ -73,9 +74,11 @@ on:
       contabo_datacenter:
         required: false
         type: string
+        default: "European Union 2"
       contabo_region:
         required: false
         type: string
+        default: "EU"
       ssh_deploy:
         required: false
         type: boolean
