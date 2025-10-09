@@ -1,0 +1,35 @@
+name: DevOps CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  sanity-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print context
+        run: |
+          echo "Ref: $GITHUB_REF"
+          echo "SHA: $GITHUB_SHA"
+
+      - name: Validate Helm chart (optional)
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm lint charts/app || true
+
+      - name: YAML syntax check (optional)
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y python3-pip
+          pip3 install yamllint
+          yamllint -d "{extends: default, rules: {line-length: {max: 180}}}" . || true
+
+      - name: Done
+        run: echo "CI completed"
+
+
