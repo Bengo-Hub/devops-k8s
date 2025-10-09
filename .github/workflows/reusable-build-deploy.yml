@@ -135,12 +135,23 @@ jobs:
       REG_USER: ${{ secrets.REGISTRY_USERNAME }}
       REG_PASS: ${{ secrets.REGISTRY_PASSWORD }}
       KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+      DOCKER_SSH_KEY_B64: ${{ secrets.DOCKER_SSH_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Configure SSH for build secrets (optional)
+        if: ${{ env.DOCKER_SSH_KEY_B64 != '' }}
+        run: |
+          mkdir -p -m 0700 $HOME/.ssh
+          echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
+          chmod 0600 $HOME/.ssh/id_rsa
+          ssh-keyscan github.com >> $HOME/.ssh/known_hosts 2>/dev/null || true
+          eval "$(ssh-agent)"
+          ssh-add $HOME/.ssh/id_rsa
 
       - name: Determine image repository
         id: img

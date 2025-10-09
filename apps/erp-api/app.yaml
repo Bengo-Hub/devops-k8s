@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: git@github.com:codevertex/devops-k8s.git
+    repoURL: git@github.com:Bengo-Hub/devops-k8s.git
     targetRevision: main
     path: charts/app
     helm:

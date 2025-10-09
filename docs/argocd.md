@@ -98,13 +98,13 @@ ssh-keygen -t ed25519 -C "argocd@codevertex" -f ~/.ssh/argocd_deploy_key -N ""
 #### Add Repo to Argo CD via UI
 1. Settings > Repositories > Connect Repo
 2. Choose "VIA SSH"
-3. Repository URL: `git@github.com:codevertex/devops-k8s.git`
+3. Repository URL: `git@github.com:Bengo-Hub/devops-k8s.git`
 4. SSH private key: Paste contents of `~/.ssh/argocd_deploy_key`
 5. Click "Connect"
 
 #### Or via CLI:
 ```bash
-argocd repo add git@github.com:codevertex/devops-k8s.git \
+argocd repo add git@github.com:Bengo-Hub/devops-k8s.git \
   --ssh-private-key-path ~/.ssh/argocd_deploy_key
 ```
 
@@ -160,7 +160,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: git@github.com:codevertex/devops-k8s.git
+    repoURL: git@github.com:Bengo-Hub/devops-k8s.git
     targetRevision: main
     path: apps
   destination:
@@ -214,8 +214,8 @@ argocd app diff erp-api
 argocd repo list
 
 # Re-add repo if needed
-argocd repo rm git@github.com:codevertex/devops-k8s.git
-argocd repo add git@github.com:codevertex/devops-k8s.git --ssh-private-key-path ~/.ssh/argocd_deploy_key
+argocd repo rm git@github.com:Bengo-Hub/devops-k8s.git
+argocd repo add git@github.com:Bengo-Hub/devops-k8s.git --ssh-private-key-path ~/.ssh/argocd_deploy_key
 ```
 
 ### Image Pull Errors
@@ -223,7 +223,7 @@ Ensure Docker Hub credentials are in the namespace:
 ```bash
 kubectl create secret docker-registry regcred \
   --docker-server=docker.io \
-  --docker-username=codevertex \
+  --docker-username=Bengo-Hub \
   --docker-password=<TOKEN> \
   -n erp
 ```
