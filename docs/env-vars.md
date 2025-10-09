@@ -20,7 +20,21 @@ stringData:
 
 Required Variables
 ------------------
-- DATABASE_URL, REDIS_URL, JWT_SECRET (example; define per-service)
+- Common (per service; adjust to your stack):
+  - DATABASE_URL: e.g., postgresql://user:pass@host:5432/db
+  - REDIS_URL: e.g., redis://:pass@host:6379/0
+  - CELERY_BROKER_URL: typically same as REDIS_URL
+  - CELERY_RESULT_BACKEND: typically same as REDIS_URL
+  - JWT_SECRET: random 32-64 chars
+  - DJANGO_SECRET_KEY (Django apps): random 50 chars
+  - DEBUG: "False"
+  - ALLOWED_HOSTS: e.g., api.domain.tld,localhost,127.0.0.1
+  - NEXT_PUBLIC_API_URL (for UI): e.g., https://api.domain.tld
+
+Optional (based on DB type):
+- PostgreSQL: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+- MySQL: MYSQL_URL or MYSQL_* variants
+- MongoDB: MONGO_URL
 
 Kube Config
 -----------
