@@ -6,9 +6,11 @@ This guide compares k3s vs full Kubernetes (kubeadm) to help you choose the best
 Quick Recommendation
 -------------------
 
-**For Contabo VPS (4-8GB RAM, single node):** Use **k3s**
-**For Multi-node cluster or 16GB+ RAM:** Use **full Kubernetes**
-**For Production-critical ERP with growth plans:** Use **full Kubernetes**
+**For 4-8GB RAM, single node:** Use **k3s**
+**For 16GB+ RAM or multi-node:** Use **full Kubernetes (kubeadm)**
+**For Production-critical ERP with growth plans:** Use **full Kubernetes (kubeadm)**
+
+Your VPS (12 cores, 48 GB RAM, NVMe) strongly favors **full Kubernetes (kubeadm)**.
 
 Detailed Comparison
 -------------------

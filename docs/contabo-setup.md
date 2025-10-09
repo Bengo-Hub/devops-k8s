@@ -16,7 +16,7 @@ Table of Contents
 2. SSH Key Configuration
 3. Initial Server Setup
 4. Docker Installation
-5. Kubernetes Installation (k3s)
+5. Kubernetes Installation (kubeadm or k3s)
 6. NGINX Ingress Controller
 7. cert-manager
 8. Verification
@@ -234,49 +234,20 @@ echo "YOUR_DOCKER_TOKEN" | docker login -u codevertex --password-stdin
 
 ---
 
-5. Kubernetes Installation (k3s)
---------------------------------
+5. Kubernetes Installation (kubeadm or k3s)
+-------------------------------------------
 
-We use k3s for lightweight K8s on single-node VPS.
+Use **kubeadm** for high-resource VPS (e.g., your 48GB server). Use **k3s** for smaller VPS.
 
-### Install k3s
+### Option A: kubeadm (Recommended for 48GB VPS)
+
+See `docs/contabo-setup-kubeadm.md` for full steps.
+
+### Option B: k3s (for smaller VPS)
 
 ```bash
-# Install k3s with Traefik disabled (we'll use NGINX)
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
-
-# Wait for node to be ready
-kubectl wait --for=condition=Ready node --all --timeout=300s
-
-# Verify
-kubectl get nodes
-kubectl get pods -A
 ```
-
-### Configure kubectl Access
-
-```bash
-# Get kubeconfig
-cat /etc/rancher/k3s/k3s.yaml
-
-# For local kubectl access, copy to your machine:
-# Replace 127.0.0.1 with your VPS IP
-scp -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP:/etc/rancher/k3s/k3s.yaml ~/.kube/contabo-config
-sed -i 's/127.0.0.1/YOUR_VPS_IP/g' ~/.kube/contabo-config
-
-# Use it
-export KUBECONFIG=~/.kube/contabo-config
-kubectl get nodes
-```
-
-### Store Kubeconfig in GitHub Secret
-
-```bash
-# Base64 encode kubeconfig
-cat /etc/rancher/k3s/k3s.yaml | base64 -w 0
-```
-
-Store as GitHub org secret: `KUBE_CONFIG`
 
 ---
 

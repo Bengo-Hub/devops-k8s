@@ -17,7 +17,7 @@ Step 1: Choose Kubernetes Distribution
 
 **Quick Recommendation:**
 - **4-8GB VPS:** Use k3s (recommended for most users)
-- **16GB+ VPS or multi-node:** Use kubeadm
+- **16GB+ VPS or multi-node:** Use kubeadm (recommended for your 48GB VPS)
 
 Step 2: Initial VPS Setup
 -------------------------
