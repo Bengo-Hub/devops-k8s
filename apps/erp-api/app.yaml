@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: erp-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:codevertex/devops-k8s.git
+    targetRevision: main
+    path: charts/app
+    helm:
+      valuesFile: apps/erp-api/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: erp
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+

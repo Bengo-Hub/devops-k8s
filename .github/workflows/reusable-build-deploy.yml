@@ -1,0 +1,236 @@
+name: Reusable Build and Deploy
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+      registry_server:
+        required: false
+        type: string
+        default: docker.io
+      registry_namespace:
+        required: false
+        type: string
+        default: codevertex
+      docker_context:
+        required: false
+        type: string
+        default: .
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+      image_repository:
+        required: false
+        type: string
+      deploy:
+        required: false
+        type: boolean
+        default: false
+      values_file_path:
+        required: true
+        type: string
+      chart_repo_path:
+        required: false
+        type: string
+        default: charts/app
+      namespace:
+        required: false
+        type: string
+        default: default
+      provider:
+        required: false
+        type: string
+        default: contabo
+      contabo_api:
+        required: false
+        type: boolean
+        default: true
+      contabo_instance_id:
+        required: false
+        type: string
+      contabo_datacenter:
+        required: false
+        type: string
+      contabo_region:
+        required: false
+        type: string
+      ssh_deploy:
+        required: false
+        type: boolean
+        default: false
+      ssh_host:
+        required: false
+        type: string
+      ssh_user:
+        required: false
+        type: string
+      ssh_port:
+        required: false
+        type: string
+        default: "22"
+      ssh_deploy_command:
+        required: false
+        type: string
+    secrets:
+      REGISTRY_USERNAME:
+        required: false
+      REGISTRY_PASSWORD:
+        required: false
+      KUBE_CONFIG:
+        required: false
+      SSH_PRIVATE_KEY:
+        required: false
+      DOCKER_SSH_KEY:
+        required: false
+      CONTABO_CLIENT_ID:
+        required: false
+      CONTABO_CLIENT_SECRET:
+        required: false
+      CONTABO_API_USERNAME:
+        required: false
+      CONTABO_API_PASSWORD:
+        required: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine image repository
+        id: img
+        env:
+          REG_SVR: ${{ inputs.registry_server }}
+          REG_NS: ${{ inputs.registry_namespace }}
+        run: |
+          if [ -n "${{ inputs.image_repository }}" ]; then
+            echo "repo=${{ inputs.image_repository }}" >> $GITHUB_OUTPUT
+          else
+            echo "repo=${REG_SVR}/${REG_NS}/${{ inputs.app_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to registry (optional)
+        if: ${{ secrets.REGISTRY_USERNAME != '' && secrets.REGISTRY_PASSWORD != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry_server }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Derive short SHA
+        id: vars
+        run: echo "short_sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq curl
+          sudo curl -L "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq
+
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          exit-code: '0'
+
+      - name: Build image
+        run: |
+          DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
+            -f "${{ inputs.dockerfile }}" \
+            -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
+            --ssh default=$SSH_AUTH_SOCK
+
+      - name: Trivy Image scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}
+          exit-code: '0'
+
+      - name: Push image
+        if: ${{ inputs.deploy }}
+        run: docker push "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+
+      - name: Contabo API bootstrap (ensure instance ready)
+        if: ${{ inputs.deploy && inputs.provider == 'contabo' && inputs.contabo_api }}
+        env:
+          CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
+          API_USER: ${{ secrets.CONTABO_API_USERNAME }}
+          API_PASS: ${{ secrets.CONTABO_API_PASSWORD }}
+          INSTANCE_ID: ${{ inputs.contabo_instance_id }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$API_USER" ] || [ -z "$API_PASS" ] || [ -z "$INSTANCE_ID" ]; then
+            echo "Missing Contabo API credentials or instance id, will rely on SSH fallback if enabled"; exit 0; fi
+          sudo apt-get update -y && sudo apt-get install -y jq curl
+          TOKEN=$(curl -s -X POST https://auth.contabo.com/oauth2/token \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            -d "grant_type=password&username=${API_USER}&password=${API_PASS}&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=openid")
+          ACCESS_TOKEN=$(echo "$TOKEN" | jq -r '.access_token')
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then echo "Failed to acquire Contabo token"; exit 0; fi
+          INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" https://api.contabo.com/v1/compute/instances/$INSTANCE_ID)
+          STATUS=$(echo "$INFO" | jq -r '.status // .data[0].status')
+          IP=$(echo "$INFO" | jq -r '.publicIpConfig.ip || .data[0].publicIpConfig.ip')
+          echo "Contabo instance status: $STATUS, ip: $IP"
+          echo "contabo_ip=$IP" >> $GITHUB_OUTPUT
+          # Optionally ensure instance is powered on
+          if [ "$STATUS" != "running" ] && [ "$STATUS" != "ACTIVE" ]; then
+            curl -s -X POST -H "Authorization: Bearer $ACCESS_TOKEN" https://api.contabo.com/v1/compute/instances/$INSTANCE_ID/start || true
+          fi
+
+      - name: Update values in devops-k8s
+        if: ${{ inputs.deploy }}
+        env:
+          SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
+          VALUES_PATH: ${{ inputs.values_file_path }}
+          IMAGE_REPO: ${{ steps.img.outputs.repo }}
+        run: |
+          git config user.name "DevOps Bot"
+          git config user.email "devops@bot.local"
+          git pull --rebase
+          yq -yi ".image.repository = \"${IMAGE_REPO}\" | .image.tag = \"${SHORT_SHA}\"" "${VALUES_PATH}"
+          git add "${VALUES_PATH}"
+          git commit -m "${{ inputs.app_name }}:${SHORT_SHA} released" || echo "No changes"
+          git push
+
+      - name: Apply kube secrets (optional)
+        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          kubectl get ns "${{ inputs.namespace }}" >/dev/null 2>&1 || kubectl create ns "${{ inputs.namespace }}"
+          if [ -f kubeSecrets/devENV.yaml ]; then
+            kubectl apply -f kubeSecrets/devENV.yaml || true
+          fi
+
+      - name: SSH deploy to VPS (optional)
+        if: ${{ inputs.ssh_deploy || (inputs.provider == 'contabo' && inputs.contabo_api && steps.vars.outputs.short_sha != '' ) }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ inputs.ssh_host || steps.contabo-api-bootstrap.outputs.contabo_ip }}
+          username: ${{ inputs.ssh_user }}
+          port: ${{ inputs.ssh_port }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            echo "Logging into registry"
+            echo '${{ secrets.REGISTRY_PASSWORD }}' | docker login ${{ inputs.registry_server }} -u '${{ secrets.REGISTRY_USERNAME }}' --password-stdin || true
+            echo "Pulling image"
+            docker pull "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+            echo "Restarting container"
+            docker rm -f ${{ inputs.app_name }} || true
+            docker run -d --restart always --name ${{ inputs.app_name }} -p 0.0.0.0:80:80 "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+
+
