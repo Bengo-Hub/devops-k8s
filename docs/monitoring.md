@@ -21,6 +21,31 @@ Prerequisites
 Installation
 ------------
 
+### Quick Install (Automated)
+
+From the devops-k8s repository root:
+
+```bash
+# Run the automated installation script
+./scripts/install-monitoring.sh
+
+# With custom Grafana domain (optional)
+GRAFANA_DOMAIN=grafana.yourdomain.com ./scripts/install-monitoring.sh
+```
+
+The script will:
+- Check for cert-manager (install if missing)
+- Install Prometheus + Grafana with production settings
+- Apply ERP-specific alerts
+- Configure TLS ingress for Grafana
+- Display credentials and access information
+
+**Default Grafana Domain:** `grafana.masterspace.co.ke`
+
+---
+
+### Manual Installation (Alternative)
+
 ### 1. Add Helm Repository
 
 ```bash
@@ -36,7 +61,7 @@ kubectl create namespace monitoring
 
 ### 3. Install kube-prometheus-stack
 
-Create `monitoring-values.yaml`:
+Using the provided values file from this repo:
 ```yaml
 prometheus:
   prometheusSpec:
@@ -94,10 +119,20 @@ Install the stack:
 ```bash
 helm install prometheus prometheus-community/kube-prometheus-stack \
   -n monitoring \
-  -f monitoring-values.yaml
+  -f manifests/monitoring/prometheus-values.yaml \
+  --timeout=15m \
+  --wait
 ```
 
-### 4. Verify Installation
+**Note:** Installation may take 10-15 minutes on first run due to image pulls.
+
+### 4. Apply ERP Alerts
+
+```bash
+kubectl apply -f manifests/monitoring/erp-alerts.yaml
+```
+
+### 5. Verify Installation
 
 ```bash
 # Check pods
@@ -105,6 +140,9 @@ kubectl get pods -n monitoring
 
 # Check services
 kubectl get svc -n monitoring
+
+# Check ingress
+kubectl get ingress -n monitoring
 
 # Get Grafana admin password
 kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d && echo
@@ -123,9 +161,16 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 # Password: (from secret above)
 ```
 
-#### Option B: Ingress (Production)
-Already configured via values.yaml above.
-Access at: https://grafana.masterspace.co.ke
+#### Option B: Ingress (Production) - Recommended
+
+Access at: **https://grafana.masterspace.co.ke**
+
+The installation script automatically configures:
+- TLS certificate via cert-manager
+- NGINX ingress with proper annotations
+- Domain as specified (default: grafana.masterspace.co.ke)
+
+**Ensure DNS:** Point `grafana.masterspace.co.ke` to your VPS IP: **77.237.232.66**
 
 ### Prometheus UI
 
@@ -223,8 +268,10 @@ spec:
 
 Apply:
 ```bash
-kubectl apply -f erp-alerts.yaml
+kubectl apply -f manifests/monitoring/erp-alerts.yaml
 ```
+
+**Note:** If you used the `install-monitoring.sh` script, alerts are already applied.
 
 ### 2. Configure Alertmanager Notifications
 
@@ -265,9 +312,17 @@ stringData:
 
 Apply:
 ```bash
-kubectl apply -f alertmanager-config.yaml
+# Update the password first in manifests/monitoring/alertmanager-config.yaml
+# Replace <APP_PASSWORD> with your Gmail app password
+kubectl apply -f manifests/monitoring/alertmanager-config.yaml
 kubectl rollout restart statefulset -n monitoring alertmanager-prometheus-kube-prometheus-alertmanager
 ```
+
+**Email Configuration:**
+- Alerts sent to: `codevertexitsolutions@gmail.com`
+- From: `alerts@codevertexitsolutions.com`
+- SMTP: Gmail (smtp.gmail.com:587)
+- Auth: Requires Gmail App Password (not regular password)
 
 Application Metrics
 -------------------
@@ -322,7 +377,7 @@ spec:
     interval: 30s
 ```
 
-Apply: `kubectl apply -f erp-api-servicemonitor.yaml`
+Apply: `kubectl apply -f manifests/monitoring/erp-api-servicemonitor.yaml`
 
 Deployment Metrics
 ------------------

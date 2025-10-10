@@ -22,9 +22,38 @@ echo -e "${BLUE}Namespace: ${NAMESPACE}${NC}"
 echo -e "${BLUE}PostgreSQL Database: ${PG_DATABASE}${NC}"
 
 # Pre-flight checks
-if ! kubectl version --short >/dev/null 2>&1; then
-  echo -e "${RED}kubectl not configured. Aborting.${NC}"
+if ! command -v kubectl &> /dev/null; then
+  echo -e "${RED}kubectl command not found. Aborting.${NC}"
   exit 1
+fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
+
+# Check for storage class (required for PVCs)
+if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
+  echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
+  "${SCRIPT_DIR}/install-storage-provisioner.sh"
+else
+  echo -e "${GREEN}✓ Default storage class available${NC}"
+fi
+
+# Check for Helm (install if missing)
+if ! command -v helm &> /dev/null; then
+  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
+  if command -v snap &> /dev/null; then
+    sudo snap install helm --classic
+  else
+    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  fi
+  echo -e "${GREEN}✓ Helm installed${NC}"
+else
+  echo -e "${GREEN}✓ Helm already installed${NC}"
 fi
 
 # Add Bitnami repository
@@ -47,37 +76,49 @@ cp "${MANIFESTS_DIR}/databases/postgresql-values.yaml" "${TEMP_PG_VALUES}"
 sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
   sed -i '' "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
 
-# Install or upgrade PostgreSQL
-if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  echo -e "${YELLOW}PostgreSQL already installed. Upgrading...${NC}"
-  helm upgrade postgresql bitnami/postgresql \
-    -n "${NAMESPACE}" \
-    -f "${TEMP_PG_VALUES}" \
-    --wait
-else
-  echo -e "${YELLOW}Installing PostgreSQL...${NC}"
-  helm install postgresql bitnami/postgresql \
-    -n "${NAMESPACE}" \
-    -f "${TEMP_PG_VALUES}" \
-    --wait
-fi
-echo -e "${GREEN}✓ PostgreSQL ready${NC}"
+# Install or upgrade PostgreSQL (idempotent)
+echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
+echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
-# Install or upgrade Redis
-if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
-  echo -e "${YELLOW}Redis already installed. Upgrading...${NC}"
-  helm upgrade redis bitnami/redis \
-    -n "${NAMESPACE}" \
-    -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-    --wait
+set +e
+helm upgrade --install postgresql bitnami/postgresql \
+  -n "${NAMESPACE}" \
+  -f "${TEMP_PG_VALUES}" \
+  --timeout=10m \
+  --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+HELM_PG_EXIT=${PIPESTATUS[0]}
+set -e
+
+if [ $HELM_PG_EXIT -eq 0 ]; then
+  echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 else
-  echo -e "${YELLOW}Installing Redis...${NC}"
-  helm install redis bitnami/redis \
-    -n "${NAMESPACE}" \
-    -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-    --wait
+  echo -e "${RED}PostgreSQL installation failed with exit code $HELM_PG_EXIT${NC}"
+  tail -50 /tmp/helm-postgresql-install.log || true
+  kubectl get pods -n "${NAMESPACE}" || true
+  exit 1
 fi
-echo -e "${GREEN}✓ Redis ready${NC}"
+
+# Install or upgrade Redis (idempotent)
+echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
+echo -e "${BLUE}This may take 3-5 minutes...${NC}"
+
+set +e
+helm upgrade --install redis bitnami/redis \
+  -n "${NAMESPACE}" \
+  -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+  --timeout=10m \
+  --wait 2>&1 | tee /tmp/helm-redis-install.log
+HELM_REDIS_EXIT=${PIPESTATUS[0]}
+set -e
+
+if [ $HELM_REDIS_EXIT -eq 0 ]; then
+  echo -e "${GREEN}✓ Redis ready${NC}"
+else
+  echo -e "${RED}Redis installation failed with exit code $HELM_REDIS_EXIT${NC}"
+  tail -50 /tmp/helm-redis-install.log || true
+  kubectl get pods -n "${NAMESPACE}" || true
+  exit 1
+fi
 
 # Retrieve credentials
 echo ""

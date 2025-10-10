@@ -98,6 +98,14 @@ kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
 Step 4: Install Core Infrastructure
 -----------------------------------
 
+### NGINX Ingress Controller (Required for external access)
+```bash
+# Configure ingress to use hostNetwork for VPS
+./scripts/configure-ingress-controller.sh
+```
+
+**This configures the ingress controller to bind directly to your VPS IP (77.237.232.66) on ports 80 and 443.**
+
 ### cert-manager (TLS Certificates)
 ```bash
 # From your local machine with kubectl configured
