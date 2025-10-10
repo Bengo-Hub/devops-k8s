@@ -192,10 +192,18 @@ jobs:
 
       - name: Build image
         run: |
-          DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
-            -f "${{ inputs.dockerfile }}" \
-            -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
-            --ssh default=$SSH_AUTH_SOCK
+          if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+            echo "Using SSH agent for Docker build"
+            DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
+              -f "${{ inputs.dockerfile }}" \
+              -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
+              --ssh default=$SSH_AUTH_SOCK
+          else
+            echo "No SSH agent available; building without --ssh"
+            DOCKER_BUILDKIT=1 docker build "${{ inputs.dockerfile == 'Dockerfile' && inputs.docker_context || inputs.docker_context }}" \
+              -f "${{ inputs.dockerfile }}" \
+              -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+          fi
 
       - name: Trivy Image scan
         uses: aquasecurity/trivy-action@0.24.0
