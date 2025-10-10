@@ -20,10 +20,17 @@ echo -e "${GREEN}Installing Argo CD (Production)...${NC}"
 echo -e "${BLUE}Domain: ${ARGOCD_DOMAIN}${NC}"
 
 # Pre-flight checks
-if ! kubectl version --short >/dev/null 2>&1; then
-  echo -e "${RED}kubectl not configured. Aborting.${NC}"
+if ! command -v kubectl &> /dev/null; then
+  echo -e "${RED}kubectl command not found. Aborting.${NC}"
   exit 1
 fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
 # Check if cert-manager is installed (required for production ingress)
 if ! kubectl get namespace cert-manager >/dev/null 2>&1; then
