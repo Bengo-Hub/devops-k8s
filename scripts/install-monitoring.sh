@@ -63,11 +63,11 @@ sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/
 # Install or upgrade kube-prometheus-stack
 if helm -n monitoring status prometheus >/dev/null 2>&1; then
   echo -e "${YELLOW}kube-prometheus-stack already installed. Upgrading...${NC}"
-  #helm upgrade prometheus prometheus-community/kube-prometheus-stack \
-  #  -n monitoring \
-  #  -f "${TEMP_VALUES}" \
-  #  --timeout=15m \
-  #  --wait
+  helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+    -n monitoring \
+    -f "${TEMP_VALUES}" \
+    --timeout=15m \
+    --wait
 else
   echo -e "${YELLOW}Installing kube-prometheus-stack (this may take 10-15 minutes)...${NC}"
   helm install prometheus prometheus-community/kube-prometheus-stack \
