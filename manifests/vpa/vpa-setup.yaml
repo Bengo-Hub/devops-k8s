@@ -1,0 +1,61 @@
+# Vertical Pod Autoscaler (VPA) Installation
+# Optional: Install VPA for automatic resource recommendation and adjustment
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vpa-system
+
+---
+# To install VPA, run:
+# kubectl apply -f https://github.com/kubernetes/autoscaler/releases/download/vertical-pod-autoscaler-1.0.0/vpa-v1.0.0.yaml
+
+# Example VPA for ERP API (recommendation mode)
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: erp-api-vpa
+  namespace: erp
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: erp-erp-api  # Adjust based on Helm release name
+  updatePolicy:
+    updateMode: "Off"  # Recommendation only; change to "Auto" for automatic updates
+  resourcePolicy:
+    containerPolicies:
+    - containerName: "*"
+      minAllowed:
+        cpu: 100m
+        memory: 256Mi
+      maxAllowed:
+        cpu: 4000m
+        memory: 4Gi
+
+---
+# Example VPA for ERP UI (recommendation mode)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: erp-ui-vpa
+  namespace: erp
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: erp-erp-ui  # Adjust based on Helm release name
+  updatePolicy:
+    updateMode: "Off"  # Recommendation only
+  resourcePolicy:
+    containerPolicies:
+    - containerName: "*"
+      minAllowed:
+        cpu: 50m
+        memory: 128Mi
+      maxAllowed:
+        cpu: 2000m
+        memory: 2Gi
+

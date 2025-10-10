@@ -85,6 +85,37 @@ Deployment Options
 └─────────────────────────────────────────┘
 ```
 
+### Quick Install (Automated)
+
+From the devops-k8s repository root:
+
+```bash
+# Run the automated installation script
+./scripts/install-databases.sh
+
+# With custom namespace and database name (optional)
+DB_NAMESPACE=myapp PG_DATABASE=myapp_db ./scripts/install-databases.sh
+```
+
+The script will:
+- Check for kubectl connectivity
+- Add Bitnami Helm repository
+- Create namespace (default: erp)
+- Install PostgreSQL with production config (20GB storage, optimized settings)
+- Install Redis with production config (8GB storage, LRU eviction)
+- Display connection strings and credentials
+- Provide next steps for secret configuration
+
+**Default Configuration:**
+- Namespace: `erp`
+- PostgreSQL Database: `bengo_erp`
+- PostgreSQL Host: `postgresql.erp.svc.cluster.local:5432`
+- Redis Host: `redis-master.erp.svc.cluster.local:6379`
+
+---
+
+### Manual Installation (Alternative)
+
 ### 1. PostgreSQL Deployment
 
 We'll use Bitnami PostgreSQL Helm chart for production-ready setup.
@@ -102,7 +133,9 @@ kubectl create namespace erp
 # Install PostgreSQL
 helm install postgresql bitnami/postgresql \
   -n erp \
-  -f manifests/databases/postgresql-values.yaml
+  -f manifests/databases/postgresql-values.yaml \
+  --timeout=10m \
+  --wait
 ```
 
 #### Get PostgreSQL Credentials
@@ -125,7 +158,9 @@ echo "PostgreSQL Password: $POSTGRES_PASSWORD"
 # Install Redis
 helm install redis bitnami/redis \
   -n erp \
-  -f manifests/databases/redis-values.yaml
+  -f manifests/databases/redis-values.yaml \
+  --timeout=10m \
+  --wait
 ```
 
 #### Get Redis Credentials
@@ -142,7 +177,23 @@ echo "Redis Password: $REDIS_PASSWORD"
 # redis://:PASSWORD@redis-master.erp.svc.cluster.local:6379/0
 ```
 
-### 3. Initialize Database
+### 3. Update Application Secrets
+
+After installation, the script outputs connection strings. Update your app's secret:
+
+```bash
+# Example output from install-databases.sh:
+# PostgreSQL: postgresql://postgres:abc123xyz@postgresql.erp.svc.cluster.local:5432/bengo_erp
+# Redis: redis://:xyz789abc@redis-master.erp.svc.cluster.local:6379/0
+
+# Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml with these values
+# Then apply:
+kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+```
+
+**Note:** The automated script displays the exact credentials you need to copy.
+
+### 4. Initialize Database
 
 Create initialization job to set up the database schema:
 
@@ -157,9 +208,11 @@ kubectl wait --for=condition=complete job/erp-db-init -n erp --timeout=300s
 kubectl logs job/erp-db-init -n erp
 ```
 
-### 4. Update ERP API Secret
+**Note:** Update the job manifest with your actual image tag before applying.
 
-Update `BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml`:
+### 5. Alternative: Manual Secret Update
+
+If not using the automated script output, update `BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml` manually:
 
 ```yaml
 apiVersion: v1
@@ -188,9 +241,9 @@ stringData:
   ALLOWED_HOSTS: "erpapi.masterspace.co.ke,localhost,127.0.0.1"
 ```
 
-**IMPORTANT:** Replace `CHANGE_ME` with actual passwords from step 1 and 2.
+**IMPORTANT:** Replace `CHANGE_ME` with actual passwords from the install-databases.sh output or from manual installation steps.
 
-### 5. Apply Updated Secret
+### 6. Apply Updated Secret
 
 ```bash
 # Apply to cluster
@@ -199,6 +252,42 @@ kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
 # Verify
 kubectl get secret erp-api-env -n erp -o yaml
 ```
+
+---
+
+## Automated Setup via CI/CD
+
+The reusable GitHub Actions workflow can automatically provision databases when enabled:
+
+```yaml
+# In your app's .github/workflows/deploy.yml
+jobs:
+  deploy:
+    uses: Bengo-Hub/devops-k8s/.github/workflows/reusable-build-deploy.yml@main
+    with:
+      app_name: erp-api
+      deploy: true
+      namespace: erp
+      setup_databases: true       # Enable automated DB setup
+      db_types: postgres,redis    # Databases to install
+      env_secret_name: erp-api-env
+    secrets:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}  # Optional; auto-generated if omitted
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}        # Optional; auto-generated if omitted
+```
+
+**How It Works:**
+1. Workflow installs PostgreSQL and Redis via Bitnami Helm charts
+2. Generates passwords (or uses provided secrets)
+3. Creates/updates Kubernetes Secret with DATABASE_URL, REDIS_URL, etc.
+4. Your application pods automatically pick up the connection strings
+
+**Benefits:**
+- Zero manual configuration
+- Idempotent (safe to re-run)
+- Passwords auto-generated securely
+- Connection strings injected automatically
 
 ---
 
@@ -458,9 +547,11 @@ kubectl exec -n erp deployment/erp-api -- \
 
 ---
 
+---
+
 ## Recommendation
 
-**For Production:** Use **Option 1 (In-Cluster)** because:
+**For Production:** Use **Option 1 (In-Cluster)** with the automated script because:
 - Easier to scale
 - Better integration with K8s
 - Automatic health checks
