@@ -447,6 +447,8 @@ mv etcd-${ETCD_VERSION}-linux-amd64/etcdctl /usr/local/bin/
 rm -rf etcd-${ETCD_VERSION}-linux-amd64*
 
 # Backup etcd
+mkdir -p /backup
+
 ETCDCTL_API=3 etcdctl \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
