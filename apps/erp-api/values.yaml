@@ -1,5 +1,5 @@
 image:
-  repository: docker.io/Bengo-Hub/erp-api
+  repository: docker.io/codevertex/erp-api
   tag: latest
 
 service:
