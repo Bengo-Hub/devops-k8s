@@ -3,8 +3,6 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ include "app.fullname" . }}
-  labels:
-    app: {{ include "app.name" . }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -13,12 +11,14 @@ spec:
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
+    {{- if .Values.autoscaling.targetCPUUtilizationPercentage }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
           averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
     {{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
@@ -27,23 +27,59 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
+    {{- range .Values.autoscaling.customMetrics }}
+    - type: {{ .type }}
+      {{- if eq .type "Pods" }}
+      pods:
+        metric:
+          name: {{ .metricName }}
+        target:
+          type: {{ .targetType }}
+          {{ if eq .targetType "Value" }}
+          value: {{ .targetValue }}
+          {{- else if eq .targetType "AverageValue" }}
+          averageValue: {{ .targetAverageValue }}
+          {{- end }}
+      {{- else if eq .type "Object" }}
+      object:
+        metric:
+          name: {{ .metricName }}
+        describedObject:
+          apiVersion: {{ .describedObject.apiVersion }}
+          kind: {{ .describedObject.kind }}
+          name: {{ .describedObject.name }}
+        target:
+          type: {{ .targetType }}
+          {{ if eq .targetType "Value" }}
+          value: {{ .targetValue }}
+          {{- else if eq .targetType "AverageValue" }}
+          averageValue: {{ .targetAverageValue }}
+          {{- end }}
+      {{- end }}
+    {{- end }}
   behavior:
+    {{- if .Values.autoscaling.scaleDown }}
     scaleDown:
-      stabilizationWindowSeconds: 300
+      stabilizationWindowSeconds: {{ .Values.autoscaling.scaleDown.stabilizationWindowSeconds | default 300 }}
       policies:
-      - type: Percent
-        value: 50
-        periodSeconds: 60
+        {{- range .Values.autoscaling.scaleDown.policies }}
+        - type: {{ .type }}
+          value: {{ .value }}
+          periodSeconds: {{ .periodSeconds }}
+        {{- end }}
+      selectPolicy: {{ .Values.autoscaling.scaleDown.selectPolicy | default "Min" }}
+    {{- end }}
+    {{- if .Values.autoscaling.scaleUp }}
     scaleUp:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: {{ .Values.autoscaling.scaleUp.stabilizationWindowSeconds | default 60 }}
       policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 30
-      - type: Pods
-        value: 2
-        periodSeconds: 30
-      selectPolicy: Max
+        {{- range .Values.autoscaling.scaleUp.policies }}
+        - type: {{ .type }}
+          value: {{ .value }}
+          periodSeconds: {{ .periodSeconds }}
+        {{- end }}
+      selectPolicy: {{ .Values.autoscaling.scaleUp.selectPolicy | default "Max" }}
+    {{- end }}
 {{- end }}
 
 

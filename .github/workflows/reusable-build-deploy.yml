@@ -125,6 +125,7 @@ on:
       CONTABO_API_PASSWORD:
         required: false
 
+jobs:
   build-deploy:
     runs-on: ubuntu-latest
     permissions:
@@ -147,24 +148,33 @@ on:
           DOCKER_SSH_KEY_B64: ${{ secrets.DOCKER_SSH_KEY }}
         run: |
           mkdir -p -m 0700 $HOME/.ssh
-          # Check if either DOCKER_SSH_KEY_B64 or SSH_PRIV is provided and not empty
-          if { [ -n "${DOCKER_SSH_KEY_B64:-}" ] && [ "$DOCKER_SSH_KEY_B64" != "" ]; } || { [ -n "${SSH_PRIV:-}" ] && [ "$SSH_PRIV" != "" ]; }; then
+
+          # Check if SSH keys are available
+          USE_SSH=false
+          if [ -n "${DOCKER_SSH_KEY_B64:-}" ] && [ "$DOCKER_SSH_KEY_B64" != "" ]; then
+            echo "Found DOCKER_SSH_KEY, will use SSH for builds"
+            USE_SSH=true
+          elif [ -n "${SSH_PRIV:-}" ] && [ "$SSH_PRIV" != "" ]; then
+            echo "Found SSH_PRIVATE_KEY, will use SSH for builds"
+            USE_SSH=true
+          fi
+
+          if [ "$USE_SSH" = "true" ]; then
             if [ -n "${DOCKER_SSH_KEY_B64:-}" ] && [ "$DOCKER_SSH_KEY_B64" != "" ]; then
               echo "Loading DOCKER_SSH_KEY"
               echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
             else
-              echo "Loading SSH_PRIVATE_KEY as fallback for Docker build"
+              echo "Loading SSH_PRIVATE_KEY as fallback"
               printf "%s" "$SSH_PRIV" > $HOME/.ssh/id_rsa
             fi
             chmod 0600 $HOME/.ssh/id_rsa
             ssh-keyscan github.com >> $HOME/.ssh/known_hosts 2>/dev/null || true
             eval "$(ssh-agent)"
             ssh-add $HOME/.ssh/id_rsa
-            # Persist SSH agent socket for later steps
             echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+            echo "SSH configured successfully"
           else
-            echo "No SSH key provided; skipping SSH agent setup"
-            # Ensure SSH_AUTH_SOCK is explicitly empty for later steps
+            echo "No SSH keys found, will build without SSH"
             echo "SSH_AUTH_SOCK=" >> $GITHUB_ENV
           fi
 
@@ -192,11 +202,8 @@ on:
         id: vars
         run: echo "short_sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      - name: Install tools
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y jq curl
-          sudo curl -L "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq
+      - name: Install DevOps Tools
+        uses: ./.github/actions/install-devops-tools
 
       - name: Trivy FS scan
         uses: aquasecurity/trivy-action@0.24.0
@@ -208,7 +215,7 @@ on:
       - name: Build image (with SSH)
         if: ${{ env.SSH_AUTH_SOCK != '' }}
         run: |
-          echo "Using SSH agent for Docker build"
+          echo "🔑 Building with SSH support"
           DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
             -f "${{ inputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
@@ -217,7 +224,7 @@ on:
       - name: Build image (no SSH)
         if: ${{ env.SSH_AUTH_SOCK == '' }}
         run: |
-          echo "No SSH agent; building without --ssh"
+          echo "🚫 Building without SSH (no keys configured)"
           DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
             -f "${{ inputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
