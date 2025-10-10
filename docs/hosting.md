@@ -17,7 +17,7 @@ Secrets (org-level recommended):
 - CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET
 - CONTABO_API_USERNAME, CONTABO_API_PASSWORD
 - SSH_PRIVATE_KEY (fallback and provisioning)
-- REGISTRY_USERNAME (Bengo-Hub), REGISTRY_PASSWORD
+- REGISTRY_USERNAME (codevertex), REGISTRY_PASSWORD
 
 Inputs to workflow (with defaults):
 - provider: contabo (default)
