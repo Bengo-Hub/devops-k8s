@@ -38,4 +38,36 @@ ingress:
 
 envFromSecret: erp-api-env
 
+# Enhanced HPA with custom metrics
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+  # Custom metrics for intelligent scaling
+  customMetrics:
+    - type: Pods
+      metricName: bengoerp_api_http_requests_per_second
+      targetType: AverageValue
+      targetAverageValue: 50
+    - type: Pods
+      metricName: bengoerp_api_db_query_duration_seconds
+      targetType: AverageValue
+      targetAverageValue: 1.0
+    - type: Pods
+      metricName: bengoerp_api_active_users
+      targetType: AverageValue
+      targetAverageValue: 100
+
+# Production-ready VPA configuration
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Recreate"
+  minCPU: 200m
+  maxCPU: 2000m
+  minMemory: 256Mi
+  maxMemory: 4096Mi
+  recommendationMode: false  # Apply recommendations automatically in production
+
 
