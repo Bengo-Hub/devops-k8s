@@ -32,6 +32,20 @@ fi
 
 echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
+# Check for Helm (install if missing)
+if ! command -v helm &> /dev/null; then
+  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
+  if command -v snap &> /dev/null; then
+    sudo snap install helm --classic
+  else
+    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  fi
+  echo -e "${GREEN}✓ Helm installed${NC}"
+else
+  echo -e "${GREEN}✓ Helm already installed${NC}"
+fi
+
 # Check if cert-manager is installed (required for production ingress)
 if ! kubectl get namespace cert-manager >/dev/null 2>&1; then
   echo -e "${YELLOW}cert-manager not found. Installing cert-manager first...${NC}"
