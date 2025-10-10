@@ -31,11 +31,40 @@ if ! kubectl get namespace ingress-nginx >/dev/null 2>&1; then
     --timeout=120s || true
 fi
 
-# Check if already using hostNetwork
-if kubectl get deployment -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.template.spec.hostNetwork}' 2>/dev/null | grep -q "true"; then
-  echo -e "${GREEN}✓ Ingress controller already configured with hostNetwork${NC}"
-  kubectl get svc -n ingress-nginx ingress-nginx-controller
-  exit 0
+# Check current hostNetwork status
+CURRENT_HOSTNET=$(kubectl get deployment -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.template.spec.hostNetwork}' 2>/dev/null || echo "false")
+echo -e "${BLUE}Current hostNetwork setting: ${CURRENT_HOSTNET}${NC}"
+
+# Verify if actually using hostNetwork by checking pod
+POD_HOSTNET=$(kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o jsonpath='{.items[0].spec.hostNetwork}' 2>/dev/null || echo "false")
+echo -e "${BLUE}Pod hostNetwork setting: ${POD_HOSTNET}${NC}"
+
+if [ "$POD_HOSTNET" = "true" ]; then
+  echo -e "${GREEN}✓ Ingress controller already using hostNetwork${NC}"
+  
+  # But check if service needs updating
+  SVC_TYPE=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
+  if [ "$SVC_TYPE" = "LoadBalancer" ]; then
+    echo -e "${YELLOW}Service is still LoadBalancer type. This is OK for hostNetwork mode.${NC}"
+    echo -e "${YELLOW}Checking if ingress is actually working...${NC}"
+    
+    # Test if controller is listening on host
+    if kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o wide 2>/dev/null | grep -q "Running"; then
+      echo -e "${GREEN}✓ Ingress controller pod is running with hostNetwork${NC}"
+      kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o wide
+      echo ""
+      echo -e "${YELLOW}Checking ingress backends...${NC}"
+      kubectl get ingress -A
+      echo ""
+      echo -e "${BLUE}If you still get 404, the issue might be:${NC}"
+      echo "1. Ingress rules not matching the request"
+      echo "2. Backend service not ready"
+      echo "3. Certificate validation issues (use HTTP first)"
+      echo ""
+      echo "Try: curl -H 'Host: grafana.masterspace.co.ke' http://77.237.232.66/"
+      exit 0
+    fi
+  fi
 fi
 
 # Patch ingress controller to use hostNetwork
