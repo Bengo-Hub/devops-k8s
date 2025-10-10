@@ -84,39 +84,34 @@ sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/
 
 # Install or upgrade kube-prometheus-stack (idempotent)
 echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
-echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
+echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}"
 
+# Run Helm with output to both stdout and capture exit code
+set +e
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   -n monitoring \
   -f "${TEMP_VALUES}" \
-  --timeout=15m --wait --debug &
-HELM_PID=$!
-
-# Watch pods in real-time while Helm installs
-echo -e "${BLUE}Monitoring pod creation (Ctrl+C won't stop installation)...${NC}"
-WATCH_COUNT=0
-while kill -0 $HELM_PID 2>/dev/null; do
-  clear
-  echo -e "${YELLOW}=== Monitoring Stack Installation Progress ===${NC}"
-  echo ""
-  kubectl get pods -n monitoring 2>/dev/null || echo "Namespace not ready yet..."
-  echo ""
-  echo -e "${BLUE}Helm installation running (PID: $HELM_PID)...${NC}"
-  sleep 3
-  WATCH_COUNT=$((WATCH_COUNT + 1))
-  if [ $WATCH_COUNT -gt 300 ]; then
-    echo -e "${RED}Installation taking too long (15+ minutes). Check manually.${NC}"
-    break
-  fi
-done
+  --timeout=15m \
+  --wait 2>&1 | tee /tmp/helm-monitoring-install.log
+HELM_EXIT_CODE=${PIPESTATUS[0]}
+set -e
 
 # Check if Helm succeeded
-if wait $HELM_PID; then
+if [ $HELM_EXIT_CODE -eq 0 ]; then
   echo -e "${GREEN}✓ kube-prometheus-stack installed successfully${NC}"
 else
-  echo -e "${RED}Installation failed. Checking status...${NC}"
-  kubectl get pods -n monitoring
+  echo -e "${RED}Installation failed with exit code $HELM_EXIT_CODE${NC}"
+  echo ""
+  echo -e "${YELLOW}Recent log output:${NC}"
+  tail -50 /tmp/helm-monitoring-install.log || true
+  echo ""
+  echo -e "${YELLOW}Pod status:${NC}"
+  kubectl get pods -n monitoring || true
+  echo ""
+  echo -e "${YELLOW}Helm status:${NC}"
   helm -n monitoring status prometheus || true
+  echo ""
+  echo -e "${RED}Check /tmp/helm-monitoring-install.log for full details${NC}"
   exit 1
 fi
 

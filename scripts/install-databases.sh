@@ -78,63 +78,45 @@ sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VAL
 
 # Install or upgrade PostgreSQL (idempotent)
 echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
-echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
+echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
+set +e
 helm upgrade --install postgresql bitnami/postgresql \
   -n "${NAMESPACE}" \
   -f "${TEMP_PG_VALUES}" \
-  --timeout=10m --wait --debug &
-HELM_PG_PID=$!
+  --timeout=10m \
+  --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+HELM_PG_EXIT=${PIPESTATUS[0]}
+set -e
 
-# Watch pods in real-time
-WATCH_COUNT=0
-while kill -0 $HELM_PG_PID 2>/dev/null; do
-  echo -ne "\r${BLUE}PostgreSQL pods: ${NC}"
-  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --no-headers 2>/dev/null | wc -l | tr -d '\n'
-  echo -ne " | Status: "
-  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo -n "Creating"
-  sleep 2
-  WATCH_COUNT=$((WATCH_COUNT + 1))
-  if [ $WATCH_COUNT -gt 300 ]; then break; fi
-done
-echo ""
-
-if wait $HELM_PG_PID; then
+if [ $HELM_PG_EXIT -eq 0 ]; then
   echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 else
-  echo -e "${RED}PostgreSQL installation failed. Checking status...${NC}"
-  kubectl get pods -n "${NAMESPACE}"
+  echo -e "${RED}PostgreSQL installation failed with exit code $HELM_PG_EXIT${NC}"
+  tail -50 /tmp/helm-postgresql-install.log || true
+  kubectl get pods -n "${NAMESPACE}" || true
   exit 1
 fi
 
 # Install or upgrade Redis (idempotent)
 echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
-echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
+echo -e "${BLUE}This may take 3-5 minutes...${NC}"
 
+set +e
 helm upgrade --install redis bitnami/redis \
   -n "${NAMESPACE}" \
   -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-  --timeout=10m --wait --debug &
-HELM_REDIS_PID=$!
+  --timeout=10m \
+  --wait 2>&1 | tee /tmp/helm-redis-install.log
+HELM_REDIS_EXIT=${PIPESTATUS[0]}
+set -e
 
-# Watch pods in real-time
-WATCH_COUNT=0
-while kill -0 $HELM_REDIS_PID 2>/dev/null; do
-  echo -ne "\r${BLUE}Redis pods: ${NC}"
-  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --no-headers 2>/dev/null | wc -l | tr -d '\n'
-  echo -ne " | Status: "
-  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo -n "Creating"
-  sleep 2
-  WATCH_COUNT=$((WATCH_COUNT + 1))
-  if [ $WATCH_COUNT -gt 300 ]; then break; fi
-done
-echo ""
-
-if wait $HELM_REDIS_PID; then
+if [ $HELM_REDIS_EXIT -eq 0 ]; then
   echo -e "${GREEN}✓ Redis ready${NC}"
 else
-  echo -e "${RED}Redis installation failed. Checking status...${NC}"
-  kubectl get pods -n "${NAMESPACE}"
+  echo -e "${RED}Redis installation failed with exit code $HELM_REDIS_EXIT${NC}"
+  tail -50 /tmp/helm-redis-install.log || true
+  kubectl get pods -n "${NAMESPACE}" || true
   exit 1
 fi
 
