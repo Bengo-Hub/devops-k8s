@@ -16,6 +16,11 @@ spec:
         app: {{ include "app.name" . }}
       annotations:
         {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- if .Values.monitoring.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.monitoring.prometheus.port }}"
+        prometheus.io/path: "{{ .Values.monitoring.prometheus.path }}"
+        {{- end }}
     spec:
       containers:
         - name: {{ include "app.name" . }}
@@ -24,6 +29,11 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.service.targetPort }}
+            {{- if .Values.monitoring.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.monitoring.prometheus.port }}
+              protocol: TCP
+            {{- end }}
           env:
             {{- toYaml .Values.env | nindent 12 }}
           {{- if .Values.envFromSecret }}

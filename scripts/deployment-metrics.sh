@@ -26,6 +26,9 @@ NAMESPACE=${NAMESPACE:-erp}
 METRICS_PORT=${METRICS_PORT:-9091}
 METRICS_PATH=${METRICS_PATH:-/metrics}
 OUTPUT_DIR=${OUTPUT_DIR:-/tmp/deployment-metrics}
+DEPLOYMENT_TIMEOUT=${DEPLOYMENT_TIMEOUT:-300}
+HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-30}
+MAX_HEALTH_CHECK_ATTEMPTS=${MAX_HEALTH_CHECK_ATTEMPTS:-10}
 
 # Pre-flight checks
 if ! kubectl version --short >/dev/null 2>&1; then
@@ -321,6 +324,187 @@ EOF
   log_info "Generated dashboard configuration for $app_name"
 }
 
+# Health check function
+perform_health_check() {
+  local app_name=$1
+  local namespace=${NAMESPACE}
+
+  log_step "Performing comprehensive health check for $app_name"
+
+  local attempt=1
+  local max_attempts=$MAX_HEALTH_CHECK_ATTEMPTS
+
+  while [[ $attempt -le $max_attempts ]]; do
+    log_info "Health check attempt $attempt/$max_attempts"
+
+    # Basic connectivity check
+    if ! check_basic_connectivity "$app_name" "$namespace"; then
+      log_warning "Basic connectivity check failed"
+      ((attempt++))
+      sleep "$HEALTH_CHECK_INTERVAL"
+      continue
+    fi
+
+    # Application-specific health checks
+    if ! check_application_health "$app_name" "$namespace"; then
+      log_warning "Application health check failed"
+      ((attempt++))
+      sleep "$HEALTH_CHECK_INTERVAL"
+      continue
+    fi
+
+    # Performance regression check
+    if ! check_performance_regression "$app_name" "$namespace"; then
+      log_warning "Performance regression detected"
+      return 1
+    fi
+
+    log_success "All health checks passed for $app_name"
+    return 0
+  done
+
+  log_error "Health checks failed after $max_attempts attempts for $app_name"
+  return 1
+}
+
+# Basic connectivity check
+check_basic_connectivity() {
+  local app_name=$1
+  local namespace=$2
+
+  # Check if service is accessible
+  kubectl get service "$app_name" -n "$namespace" >/dev/null 2>&1 || return 1
+
+  # Check if pods are ready
+  local ready_pods=$(kubectl get deployment "$app_name" -n "$namespace" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  [[ $ready_pods -gt 0 ]] && return 0 || return 1
+}
+
+# Application-specific health checks
+check_application_health() {
+  local app_name=$1
+  local namespace=$2
+
+  # Check application metrics endpoint
+  local metrics_url="http://$app_name.$namespace.svc.cluster.local:9090/metrics"
+
+  # Try to fetch metrics (basic check)
+  if kubectl run test-client --image=curlimages/curl --rm -i --restart=Never \
+      -- curl -f -s "$metrics_url" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Performance regression detection
+check_performance_regression() {
+  local app_name=$1
+  local namespace=$2
+
+  # Get current response time metrics (if available)
+  local response_time=$(kubectl exec deployment/"$app_name" -n "$namespace" \
+      -- curl -w "%{time_total}" -o /dev/null -s "http://localhost:4000/api/v1/health" 2>/dev/null || echo "0")
+
+  # If response time is too high (>5 seconds), consider it a regression
+  if (( $(echo "$response_time > 5" | bc -l) )); then
+    log_warning "Performance regression detected for $app_name: response time ${response_time}s > 5s"
+    return 1
+  fi
+
+  return 0
+}
+
+# Automated rollback trigger
+trigger_rollback_if_needed() {
+  local app_name=$1
+  local namespace=${NAMESPACE}
+
+  log_info "Checking if rollback is needed for $app_name..."
+
+  # Get current deployment status
+  local health_score=$(calculate_health_score \
+      $(kubectl get deployment "$app_name" -n "$namespace" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0") \
+      $(kubectl get deployment "$app_name" -n "$namespace" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1"))
+
+  # If health score is below 50%, trigger rollback
+  if [[ $health_score -lt 50 ]]; then
+    log_error "Health score $health_score% is below threshold (50%) for $app_name. Triggering rollback..."
+
+    # Get previous successful revision
+    local prev_revision=$(kubectl get application "$app_name" -n argocd -o jsonpath='{.status.history[1].revision}' 2>/dev/null || echo "")
+
+    if [[ -n "$prev_revision" ]]; then
+      log_info "Rolling back $app_name to revision: $prev_revision"
+      kubectl patch application "$app_name" -n argocd -p "{\"spec\":{\"source\":{\"targetRevision\":\"$prev_revision\"}}}"
+
+      # Wait a bit for rollback to start
+      sleep 30
+
+      # Verify rollback status
+      if kubectl wait --for=condition=available --timeout=180s deployment/"$app_name" -n "$namespace"; then
+        log_success "Rollback completed successfully for $app_name"
+        return 0
+      else
+        log_error "Rollback failed for $app_name"
+        return 1
+      fi
+    else
+      log_error "No previous revision found for rollback of $app_name"
+      return 1
+    fi
+  fi
+
+  log_success "No rollback needed for $app_name. Deployment is healthy."
+  return 0
+}
+
+# Monitor deployment continuously
+monitor_deployment() {
+  local app_name=$1
+  local namespace=${NAMESPACE}
+
+  log_info "Starting continuous monitoring for $app_name..."
+
+  # Collect initial metrics
+  get_deployment_metrics "$app_name" "$namespace"
+
+  # Monitor for specified duration
+  local elapsed=0
+  while [[ $elapsed -lt $DEPLOYMENT_TIMEOUT ]]; do
+    log_info "Monitoring $app_name deployment... (${elapsed}s/${DEPLOYMENT_TIMEOUT}s)"
+
+    # Collect ongoing metrics
+    get_deployment_metrics "$app_name" "$namespace"
+
+    # Check for rollback triggers
+    if ! trigger_rollback_if_needed "$app_name"; then
+      log_error "Deployment monitoring stopped due to rollback trigger for $app_name"
+      exit 1
+    fi
+
+    sleep "$HEALTH_CHECK_INTERVAL"
+    elapsed=$((elapsed + HEALTH_CHECK_INTERVAL))
+  done
+
+  log_success "Deployment monitoring completed successfully for $app_name!"
+}
+
+# Calculate deployment health score
+calculate_health_score() {
+  local ready=$1
+  local desired=$2
+
+  if [[ $desired -eq 0 ]]; then
+    echo "0"
+    return
+  fi
+
+  # Calculate percentage and convert to 0-100 scale
+  local percentage=$(( ready * 100 / desired ))
+  echo "$percentage"
+}
+
 # Main execution
 main() {
   case "${1:-collect}" in
@@ -341,21 +525,31 @@ main() {
       generate_dashboard_config "$2"
       ;;
 
-    "all")
-      log_step "Running complete metrics collection pipeline"
+    "health")
+      if [[ -z "${2:-}" ]]; then
+        log_error "App name required for health check"
+        echo "Usage: $0 health <app_name>"
+        exit 1
+      fi
+      perform_health_check "$2"
+      ;;
 
-      collect_all_metrics
-      start_metrics_server
+    "rollback")
+      if [[ -z "${2:-}" ]]; then
+        log_error "App name required for rollback"
+        echo "Usage: $0 rollback <app_name>"
+        exit 1
+      fi
+      trigger_rollback_if_needed "$2"
+      ;;
 
-      # Generate dashboards for all deployments
-      for metrics_file in "$OUTPUT_DIR"/*_deployment_metrics.prom; do
-        if [[ -f "$metrics_file" ]]; then
-          app_name=$(basename "$metrics_file" _deployment_metrics.prom)
-          generate_dashboard_config "$app_name"
-        fi
-      done
-
-      log_success "Complete metrics pipeline executed"
+    "monitor")
+      if [[ -z "${2:-}" ]]; then
+        log_error "App name required for monitoring"
+        echo "Usage: $0 monitor <app_name>"
+        exit 1
+      fi
+      monitor_deployment "$2"
       ;;
 
     "stop")
@@ -364,13 +558,16 @@ main() {
       ;;
 
     *)
-      echo "Usage: $0 {collect|serve|dashboard|all|stop}"
+      echo "Usage: $0 {collect|serve|dashboard|health|rollback|monitor|all|stop} [app_name] [pid]"
       echo ""
       echo "Commands:"
-      echo "  collect    - Collect metrics for all deployments"
-      echo "  serve      - Start metrics server"
-      echo "  dashboard  - Generate Grafana dashboard config"
-      echo "  all        - Run complete pipeline"
+      echo "  collect    - Collect metrics for all deployments (or specific app)"
+      echo "  serve      - Start metrics server (requires PID for stop)"
+      echo "  dashboard  - Generate Grafana dashboard config (requires app name)"
+      echo "  health     - Perform health check on deployment (requires app name)"
+      echo "  rollback   - Trigger rollback if needed (requires app name)"
+      echo "  monitor    - Monitor deployment health continuously (requires app name)"
+      echo "  all        - Run complete pipeline (collect + serve + dashboards)"
       echo "  stop       - Stop metrics server (requires PID)"
       echo ""
       echo "Environment Variables:"
@@ -378,13 +575,12 @@ main() {
       echo "  METRICS_PORT      - Metrics server port (default: 9091)"
       echo "  METRICS_PATH      - Metrics endpoint path (default: /metrics)"
       echo "  OUTPUT_DIR        - Output directory (default: /tmp/deployment-metrics)"
+      echo "  DEPLOYMENT_TIMEOUT - Max monitoring time in seconds (default: 300)"
+      echo "  HEALTH_CHECK_INTERVAL - Health check interval in seconds (default: 30)"
+      echo "  MAX_HEALTH_CHECK_ATTEMPTS - Max health check attempts (default: 10)"
       echo ""
       echo "Examples:"
-      echo "  $0 collect"
-      echo "  $0 serve"
-      echo "  $0 dashboard erp-api"
-      echo "  $0 all"
-      exit 1
+      echo "  $0 collect erp-api          # Collect metrics for specific app"      echo "  $0 health erp-api          # Check health of erp-api deployment"      echo "  $0 monitor erp-api         # Monitor erp-api deployment continuously"      echo "  $0 rollback erp-api        # Trigger rollback if needed"      echo "  $0 serve                   # Start metrics server"      echo "  $0 stop 1234               # Stop metrics server with PID 1234"      echo "  $0 all                     # Run complete pipeline"      exit 1
       ;;
   esac
 }

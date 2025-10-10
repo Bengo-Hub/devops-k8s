@@ -9,7 +9,10 @@ spec:
     kind: Deployment
     name: {{ include "app.fullname" . }}
   updatePolicy:
-    updateMode: {{ .Values.verticalPodAutoscaling.updateMode | default "Auto" }}
+    updateMode: {{ .Values.verticalPodAutoscaling.updateMode | default "Recreate" }}
+    {{- if .Values.verticalPodAutoscaling.recommendationMode }}
+    # Safety: Only provide recommendations, don't auto-update
+    {{- end }}
   resourcePolicy:
     containerPolicies:
       - containerName: {{ include "app.name" . }}
@@ -18,6 +21,6 @@ spec:
           memory: {{ .Values.verticalPodAutoscaling.minMemory | default "128Mi" }}
         maxAllowed:
           cpu: {{ .Values.verticalPodAutoscaling.maxCPU | default "2000m" }}
-          memory: {{ .Values.verticalPodAutoscaling.maxMemory | default "2048Mi" }}
-        controlledResources: ["cpu", "memory"]
+          memory: {{ .Values.verticalPodAutoscaling.maxMemory | default "4096Mi" }}
+        controlledResources: {{ .Values.verticalPodAutoscaling.controlledResources | default (list "cpu" "memory") | toYaml | nindent 10 }}
 {{- end }}
