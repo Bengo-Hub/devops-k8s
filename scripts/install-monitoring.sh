@@ -66,13 +66,21 @@ if helm -n monitoring status prometheus >/dev/null 2>&1; then
   helm upgrade prometheus prometheus-community/kube-prometheus-stack \
     -n monitoring \
     -f "${TEMP_VALUES}" \
+    --timeout=15m \
     --wait
 else
-  echo -e "${YELLOW}Installing kube-prometheus-stack...${NC}"
+  echo -e "${YELLOW}Installing kube-prometheus-stack (this may take 10-15 minutes)...${NC}"
   helm install prometheus prometheus-community/kube-prometheus-stack \
     -n monitoring \
     -f "${TEMP_VALUES}" \
-    --wait
+    --timeout=15m \
+    --wait \
+    --debug || {
+      echo -e "${RED}Installation timed out or failed. Checking status...${NC}"
+      kubectl get pods -n monitoring
+      helm -n monitoring status prometheus || true
+      exit 1
+    }
 fi
 
 # Apply ERP-specific alerts
