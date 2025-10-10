@@ -10,28 +10,28 @@ This repository contains reusable DevOps assets for deploying applications to a 
 Quick Links
 -----------
 - **Getting Started**
-  - docs overview: docs/README.md
-  - **K8s choice (k3s vs kubeadm):** docs/k8s-comparison.md ⭐
-  - Contabo VPS with k3s (recommended): docs/contabo-setup.md
-  - Contabo VPS with kubeadm (alternative): docs/contabo-setup-kubeadm.md
-  - hosting environments and providers: docs/hosting.md
-  - onboarding a repo: docs/onboarding.md
+  - docs overview: [docs/README.md](docs/README.md)
+  - **K8s choice (k3s vs kubeadm):** [docs/k8s-comparison.md](docs/k8s-comparison.md) ⭐
+  - Contabo VPS with k3s (recommended): [docs/contabo-setup.md](docs/contabo-setup.md)
+  - Contabo VPS with kubeadm (alternative): [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md)
+  - hosting environments and providers: [docs/hosting.md](docs/hosting.md)
+  - onboarding a repo: [docs/onboarding.md](docs/onboarding.md)
 
 - **Deployment**
-  - pipelines and workflows: docs/pipelines.md
-  - Argo CD setup and GitOps: docs/argocd.md
-  - GitHub secrets required: docs/github-secrets.md
-  - environments and secrets: docs/env-vars.md
+  - pipelines and workflows: [docs/pipelines.md](docs/pipelines.md)
+  - Argo CD setup and GitOps: [docs/argocd.md](docs/argocd.md)
+  - GitHub secrets required: [docs/github-secrets.md](docs/github-secrets.md)
+  - environments and secrets: [docs/env-vars.md](docs/env-vars.md)
 
 - **Infrastructure**
-  - **database setup (PostgreSQL + Redis):** docs/database-setup.md
-  - certificates and domains: docs/certificates.md
-  - API gateway and ingress: docs/domains-gateway.md
-  - image registry and SBOM: docs/image-registry.md
+  - **database setup (PostgreSQL + Redis):** [docs/database-setup.md](docs/database-setup.md)
+  - certificates and domains: [docs/certificates.md](docs/certificates.md)
+  - API gateway and ingress: [docs/domains-gateway.md](docs/domains-gateway.md)
+  - image registry and SBOM: [docs/image-registry.md](docs/image-registry.md)
 
 - **Operations**
-  - monitoring and alerts (Prometheus, Grafana): docs/monitoring.md
-  - scaling (HPA, VPA): docs/scaling.md
-  - security best practices: docs/security.md
+  - monitoring and alerts (Prometheus, Grafana): [docs/monitoring.md](docs/monitoring.md)
+  - scaling (HPA, VPA): [docs/scaling.md](docs/scaling.md)
+  - security best practices: [docs/security.md](docs/security.md)
 
 
