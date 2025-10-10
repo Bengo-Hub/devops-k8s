@@ -223,7 +223,7 @@ Ensure Docker Hub credentials are in the namespace:
 ```bash
 kubectl create secret docker-registry regcred \
   --docker-server=docker.io \
-  --docker-username=Bengo-Hub \
+  --docker-username=codevertex \
   --docker-password=<TOKEN> \
   -n erp
 ```
