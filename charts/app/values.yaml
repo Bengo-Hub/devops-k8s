@@ -69,12 +69,16 @@ autoscaling:
 
 # Vertical Pod Autoscaler configuration
 verticalPodAutoscaling:
-  enabled: false
-  updateMode: Auto
+  enabled: true
+  updateMode: "Recreate"
   minCPU: 100m
   maxCPU: 2000m
   minMemory: 128Mi
-  maxMemory: 2048Mi
+  maxMemory: 4096Mi
+  # Safety mechanisms
+  controlledResources: ["cpu", "memory"]
+  # Recommendation-only mode for safer rollout
+  recommendationMode: true
 
 ingress:
   enabled: true
@@ -89,9 +93,29 @@ ingress:
         - example.com
       secretName: app-tls
 
-podAnnotations: {}
-nodeSelector: {}
-tolerations: []
-affinity: {}
+# Prometheus monitoring configuration
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    scrape: true
+    port: 9090
+    path: "/metrics"
+    interval: "30s"
+    labels:
+      app: "{{ include \"app.name\" . }}"
+      release: "{{ .Release.Name }}"
+
+# Service monitor for Prometheus Operator
+serviceMonitor:
+  enabled: true
+  namespace: "monitoring"
+  interval: "30s"
+  scrapeTimeout: "10s"
+  labels:
+    release: "prometheus"
+  selector:
+    matchLabels:
+      app: "{{ include \"app.name\" . }}"
 
 
