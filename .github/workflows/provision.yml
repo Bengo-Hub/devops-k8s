@@ -1,0 +1,72 @@
+name: Provision Cluster Services
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip if KUBE_CONFIG not set
+        if: ${{ secrets.KUBE_CONFIG == '' }}
+        run: |
+          echo "KUBE_CONFIG not provided. Skipping cluster provisioning."
+          exit 0
+
+      - name: Install kubectl
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          set -e
+          VER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+          curl -LO https://dl.k8s.io/release/${VER}/bin/linux/amd64/kubectl
+          sudo install -m 0755 kubectl /usr/local/bin/kubectl
+          kubectl version --client=true
+
+      - name: Install Helm
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
+
+      - name: Configure kubeconfig
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          kubectl cluster-info
+
+      - name: Ensure scripts executable
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          chmod +x scripts/*.sh || true
+
+      - name: Install cert-manager (idempotent)
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          ./scripts/install-cert-manager.sh
+
+      - name: Install Argo CD (idempotent)
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          ./scripts/install-argocd.sh
+
+      - name: Install Monitoring (idempotent)
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          ./scripts/install-monitoring.sh
+
+      - name: Install Databases (idempotent)
+        if: ${{ secrets.KUBE_CONFIG != '' }}
+        run: |
+          ./scripts/install-databases.sh
+
+
