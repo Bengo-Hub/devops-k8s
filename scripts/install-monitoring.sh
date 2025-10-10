@@ -20,9 +20,38 @@ echo -e "${GREEN}Installing Prometheus + Grafana monitoring stack (Production)..
 echo -e "${BLUE}Grafana Domain: ${GRAFANA_DOMAIN}${NC}"
 
 # Pre-flight checks
-if ! kubectl version --short >/dev/null 2>&1; then
-  echo -e "${RED}kubectl not configured. Aborting.${NC}"
+if ! command -v kubectl &> /dev/null; then
+  echo -e "${RED}kubectl command not found. Aborting.${NC}"
   exit 1
+fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
+
+# Check for storage class (required for Prometheus/Grafana PVCs)
+if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
+  echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
+  "${SCRIPT_DIR}/install-storage-provisioner.sh"
+else
+  echo -e "${GREEN}✓ Default storage class available${NC}"
+fi
+
+# Check for Helm (install if missing)
+if ! command -v helm &> /dev/null; then
+  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
+  if command -v snap &> /dev/null; then
+    sudo snap install helm --classic
+  else
+    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  fi
+  echo -e "${GREEN}✓ Helm installed${NC}"
+else
+  echo -e "${GREEN}✓ Helm already installed${NC}"
 fi
 
 # Check if cert-manager is installed (required for Grafana ingress TLS)
@@ -50,21 +79,40 @@ fi
 # Update prometheus-values.yaml with dynamic domain
 TEMP_VALUES=/tmp/prometheus-values-prod.yaml
 cp "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" "${TEMP_VALUES}"
-sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}"
+sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
+  sed -i '' "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
 
-# Install or upgrade kube-prometheus-stack
-if helm -n monitoring status prometheus >/dev/null 2>&1; then
-  echo -e "${YELLOW}kube-prometheus-stack already installed. Upgrading...${NC}"
-  helm upgrade prometheus prometheus-community/kube-prometheus-stack \
-    -n monitoring \
-    -f "${TEMP_VALUES}" \
-    --wait
+# Install or upgrade kube-prometheus-stack (idempotent)
+echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
+echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}"
+
+# Run Helm with output to both stdout and capture exit code
+set +e
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  -f "${TEMP_VALUES}" \
+  --timeout=15m \
+  --wait 2>&1 | tee /tmp/helm-monitoring-install.log
+HELM_EXIT_CODE=${PIPESTATUS[0]}
+set -e
+
+# Check if Helm succeeded
+if [ $HELM_EXIT_CODE -eq 0 ]; then
+  echo -e "${GREEN}✓ kube-prometheus-stack installed successfully${NC}"
 else
-  echo -e "${YELLOW}Installing kube-prometheus-stack...${NC}"
-  helm install prometheus prometheus-community/kube-prometheus-stack \
-    -n monitoring \
-    -f "${TEMP_VALUES}" \
-    --wait
+  echo -e "${RED}Installation failed with exit code $HELM_EXIT_CODE${NC}"
+  echo ""
+  echo -e "${YELLOW}Recent log output:${NC}"
+  tail -50 /tmp/helm-monitoring-install.log || true
+  echo ""
+  echo -e "${YELLOW}Pod status:${NC}"
+  kubectl get pods -n monitoring || true
+  echo ""
+  echo -e "${YELLOW}Helm status:${NC}"
+  helm -n monitoring status prometheus || true
+  echo ""
+  echo -e "${RED}Check /tmp/helm-monitoring-install.log for full details${NC}"
+  exit 1
 fi
 
 # Apply ERP-specific alerts

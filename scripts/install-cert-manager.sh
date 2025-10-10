@@ -20,9 +20,30 @@ echo -e "${GREEN}Installing cert-manager (Production)...${NC}"
 echo -e "${BLUE}Let's Encrypt Email: ${LETSENCRYPT_EMAIL}${NC}"
 
 # Pre-flight checks
-if ! kubectl version --short >/dev/null 2>&1; then
-  echo -e "${RED}kubectl not configured. Aborting.${NC}"
+if ! command -v kubectl &> /dev/null; then
+  echo -e "${RED}kubectl command not found. Aborting.${NC}"
   exit 1
+fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
+
+# Check for Helm (install if missing)
+if ! command -v helm &> /dev/null; then
+  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
+  if command -v snap &> /dev/null; then
+    sudo snap install helm --classic
+  else
+    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  fi
+  echo -e "${GREEN}✓ Helm installed${NC}"
+else
+  echo -e "${GREEN}✓ Helm already installed${NC}"
 fi
 
 # Install or upgrade cert-manager

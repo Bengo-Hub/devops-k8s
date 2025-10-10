@@ -378,6 +378,47 @@ jobs:
             kubectl -n "$NS" create secret generic "$SECRET_NAME" --from-literal=JWT_SECRET="$JWT"
           fi
 
+      - name: Run database migrations (Django apps)
+        if: ${{ inputs.deploy && env.KUBE_CONFIG_B64 != '' && inputs.app_name == 'erp-api' }}
+        env:
+          NS: ${{ inputs.namespace }}
+          IMAGE_REPO: ${{ steps.img.outputs.repo }}
+          SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
+        run: |
+          echo "::group::Running database migrations"
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          
+          # Create migration job
+          cat > /tmp/migrate-job.yaml <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: erp-migrate-${{ steps.vars.outputs.short_sha }}
+            namespace: ${NS}
+          spec:
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                - name: migrate
+                  image: ${IMAGE_REPO}:${SHORT_SHA}
+                  command: ["python", "manage.py", "migrate"]
+                  envFrom:
+                  - secretRef:
+                      name: ${{ inputs.env_secret_name }}
+          EOF
+          
+          kubectl apply -f /tmp/migrate-job.yaml
+          kubectl wait --for=condition=complete job/erp-migrate-${{ steps.vars.outputs.short_sha }} -n ${NS} --timeout=300s || {
+            echo "Migration job logs:"
+            kubectl logs job/erp-migrate-${{ steps.vars.outputs.short_sha }} -n ${NS} || true
+            exit 1
+          }
+          echo "✅ Database migrations completed"
+          echo "::endgroup::"
+
       - name: SSH deploy to VPS (optional)
         if: ${{ inputs.ssh_deploy || (inputs.provider == 'contabo' && inputs.contabo_api && steps.vars.outputs.short_sha != '' ) }}
         uses: appleboy/ssh-action@v1.2.0
