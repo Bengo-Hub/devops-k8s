@@ -144,14 +144,26 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Configure SSH for build secrets (optional)
-        if: ${{ env.DOCKER_SSH_KEY_B64 != '' }}
+        env:
+          SSH_PRIV: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p -m 0700 $HOME/.ssh
-          echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
+          if [ -n "${DOCKER_SSH_KEY_B64:-}" ]; then
+            echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
+            echo "Loaded DOCKER_SSH_KEY"
+          elif [ -n "${SSH_PRIV:-}" ]; then
+            printf "%s" "$SSH_PRIV" > $HOME/.ssh/id_rsa
+            echo "Loaded SSH_PRIVATE_KEY as fallback for Docker build"
+          else
+            echo "No SSH key provided; skipping SSH agent setup"
+            exit 0
+          fi
           chmod 0600 $HOME/.ssh/id_rsa
           ssh-keyscan github.com >> $HOME/.ssh/known_hosts 2>/dev/null || true
           eval "$(ssh-agent)"
           ssh-add $HOME/.ssh/id_rsa
+          # Persist SSH agent socket for later steps
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
 
       - name: Determine image repository
         id: img
