@@ -73,6 +73,13 @@ jobs:
           ./scripts/install-storage-provisioner.sh
           echo "::endgroup::"
 
+      - name: Configure ingress controller (idempotent)
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Configuring NGINX Ingress Controller"
+          ./scripts/configure-ingress-controller.sh
+          echo "::endgroup::"
+
       - name: Install cert-manager (idempotent)
         if: env.skip_provision != 'true'
         run: |
