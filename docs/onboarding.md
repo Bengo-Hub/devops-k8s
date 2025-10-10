@@ -27,7 +27,7 @@ else
   GIT_COMMIT_ID=${GITHUB_SHA::8}
 fi
 
-IMAGE_REPO=${IMAGE_REPO:-docker.io/Bengo-Hub/my-app}
+IMAGE_REPO=${IMAGE_REPO:-docker.io/codevertex/my-app}
 
 echo "[INFO] Trivy FS scan"
 trivy fs . --exit-code $TRIVY_ECODE || true
@@ -112,7 +112,7 @@ jobs:
 Create `apps/my-app/values.yaml`:
 ```yaml
 image:
-  repository: docker.io/Bengo-Hub/my-app
+  repository: docker.io/codevertex/my-app
   tag: latest
 
 service:
