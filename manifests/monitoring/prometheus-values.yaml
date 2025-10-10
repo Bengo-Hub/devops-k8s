@@ -26,8 +26,11 @@ grafana:
     ingressClassName: nginx
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/rewrite-target: /
     hosts:
       - grafana.masterspace.co.ke
+    path: /
+    pathType: Prefix
     tls:
       - secretName: grafana-tls
         hosts:
