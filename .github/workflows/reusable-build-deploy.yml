@@ -125,47 +125,48 @@ on:
       CONTABO_API_PASSWORD:
         required: false
 
-jobs:
   build-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
-    env:
-      REG_USER: ${{ secrets.REGISTRY_USERNAME }}
-      REG_PASS: ${{ secrets.REGISTRY_PASSWORD }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
-      DOCKER_SSH_KEY_B64: ${{ secrets.DOCKER_SSH_KEY }}
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      DOCKER_SSH_KEY: ${{ secrets.DOCKER_SSH_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Configure SSH for build secrets (optional)
         env:
           SSH_PRIV: ${{ secrets.SSH_PRIVATE_KEY }}
+          DOCKER_SSH_KEY_B64: ${{ secrets.DOCKER_SSH_KEY }}
         run: |
           mkdir -p -m 0700 $HOME/.ssh
-          if [ -n "${DOCKER_SSH_KEY_B64:-}" ]; then
-            echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
-            echo "Loaded DOCKER_SSH_KEY"
-          elif [ -n "${SSH_PRIV:-}" ]; then
-            printf "%s" "$SSH_PRIV" > $HOME/.ssh/id_rsa
-            echo "Loaded SSH_PRIVATE_KEY as fallback for Docker build"
+          # Check if either DOCKER_SSH_KEY_B64 or SSH_PRIV is provided and not empty
+          if { [ -n "${DOCKER_SSH_KEY_B64:-}" ] && [ "$DOCKER_SSH_KEY_B64" != "" ]; } || { [ -n "${SSH_PRIV:-}" ] && [ "$SSH_PRIV" != "" ]; }; then
+            if [ -n "${DOCKER_SSH_KEY_B64:-}" ] && [ "$DOCKER_SSH_KEY_B64" != "" ]; then
+              echo "Loading DOCKER_SSH_KEY"
+              echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
+            else
+              echo "Loading SSH_PRIVATE_KEY as fallback for Docker build"
+              printf "%s" "$SSH_PRIV" > $HOME/.ssh/id_rsa
+            fi
+            chmod 0600 $HOME/.ssh/id_rsa
+            ssh-keyscan github.com >> $HOME/.ssh/known_hosts 2>/dev/null || true
+            eval "$(ssh-agent)"
+            ssh-add $HOME/.ssh/id_rsa
+            # Persist SSH agent socket for later steps
+            echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
           else
             echo "No SSH key provided; skipping SSH agent setup"
-            # Ensure SSH_AUTH_SOCK is unset for later steps
+            # Ensure SSH_AUTH_SOCK is explicitly empty for later steps
             echo "SSH_AUTH_SOCK=" >> $GITHUB_ENV
-            exit 0
           fi
-          chmod 0600 $HOME/.ssh/id_rsa
-          ssh-keyscan github.com >> $HOME/.ssh/known_hosts 2>/dev/null || true
-          eval "$(ssh-agent)"
-          ssh-add $HOME/.ssh/id_rsa
-          # Persist SSH agent socket for later steps
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
 
       - name: Determine image repository
         id: img
@@ -211,7 +212,7 @@ jobs:
           DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
             -f "${{ inputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
-            --ssh default=$SSH_AUTH_SOCK
+            --ssh default="$SSH_AUTH_SOCK"
 
       - name: Build image (no SSH)
         if: ${{ env.SSH_AUTH_SOCK == '' }}
