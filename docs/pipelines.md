@@ -106,7 +106,7 @@ jobs:
         echo "NAMESPACE=erp" >> $GITHUB_ENV
         echo "ENV_SECRET_NAME=erp-api-env" >> $GITHUB_ENV
         echo "REGISTRY_SERVER=docker.io" >> $GITHUB_ENV
-        echo "REGISTRY_NAMESPACE=Bengo-Hub" >> $GITHUB_ENV
+        echo "REGISTRY_NAMESPACE=codevertex" >> $GITHUB_ENV
 
     - name: Run production deployment
       env:
@@ -139,7 +139,7 @@ jobs:
     with:
       app_name: erp-api
       registry_server: docker.io
-      registry_namespace: Bengo-Hub
+      registry_namespace: codevertex
       values_file_path: apps/erp-api/values.yaml
       deploy: true
       namespace: erp
@@ -165,7 +165,7 @@ jobs:
 | `NAMESPACE` | Kubernetes namespace | `erp` |
 | `ENV_SECRET_NAME` | Kubernetes secret name | `app-env` |
 | `REGISTRY_SERVER` | Container registry | `docker.io` |
-| `REGISTRY_NAMESPACE` | Registry namespace | `Bengo-Hub` |
+| `REGISTRY_NAMESPACE` | Registry namespace | `codevertex` |
 | `DOCKER_SSH_KEY` | SSH key for private repos | *From secret* |
 | `KUBE_CONFIG` | Base64 kubeconfig | *From secret* |
 

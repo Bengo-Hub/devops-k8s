@@ -63,7 +63,7 @@ Production Readiness Checklist
 - [x] Contabo API integration with SSH fallback
 
 ### GitHub Secrets (Organization Level)
-- [x] REGISTRY_USERNAME (Bengo-Hub)
+- [x] REGISTRY_USERNAME (codevertex)
 - [x] REGISTRY_PASSWORD (Docker Hub token)
 - [x] KUBE_CONFIG (base64 kubeconfig)
 - [x] SSH_PRIVATE_KEY (VPS access)

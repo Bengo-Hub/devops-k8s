@@ -199,7 +199,7 @@ GitHub Secrets Required
 -----------------------
 
 Ensure these are set at organization level:
-- `REGISTRY_USERNAME` (Bengo-Hub)
+- `REGISTRY_USERNAME` (codevertex)
 - `REGISTRY_PASSWORD` (Docker Hub token)
 - `KUBE_CONFIG` (base64 kubeconfig from VPS)
 - `SSH_PRIVATE_KEY` (for VPS access)
