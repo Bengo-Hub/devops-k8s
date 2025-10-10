@@ -66,6 +66,13 @@ jobs:
         run: |
           chmod +x scripts/*.sh || true
 
+      - name: Install storage provisioner (idempotent)
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Installing Storage Provisioner"
+          ./scripts/install-storage-provisioner.sh
+          echo "::endgroup::"
+
       - name: Install cert-manager (idempotent)
         if: env.skip_provision != 'true'
         run: |
