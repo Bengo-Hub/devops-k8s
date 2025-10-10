@@ -14,14 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Skip if KUBE_CONFIG not set
-        if: ${{ secrets.KUBE_CONFIG == '' }}
-        run: |
-          echo "KUBE_CONFIG not provided. Skipping cluster provisioning."
-          exit 0
-
       - name: Install kubectl
-        if: ${{ secrets.KUBE_CONFIG != '' }}
         run: |
           set -e
           VER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
@@ -30,43 +23,109 @@ jobs:
           kubectl version --client=true
 
       - name: Install Helm
-        if: ${{ secrets.KUBE_CONFIG != '' }}
         run: |
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm version
 
       - name: Configure kubeconfig
-        if: ${{ secrets.KUBE_CONFIG != '' }}
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
+          echo "::group::Checking KUBE_CONFIG"
+          if [ -z "$KUBE_CONFIG_B64" ]; then
+            echo "❌ KUBE_CONFIG secret not provided."
+            echo "Please set KUBE_CONFIG at org/repo level with base64-encoded kubeconfig."
+            echo "skip_provision=true" >> $GITHUB_ENV
+            echo "::endgroup::"
+            exit 0
+          fi
+          echo "✅ KUBE_CONFIG secret found"
+          echo "::endgroup::"
+          
+          echo "::group::Decoding and configuring kubeconfig"
           mkdir -p ~/.kube
           echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
-          kubectl cluster-info
+          chmod 600 ~/.kube/config
+          echo "✅ Kubeconfig written to ~/.kube/config"
+          echo "::endgroup::"
+          
+          echo "::group::Testing cluster connectivity"
+          if kubectl cluster-info; then
+            echo "✅ Successfully connected to Kubernetes cluster"
+            kubectl get nodes || true
+            echo "skip_provision=false" >> $GITHUB_ENV
+          else
+            echo "❌ Failed to connect to cluster. Check your KUBE_CONFIG."
+            echo "skip_provision=true" >> $GITHUB_ENV
+            exit 1
+          fi
+          echo "::endgroup::"
 
       - name: Ensure scripts executable
-        if: ${{ secrets.KUBE_CONFIG != '' }}
+        if: env.skip_provision != 'true'
         run: |
           chmod +x scripts/*.sh || true
 
-      - name: Install cert-manager (idempotent)
-        if: ${{ secrets.KUBE_CONFIG != '' }}
+      - name: Install storage provisioner (idempotent)
+        if: env.skip_provision != 'true'
         run: |
+          echo "::group::Installing Storage Provisioner"
+          ./scripts/install-storage-provisioner.sh
+          echo "::endgroup::"
+
+      - name: Configure ingress controller (idempotent)
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Configuring NGINX Ingress Controller"
+          ./scripts/configure-ingress-controller.sh
+          echo "::endgroup::"
+
+      - name: Install cert-manager (idempotent)
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Installing cert-manager"
           ./scripts/install-cert-manager.sh
+          echo "::endgroup::"
 
       - name: Install Argo CD (idempotent)
-        if: ${{ secrets.KUBE_CONFIG != '' }}
+        if: env.skip_provision != 'true'
+        env:
+          ARGOCD_DOMAIN: argocd.masterspace.co.ke
         run: |
+          echo "::group::Installing Argo CD"
           ./scripts/install-argocd.sh
+          echo "::endgroup::"
 
       - name: Install Monitoring (idempotent)
-        if: ${{ secrets.KUBE_CONFIG != '' }}
+        if: env.skip_provision != 'true'
+        env:
+          GRAFANA_DOMAIN: grafana.masterspace.co.ke
         run: |
+          echo "::group::Installing Monitoring Stack"
           ./scripts/install-monitoring.sh
+          echo "::endgroup::"
 
       - name: Install Databases (idempotent)
-        if: ${{ secrets.KUBE_CONFIG != '' }}
+        if: env.skip_provision != 'true'
+        env:
+          DB_NAMESPACE: erp
+          PG_DATABASE: bengo_erp
         run: |
+          echo "::group::Installing Databases"
           ./scripts/install-databases.sh
-
-
+          echo "::endgroup::"
+      
+      - name: Summary
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Cluster Provisioning Complete"
+          echo "✅ cert-manager installed"
+          echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
+          echo "✅ Monitoring installed (https://grafana.masterspace.co.ke)"
+          echo "✅ Databases installed (PostgreSQL + Redis in 'erp' namespace)"
+          echo ""
+          echo "Next steps:"
+          echo "1. Point DNS to your VPS IP (77.237.232.66)"
+          echo "2. Configure Argo CD repository access"
+          echo "3. Deploy applications via Argo CD"
+          echo "::endgroup::"
