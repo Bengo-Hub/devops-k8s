@@ -54,7 +54,7 @@ Current Production Setup
 **Bengo-Hub Organization:**
 - VPS IP: 77.237.232.66
 - K8s: Full Kubernetes (kubeadm recommended for 48GB VPS)
-- Registry: Docker Hub (docker.io/Bengo-Hub)
+- Registry: Docker Hub (docker.io/codevertex)
 - Domains: *.masterspace.co.ke
 - Namespace: erp (for ERP apps)
 
