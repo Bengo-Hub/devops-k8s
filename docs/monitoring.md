@@ -324,6 +324,75 @@ spec:
 
 Apply: `kubectl apply -f erp-api-servicemonitor.yaml`
 
+Deployment Metrics
+------------------
+
+### Automated Deployment Metrics Collection
+
+The system includes automated deployment metrics collection for comprehensive monitoring of deployment health and performance.
+
+#### Deployment Metrics Script
+
+Use the deployment metrics collector script:
+
+```bash
+# Collect metrics for all deployments
+./scripts/deployment-metrics.sh collect
+
+# Start metrics server
+./scripts/deployment-metrics.sh serve
+
+# Generate Grafana dashboard config
+./scripts/deployment-metrics.sh dashboard erp-api
+
+# Run complete pipeline
+./scripts/deployment-metrics.sh all
+```
+
+#### Metrics Collected
+
+- **Replica Status**: Current, ready, available, and unavailable replicas
+- **Health Ratio**: Ratio of ready to total replicas (0-1)
+- **Deployment Revision**: Latest deployment revision number
+- **Pod Count**: Total number of pods for the deployment
+- **Resource Usage**: CPU and memory usage (if metrics server available)
+- **Rollout History**: Deployment revision history
+
+#### Prometheus Metrics Format
+
+```prometheus
+# Deployment replica metrics
+deployment_replicas_current{app="erp-api",namespace="erp"} 3
+deployment_replicas_ready{app="erp-api",namespace="erp"} 3
+deployment_health_ratio{app="erp-api",namespace="erp"} 1.0
+
+# Resource usage metrics
+deployment_cpu_usage_millicores{app="erp-api",namespace="erp"} 150
+deployment_memory_usage_mebibytes{app="erp-api",namespace="erp"} 256
+```
+
+#### Grafana Dashboard Integration
+
+Deployment metrics are automatically integrated into Grafana:
+
+1. **Deployment Health Panel**: Shows replica status and health ratio
+2. **Resource Usage Panel**: Displays CPU and memory consumption
+3. **Rollout History**: Tracks deployment revisions over time
+4. **Alert Integration**: HPA and deployment failure alerts
+
+#### Automated Metrics Collection
+
+The deployment metrics collector can be deployed as a Kubernetes resource:
+
+```bash
+kubectl apply -f manifests/monitoring/deployment-metrics.yaml
+```
+
+This creates:
+- **ServiceMonitor**: For Prometheus to scrape metrics
+- **Service**: Exposes metrics endpoint
+- **Deployment**: Runs metrics collection and server
+
 Grafana Dashboards
 ------------------
 
@@ -336,6 +405,7 @@ Grafana Dashboards
    - **6417**: Kubernetes cluster overview
    - **7249**: Kubernetes pod metrics
    - **1860**: Node Exporter Full
+   - **3119**: Kubernetes Deployment Metrics (for deployment-specific monitoring)
 
 ### Custom ERP Dashboard
 
@@ -345,6 +415,90 @@ Create custom dashboard for ERP metrics:
 - Active users
 - Error rates
 - Resource usage per service
+- Deployment health and rollout status
+
+### Deployment Metrics Dashboard
+
+A specialized dashboard for deployment monitoring includes:
+- **Replica Status**: Visual indicator of deployment health
+- **Scaling Events**: HPA scaling decisions and timing
+- **Resource Optimization**: VPA recommendations and adjustments
+- **Rollback History**: Track deployment rollbacks and reasons
+- **Performance Trends**: CPU/memory usage patterns over time
+
+Deployment Rollbacks
+--------------------
+
+### Automated Rollback Capabilities
+
+The system includes automated rollback capabilities for failed deployments with comprehensive monitoring and alerting.
+
+#### Rollback Script
+
+Use the deployment rollback script for managing deployment rollbacks:
+
+```bash
+# Check deployment status and history
+./scripts/deployment-rollback.sh status
+
+# View deployment history
+./scripts/deployment-rollback.sh history
+
+# Rollback to specific version
+./scripts/deployment-rollback.sh rollback
+
+# Enable auto-rollback on failure
+./scripts/deployment-rollback.sh auto-rollback
+```
+
+#### Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `APP_NAME` | Application name | Required |
+| `NAMESPACE` | Kubernetes namespace | `erp` |
+| `ROLLBACK_VERSION` | Version to rollback to | Required for rollback |
+| `AUTO_ROLLBACK` | Enable automatic rollback | `false` |
+| `HEALTH_CHECK_URL` | Health check endpoint | Optional |
+
+#### Manual Rollback
+
+```bash
+# Check current deployment status
+kubectl -n erp rollout history deployment erp-api
+
+# Rollback to previous version
+kubectl -n erp rollout undo deployment erp-api --to-revision=2
+
+# Monitor rollback status
+kubectl -n erp rollout status deployment erp-api
+```
+
+#### Automated Rollback
+
+Enable automatic rollback for production deployments:
+
+```bash
+APP_NAME=erp-api AUTO_ROLLBACK=true \
+  HEALTH_CHECK_URL=https://erpapi.masterspace.co.ke/api/v1/core/health/ \
+  ./scripts/deployment-rollback.sh auto-rollback
+```
+
+#### Rollback Monitoring
+
+The system monitors for:
+- **Deployment failures**: Automatic detection of failed rollouts
+- **Health check failures**: Application-level health verification
+- **Resource issues**: CPU/memory constraints during deployment
+- **Pod restart spikes**: Indication of application instability
+
+#### Alert Integration
+
+Rollback events are integrated with the alerting system:
+
+- **Critical**: Deployment failure with auto-rollback
+- **Warning**: Manual rollback initiated
+- **Info**: Successful rollback completion
 
 Log Aggregation (Optional)
 --------------------------
