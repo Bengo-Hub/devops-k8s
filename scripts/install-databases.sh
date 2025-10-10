@@ -34,6 +34,14 @@ fi
 
 echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
+# Check for storage class (required for PVCs)
+if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
+  echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
+  "${SCRIPT_DIR}/install-storage-provisioner.sh"
+else
+  echo -e "${GREEN}✓ Default storage class available${NC}"
+fi
+
 # Check for Helm (install if missing)
 if ! command -v helm &> /dev/null; then
   echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
@@ -68,39 +76,67 @@ cp "${MANIFESTS_DIR}/databases/postgresql-values.yaml" "${TEMP_PG_VALUES}"
 sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
   sed -i '' "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
 
-# Install or upgrade PostgreSQL
-if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  echo -e "${YELLOW}PostgreSQL already installed. Skipping re-install.${NC}"
-else
-  echo -e "${YELLOW}Installing PostgreSQL (may take 5-10 minutes)...${NC}"
-  helm install postgresql bitnami/postgresql \
-    -n "${NAMESPACE}" \
-    -f "${TEMP_PG_VALUES}" \
-    --timeout=10m \
-    --wait || {
-      echo -e "${RED}PostgreSQL installation failed. Checking status...${NC}"
-      kubectl get pods -n "${NAMESPACE}"
-      exit 1
-    }
-fi
-echo -e "${GREEN}✓ PostgreSQL ready${NC}"
+# Install or upgrade PostgreSQL (idempotent)
+echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
+echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
 
-# Install or upgrade Redis
-if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
-  echo -e "${YELLOW}Redis already installed. Skipping re-install.${NC}"
+helm upgrade --install postgresql bitnami/postgresql \
+  -n "${NAMESPACE}" \
+  -f "${TEMP_PG_VALUES}" \
+  --timeout=10m &
+HELM_PG_PID=$!
+
+# Watch pods in real-time
+WATCH_COUNT=0
+while kill -0 $HELM_PG_PID 2>/dev/null; do
+  echo -ne "\r${BLUE}PostgreSQL pods: ${NC}"
+  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --no-headers 2>/dev/null | wc -l | tr -d '\n'
+  echo -ne " | Status: "
+  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo -n "Creating"
+  sleep 2
+  WATCH_COUNT=$((WATCH_COUNT + 1))
+  if [ $WATCH_COUNT -gt 300 ]; then break; fi
+done
+echo ""
+
+if wait $HELM_PG_PID; then
+  echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 else
-  echo -e "${YELLOW}Installing Redis (may take 3-5 minutes)...${NC}"
-  helm install redis bitnami/redis \
-    -n "${NAMESPACE}" \
-    -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-    --timeout=10m \
-    --wait || {
-      echo -e "${RED}Redis installation failed. Checking status...${NC}"
-      kubectl get pods -n "${NAMESPACE}"
-      exit 1
-    }
+  echo -e "${RED}PostgreSQL installation failed. Checking status...${NC}"
+  kubectl get pods -n "${NAMESPACE}"
+  exit 1
 fi
-echo -e "${GREEN}✓ Redis ready${NC}"
+
+# Install or upgrade Redis (idempotent)
+echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
+echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
+
+helm upgrade --install redis bitnami/redis \
+  -n "${NAMESPACE}" \
+  -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+  --timeout=10m &
+HELM_REDIS_PID=$!
+
+# Watch pods in real-time
+WATCH_COUNT=0
+while kill -0 $HELM_REDIS_PID 2>/dev/null; do
+  echo -ne "\r${BLUE}Redis pods: ${NC}"
+  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --no-headers 2>/dev/null | wc -l | tr -d '\n'
+  echo -ne " | Status: "
+  kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo -n "Creating"
+  sleep 2
+  WATCH_COUNT=$((WATCH_COUNT + 1))
+  if [ $WATCH_COUNT -gt 300 ]; then break; fi
+done
+echo ""
+
+if wait $HELM_REDIS_PID; then
+  echo -e "${GREEN}✓ Redis ready${NC}"
+else
+  echo -e "${RED}Redis installation failed. Checking status...${NC}"
+  kubectl get pods -n "${NAMESPACE}"
+  exit 1
+fi
 
 # Retrieve credentials
 echo ""

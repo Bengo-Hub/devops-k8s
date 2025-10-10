@@ -32,6 +32,14 @@ fi
 
 echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
+# Check for storage class (required for Prometheus/Grafana PVCs)
+if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
+  echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
+  "${SCRIPT_DIR}/install-storage-provisioner.sh"
+else
+  echo -e "${GREEN}✓ Default storage class available${NC}"
+fi
+
 # Check for Helm (install if missing)
 if ! command -v helm &> /dev/null; then
   echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
@@ -74,27 +82,42 @@ cp "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" "${TEMP_VALUES}"
 sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
   sed -i '' "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
 
-# Install or upgrade kube-prometheus-stack
-if helm -n monitoring status prometheus >/dev/null 2>&1; then
-  echo -e "${YELLOW}kube-prometheus-stack already installed. Upgrading...${NC}"
-  helm upgrade prometheus prometheus-community/kube-prometheus-stack \
-    -n monitoring \
-    -f "${TEMP_VALUES}" \
-    --timeout=15m \
-    --wait
+# Install or upgrade kube-prometheus-stack (idempotent)
+echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
+echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
+
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  -f "${TEMP_VALUES}" \
+  --timeout=15m &
+HELM_PID=$!
+
+# Watch pods in real-time while Helm installs
+echo -e "${BLUE}Monitoring pod creation (Ctrl+C won't stop installation)...${NC}"
+WATCH_COUNT=0
+while kill -0 $HELM_PID 2>/dev/null; do
+  clear
+  echo -e "${YELLOW}=== Monitoring Stack Installation Progress ===${NC}"
+  echo ""
+  kubectl get pods -n monitoring 2>/dev/null || echo "Namespace not ready yet..."
+  echo ""
+  echo -e "${BLUE}Helm installation running (PID: $HELM_PID)...${NC}"
+  sleep 3
+  WATCH_COUNT=$((WATCH_COUNT + 1))
+  if [ $WATCH_COUNT -gt 300 ]; then
+    echo -e "${RED}Installation taking too long (15+ minutes). Check manually.${NC}"
+    break
+  fi
+done
+
+# Check if Helm succeeded
+if wait $HELM_PID; then
+  echo -e "${GREEN}✓ kube-prometheus-stack installed successfully${NC}"
 else
-  echo -e "${YELLOW}Installing kube-prometheus-stack (this may take 10-15 minutes)...${NC}"
-  helm install prometheus prometheus-community/kube-prometheus-stack \
-    -n monitoring \
-    -f "${TEMP_VALUES}" \
-    --timeout=15m \
-    --wait \
-    --debug || {
-      echo -e "${RED}Installation timed out or failed. Checking status...${NC}"
-      kubectl get pods -n monitoring
-      helm -n monitoring status prometheus || true
-      exit 1
-    }
+  echo -e "${RED}Installation failed. Checking status...${NC}"
+  kubectl get pods -n monitoring
+  helm -n monitoring status prometheus || true
+  exit 1
 fi
 
 # Apply ERP-specific alerts
