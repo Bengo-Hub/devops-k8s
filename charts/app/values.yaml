@@ -27,8 +27,54 @@ resources:
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 5
+  maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  # Advanced scaling policies
+  scaleDown:
+    stabilizationWindowSeconds: 300
+    policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+    selectPolicy: Min
+  scaleUp:
+    stabilizationWindowSeconds: 60
+    policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+    selectPolicy: Max
+  # Custom metrics for advanced scaling
+  customMetrics: []
+    # Example custom metrics:
+    # - type: Pods
+    #   metricName: http_requests_per_second
+    #   targetType: AverageValue
+    #   targetAverageValue: 100
+    # - type: Object
+    #   metricName: requests_per_second
+    #   describedObject:
+    #     apiVersion: apps/v1
+    #     kind: Deployment
+    #     name: erp-api
+    #   targetType: Value
+    #   targetValue: 1000
+
+# Vertical Pod Autoscaler configuration
+verticalPodAutoscaling:
+  enabled: false
+  updateMode: Auto
+  minCPU: 100m
+  maxCPU: 2000m
+  minMemory: 128Mi
+  maxMemory: 2048Mi
 
 ingress:
   enabled: true

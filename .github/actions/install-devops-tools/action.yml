@@ -1,0 +1,50 @@
+name: Install DevOps Tools
+
+description: 'Reusable composite action to install all required DevOps tools'
+
+inputs:
+  install_trivy:
+    description: 'Install Trivy security scanner'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install kubectl
+      shell: bash
+      run: |
+        VER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+        curl -LO https://dl.k8s.io/release/${VER}/bin/linux/amd64/kubectl
+        sudo install -m 0755 kubectl /usr/local/bin/kubectl
+        kubectl version --client=true
+
+    - name: Install Helm
+      shell: bash
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        helm version
+
+    - name: Install yq
+      shell: bash
+      run: |
+        sudo curl -L "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq
+        yq --version
+
+    - name: Install Trivy (optional)
+      shell: bash
+      if: ${{ inputs.install_trivy == 'true' }}
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install wget apt-transport-https gnupg lsb-release -y
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update -y
+        sudo apt-get install trivy -y
+        trivy --version
+
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y jq curl git openssl
