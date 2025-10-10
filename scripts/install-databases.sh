@@ -22,10 +22,17 @@ echo -e "${BLUE}Namespace: ${NAMESPACE}${NC}"
 echo -e "${BLUE}PostgreSQL Database: ${PG_DATABASE}${NC}"
 
 # Pre-flight checks
-if ! kubectl version --short >/dev/null 2>&1; then
-  echo -e "${RED}kubectl not configured. Aborting.${NC}"
+if ! command -v kubectl &> /dev/null; then
+  echo -e "${RED}kubectl command not found. Aborting.${NC}"
   exit 1
 fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
 # Add Bitnami repository
 echo -e "${YELLOW}Adding Bitnami Helm repository...${NC}"
@@ -49,11 +56,7 @@ sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VAL
 
 # Install or upgrade PostgreSQL
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  echo -e "${YELLOW}PostgreSQL already installed. Upgrading...${NC}"
-  helm upgrade postgresql bitnami/postgresql \
-    -n "${NAMESPACE}" \
-    -f "${TEMP_PG_VALUES}" \
-    --wait
+  echo -e "${YELLOW}PostgreSQL already installed. Skipping re-install.${NC}"
 else
   echo -e "${YELLOW}Installing PostgreSQL...${NC}"
   helm install postgresql bitnami/postgresql \
@@ -65,11 +68,7 @@ echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 
 # Install or upgrade Redis
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
-  echo -e "${YELLOW}Redis already installed. Upgrading...${NC}"
-  helm upgrade redis bitnami/redis \
-    -n "${NAMESPACE}" \
-    -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-    --wait
+  echo -e "${YELLOW}Redis already installed. Skipping re-install.${NC}"
 else
   echo -e "${YELLOW}Installing Redis...${NC}"
   helm install redis bitnami/redis \

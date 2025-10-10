@@ -20,10 +20,17 @@ echo -e "${GREEN}Installing cert-manager (Production)...${NC}"
 echo -e "${BLUE}Let's Encrypt Email: ${LETSENCRYPT_EMAIL}${NC}"
 
 # Pre-flight checks
-if ! kubectl version --short >/dev/null 2>&1; then
-  echo -e "${RED}kubectl not configured. Aborting.${NC}"
+if ! command -v kubectl &> /dev/null; then
+  echo -e "${RED}kubectl command not found. Aborting.${NC}"
   exit 1
 fi
+
+if ! kubectl cluster-info >/dev/null 2>&1; then
+  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
 # Install or upgrade cert-manager
 if kubectl get namespace cert-manager >/dev/null 2>&1; then
