@@ -58,11 +58,16 @@ sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VAL
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   echo -e "${YELLOW}PostgreSQL already installed. Skipping re-install.${NC}"
 else
-  echo -e "${YELLOW}Installing PostgreSQL...${NC}"
+  echo -e "${YELLOW}Installing PostgreSQL (may take 5-10 minutes)...${NC}"
   helm install postgresql bitnami/postgresql \
     -n "${NAMESPACE}" \
     -f "${TEMP_PG_VALUES}" \
-    --wait
+    --timeout=10m \
+    --wait || {
+      echo -e "${RED}PostgreSQL installation failed. Checking status...${NC}"
+      kubectl get pods -n "${NAMESPACE}"
+      exit 1
+    }
 fi
 echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 
@@ -70,11 +75,16 @@ echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
   echo -e "${YELLOW}Redis already installed. Skipping re-install.${NC}"
 else
-  echo -e "${YELLOW}Installing Redis...${NC}"
+  echo -e "${YELLOW}Installing Redis (may take 3-5 minutes)...${NC}"
   helm install redis bitnami/redis \
     -n "${NAMESPACE}" \
     -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-    --wait
+    --timeout=10m \
+    --wait || {
+      echo -e "${RED}Redis installation failed. Checking status...${NC}"
+      kubectl get pods -n "${NAMESPACE}"
+      exit 1
+    }
 fi
 echo -e "${GREEN}✓ Redis ready${NC}"
 
