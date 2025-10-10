@@ -89,7 +89,7 @@ echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   -n monitoring \
   -f "${TEMP_VALUES}" \
-  --timeout=15m &
+  --timeout=15m --wait --debug &
 HELM_PID=$!
 
 # Watch pods in real-time while Helm installs

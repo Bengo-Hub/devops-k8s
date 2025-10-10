@@ -83,7 +83,7 @@ echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
 helm upgrade --install postgresql bitnami/postgresql \
   -n "${NAMESPACE}" \
   -f "${TEMP_PG_VALUES}" \
-  --timeout=10m &
+  --timeout=10m --wait --debug &
 HELM_PG_PID=$!
 
 # Watch pods in real-time
@@ -114,7 +114,7 @@ echo -e "${BLUE}Starting in background. Watching pod status...${NC}"
 helm upgrade --install redis bitnami/redis \
   -n "${NAMESPACE}" \
   -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-  --timeout=10m &
+  --timeout=10m --wait --debug &
 HELM_REDIS_PID=$!
 
 # Watch pods in real-time
