@@ -5,6 +5,8 @@ This repository contains reusable DevOps assets for deploying applications to a 
 
 🚀 **Quick Start**: See [SETUP.md](SETUP.md) for fast-track deployment guide.
 
+✅ **Production Checklist**: See [PRODUCTION-CHECKLIST.md](PRODUCTION-CHECKLIST.md) for deployment status and manual steps.
+
 📖 **Full Documentation**: Browse [docs/](docs/README.md) for comprehensive guides.
 
 Quick Links
