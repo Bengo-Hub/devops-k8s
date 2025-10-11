@@ -86,6 +86,54 @@ sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/
 echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
 echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}"
 
+# Function to fix stuck Helm operations
+fix_stuck_helm() {
+    local release_name=${1:-prometheus}
+    local namespace=${2:-monitoring}
+
+    echo -e "${YELLOW}🔧 Attempting to fix stuck Helm operation for ${release_name}...${NC}"
+
+    # Check for stuck operations
+    if helm status ${release_name} -n ${namespace} 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
+        echo -e "${YELLOW}📊 Found stuck operation, attempting cleanup...${NC}"
+
+        # Delete stuck pods
+        kubectl delete pods -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --force --grace-period=0 2>/dev/null || true
+
+        # Wait for cleanup
+        sleep 10
+
+        # Try to rollback to last known good state
+        if helm history ${release_name} -n ${namespace} >/dev/null 2>&1; then
+            LAST_REVISION=$(helm history ${release_name} -n ${namespace} -o yaml | grep -A 5 "status:" | grep -B 5 "deployed" | head -1 | awk '{print $1}' | tail -1)
+            if [ -n "$LAST_REVISION" ] && [ "$LAST_REVISION" != "1" ]; then
+                echo -e "${YELLOW}📉 Rolling back to revision $LAST_REVISION...${NC}"
+                helm rollback ${release_name} $LAST_REVISION -n ${namespace} 2>/dev/null || true
+                sleep 15
+                return 0
+            fi
+        fi
+
+        # If rollback fails, uninstall and prepare for fresh install
+        echo -e "${YELLOW}🗑️  Rolling back failed, attempting uninstall...${NC}"
+        helm uninstall ${release_name} -n ${namespace} 2>/dev/null || true
+        sleep 20
+
+        # Clean up any remaining resources
+        kubectl delete pvc -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --all 2>/dev/null || true
+        kubectl delete pv -l "app.kubernetes.io/instance=${release_name}" --all 2>/dev/null || true
+
+        sleep 20
+        echo -e "${GREEN}✅ Cleanup completed${NC}"
+    fi
+}
+
+# Check for stuck operations first
+if helm status prometheus -n monitoring 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
+    echo -e "${YELLOW}⚠️  Detected stuck Helm operation. Running fix...${NC}"
+    fix_stuck_helm prometheus monitoring
+fi
+
 # Run Helm with output to both stdout and capture exit code
 set +e
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
@@ -111,6 +159,14 @@ else
   echo -e "${YELLOW}Helm status:${NC}"
   helm -n monitoring status prometheus || true
   echo ""
+
+  # Check for common failure patterns and attempt fixes
+  if grep -q "another operation.*in progress" /tmp/helm-monitoring-install.log 2>/dev/null; then
+    echo -e "${YELLOW}🔧 Stuck operation detected during installation. Running fix...${NC}"
+    fix_stuck_helm prometheus monitoring
+    echo -e "${BLUE}🔄 Please retry the installation after cleanup completes${NC}"
+  fi
+
   echo -e "${RED}Check /tmp/helm-monitoring-install.log for full details${NC}"
   exit 1
 fi
