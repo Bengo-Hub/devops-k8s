@@ -82,7 +82,7 @@ verticalPodAutoscaling:
 
 ingress:
   enabled: true
-  className: nginx
+  ingressClassName: nginx
   hosts:
     - host: example.com
       paths:
