@@ -25,7 +25,7 @@ autoscaling:
 
 ingress:
   enabled: true
-  className: nginx
+  ingressClassName: nginx
   hosts:
     - host: erpapi.masterspace.co.ke
       paths:
