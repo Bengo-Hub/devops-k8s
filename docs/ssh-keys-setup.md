@@ -47,6 +47,64 @@ This guide explains the different SSH keys used in the BengoERP deployment pipel
 - Uses either `DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY` (workflow handles fallback)
 - Configured in workflow step: `Configure SSH for build secrets`
 
+## Architecture Overview
+
+### Centralized vs App-Specific Logic
+
+The BengoERP deployment system uses a **centralized architecture** where:
+
+**Centralized Logic (in `devops-k8s/.github/workflows/reusable-build-deploy.yml`):**
+- Docker build process with SSH support
+- Trivy security scanning
+- Registry operations (login, push)
+- Database setup (postgres, redis, mongo, mysql)
+- Kubernetes operations and secrets management
+- Helm deployment updates
+- ArgoCD application refresh
+- Service URL discovery
+
+**App-Specific Logic (in individual `build.sh` files):**
+- App configuration (name, namespace, secrets)
+- App-specific build context and Dockerfile paths
+- App-specific deployment validation
+- App-specific secrets generation (Django migrations for erp-api)
+- Workflow orchestration and parameter passing
+
+### How Build Scripts Work
+
+Each application's `build.sh` script:
+
+1. **Handles app-specific configuration** (namespace, database types, secrets names)
+2. **Runs security scans** (Trivy filesystem and image scanning)
+3. **Builds Docker images** with SSH support for private repos
+4. **Calls the centralized workflow** with app-specific parameters
+5. **Provides deployment summary** and service URLs
+
+**Example workflow call from `erp-api/build.sh`:**
+```bash
+# Call the reusable workflow with app-specific parameters
+gh workflow run reusable-build-deploy \
+    --ref main \
+    --field app_name="${APP_NAME}" \
+    --field registry_server="${REGISTRY_SERVER}" \
+    --field registry_namespace="${REGISTRY_NAMESPACE}" \
+    --field deploy=true \
+    --field values_file_path="${VALUES_FILE_PATH}" \
+    --field namespace="${NAMESPACE}" \
+    --field git_user="${GIT_USER}" \
+    --field git_email="${GIT_EMAIL}" \
+    --field devops_repo="${DEVOPS_REPO}" \
+    --field setup_databases="${SETUP_DATABASES}" \
+    --field db_types="${DB_TYPES}" \
+    --field env_secret_name="${ENV_SECRET_NAME}" \
+    --field provider="${PROVIDER}" \
+    --field contabo_api="${CONTABO_API}" \
+    --field ssh_deploy="${SSH_DEPLOY}" \
+    --field ssh_host="${SSH_HOST:-}" \
+    --field ssh_user="${SSH_USER:-}" \
+    --field ssh_port="${SSH_PORT:-22}"
+```
+
 ## SSH Key Setup Process
 
 ### Step 1: Generate SSH Key Pair
@@ -159,26 +217,75 @@ When a workflow runs with `DOCKER_SSH_KEY` configured:
       eval "$(ssh-agent)"
       ssh-add $HOME/.ssh/id_rsa
       export SSH_AUTH_SOCK=$(ssh-agent -s)
+      cat > ~/.ssh/config << 'EOF'
+      Host github.com
+          HostName github.com
+          User git
+          IdentityFile ~/.ssh/id_rsa
+          IdentitiesOnly yes
+          StrictHostKeyChecking no
+      EOF
+      chmod 600 ~/.ssh/config
       git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"
     fi
 ```
 
-### Git Operations in Workflows
+### **SSH Configuration (RECOMMENDED FINAL SOLUTION)**
 
-Git operations in GitHub Actions workflows use the SSH configuration established in the "Configure SSH for build secrets" step. The workflow ensures SSH keys are properly loaded and available for git operations by:
+The most reliable approach is to create an SSH config file that ensures git operations always use the correct SSH key:
 
-1. **Loading SSH keys** from GitHub secrets (`DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY`)
-2. **Starting SSH agent** with `eval "$(ssh-agent)"`
-3. **Adding keys** with `ssh-add`
-4. **Setting SSH_AUTH_SOCK** environment variable for git operations
-5. **Configuring git** to use SSH with `git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"`
+```bash
+# Create SSH config file (RECOMMENDED APPROACH)
+cat > ~/.ssh/config << 'EOF'
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/git_deploy_key
+    IdentitiesOnly yes
+    StrictHostKeyChecking no
+EOF
+chmod 600 ~/.ssh/config
+```
+
+**What this config does:**
+- **IdentityFile**: Specifies which SSH key to use
+- **IdentitiesOnly yes**: Forces SSH to only use the specified key (prevents conflicts)
+- **StrictHostKeyChecking no**: Automatically accepts GitHub's host key
+
+### **Git Operations in Workflows**
+
+Git operations in GitHub Actions workflows use this SSH configuration. The workflow ensures:
+
+1. **SSH keys are loaded** from GitHub secrets (`DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY`)
+2. **SSH config file is created** with the correct settings
+3. **Git operations use SSH** by default when keys are available
+4. **Fallback to tokens** when SSH keys aren't configured
+
+**Workflow SSH Setup Process:**
+```yaml
+# Example from reusable-build-deploy.yml
+- name: Update values in devops-k8s
+  run: |
+    # Create SSH config for reliable git operations
+    cat > ~/.ssh/config << 'EOF'
+    Host github.com
+        HostName github.com
+        User git
+        IdentitiesOnly yes
+        StrictHostKeyChecking no
+        IdentityFile ~/.ssh/id_rsa
+    EOF
+    
+    git pull --rebase
+    git push
+```
 
 **Troubleshooting Git Operations:**
 - Verify `DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY` secrets are properly base64-encoded
 - Ensure the public key is added as a deploy key to the target repository
 - Check that "Allow write access" is enabled for push operations
 - The workflow will show "🔑 Using SSH for git operations" if SSH is configured correctly
-- **Recent Fix:** Git operations now explicitly use `SSH_AUTH_SOCK` and `IdentitiesOnly=yes` for reliable SSH key usage
+- **Final Solution:** SSH config file ensures reliable git operations with `IdentitiesOnly=yes`
 
 ```yaml
 # Example from reusable-build-deploy.yml
@@ -194,24 +301,6 @@ Git operations in GitHub Actions workflows use the SSH configuration established
 ```
 
 The SSH keys configured earlier enable these git operations to work with private repositories.
-
-### VPS Deployment
-
-For SSH deployment to VPS:
-
-```yaml
-# Example from reusable-build-deploy.yml
-- name: SSH deploy to VPS (optional)
-  uses: appleboy/ssh-action@v1.2.0
-  with:
-    host: ${{ secrets.VPS_IP }}
-    username: root
-    key: ${{ secrets.SSH_PRIVATE_KEY }}
-    script: |
-      docker pull image:latest
-      docker rm -f app || true
-      docker run -d app image:latest
-```
 
 ## Testing SSH Key Setup
 
