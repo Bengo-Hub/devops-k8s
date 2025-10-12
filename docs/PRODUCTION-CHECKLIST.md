@@ -35,7 +35,7 @@ Production Readiness Checklist
 - [x] Resources: 250m-2000m CPU, 512Mi-2Gi memory
 - [x] Domain: erpapi.masterspace.co.ke
 
-### ERP UI (bengobox-erpi-ui)
+### ERP UI (bengobox-erp-ui)
 - [x] Dockerfile with multi-stage build
 - [x] Health check endpoint: `/health` or `/`
 - [x] build.sh with Trivy scans
@@ -106,7 +106,7 @@ Edit `BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml`:
 ### 2. Apply Secrets to Cluster
 ```bash
 kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
-kubectl apply -f BengoERP/bengobox-erpi-ui/kubeSecrets/devENV.yaml
+kubectl apply -f BengoERP/bengobox-erp-ui/kubeSecrets/devENV.yaml
 ```
 
 ### 3. Deploy Applications via Argo CD

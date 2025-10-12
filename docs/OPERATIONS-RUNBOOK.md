@@ -34,7 +34,7 @@ This runbook provides comprehensive operational procedures for managing BengoERP
    git push origin main  # Triggers GitHub Actions workflow
 
    # For UI deployment
-   cd bengobox-erpi-ui
+   cd bengobox-erp-ui
    git push origin main  # Triggers GitHub Actions workflow
    ```
 

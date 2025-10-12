@@ -36,7 +36,7 @@ This guide provides step-by-step instructions for setting up all required access
 
 ### 1.2 Repository-Specific Secrets
 
-For the ERP UI repository (`bengobox-erpi-ui`), add these repository secrets:
+For the ERP UI repository (`bengobox-erp-ui`), add these repository secrets:
 
 - `DEVOPS_K8S_ACCESS_TOKEN` - The PAT created above
 - `DOCKER_SSH_KEY` - Base64-encoded SSH private key for Docker builds (optional)
