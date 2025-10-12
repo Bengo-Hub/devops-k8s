@@ -237,7 +237,7 @@ Run these commands on your VPS (erp-k8s-prod):
 
 ```bash
 # Generate SSH key pair (ED25519 recommended)
-ssh-keygen -t ed25519 -C "vps-git-access@bengoerp" -f ~/.ssh/git_deploy_key -N ""
+ssh-keygen -t ed25519 -C "vps-git-access@bengoerp" -f ~/.ssh/git_deploy_key -N "codevertex"
 
 # Set proper permissions
 chmod 600 ~/.ssh/git_deploy_key

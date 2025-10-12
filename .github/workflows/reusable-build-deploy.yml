@@ -151,6 +151,283 @@ on:
         required: false
         type: string
         description: "Custom SSH deployment command"
+
+  # Allow manual triggering for testing and direct execution
+  workflow_dispatch:
+    inputs:
+      # Generic branding and customization
+      deployment_summary_title:
+        required: false
+        type: string
+        default: "Deployment Summary"
+        description: "Title for the deployment summary"
+      deployment_success_message:
+        required: false
+        type: string
+        default: "Deployment completed! Application should be accessible via the URLs above."
+        description: "Success message displayed in deployment summary"
+      application_display_name:
+        required: false
+        type: string
+        description: "Human-readable application name for display"
+
+      # Core deployment parameters
+      app_name:
+        required: true
+        type: string
+        description: "Application name (used for naming resources)"
+      registry_server:
+        required: false
+        type: string
+        default: docker.io
+        description: "Container registry server"
+      registry_namespace:
+        required: false
+        type: string
+        default: codevertex
+        description: "Registry namespace/organization"
+      docker_context:
+        required: false
+        type: string
+        default: .
+        description: "Docker build context path"
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+        description: "Path to Dockerfile"
+      image_repository:
+        required: false
+        type: string
+        description: "Custom image repository"
+      deploy:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable deployment phase"
+      values_file_path:
+        required: true
+        type: string
+        description: "Path to Helm values file"
+      chart_repo_path:
+        required: false
+        type: string
+        default: charts/app
+        description: "Path to Helm chart"
+      namespace:
+        required: false
+        type: string
+        default: default
+        description: "Kubernetes namespace"
+      git_user:
+        required: false
+        type: string
+        default: "Titus Owuor"
+        description: "Git commit author name"
+      git_email:
+        required: false
+        type: string
+        default: "titusowuor30@gmail.com"
+        description: "Git commit author email"
+      devops_repo:
+        required: false
+        type: string
+        default: "Bengo-Hub/devops-k8s"
+        description: "DevOps repository"
+      setup_databases:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable database setup"
+      db_types:
+        required: false
+        type: string
+        default: "postgres,redis"
+        description: "Database types to setup"
+      env_secret_name:
+        required: false
+        type: string
+        default: "app-env"
+        description: "Environment secret name"
+      provider:
+        required: false
+        type: string
+        default: contabo
+        description: "Cloud provider"
+      contabo_api:
+        required: false
+        type: boolean
+        default: true
+        description: "Enable Contabo API"
+      contabo_instance_id:
+        required: false
+        type: string
+        default: "202846760"
+        description: "Contabo instance ID"
+      contabo_ip:
+        required: false
+        type: string
+        default: "77.237.232.66"
+        description: "Contabo instance IP"
+      contabo_datacenter:
+        required: false
+        type: string
+        default: "European Union 2"
+        description: "Contabo datacenter"
+      contabo_region:
+        required: false
+        type: string
+        default: "EU"
+        description: "Contabo region"
+      ssh_deploy:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable SSH deployment"
+      ssh_host:
+        required: false
+        type: string
+        description: "SSH target host"
+      ssh_user:
+        required: false
+        type: string
+        description: "SSH username"
+      ssh_port:
+        required: false
+        type: string
+        default: "22"
+        description: "SSH port"
+      ssh_deploy_command:
+        required: false
+        type: string
+        description: "Custom SSH deployment command"
+      registry_server:
+        required: false
+        type: string
+        default: docker.io
+        description: "Container registry server (e.g., docker.io, gcr.io, quay.io)"
+      registry_namespace:
+        required: false
+        type: string
+        default: codevertex
+        description: "Registry namespace/organization (e.g., codevertex, myorg)"
+      docker_context:
+        required: false
+        type: string
+        default: .
+        description: "Docker build context path (relative to repository root)"
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+        description: "Path to Dockerfile (relative to docker_context)"
+      image_repository:
+        required: false
+        type: string
+        description: "Custom image repository (overrides registry_server/namespace/app_name)"
+      deploy:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable deployment phase (build, push, and deploy)"
+      values_file_path:
+        required: true
+        type: string
+        description: "Path to Helm values file in devops-k8s repository (e.g., apps/erp-api/values.yaml)"
+      chart_repo_path:
+        required: false
+        type: string
+        default: charts/app
+        description: "Path to Helm chart in devops-k8s repository"
+      namespace:
+        required: false
+        type: string
+        default: default
+        description: "Kubernetes namespace for deployment (must exist or be creatable)"
+      # Git configuration for devops-k8s repo access
+      git_user:
+        required: false
+        type: string
+        default: "Titus Owuor"
+        description: "Git commit author name for devops-k8s repository updates"
+      git_email:
+        required: false
+        type: string
+        default: "titusowuor30@gmail.com"
+        description: "Git commit author email for devops-k8s repository updates"
+      devops_repo:
+        required: false
+        type: string
+        default: "Bengo-Hub/devops-k8s"
+        description: "DevOps repository in format 'owner/repo' for Helm updates"
+      # Database automation (optional)
+      setup_databases:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable automatic database setup (postgres, redis, mongo, mysql)"
+      db_types:
+        description: "Comma-separated list of databases to setup (postgres,redis,mongo,mysql)"
+        required: false
+        type: string
+        default: "postgres,redis"
+      env_secret_name:
+        description: "Kubernetes Secret name to create/update with DB URLs"
+        required: false
+        type: string
+        default: "app-env"
+      provider:
+        required: false
+        type: string
+        default: contabo
+        description: "Cloud provider (contabo, aws, gcp, azure)"
+      contabo_api:
+        required: false
+        type: boolean
+        default: true
+        description: "Enable Contabo API for instance management"
+      contabo_instance_id:
+        required: false
+        type: string
+        default: "202846760"
+        description: "Contabo instance ID for API operations"
+      contabo_ip:
+        required: false
+        type: string
+        default: "77.237.232.66"
+        description: "Contabo instance IP address"
+      contabo_datacenter:
+        required: false
+        type: string
+        default: "European Union 2"
+        description: "Contabo datacenter location"
+      contabo_region:
+        required: false
+        type: string
+        default: "EU"
+        description: "Contabo region (EU, US, etc.)"
+      ssh_deploy:
+        required: false
+        type: boolean
+        default: false
+        description: "Enable SSH deployment to VPS"
+      ssh_host:
+        required: false
+        type: string
+        description: "SSH target host (IP or hostname)"
+      ssh_user:
+        required: false
+        type: string
+        description: "SSH username for deployment"
+      ssh_port:
+        required: false
+        type: string
+        default: "22"
+        description: "SSH port (default: 22)"
+      ssh_deploy_command:
+        required: false
+        type: string
+        description: "Custom SSH deployment command"
     secrets:
       REGISTRY_USERNAME:
         required: false
@@ -206,6 +483,75 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Normalize inputs for both workflow_call and workflow_dispatch
+        id: inputs
+        run: |
+          # Handle both workflow_call and workflow_dispatch inputs
+          APP_NAME="${{ inputs.app_name || github.event.inputs.app_name }}"
+          REGISTRY_SERVER="${{ inputs.registry_server || github.event.inputs.registry_server || 'docker.io' }}"
+          REGISTRY_NAMESPACE="${{ inputs.registry_namespace || github.event.inputs.registry_namespace || 'codevertex' }}"
+          DOCKER_CONTEXT="${{ inputs.docker_context || github.event.inputs.docker_context || '.' }}"
+          DOCKERFILE="${{ inputs.dockerfile || github.event.inputs.dockerfile || 'Dockerfile' }}"
+          IMAGE_REPOSITORY="${{ inputs.image_repository || github.event.inputs.image_repository || '' }}"
+          DEPLOY="${{ inputs.deploy || github.event.inputs.deploy || false }}"
+          VALUES_FILE_PATH="${{ inputs.values_file_path || github.event.inputs.values_file_path }}"
+          CHART_REPO_PATH="${{ inputs.chart_repo_path || github.event.inputs.chart_repo_path || 'charts/app' }}"
+          NAMESPACE="${{ inputs.namespace || github.event.inputs.namespace || 'default' }}"
+          GIT_USER="${{ inputs.git_user || github.event.inputs.git_user || 'Titus Owuor' }}"
+          GIT_EMAIL="${{ inputs.git_email || github.event.inputs.git_email || 'titusowuor30@gmail.com' }}"
+          DEVOPS_REPO="${{ inputs.devops_repo || github.event.inputs.devops_repo || 'Bengo-Hub/devops-k8s' }}"
+          SETUP_DATABASES="${{ inputs.setup_databases || github.event.inputs.setup_databases || false }}"
+          DB_TYPES="${{ inputs.db_types || github.event.inputs.db_types || 'postgres,redis' }}"
+          ENV_SECRET_NAME="${{ inputs.env_secret_name || github.event.inputs.env_secret_name || 'app-env' }}"
+          PROVIDER="${{ inputs.provider || github.event.inputs.provider || 'contabo' }}"
+          CONTABO_API="${{ inputs.contabo_api || github.event.inputs.contabo_api || true }}"
+          CONTABO_INSTANCE_ID="${{ inputs.contabo_instance_id || github.event.inputs.contabo_instance_id || '202846760' }}"
+          CONTABO_IP="${{ inputs.contabo_ip || github.event.inputs.contabo_ip || '77.237.232.66' }}"
+          CONTABO_DATACENTER="${{ inputs.contabo_datacenter || github.event.inputs.contabo_datacenter || 'European Union 2' }}"
+          CONTABO_REGION="${{ inputs.contabo_region || github.event.inputs.contabo_region || 'EU' }}"
+          SSH_DEPLOY="${{ inputs.ssh_deploy || github.event.inputs.ssh_deploy || false }}"
+          SSH_HOST="${{ inputs.ssh_host || github.event.inputs.ssh_host || '' }}"
+          SSH_USER="${{ inputs.ssh_user || github.event.inputs.ssh_user || '' }}"
+          SSH_PORT="${{ inputs.ssh_port || github.event.inputs.ssh_port || '22' }}"
+          SSH_DEPLOY_COMMAND="${{ inputs.ssh_deploy_command || github.event.inputs.ssh_deploy_command || '' }}"
+
+          # Generic branding inputs
+          DEPLOYMENT_SUMMARY_TITLE="${{ inputs.deployment_summary_title || github.event.inputs.deployment_summary_title || 'Deployment Summary' }}"
+          DEPLOYMENT_SUCCESS_MESSAGE="${{ inputs.deployment_success_message || github.event.inputs.deployment_success_message || 'Deployment completed! Application should be accessible via the URLs above.' }}"
+          APPLICATION_DISPLAY_NAME="${{ inputs.application_display_name || github.event.inputs.application_display_name || '' }}"
+
+          # Export all inputs for use in subsequent steps
+          echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
+          echo "registry_server=$REGISTRY_SERVER" >> $GITHUB_OUTPUT
+          echo "registry_namespace=$REGISTRY_NAMESPACE" >> $GITHUB_OUTPUT
+          echo "docker_context=$DOCKER_CONTEXT" >> $GITHUB_OUTPUT
+          echo "dockerfile=$DOCKERFILE" >> $GITHUB_OUTPUT
+          echo "image_repository=$IMAGE_REPOSITORY" >> $GITHUB_OUTPUT
+          echo "deploy=$DEPLOY" >> $GITHUB_OUTPUT
+          echo "values_file_path=$VALUES_FILE_PATH" >> $GITHUB_OUTPUT
+          echo "chart_repo_path=$CHART_REPO_PATH" >> $GITHUB_OUTPUT
+          echo "namespace=$NAMESPACE" >> $GITHUB_OUTPUT
+          echo "git_user=$GIT_USER" >> $GITHUB_OUTPUT
+          echo "git_email=$GIT_EMAIL" >> $GITHUB_OUTPUT
+          echo "devops_repo=$DEVOPS_REPO" >> $GITHUB_OUTPUT
+          echo "setup_databases=$SETUP_DATABASES" >> $GITHUB_OUTPUT
+          echo "db_types=$DB_TYPES" >> $GITHUB_OUTPUT
+          echo "env_secret_name=$ENV_SECRET_NAME" >> $GITHUB_OUTPUT
+          echo "provider=$PROVIDER" >> $GITHUB_OUTPUT
+          echo "contabo_api=$CONTABO_API" >> $GITHUB_OUTPUT
+          echo "contabo_instance_id=$CONTABO_INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "contabo_ip=$CONTABO_IP" >> $GITHUB_OUTPUT
+          echo "contabo_datacenter=$CONTABO_DATACENTER" >> $GITHUB_OUTPUT
+          echo "contabo_region=$CONTABO_REGION" >> $GITHUB_OUTPUT
+          echo "ssh_deploy=$SSH_DEPLOY" >> $GITHUB_OUTPUT
+          echo "ssh_host=$SSH_HOST" >> $GITHUB_OUTPUT
+          echo "ssh_user=$SSH_USER" >> $GITHUB_OUTPUT
+          echo "ssh_port=$SSH_PORT" >> $GITHUB_OUTPUT
+          echo "ssh_deploy_command=$SSH_DEPLOY_COMMAND" >> $GITHUB_OUTPUT
+          echo "deployment_summary_title=$DEPLOYMENT_SUMMARY_TITLE" >> $GITHUB_OUTPUT
+          echo "deployment_success_message=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_OUTPUT
+          echo "application_display_name=$APPLICATION_DISPLAY_NAME" >> $GITHUB_OUTPUT
+
       - name: Configure SSH for build secrets (optional)
         env:
           SSH_PRIV: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -234,7 +580,11 @@ jobs:
             chmod 0600 $HOME/.ssh/id_rsa
             ssh-keyscan github.com >> $HOME/.ssh/known_hosts 2>/dev/null || true
             eval "$(ssh-agent)"
-            ssh-add $HOME/.ssh/id_rsa
+            # Add SSH key with passphrase "codevertex" for automated deployments
+            echo "codevertex" | SSH_ASKPASS=/bin/echo ssh-add $HOME/.ssh/id_rsa 2>/dev/null || {
+              echo "❌ Failed to add SSH key to agent - passphrase may be incorrect"
+              exit 1
+            }
             echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
             echo "SSH configured successfully"
           else
