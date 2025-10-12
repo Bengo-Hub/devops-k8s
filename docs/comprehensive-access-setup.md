@@ -51,26 +51,35 @@ For the ERP UI repository (`bengobox-erpi-ui`), add these repository secrets:
 
 ### 2.1 Generate SSH Key Pair
 
+**Important:** All SSH keys in this project use the default passphrase `"codevertex"` and are designed to work without requiring user input during automated deployments.
+
 ```bash
 # On your local machine
-ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N ""
+ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
 ```
 
 This creates:
 - `~/.ssh/contabo_deploy_key` (private key)
 - `~/.ssh/contabo_deploy_key.pub` (public key)
 
+**Note:** The passphrase "codevertex" is used consistently across all SSH keys in this project for automated deployment scenarios.
+
 ### 2.2 Add Public Key to Contabo VPS
 
 #### Option A: Via Contabo Control Panel (Recommended)
-1. Login to https://my.contabo.com
-2. Select your VPS instance
-3. Go to "Access" tab
-4. Click "Add SSH Key"
-5. Paste the contents of `~/.ssh/contabo_deploy_key.pub`
-6. Save
+
+1. **Login to Contabo:**
+   - Go to https://my.contabo.com
+   - Select your VPS instance
+
+2. **Add SSH Key:**
+   - Go to "Access" tab
+   - Click "Add SSH Key"
+   - Paste the contents of `~/.ssh/contabo_deploy_key.pub`
+   - Save
 
 #### Option B: Manual Setup (After First Login)
+
 ```bash
 # SSH into server with password (first time only)
 ssh root@YOUR_VPS_IP
@@ -96,15 +105,29 @@ ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 
 ### 2.4 Store Private Key in GitHub Secrets
 
-```bash
-# Base64 encode the private key
-cat ~/.ssh/contabo_deploy_key | base64 -w 0
+**Important:** All secrets must be stored at the **organization level**, not repository level, to ensure they are available across all repositories in the organization.
 
-# Or without encoding (paste content directly)
-cat ~/.ssh/contabo_deploy_key
+```bash
+# Base64 encode the private key for GitHub secret
+cat ~/.ssh/contabo_deploy_key | base64 -w 0
 ```
 
-Add to GitHub secrets as `SSH_PRIVATE_KEY`.
+**Organization-level secrets to configure in GitHub:**
+
+Add these **organization-level** secrets in your GitHub organization settings:
+
+| Secret Name | Description | Source |
+|-------------|-------------|---------|
+| `DOCKER_SSH_KEY` | Base64-encoded SSH private key for Docker builds | Generated above |
+| `KUBE_CONFIG` | Base64-encoded kubeconfig for Kubernetes access | From VPS kubeconfig |
+| `REGISTRY_USERNAME` | Docker Hub username | `codevertex` |
+| `REGISTRY_PASSWORD` | Docker Hub access token | From Docker Hub |
+| `SSH_PRIVATE_KEY` | Base64-encoded SSH private key for VPS access | Generated above |
+| `GIT_USER` | Git username | `Titus Owuor` |
+| `GIT_EMAIL` | Git email | `titusowuor30@gmail.com` |
+| `GITHUB_TOKEN` | GitHub personal access token for repo access | Generated earlier |
+
+**Note:** Organization-level secrets are accessed using `${{ secrets.SECRET_NAME }}` in GitHub Actions workflows, just like repository secrets.
 
 ## 3. Contabo API Setup
 
@@ -300,6 +323,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 4. **Monitor access** - Regularly review GitHub organization audit logs
 5. **Disable password auth** - Use only SSH key authentication on VPS
 6. **Keep software updated** - Regularly update all systems and dependencies
+7. **Standard SSH passphrase** - All project SSH keys use passphrase "codevertex" for consistency
 
 ## 8. Maintenance
 

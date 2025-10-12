@@ -533,7 +533,7 @@ kubectl exec deployment/argocd-repo-server -n argocd -- git ls-remote https://gi
 
 1. **Generate New SSH Keys**
    ```bash
-   ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa_deployment -N ""
+   ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa_deployment -N "codevertex"
    ```
 
 2. **Update GitHub Secrets**
