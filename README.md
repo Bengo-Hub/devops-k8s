@@ -24,6 +24,8 @@ Quick Links
   - Argo CD setup and GitOps: [docs/argocd.md](docs/argocd.md)
   - GitHub secrets required: [docs/github-secrets.md](docs/github-secrets.md)
   - environments and secrets: [docs/env-vars.md](docs/env-vars.md)
+  - **comprehensive access setup:** [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) 🔐
+  - **deployment access setup:** [docs/deployment-access-setup.md](docs/deployment-access-setup.md) 🚀
 
 - **Infrastructure**
   - **database setup (PostgreSQL + Redis):** [docs/database-setup.md](docs/database-setup.md)
@@ -32,8 +34,10 @@ Quick Links
   - image registry and SBOM: [docs/image-registry.md](docs/image-registry.md)
 
 - **Operations**
+  - **operations runbook:** [docs/OPERATIONS-RUNBOOK.md](docs/OPERATIONS-RUNBOOK.md) 📋
   - monitoring and alerts (Prometheus, Grafana): [docs/monitoring.md](docs/monitoring.md)
   - scaling (HPA, VPA): [docs/scaling.md](docs/scaling.md)
   - security best practices: [docs/security.md](docs/security.md)
+  - **VPS access testing guide:** [docs/vps-access-testing-guide.md](docs/vps-access-testing-guide.md) ✅
 
 
