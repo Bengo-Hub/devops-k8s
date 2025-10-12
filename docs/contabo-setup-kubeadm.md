@@ -3,7 +3,7 @@ Contabo VPS Setup with Full Kubernetes (kubeadm)
 
 This guide walks through setting up a Contabo VPS with full Kubernetes using kubeadm instead of k3s.
 
-**Note:** For resource-constrained VPS (4-8GB RAM), consider k3s instead. See `k8s-comparison.md` for guidance.
+**Note:** For all Contabo VPS tiers (4GB+ RAM), kubeadm is recommended. See `k8s-comparison.md` for guidance.
 
 Prerequisites
 -------------
