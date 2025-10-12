@@ -1,7 +1,7 @@
 Contabo VPS Setup Guide
 =======================
 
-This guide walks through setting up a Contabo VPS for Kubernetes deployments, including SSH keys, Docker, and K8s installation.
+This guide walks through setting up a Contabo VPS for Kubernetes deployments, including SSH keys, Docker, and Kubernetes installation using kubeadm.
 
 Prerequisites
 -------------
@@ -236,13 +236,13 @@ echo "YOUR_DOCKER_TOKEN" | docker login -u codevertex --password-stdin
 5. Kubernetes Installation (kubeadm or k3s)
 -------------------------------------------
 
-Use **kubeadm** for high-resource VPS (e.g., your 48GB server). Use **k3s** for smaller VPS.
+Use **kubeadm** for production Kubernetes deployments on Contabo VPS.
 
 ### Option A: kubeadm (Recommended for 48GB VPS)
 
 See `docs/contabo-setup-kubeadm.md` for full steps.
 
-### Option B: k3s (for smaller VPS)
+### Option B: k3s (for smaller VPS or resource-constrained environments)
 
 ```bash
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
@@ -268,8 +268,6 @@ kubectl get svc -n ingress-nginx
 ```
 
 ### Configure External IP (Contabo)
-
-k3s with NGINX ingress on Contabo typically uses NodePort or HostNetwork.
 
 ```bash
 # Check ingress service
@@ -469,9 +467,6 @@ journalctl -u docker -f
 
 ### Kubernetes Issues
 ```bash
-# k3s logs
-journalctl -u k3s -f
-
 # Check node
 kubectl describe node
 
@@ -502,9 +497,10 @@ apt-get update && apt-get upgrade -y
 reboot  # if kernel updated
 ```
 
-### Update k3s
+### Update Kubernetes
 ```bash
-curl -sfL https://get.k3s.io | sh -
+# For kubeadm, follow the official upgrade process
+# See: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
 ```
 
 ### Backup Kubernetes Resources
@@ -512,8 +508,8 @@ curl -sfL https://get.k3s.io | sh -
 # Export all resources
 kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
 
-# Backup etcd (k3s uses SQLite by default)
-cp /var/lib/rancher/k3s/server/db/state.db /backup/
+# For kubeadm, also backup etcd
+# See: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
 ```
 
 ### Monitor Resource Usage

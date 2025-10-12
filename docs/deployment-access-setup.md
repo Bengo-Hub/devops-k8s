@@ -126,11 +126,11 @@ cat ~/.ssh/contabo_deploy_key | base64
 # SSH into VPS
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 
-# Get kubeconfig (k3s location)
-cat /etc/rancher/k3s/k3s.yaml
-
-# Or for kubeadm:
+# Get kubeconfig (kubeadm location)
 cat /etc/kubernetes/admin.conf
+
+# Or for k3s:
+cat /etc/rancher/k3s/k3s.yaml
 ```
 
 ### 3.2 Update Kubeconfig Server URL
@@ -307,6 +307,9 @@ kubectl config view | grep server
 curl -k https://YOUR_VPS_IP:6443/healthz
 
 # Verify API server is running
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status kubelet"
+
+# Or for k3s:
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status k3s"
 ```
 
@@ -363,6 +366,8 @@ apt-get update && apt-get upgrade -y
 # Update k3s
 curl -sfL https://get.k3s.io | sh -
 
+# Or update kubeadm cluster (more complex process)
+
 # Update Docker
 apt-get update && apt-get install docker-ce docker-ce-cli containerd.io
 ```
@@ -386,7 +391,10 @@ kubectl top pods -A
 # Kubernetes resources
 kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
 
-# etcd backup (k3s)
+# etcd backup (kubeadm)
+# See: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+
+# Or for k3s:
 cp /var/lib/rancher/k3s/server/db/state.db /backup/k3s-state.db
 ```
 

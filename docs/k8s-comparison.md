@@ -6,7 +6,7 @@ This guide compares k3s vs full Kubernetes (kubeadm) to help you choose the best
 Quick Recommendation
 -------------------
 
-**For 4-8GB RAM, single node:** Use **k3s**
+**For 4-8GB RAM, single node:** Use **kubeadm**
 **For 16GB+ RAM or multi-node:** Use **full Kubernetes (kubeadm)**
 **For Production-critical ERP with growth plans:** Use **full Kubernetes (kubeadm)**
 
@@ -14,39 +14,6 @@ Your VPS (12 cores, 48 GB RAM, NVMe) strongly favors **full Kubernetes (kubeadm)
 
 Detailed Comparison
 -------------------
-
-### k3s (Lightweight Kubernetes)
-
-**Pros:**
-✅ **Lower resource usage** (512MB RAM vs 2GB+ for kubeadm)
-✅ **Faster installation** (~30 seconds vs 10-15 minutes)
-✅ **Single binary** - easy to install and upgrade
-✅ **Built-in SQLite** - no etcd needed for single-node
-✅ **Perfect for single VPS** deployments
-✅ **Auto-configures networking** (Flannel)
-✅ **Includes local storage** provisioner
-✅ **Traefik ingress** included (though we disable it for NGINX)
-✅ **Production-ready** and CNCF certified
-
-**Cons:**
-❌ Limited to smaller clusters (recommended max: 10 nodes)
-❌ Some advanced features may lag behind upstream
-❌ Less community resources/tutorials
-❌ Harder to troubleshoot edge cases
-
-**Resource Requirements:**
-- Minimum: 512MB RAM, 1 CPU
-- Recommended: 2GB RAM, 2 CPUs
-- Disk: ~500MB
-
-**Best For:**
-- Single VPS deployments (Contabo 4-8GB)
-- Dev/staging environments
-- Small production workloads
-- Resource-constrained environments
-- Quick setup and testing
-
----
 
 ### Full Kubernetes (kubeadm)
 
@@ -82,14 +49,47 @@ Detailed Comparison
 
 ---
 
+### k3s (Lightweight Kubernetes)
+
+**Pros:**
+✅ **Lower resource usage** (512MB RAM vs 2GB+ for kubeadm)
+✅ **Faster installation** (~30 seconds vs 10-15 minutes)
+✅ **Single binary** - easy to install and upgrade
+✅ **Built-in SQLite** - no etcd needed for single-node
+✅ **Perfect for single VPS** deployments
+✅ **Auto-configures networking** (Flannel)
+✅ **Includes local storage** provisioner
+✅ **Traefik ingress** included (though we disable it for NGINX)
+✅ **Production-ready** and CNCF certified
+
+**Cons:**
+❌ Limited to smaller clusters (recommended max: 10 nodes)
+❌ Some advanced features may lag behind upstream
+❌ Less community resources/tutorials
+❌ Harder to troubleshoot edge cases
+
+**Resource Requirements:**
+- Minimum: 512MB RAM, 1 CPU
+- Recommended: 2GB RAM, 2 CPUs
+- Disk: ~500MB
+
+**Best For:**
+- Single VPS deployments (Contabo 4-8GB)
+- Dev/staging environments
+- Small production workloads
+- Resource-constrained environments
+- Quick setup and testing
+
+---
+
 Recommendation for Your ERP System
 ----------------------------------
 
 ### Current Setup Analysis
 
 **Your Contabo VPS specs (assumed):**
-- 4-8GB RAM
-- 2-4 vCPUs
+- 16GB+ RAM
+- 4+ vCPUs
 - Single node deployment
 - Running: ERP API (Django), ERP UI (Vue), PostgreSQL, Redis
 
@@ -103,37 +103,34 @@ Recommendation for Your ERP System
 
 ### Decision Matrix
 
-#### Choose **k3s** if:
-✅ Your VPS has 4-8GB RAM (Contabo standard VPS)
+#### Choose **kubeadm** if:
+✅ Your VPS has 4GB+ RAM (all Contabo VPS tiers)
 ✅ Single-node deployment is acceptable
-✅ You want faster setup and lower overhead
-✅ Resource efficiency is a priority
-✅ You're comfortable with k3s quirks
-✅ This is a small-to-medium business ERP
+✅ You want full upstream Kubernetes features
+✅ You need better community support and documentation
+✅ You want industry-standard tooling and practices
+✅ You're comfortable with standard Kubernetes operations
 
-**Verdict: RECOMMENDED for most Contabo deployments**
+**Verdict: RECOMMENDED for all Contabo VPS deployments**
 
-#### Choose **full Kubernetes (kubeadm)** if:
-✅ Your VPS has 16GB+ RAM (or planning multi-node)
-✅ You need high availability (multi-master)
-✅ You want 100% upstream compatibility
-✅ Team has strong Kubernetes experience
-✅ Planning to scale beyond single node
-✅ Enterprise-grade SLAs required
-✅ Complex networking (multi-tenancy, network policies)
+#### Choose **k3s** if:
+✅ Your VPS has <4GB RAM (not available on Contabo)
+✅ You need absolute minimum resource usage
+✅ You want the fastest possible setup
+✅ You're willing to accept k3s limitations
 
-**Verdict: RECOMMENDED for enterprise production**
+**Verdict: OPTIONAL for resource-constrained environments**
 
 ---
 
 Hybrid Recommendation
 --------------------
 
-### Start with k3s, Plan for kubeadm
+### Start with kubeadm, Plan for Production Scale
 
 **Phase 1: Initial Deployment (0-6 months)**
-- Deploy on Contabo with k3s
-- Lower costs, faster iteration
+- Deploy on Contabo with kubeadm
+- Full Kubernetes features from day one
 - Validate workload and scaling needs
 - Build operational expertise
 
@@ -164,27 +161,39 @@ Performance Comparison
 
 ### Resource Overhead (System Components Only)
 
-| Component | k3s | kubeadm |
-|-----------|-----|---------|
-| Control Plane | ~400MB | ~1.5GB |
+| Component | kubeadm | k3s |
+|-----------|---------|-----|
+| Control Plane | ~1.5GB | ~400MB |
 | Container Runtime | containerd | containerd |
-| etcd | SQLite (50MB) | etcd (300MB+) |
-| CNI | Flannel (100MB) | Calico (200MB+) |
-| **Total System** | **~500-600MB** | **~2GB+** |
+| etcd | etcd (300MB+) | SQLite (50MB) |
+| CNI | Calico (200MB+) | Flannel (100MB) |
+| **Total System** | **~2GB+** | **~500-600MB** |
 
 **Available for Apps:**
-- 4GB VPS: k3s = ~3.4GB, kubeadm = ~2GB
-- 8GB VPS: k3s = ~7.4GB, kubeadm = ~6GB
+- 4GB VPS: kubeadm = ~2GB, k3s = ~3.4GB
+- 8GB VPS: kubeadm = ~6GB, k3s = ~7.4GB
 
 ### Startup Time
 
-- k3s: ~30 seconds to running cluster
 - kubeadm: ~10-15 minutes including CNI setup
+- k3s: ~30 seconds to running cluster
 
 ---
 
 Production Readiness
 -------------------
+
+### kubeadm in Production
+
+**Used by:**
+- Most enterprise Kubernetes deployments
+- Cloud provider managed K8s (basis for EKS, GKE, AKS)
+- Large-scale production clusters
+
+**Certification:**
+- Official Kubernetes installer
+- Always up-to-date with upstream
+- Industry standard
 
 ### k3s in Production
 
@@ -204,18 +213,6 @@ Production Readiness
 - Stable release cycle
 - Easy upgrades via single command
 
-### kubeadm in Production
-
-**Used by:**
-- Most enterprise Kubernetes deployments
-- Cloud provider managed K8s (basis for EKS, GKE, AKS)
-- Large-scale production clusters
-
-**Certification:**
-- Official Kubernetes installer
-- Always up-to-date with upstream
-- Industry standard
-
 ---
 
 Final Recommendation
@@ -223,43 +220,41 @@ Final Recommendation
 
 ### For Your ERP System on Contabo VPS
 
-**Use k3s because:**
+**Use kubeadm because:**
 
-1. **Resource Efficiency**
-   - Leaves more RAM for your ERP applications
-   - Lower CPU overhead = better app performance
-   - Smaller disk footprint
+1. **Full Kubernetes Features**
+   - Latest upstream features and bug fixes
+   - Better compatibility with tooling
+   - Industry standard practices
 
-2. **Simpler Operations**
-   - Single command installation
-   - Easier troubleshooting
-   - Faster disaster recovery
-   - One-line upgrades
+2. **Better Community Support**
+   - More documentation and tutorials
+   - Larger community for troubleshooting
+   - Easier to hire experienced engineers
 
-3. **Perfect for Single Node**
-   - Built-in storage provisioner
-   - No external dependencies
-   - SQLite for single-node is fine
+3. **Production Ready**
+   - Official Kubernetes distribution
+   - Always current with upstream
+   - Better for long-term maintenance
 
-4. **Cost-Effective**
-   - Can run on smaller VPS tier
-   - Save €10-20/month on hosting
-   - Reinvest in application resources
+4. **Resource Appropriate**
+   - Your 48GB VPS has plenty of RAM
+   - kubeadm overhead is negligible
+   - Better performance for complex workloads
 
-5. **Production Ready**
-   - CNCF certified
-   - Used by thousands of production deployments
-   - Well-tested and stable
+5. **Future-Proof**
+   - Easier to scale to multi-node
+   - Better foundation for HA setups
+   - Industry standard for enterprise
 
-### When to Migrate to kubeadm
+### When to Use k3s
 
-Consider migration when you need:
-- **Multiple nodes** (horizontal scaling)
-- **High availability** (multi-master)
-- **16GB+ RAM** available
-- **Enterprise SLAs** with strict uptime requirements
-- **Complex networking** (network policies, service mesh)
-- **Team preference** for vanilla Kubernetes
+Consider k3s only when:
+- **Resource constraints** (<4GB RAM available)
+- **Absolute minimum setup time** needed
+- **Edge computing** or IoT deployments
+- **Limited operational experience**
+- **Cost optimization** is critical
 
 ---
 
@@ -268,8 +263,8 @@ Implementation
 
 I've provided installation scripts for both options:
 
-- **k3s:** `docs/contabo-setup.md` (current default)
-- **kubeadm:** `docs/contabo-setup-kubeadm.md` (new, alternative)
+- **kubeadm:** `docs/contabo-setup-kubeadm.md` (recommended)
+- **k3s:** `docs/contabo-setup.md` (alternative)
 
 Both work with the same:
 - Helm charts
@@ -289,17 +284,15 @@ Need Help Deciding?
 # Check available RAM on your VPS
 free -h
 
-# If "available" is < 3GB → use k3s
-# If "available" is > 6GB → either works, k3s still recommended for simplicity
+# If "available" is > 2GB → use kubeadm (recommended)
+# If "available" is < 1GB → consider k3s
 # If planning multi-node → use kubeadm
 ```
 
 **Questions to Consider:**
-1. Do you plan to add more nodes in next 12 months? → kubeadm
-2. Is resource efficiency critical? → k3s
-3. Team experienced with vanilla K8s? → kubeadm
-4. Want fastest setup and simplest ops? → k3s
-5. Need 99.99% uptime? → kubeadm (multi-master)
-
-**Still unsure?** Start with k3s. It's easier to migrate from k3s → kubeadm than the reverse, and you might never need to!
+1. Do you need full upstream Kubernetes features? → kubeadm
+2. Do you want maximum community support? → kubeadm
+3. Is your team experienced with standard K8s? → kubeadm
+4. Do you need the absolute fastest setup? → k3s
+5. Are you resource-constrained? → k3s
 
