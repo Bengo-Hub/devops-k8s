@@ -294,6 +294,9 @@ kubectl config view | grep server
 curl -k https://YOUR_VPS_IP:6443/healthz
 
 # Check if API server is running
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status kubelet"
+
+# Or for k3s:
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status k3s"
 ```
 
