@@ -151,283 +151,6 @@ on:
         required: false
         type: string
         description: "Custom SSH deployment command"
-
-  # Allow manual triggering for testing and direct execution
-  workflow_dispatch:
-    inputs:
-      # Generic branding and customization
-      deployment_summary_title:
-        required: false
-        type: string
-        default: "Deployment Summary"
-        description: "Title for the deployment summary"
-      deployment_success_message:
-        required: false
-        type: string
-        default: "Deployment completed! Application should be accessible via the URLs above."
-        description: "Success message displayed in deployment summary"
-      application_display_name:
-        required: false
-        type: string
-        description: "Human-readable application name for display"
-
-      # Core deployment parameters
-      app_name:
-        required: true
-        type: string
-        description: "Application name (used for naming resources)"
-      registry_server:
-        required: false
-        type: string
-        default: docker.io
-        description: "Container registry server"
-      registry_namespace:
-        required: false
-        type: string
-        default: codevertex
-        description: "Registry namespace/organization"
-      docker_context:
-        required: false
-        type: string
-        default: .
-        description: "Docker build context path"
-      dockerfile:
-        required: false
-        type: string
-        default: Dockerfile
-        description: "Path to Dockerfile"
-      image_repository:
-        required: false
-        type: string
-        description: "Custom image repository"
-      deploy:
-        required: false
-        type: boolean
-        default: false
-        description: "Enable deployment phase"
-      values_file_path:
-        required: true
-        type: string
-        description: "Path to Helm values file"
-      chart_repo_path:
-        required: false
-        type: string
-        default: charts/app
-        description: "Path to Helm chart"
-      namespace:
-        required: false
-        type: string
-        default: default
-        description: "Kubernetes namespace"
-      git_user:
-        required: false
-        type: string
-        default: "Titus Owuor"
-        description: "Git commit author name"
-      git_email:
-        required: false
-        type: string
-        default: "titusowuor30@gmail.com"
-        description: "Git commit author email"
-      devops_repo:
-        required: false
-        type: string
-        default: "Bengo-Hub/devops-k8s"
-        description: "DevOps repository"
-      setup_databases:
-        required: false
-        type: boolean
-        default: false
-        description: "Enable database setup"
-      db_types:
-        required: false
-        type: string
-        default: "postgres,redis"
-        description: "Database types to setup"
-      env_secret_name:
-        required: false
-        type: string
-        default: "app-env"
-        description: "Environment secret name"
-      provider:
-        required: false
-        type: string
-        default: contabo
-        description: "Cloud provider"
-      contabo_api:
-        required: false
-        type: boolean
-        default: true
-        description: "Enable Contabo API"
-      contabo_instance_id:
-        required: false
-        type: string
-        default: "202846760"
-        description: "Contabo instance ID"
-      contabo_ip:
-        required: false
-        type: string
-        default: "77.237.232.66"
-        description: "Contabo instance IP"
-      contabo_datacenter:
-        required: false
-        type: string
-        default: "European Union 2"
-        description: "Contabo datacenter"
-      contabo_region:
-        required: false
-        type: string
-        default: "EU"
-        description: "Contabo region"
-      ssh_deploy:
-        required: false
-        type: boolean
-        default: false
-        description: "Enable SSH deployment"
-      ssh_host:
-        required: false
-        type: string
-        description: "SSH target host"
-      ssh_user:
-        required: false
-        type: string
-        description: "SSH username"
-      ssh_port:
-        required: false
-        type: string
-        default: "22"
-        description: "SSH port"
-      ssh_deploy_command:
-        required: false
-        type: string
-        description: "Custom SSH deployment command"
-      registry_server:
-        required: false
-        type: string
-        default: docker.io
-        description: "Container registry server (e.g., docker.io, gcr.io, quay.io)"
-      registry_namespace:
-        required: false
-        type: string
-        default: codevertex
-        description: "Registry namespace/organization (e.g., codevertex, myorg)"
-      docker_context:
-        required: false
-        type: string
-        default: .
-        description: "Docker build context path (relative to repository root)"
-      dockerfile:
-        required: false
-        type: string
-        default: Dockerfile
-        description: "Path to Dockerfile (relative to docker_context)"
-      image_repository:
-        required: false
-        type: string
-        description: "Custom image repository (overrides registry_server/namespace/app_name)"
-      deploy:
-        required: false
-        type: boolean
-        default: false
-        description: "Enable deployment phase (build, push, and deploy)"
-      values_file_path:
-        required: true
-        type: string
-        description: "Path to Helm values file in devops-k8s repository (e.g., apps/erp-api/values.yaml)"
-      chart_repo_path:
-        required: false
-        type: string
-        default: charts/app
-        description: "Path to Helm chart in devops-k8s repository"
-      namespace:
-        required: false
-        type: string
-        default: default
-        description: "Kubernetes namespace for deployment (must exist or be creatable)"
-      # Git configuration for devops-k8s repo access
-      git_user:
-        required: false
-        type: string
-        default: "Titus Owuor"
-        description: "Git commit author name for devops-k8s repository updates"
-      git_email:
-        required: false
-        type: string
-        default: "titusowuor30@gmail.com"
-        description: "Git commit author email for devops-k8s repository updates"
-      devops_repo:
-        required: false
-        type: string
-        default: "Bengo-Hub/devops-k8s"
-        description: "DevOps repository in format 'owner/repo' for Helm updates"
-      # Database automation (optional)
-      setup_databases:
-        required: false
-        type: boolean
-        default: false
-        description: "Enable automatic database setup (postgres, redis, mongo, mysql)"
-      db_types:
-        description: "Comma-separated list of databases to setup (postgres,redis,mongo,mysql)"
-        required: false
-        type: string
-        default: "postgres,redis"
-      env_secret_name:
-        description: "Kubernetes Secret name to create/update with DB URLs"
-        required: false
-        type: string
-        default: "app-env"
-      provider:
-        required: false
-        type: string
-        default: contabo
-        description: "Cloud provider (contabo, aws, gcp, azure)"
-      contabo_api:
-        required: false
-        type: boolean
-        default: true
-        description: "Enable Contabo API for instance management"
-      contabo_instance_id:
-        required: false
-        type: string
-        default: "202846760"
-        description: "Contabo instance ID for API operations"
-      contabo_ip:
-        required: false
-        type: string
-        default: "77.237.232.66"
-        description: "Contabo instance IP address"
-      contabo_datacenter:
-        required: false
-        type: string
-        default: "European Union 2"
-        description: "Contabo datacenter location"
-      contabo_region:
-        required: false
-        type: string
-        default: "EU"
-        description: "Contabo region (EU, US, etc.)"
-      ssh_deploy:
-        required: false
-        type: boolean
-        default: false
-        description: "Enable SSH deployment to VPS"
-      ssh_host:
-        required: false
-        type: string
-        description: "SSH target host (IP or hostname)"
-      ssh_user:
-        required: false
-        type: string
-        description: "SSH username for deployment"
-      ssh_port:
-        required: false
-        type: string
-        default: "22"
-        description: "SSH port (default: 22)"
-      ssh_deploy_command:
-        required: false
-        type: string
-        description: "Custom SSH deployment command"
     secrets:
       REGISTRY_USERNAME:
         required: false
@@ -456,6 +179,9 @@ on:
         required: false
       CONTABO_API_PASSWORD:
         required: false
+
+  # Allow manual triggering for testing and direct execution
+  workflow_dispatch:
 
 jobs:
   build-deploy:
@@ -552,6 +278,38 @@ jobs:
           echo "deployment_success_message=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_OUTPUT
           echo "application_display_name=$APPLICATION_DISPLAY_NAME" >> $GITHUB_OUTPUT
 
+          # Also set as environment variables for easier access
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          echo "REGISTRY_SERVER=$REGISTRY_SERVER" >> $GITHUB_ENV
+          echo "REGISTRY_NAMESPACE=$REGISTRY_NAMESPACE" >> $GITHUB_ENV
+          echo "DOCKER_CONTEXT=$DOCKER_CONTEXT" >> $GITHUB_ENV
+          echo "DOCKERFILE=$DOCKERFILE" >> $GITHUB_ENV
+          echo "IMAGE_REPOSITORY=$IMAGE_REPOSITORY" >> $GITHUB_ENV
+          echo "DEPLOY=$DEPLOY" >> $GITHUB_ENV
+          echo "VALUES_FILE_PATH=$VALUES_FILE_PATH" >> $GITHUB_ENV
+          echo "CHART_REPO_PATH=$CHART_REPO_PATH" >> $GITHUB_ENV
+          echo "NAMESPACE=$NAMESPACE" >> $GITHUB_ENV
+          echo "GIT_USER=$GIT_USER" >> $GITHUB_ENV
+          echo "GIT_EMAIL=$GIT_EMAIL" >> $GITHUB_ENV
+          echo "DEVOPS_REPO=$DEVOPS_REPO" >> $GITHUB_ENV
+          echo "SETUP_DATABASES=$SETUP_DATABASES" >> $GITHUB_ENV
+          echo "DB_TYPES=$DB_TYPES" >> $GITHUB_ENV
+          echo "ENV_SECRET_NAME=$ENV_SECRET_NAME" >> $GITHUB_ENV
+          echo "PROVIDER=$PROVIDER" >> $GITHUB_ENV
+          echo "CONTABO_API=$CONTABO_API" >> $GITHUB_ENV
+          echo "CONTABO_INSTANCE_ID=$CONTABO_INSTANCE_ID" >> $GITHUB_ENV
+          echo "CONTABO_IP=$CONTABO_IP" >> $GITHUB_ENV
+          echo "CONTABO_DATACENTER=$CONTABO_DATACENTER" >> $GITHUB_ENV
+          echo "CONTABO_REGION=$CONTABO_REGION" >> $GITHUB_ENV
+          echo "SSH_DEPLOY=$SSH_DEPLOY" >> $GITHUB_ENV
+          echo "SSH_HOST=$SSH_HOST" >> $GITHUB_ENV
+          echo "SSH_USER=$SSH_USER" >> $GITHUB_ENV
+          echo "SSH_PORT=$SSH_PORT" >> $GITHUB_ENV
+          echo "SSH_DEPLOY_COMMAND=$SSH_DEPLOY_COMMAND" >> $GITHUB_ENV
+          echo "DEPLOYMENT_SUMMARY_TITLE=$DEPLOYMENT_SUMMARY_TITLE" >> $GITHUB_ENV
+          echo "DEPLOYMENT_SUCCESS_MESSAGE=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_ENV
+          echo "APPLICATION_DISPLAY_NAME=$APPLICATION_DISPLAY_NAME" >> $GITHUB_ENV
+
       - name: Configure SSH for build secrets (optional)
         env:
           SSH_PRIV: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -595,20 +353,20 @@ jobs:
       - name: Determine image repository
         id: img
         env:
-          REG_SVR: ${{ inputs.registry_server }}
-          REG_NS: ${{ inputs.registry_namespace }}
+          REG_SVR: ${{ steps.inputs.outputs.registry_server }}
+          REG_NS: ${{ steps.inputs.outputs.registry_namespace }}
         run: |
-          if [ -n "${{ inputs.image_repository }}" ]; then
-            echo "repo=${{ inputs.image_repository }}" >> $GITHUB_OUTPUT
+          if [ -n "${{ steps.inputs.outputs.image_repository }}" ]; then
+            echo "repo=${{ steps.inputs.outputs.image_repository }}" >> $GITHUB_OUTPUT
           else
-            echo "repo=${REG_SVR}/${REG_NS}/${{ inputs.app_name }}" >> $GITHUB_OUTPUT
+            echo "repo=${REG_SVR}/${REG_NS}/${{ steps.inputs.outputs.app_name }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Log in to registry (optional)
         if: ${{ secrets.REGISTRY_USERNAME != '' && secrets.REGISTRY_PASSWORD != '' }}
         uses: docker/login-action@v3
         with:
-          registry: ${{ inputs.registry_server }}
+          registry: ${{ steps.inputs.outputs.registry_server }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
@@ -631,8 +389,8 @@ jobs:
         run: |
           echo "🔑 Building with SSH support"
           echo "📦 Image: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
-          DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
-            -f "${{ inputs.dockerfile }}" \
+          DOCKER_BUILDKIT=1 docker build "${{ steps.inputs.outputs.docker_context }}" \
+            -f "${{ steps.inputs.outputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
             --ssh default="$SSH_AUTH_SOCK"
 
@@ -641,8 +399,8 @@ jobs:
         run: |
           echo "🚫 Building without SSH (no keys configured)"
           echo "📦 Image: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
-          DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
-            -f "${{ inputs.dockerfile }}" \
+          DOCKER_BUILDKIT=1 docker build "${{ steps.inputs.outputs.docker_context }}" \
+            -f "${{ steps.inputs.outputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
 
       - name: Trivy Image scan
@@ -652,16 +410,16 @@ jobs:
           exit-code: '0'
 
       - name: Push image
-        if: ${{ inputs.deploy }}
+        if: ${{ steps.inputs.outputs.deploy }}
         run: docker push "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
 
       - name: Setup databases (optional)
-        if: ${{ inputs.deploy && inputs.setup_databases }}
+        if: ${{ steps.inputs.outputs.deploy }} && ${{ steps.inputs.outputs.setup_databases }}
         timeout-minutes: 10
         continue-on-error: true
         env:
-          NS: ${{ inputs.namespace }}
-          DB_TYPES: ${{ inputs.db_types }}
+          NS: ${{ steps.inputs.outputs.namespace }}
+          DB_TYPES: ${{ steps.inputs.outputs.db_types }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
@@ -761,7 +519,7 @@ jobs:
           [ -n "$MYSQL_URL" ] && LITS="$LITS --from-literal=MYSQL_URL=$MYSQL_URL"
 
           if [ -n "$LITS" ]; then
-            if kubectl -n "$NS" create secret generic "${{ inputs.env_secret_name }}" $LITS --dry-run=client -o yaml | kubectl apply -f -; then
+            if kubectl -n "$NS" create secret generic "${{ steps.inputs.outputs.env_secret_name }}" $LITS --dry-run=client -o yaml | kubectl apply -f -; then
               echo "✅ Environment secret created/updated successfully"
             else
               echo "❌ Failed to create/update environment secret"
@@ -773,13 +531,13 @@ jobs:
 
       - name: Contabo API bootstrap (ensure instance ready)
         id: contabo_bootstrap
-        if: ${{ inputs.deploy && inputs.provider == 'contabo' && inputs.contabo_api }}
+        if: ${{ steps.inputs.outputs.deploy }} && ${{ steps.inputs.outputs.provider }} == 'contabo' && ${{ steps.inputs.outputs.contabo_api }}
         env:
           CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
           API_USER: ${{ secrets.CONTABO_API_USERNAME }}
           API_PASS: ${{ secrets.CONTABO_API_PASSWORD }}
-          INSTANCE_ID: ${{ inputs.contabo_instance_id }}
+          INSTANCE_ID: ${{ steps.inputs.outputs.contabo_instance_id }}
         run: |
           if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$API_USER" ] || [ -z "$API_PASS" ] || [ -z "$INSTANCE_ID" ]; then
             echo "Missing Contabo API credentials or instance id, will rely on SSH fallback if enabled"; exit 0; fi
@@ -800,15 +558,15 @@ jobs:
           fi
 
       - name: Update values in devops-k8s
-        if: ${{ inputs.deploy }}
+        if: ${{ steps.inputs.outputs.deploy }}
         timeout-minutes: 5
         env:
           SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
-          VALUES_PATH: ${{ inputs.values_file_path }}
+          VALUES_PATH: ${{ steps.inputs.outputs.values_file_path }}
           IMAGE_REPO: ${{ steps.img.outputs.repo }}
-          DEVOPS_REPO: ${{ inputs.devops_repo }}
-          GIT_USER: ${{ inputs.git_user }}
-          GIT_EMAIL: ${{ inputs.git_email }}
+          DEVOPS_REPO: ${{ steps.inputs.outputs.devops_repo }}
+          GIT_USER: ${{ steps.inputs.outputs.git_user }}
+          GIT_EMAIL: ${{ steps.inputs.outputs.git_email }}
         run: |
           # Ensure SSH is configured for git operations
           if [ -n "${SSH_AUTH_SOCK:-}" ] && [ "$SSH_AUTH_SOCK" != "" ]; then
@@ -881,7 +639,7 @@ jobs:
                 git add "${VALUES_PATH}"
 
                 # Retry git commit
-                if git commit -m "${{ inputs.app_name }}:${SHORT_SHA} released"; then
+                if git commit -m "${{ steps.inputs.outputs.app_name }}:${SHORT_SHA} released"; then
                   echo "✅ Changes committed"
 
                   # Retry git push with exponential backoff
@@ -912,9 +670,9 @@ jobs:
           fi
 
       - name: Apply kube secrets (optional)
-        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        if: ${{ steps.inputs.outputs.deploy }} && ${{ secrets.KUBE_CONFIG }} != ''
         env:
-          NS: ${{ inputs.namespace }}
+          NS: ${{ steps.inputs.outputs.namespace }}
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           mkdir -p ~/.kube
@@ -925,10 +683,10 @@ jobs:
           fi
 
       - name: Ensure default JWT secret (when KUBE_CONFIG provided)
-        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        if: ${{ steps.inputs.outputs.deploy }} && ${{ secrets.KUBE_CONFIG }} != ''
         env:
-          NS: ${{ inputs.namespace }}
-          SECRET_NAME: ${{ inputs.env_secret_name }}
+          NS: ${{ steps.inputs.outputs.namespace }}
+          SECRET_NAME: ${{ steps.inputs.outputs.env_secret_name }}
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           set -e
@@ -945,72 +703,30 @@ jobs:
             kubectl -n "$NS" create secret generic "$SECRET_NAME" --from-literal=JWT_SECRET="$JWT"
           fi
 
-      - name: Run database migrations (Django apps)
-        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' && inputs.app_name == 'erp-api' }}
-        env:
-          NS: ${{ inputs.namespace }}
-          IMAGE_REPO: ${{ steps.img.outputs.repo }}
-          SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
-        run: |
-          echo "::group::Running database migrations"
-          mkdir -p ~/.kube
-          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
-          
-          # Create migration job
-          cat > /tmp/migrate-job.yaml <<EOF
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: erp-migrate-${{ steps.vars.outputs.short_sha }}
-            namespace: ${NS}
-          spec:
-            ttlSecondsAfterFinished: 600
-            template:
-              spec:
-                restartPolicy: Never
-                containers:
-                - name: migrate
-                  image: ${IMAGE_REPO}:${SHORT_SHA}
-                  command: ["python", "manage.py", "migrate"]
-                  envFrom:
-                  - secretRef:
-                      name: ${{ inputs.env_secret_name }}
-          EOF
-          
-          kubectl apply -f /tmp/migrate-job.yaml
-          kubectl wait --for=condition=complete job/erp-migrate-${{ steps.vars.outputs.short_sha }} -n ${NS} --timeout=300s || {
-            echo "Migration job logs:"
-            kubectl logs job/erp-migrate-${{ steps.vars.outputs.short_sha }} -n ${NS} || true
-            exit 1
-          }
-          echo "✅ Database migrations completed"
-          echo "::endgroup::"
-
       - name: SSH deploy to VPS (optional)
-        if: ${{ inputs.ssh_deploy || (inputs.provider == 'contabo' && inputs.contabo_api && steps.vars.outputs.short_sha != '' ) }}
+        if: ${{ steps.inputs.outputs.ssh_deploy }} || (${{ steps.inputs.outputs.provider }} == 'contabo' && ${{ steps.inputs.outputs.contabo_api }} && ${{ steps.vars.outputs.short_sha }} != '' )
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ inputs.ssh_host || inputs.contabo_ip || steps.contabo_bootstrap.outputs.contabo_ip }}
-          username: ${{ inputs.ssh_user }}
-          port: ${{ inputs.ssh_port }}
+          host: ${{ steps.inputs.outputs.ssh_host || steps.inputs.outputs.contabo_ip || steps.contabo_bootstrap.outputs.contabo_ip }}
+          username: ${{ steps.inputs.outputs.ssh_user }}
+          port: ${{ steps.inputs.outputs.ssh_port }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           script: |
             echo "Logging into registry"
-            echo '${{ secrets.REGISTRY_PASSWORD }}' | docker login ${{ inputs.registry_server }} -u '${{ secrets.REGISTRY_USERNAME }}' --password-stdin || true
+            echo '${{ secrets.REGISTRY_PASSWORD }}' | docker login ${{ steps.inputs.outputs.registry_server }} -u '${{ secrets.REGISTRY_USERNAME }}' --password-stdin || true
             echo "Pulling image"
             docker pull "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
             echo "Restarting container"
-            docker rm -f ${{ inputs.app_name }} || true
-            docker run -d --restart always --name ${{ inputs.app_name }} -p 0.0.0.0:80:80 "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+            docker rm -f ${{ steps.inputs.outputs.app_name }} || true
+            docker run -d --restart always --name ${{ steps.inputs.outputs.app_name }} -p 0.0.0.0:80:80 "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
 
       - name: Get service URLs
         id: service_urls
-        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        if: ${{ steps.inputs.outputs.deploy }} && ${{ secrets.KUBE_CONFIG }} != ''
         env:
-          NS: ${{ inputs.namespace }}
-          APP_NAME: ${{ inputs.app_name }}
+          NS: ${{ steps.inputs.outputs.namespace }}
+          APP_NAME: ${{ steps.inputs.outputs.app_name }}
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           mkdir -p ~/.kube
@@ -1090,18 +806,18 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Deployment Summary
-        if: ${{ inputs.deploy }}
+        if: ${{ steps.inputs.outputs.deploy }}
         run: |
           # Determine display name for the application
-          APP_DISPLAY_NAME="${{ inputs.application_display_name || inputs.app_name }}"
+          APP_DISPLAY_NAME="${{ steps.inputs.outputs.application_display_name || steps.inputs.outputs.app_name }}"
 
-          echo "🚀 === ${{ inputs.deployment_summary_title }} ===" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 === ${{ steps.inputs.outputs.deployment_summary_title }} ===" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## ✅ Deployment Completed Successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Application Information" >> $GITHUB_STEP_SUMMARY
           echo "- **Application:** $APP_DISPLAY_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "- **Namespace:** ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Namespace:** ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image Tag:** ${{ steps.vars.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Registry:** ${{ steps.img.outputs.repo }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1120,11 +836,11 @@ jobs:
           fi
 
           # Database information if setup was enabled
-          if [[ "${{ inputs.setup_databases }}" == "true" ]]; then
+          if [[ "${{ steps.inputs.outputs.setup_databases }}" == "true" ]]; then
             echo "### 🗄️ Database Setup" >> $GITHUB_STEP_SUMMARY
-            echo "- **Databases:** ${{ inputs.db_types }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Secret:** ${{ inputs.env_secret_name }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Namespace:** ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Databases:** ${{ steps.inputs.outputs.db_types }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Secret:** ${{ steps.inputs.outputs.env_secret_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Namespace:** ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
 
@@ -1141,11 +857,11 @@ jobs:
           echo "kubectl get applications -n argocd" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Check application logs" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl logs -l app=${{ inputs.app_name }} -n ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl logs -l app=${{ steps.inputs.outputs.app_name }} -n ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Check service status" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl get pods,svc,ingress -l app=${{ inputs.app_name }} -n ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl get pods,svc,ingress -l app=${{ steps.inputs.outputs.app_name }} -n ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "🎉 **${{ inputs.deployment_success_message }}**" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **${{ steps.inputs.outputs.deployment_success_message }}**" >> $GITHUB_STEP_SUMMARY
