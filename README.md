@@ -13,9 +13,9 @@ Quick Links
 -----------
 - **Getting Started**
   - docs overview: [docs/README.md](docs/README.md)
-  - **K8s choice (k3s vs kubeadm):** [docs/k8s-comparison.md](docs/k8s-comparison.md) ⭐
-  - Contabo VPS with k3s (recommended): [docs/contabo-setup.md](docs/contabo-setup.md)
-  - Contabo VPS with kubeadm (alternative): [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md)
+  - **K8s choice (kubeadm vs k3s):** [docs/k8s-comparison.md](docs/k8s-comparison.md) ⭐
+  - Contabo VPS with kubeadm (recommended): [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md)
+  - Contabo VPS with k3s (alternative): [docs/contabo-setup.md](docs/contabo-setup.md)
   - hosting environments and providers: [docs/hosting.md](docs/hosting.md)
   - onboarding a repo: [docs/onboarding.md](docs/onboarding.md)
 

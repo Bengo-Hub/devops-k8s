@@ -178,11 +178,11 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 
 2. **Copy the kubeconfig:**
    ```bash
-   # For k3s (default location)
-   cat /etc/rancher/k3s/k3s.yaml
-
    # For kubeadm (default location)
    cat /etc/kubernetes/admin.conf
+
+   # For k3s (alternative location)
+   cat /etc/rancher/k3s/k3s.yaml
    ```
 
 3. **Save the kubeconfig content** to a local file (e.g., `kubeconfig.yaml`)
@@ -334,6 +334,8 @@ apt-get update && apt-get upgrade -y
 
 # Update k3s (if using k3s)
 curl -sfL https://get.k3s.io | sh -
+
+# Or update kubeadm cluster (follow official upgrade process)
 ```
 
 ### 8.2 Monitor Resource Usage
@@ -353,7 +355,10 @@ kubectl top pods -A
 # Backup Kubernetes resources
 kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
 
-# Backup etcd (k3s)
+# Backup etcd (kubeadm)
+# See: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
+
+# Or for k3s:
 cp /var/lib/rancher/k3s/server/db/state.db /backup/k3s-state.db
 
 # Backup Docker data (if needed)
