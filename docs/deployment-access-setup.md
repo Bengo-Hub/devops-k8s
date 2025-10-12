@@ -36,7 +36,7 @@ This comprehensive guide provides all the information needed to set up access fo
 
 ### 1.2 Repository-Specific Secrets Setup
 
-For the ERP UI repository (`bengobox-erpi-ui`), add these repository secrets in GitHub:
+For the ERP UI repository (`bengobox-erp-ui`), add these repository secrets in GitHub:
 
 **Go to Repository → Settings → Secrets and variables → Actions**
 
