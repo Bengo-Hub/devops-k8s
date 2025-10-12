@@ -25,7 +25,7 @@ Quick Links
   - GitHub secrets required: [docs/github-secrets.md](docs/github-secrets.md)
   - environments and secrets: [docs/env-vars.md](docs/env-vars.md)
   - **comprehensive access setup:** [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) 🔐
-  - **deployment access setup:** [docs/deployment-access-setup.md](docs/deployment-access-setup.md) 🚀
+  - **SSH keys setup:** [docs/ssh-keys-setup.md](docs/ssh-keys-setup.md) 🔑
 
 - **Infrastructure**
   - **database setup (PostgreSQL + Redis):** [docs/database-setup.md](docs/database-setup.md)

@@ -1,14 +1,14 @@
-# Comprehensive Access Setup Guide for BengoERP Deployment
+# Comprehensive Access Setup Guide for BengoERP Deployment Pipeline
 
 ## Overview
 
 This guide provides step-by-step instructions for setting up all required access permissions and authentication methods needed for the BengoERP deployment pipeline to work successfully.
 
-## Prerequisites
+## Related Documentation
 
-- Contabo VPS with Ubuntu/Debian-based system
-- GitHub organization access with admin permissions
-- Local machine with git, kubectl, and SSH client installed
+- [SSH Keys Setup Guide](./ssh-keys-setup.md) - Detailed SSH key configuration and troubleshooting
+- [GitHub Secrets Guide](./github-secrets.md) - Complete secrets documentation
+- [VPS Access Testing Guide](./vps-access-testing-guide.md) - Testing and verification procedures
 
 ## 1. GitHub Access Setup
 
@@ -42,12 +42,10 @@ For the ERP UI repository (`bengobox-erp-ui`), add these repository secrets:
 - `DOCKER_SSH_KEY` - Base64-encoded SSH private key for Docker builds (optional)
 - `KUBE_CONFIG` - Base64-encoded kubeconfig for Kubernetes access
 - `REGISTRY_USERNAME` - Docker Hub username (`codevertex`)
-- `REGISTRY_PASSWORD` - Docker Hub access token
-- `SSH_PRIVATE_KEY` - Base64-encoded SSH private key for VPS access
 - `GIT_USER` - Your git username (`Titus Owuor`)
 - `GIT_EMAIL` - Your git email (`titusowuor30@gmail.com`)
 
-## 2. SSH Key Setup for Contabo VPS
+## 1. GitHub Access Setup
 
 ### 2.1 Generate SSH Key Pair
 
@@ -121,13 +119,24 @@ Add these **organization-level** secrets in your GitHub organization settings:
 | `DOCKER_SSH_KEY` | Base64-encoded SSH private key for Docker builds | Generated above |
 | `KUBE_CONFIG` | Base64-encoded kubeconfig for Kubernetes access | From VPS kubeconfig |
 | `REGISTRY_USERNAME` | Docker Hub username | `codevertex` |
-| `REGISTRY_PASSWORD` | Docker Hub access token | From Docker Hub |
 | `SSH_PRIVATE_KEY` | Base64-encoded SSH private key for VPS access | Generated above |
 | `GIT_USER` | Git username | `Titus Owuor` |
 | `GIT_EMAIL` | Git email | `titusowuor30@gmail.com` |
 | `GITHUB_TOKEN` | GitHub personal access token for repo access | Generated earlier |
 
 **Note:** Organization-level secrets are accessed using `${{ secrets.SECRET_NAME }}` in GitHub Actions workflows, just like repository secrets.
+
+## 2. SSH Keys Setup
+
+For detailed SSH key setup and troubleshooting, see: [SSH Keys Setup Guide](./ssh-keys-setup.md)
+
+**Quick Setup Summary:**
+
+1. Generate SSH key pair (uses passphrase `codevertex`)
+2. Add public key to Contabo VPS
+3. Store private key as `DOCKER_SSH_KEY` and `SSH_PRIVATE_KEY` in GitHub secrets
+
+The same SSH key can be used for both Docker builds and VPS access for simplicity.
 
 ## 3. Contabo API Setup
 
@@ -167,7 +176,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
   https://api.contabo.com/v1/compute/instances
 ```
 
-## 4. Kubernetes Access Setup
+## 3. Contabo API Setup
 
 ### 4.1 Get Kubeconfig from Contabo VPS
 
@@ -225,7 +234,7 @@ export KUBECONFIG=/tmp/test-kubeconfig
 kubectl get nodes
 ```
 
-## 5. Testing the Setup
+## 4. Kubernetes Access Setup
 
 ### 5.1 Test VPS Access
 
@@ -276,13 +285,13 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
    - ArgoCD application is refreshed
    - Pods are created in the cluster
 
-## 6. Troubleshooting
+## 5. Testing and Verification
 
 ### 6.1 GitHub Token Issues
 
 **Problem:** `git@github.com: Permission denied (publickey)`
 
-**Solution:**
+{{ ... }}
 - Ensure the `DEVOPS_K8S_ACCESS_TOKEN` secret exists and has the correct value
 - Verify the token has `repo` scope enabled
 - Check that the token belongs to a user with access to the `Bengo-Hub/devops-k8s` repository
@@ -315,7 +324,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 - Ensure OAuth2 client has proper permissions
 - Check that the API user has access to the instance
 
-## 7. Security Best Practices
+## 6. Troubleshooting
 
 1. **Rotate tokens regularly** - Set expiration dates and rotate tokens periodically
 2. **Use least privilege** - Only grant necessary permissions to tokens
@@ -325,7 +334,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 6. **Keep software updated** - Regularly update all systems and dependencies
 7. **Standard SSH passphrase** - All project SSH keys use passphrase "codevertex" for consistency
 
-## 8. Maintenance
+## 7. Security Best Practices
 
 ### 8.1 Update Dependencies
 ```bash
@@ -365,7 +374,7 @@ cp /var/lib/rancher/k3s/server/db/state.db /backup/k3s-state.db
 docker system df
 ```
 
-## 9. Support
+## 8. Maintenance
 
 For issues or questions:
 - **Email:** codevertexitsolutions@gmail.com
