@@ -287,14 +287,31 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 
 ## 5. Testing and Verification
 
-### 6.1 GitHub Token Issues
+### 6.1 Git Operations Issues
 
-**Problem:** `git@github.com: Permission denied (publickey)`
+**Problem:** `git@github.com: Permission denied (publickey)` during git pull/push operations
 
-{{ ... }}
-- Ensure the `DEVOPS_K8S_ACCESS_TOKEN` secret exists and has the correct value
-- Verify the token has `repo` scope enabled
-- Check that the token belongs to a user with access to the `Bengo-Hub/devops-k8s` repository
+**Root Cause:** The workflow uses SSH keys for git operations (git pull, git push, git commit), not tokens.
+
+**Solutions:**
+- **Verify SSH keys are properly configured** in GitHub secrets (`DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY`)
+- **Ensure SSH agent is running** - the workflow sets `SSH_AUTH_SOCK` environment variable
+- **Check SSH key format** - must be base64-encoded private key without passphrase or with passphrase `codevertex`
+- **Verify public key is added** to the repository as a deploy key (for private repos during Docker builds)
+
+**Workflow SSH Setup Process:**
+1. SSH keys are loaded from secrets
+2. SSH agent is started with `eval "$(ssh-agent)"`
+3. Keys are added with `ssh-add`
+4. `SSH_AUTH_SOCK` is exported for use in git operations
+
+**Debug SSH Setup:**
+```bash
+echo "SSH_AUTH_SOCK=", $SSH_AUTH_SOCK
+ssh-add -l
+```
+
+**Alternative:** Use `DEVOPS_K8S_ACCESS_TOKEN` for workflows that don't require SSH key access.
 
 ### 6.2 SSH Connection Issues
 
