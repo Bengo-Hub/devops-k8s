@@ -46,12 +46,11 @@ Store these as GitHub org secrets:
 (Same as k3s guide - see `contabo-setup.md` section 2)
 
 ```bash
-# Generate SSH key
-ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N ""
-
+# On your local machine
+ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
+```
 # Add public key to Contabo via control panel or API
 # Store private key in GitHub secret: SSH_PRIVATE_KEY
-```
 
 ---
 

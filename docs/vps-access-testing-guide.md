@@ -66,11 +66,14 @@ kubectl get nodes
 
 ```bash
 # Test token has access to devops-k8s repository
-curl -H "Authorization: Bearer YOUR_GITHUB_TOKEN" \
+curl -H "Authorization: Bearer YOUR_TOKEN" \
   https://api.github.com/repos/Bengo-Hub/devops-k8s
 
-# Expected: Returns repository information (HTTP 200)
+# Should return repository information if token has access
 # If fails: Check token has 'repo' scope and access to repository
+
+# Note: GitHub tokens and all other secrets should be stored at the organization level
+# in GitHub organization settings, not repository settings.
 ```
 
 ### 2.2 Test Repository Clone

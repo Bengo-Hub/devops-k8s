@@ -87,13 +87,12 @@ Configuration
 #### Generate SSH Deploy Key for devops-k8s
 ```bash
 # On your local machine
-ssh-keygen -t ed25519 -C "argocd@codevertex" -f ~/.ssh/argocd_deploy_key -N ""
-
+ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
+```
 # Add public key to GitHub repo
 # Settings > Deploy keys > Add deploy key
-# Paste contents of ~/.ssh/argocd_deploy_key.pub
+# Paste contents of ~/.ssh/contabo_deploy_key.pub
 # ✓ Allow write access if using automated commits
-```
 
 #### Add Repo to Argo CD via UI
 1. Settings > Repositories > Connect Repo

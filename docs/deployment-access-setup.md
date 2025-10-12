@@ -59,13 +59,12 @@ Add these secrets:
 ### 2.1 Generate SSH Key Pair for VPS Access
 
 ```bash
-# Generate Ed25519 key pair (more secure than RSA)
-ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N ""
-
+# On your local machine
+ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
+```
 # This creates:
 # - ~/.ssh/contabo_deploy_key (private key)
 # - ~/.ssh/contabo_deploy_key.pub (public key)
-```
 
 ### 2.2 Add Public Key to Contabo VPS
 
@@ -197,6 +196,8 @@ Add these **organization-level** secrets:
 | `CONTABO_CLIENT_SECRET` | OAuth2 client secret |
 | `CONTABO_API_USERNAME` | Contabo username |
 | `CONTABO_API_PASSWORD` | Contabo password |
+
+**Note:** Organization-level secrets are accessed using `${{ secrets.SECRET_NAME }}` in GitHub Actions workflows, just like repository secrets.
 
 ## 5. Testing and Verification
 
