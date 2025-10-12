@@ -105,16 +105,54 @@ jobs:
           ./scripts/install-monitoring.sh
           echo "::endgroup::"
 
-      - name: Install Databases (idempotent)
+      - name: Setup Git Access (SSH Keys & Configuration)
         if: env.skip_provision != 'true'
         env:
-          DB_NAMESPACE: erp
-          PG_DATABASE: bengo_erp
+          VPS_IP: ${{ secrets.VPS_IP }}
         run: |
-          echo "::group::Installing Databases"
-          ./scripts/install-databases.sh
+          echo "::group::Setting up Git SSH Access"
+          
+          # Create SSH directory if it doesn't exist
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          # Generate SSH key pair for git operations (if not exists)
+          if [ ! -f ~/.ssh/git_deploy_key ]; then
+            echo "🔑 Generating SSH key pair for git operations..."
+            ssh-keygen -t ed25519 -C "vps-git-access@bengoerp" -f ~/.ssh/git_deploy_key -N ""
+            chmod 600 ~/.ssh/git_deploy_key
+            chmod 644 ~/.ssh/git_deploy_key.pub
+          else
+            echo "✅ SSH key pair already exists"
+          fi
+          
+          # Add GitHub to known hosts
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          # Create SSH config for git operations
+          cat > ~/.ssh/config << 'EOF'
+          Host github.com
+              HostName github.com
+              User git
+              IdentityFile ~/.ssh/git_deploy_key
+              IdentitiesOnly yes
+              StrictHostKeyChecking no
+          EOF
+          chmod 600 ~/.ssh/config
+          
+          # Display public key for deploy key setup
+          echo "🔑 PUBLIC KEY FOR GITHUB DEPLOY KEY:"
+          echo "====================================="
+          cat ~/.ssh/git_deploy_key.pub
+          echo "====================================="
+          echo ""
+          echo "📋 NEXT STEPS:"
+          echo "1. Copy the public key above"
+          echo "2. Go to: https://github.com/Bengo-Hub/devops-k8s/settings/keys"
+          echo "3. Add deploy key with 'Allow write access' enabled"
+          echo "4. Test: git clone git@github.com:Bengo-Hub/devops-k8s.git"
+          
           echo "::endgroup::"
-      
       - name: Summary
         if: env.skip_provision != 'true'
         run: |
@@ -123,9 +161,11 @@ jobs:
           echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
           echo "✅ Monitoring installed (https://grafana.masterspace.co.ke)"
           echo "✅ Databases installed (PostgreSQL + Redis in 'erp' namespace)"
+          echo "✅ Git SSH access configured"
           echo ""
           echo "Next steps:"
-          echo "1. Point DNS to your VPS IP (77.237.232.66)"
-          echo "2. Configure Argo CD repository access"
-          echo "3. Deploy applications via Argo CD"
+          echo "1. Set up GitHub deploy key (see workflow output above)"
+          echo "2. Point DNS to your VPS IP (77.237.232.66)"
+          echo "3. Configure Argo CD repository access"
+          echo "4. Deploy applications via Argo CD"
           echo "::endgroup::"
