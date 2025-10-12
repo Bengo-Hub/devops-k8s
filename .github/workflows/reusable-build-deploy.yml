@@ -3,48 +3,92 @@ name: Reusable Build and Deploy
 on:
   workflow_call:
     inputs:
+      # Generic branding and customization
+      deployment_summary_title:
+        required: false
+        type: string
+        default: "Deployment Summary"
+        description: "Title for the deployment summary (e.g., 'MyApp Deployment Summary')"
+      deployment_success_message:
+        required: false
+        type: string
+        default: "Deployment completed! Application should be accessible via the URLs above."
+        description: "Success message displayed in deployment summary"
+      application_display_name:
+        required: false
+        type: string
+        description: "Human-readable application name for display (defaults to app_name)"
+
+      # Core deployment parameters
       app_name:
         required: true
         type: string
+        description: "Application name (required, used for naming resources and ArgoCD applications)"
       registry_server:
         required: false
         type: string
         default: docker.io
+        description: "Container registry server (e.g., docker.io, gcr.io, quay.io)"
       registry_namespace:
         required: false
         type: string
         default: codevertex
+        description: "Registry namespace/organization (e.g., codevertex, myorg)"
       docker_context:
         required: false
         type: string
         default: .
+        description: "Docker build context path (relative to repository root)"
       dockerfile:
         required: false
         type: string
         default: Dockerfile
+        description: "Path to Dockerfile (relative to docker_context)"
       image_repository:
         required: false
         type: string
+        description: "Custom image repository (overrides registry_server/namespace/app_name)"
       deploy:
         required: false
         type: boolean
         default: false
+        description: "Enable deployment phase (build, push, and deploy)"
       values_file_path:
         required: true
         type: string
+        description: "Path to Helm values file in devops-k8s repository (e.g., apps/erp-api/values.yaml)"
       chart_repo_path:
         required: false
         type: string
         default: charts/app
+        description: "Path to Helm chart in devops-k8s repository"
       namespace:
         required: false
         type: string
         default: default
+        description: "Kubernetes namespace for deployment (must exist or be creatable)"
+      # Git configuration for devops-k8s repo access
+      git_user:
+        required: false
+        type: string
+        default: "Titus Owuor"
+        description: "Git commit author name for devops-k8s repository updates"
+      git_email:
+        required: false
+        type: string
+        default: "titusowuor30@gmail.com"
+        description: "Git commit author email for devops-k8s repository updates"
+      devops_repo:
+        required: false
+        type: string
+        default: "Bengo-Hub/devops-k8s"
+        description: "DevOps repository in format 'owner/repo' for Helm updates"
       # Database automation (optional)
       setup_databases:
         required: false
         type: boolean
         default: false
+        description: "Enable automatic database setup (postgres, redis, mongo, mysql)"
       db_types:
         description: "Comma-separated list of databases to setup (postgres,redis,mongo,mysql)"
         required: false
@@ -59,43 +103,54 @@ on:
         required: false
         type: string
         default: contabo
+        description: "Cloud provider (contabo, aws, gcp, azure)"
       contabo_api:
         required: false
         type: boolean
         default: true
+        description: "Enable Contabo API for instance management"
       contabo_instance_id:
         required: false
         type: string
         default: "202846760"
+        description: "Contabo instance ID for API operations"
       contabo_ip:
         required: false
         type: string
         default: "77.237.232.66"
+        description: "Contabo instance IP address"
       contabo_datacenter:
         required: false
         type: string
         default: "European Union 2"
+        description: "Contabo datacenter location"
       contabo_region:
         required: false
         type: string
         default: "EU"
+        description: "Contabo region (EU, US, etc.)"
       ssh_deploy:
         required: false
         type: boolean
         default: false
+        description: "Enable SSH deployment to VPS"
       ssh_host:
         required: false
         type: string
+        description: "SSH target host (IP or hostname)"
       ssh_user:
         required: false
         type: string
+        description: "SSH username for deployment"
       ssh_port:
         required: false
         type: string
         default: "22"
+        description: "SSH port (default: 22)"
       ssh_deploy_command:
         required: false
         type: string
+        description: "Custom SSH deployment command"
     secrets:
       REGISTRY_USERNAME:
         required: false
@@ -136,6 +191,15 @@ jobs:
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
       DOCKER_SSH_KEY: ${{ secrets.DOCKER_SSH_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+      CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
+      CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
+      CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
+      CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -191,12 +255,12 @@ jobs:
           fi
 
       - name: Log in to registry (optional)
-        if: ${{ env.REG_USER != '' && env.REG_PASS != '' }}
+        if: ${{ secrets.REGISTRY_USERNAME != '' && secrets.REGISTRY_PASSWORD != '' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ inputs.registry_server }}
-          username: ${{ env.REG_USER }}
-          password: ${{ env.REG_PASS }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Derive short SHA
         id: vars
@@ -213,18 +277,20 @@ jobs:
           exit-code: '0'
 
       - name: Build image (with SSH)
-        if: ${{ env.SSH_AUTH_SOCK != '' }}
+        if: ${{ env.SSH_AUTH_SOCK != '' && env.SSH_AUTH_SOCK != null }}
         run: |
           echo "🔑 Building with SSH support"
+          echo "📦 Image: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
           DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
             -f "${{ inputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
             --ssh default="$SSH_AUTH_SOCK"
 
       - name: Build image (no SSH)
-        if: ${{ env.SSH_AUTH_SOCK == '' }}
+        if: ${{ env.SSH_AUTH_SOCK == '' || env.SSH_AUTH_SOCK == null }}
         run: |
           echo "🚫 Building without SSH (no keys configured)"
+          echo "📦 Image: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
           DOCKER_BUILDKIT=1 docker build "${{ inputs.docker_context }}" \
             -f "${{ inputs.dockerfile }}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
@@ -241,6 +307,8 @@ jobs:
 
       - name: Setup databases (optional)
         if: ${{ inputs.deploy && inputs.setup_databases }}
+        timeout-minutes: 10
+        continue-on-error: true
         env:
           NS: ${{ inputs.namespace }}
           DB_TYPES: ${{ inputs.db_types }}
@@ -252,58 +320,106 @@ jobs:
           set -e
           echo "Setting up databases in namespace ${NS}: ${DB_TYPES}"
           kubectl get ns "${NS}" >/dev/null 2>&1 || kubectl create ns "${NS}"
+
           # Tools
           sudo apt-get update -y && sudo apt-get install -y jq curl
+
           # Generate passwords if not provided
           gen_pwd() { openssl rand -hex 16; }
           : "${POSTGRES_PASSWORD:=$(gen_pwd)}"; : "${REDIS_PASSWORD:=$(gen_pwd)}"; : "${MONGO_PASSWORD:=$(gen_pwd)}"; : "${MYSQL_PASSWORD:=$(gen_pwd)}"
+
           echo "::group::Install Helm repos"
           helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
           helm repo update >/dev/null 2>&1 || true
           echo "::endgroup::"
+
           # Parse db types
           SAVEIFS=$IFS; IFS=','; set -f; types=($DB_TYPES); IFS=$SAVEIFS; set +f
+
+          DB_SETUP_SUCCESS=0
+          DB_SETUP_TOTAL=${#types[@]}
+
           for db in "${types[@]}"; do
             db=$(echo "$db" | xargs)
-            if [ "$db" = "postgres" ]; then
-              echo "Installing PostgreSQL..."
-              helm upgrade --install postgresql bitnami/postgresql -n "$NS" \
-                --set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD" \
-                --set global.postgresql.auth.database="appdb" \
-                --wait
-              export POSTGRES_URL="postgresql://postgres:${POSTGRES_PASSWORD}@postgresql.${NS}.svc.cluster.local:5432/appdb"
-            elif [ "$db" = "redis" ]; then
-              echo "Installing Redis..."
-              helm upgrade --install redis bitnami/redis -n "$NS" \
-                --set global.redis.password="$REDIS_PASSWORD" \
-                --wait
-              export REDIS_URL="redis://:${REDIS_PASSWORD}@redis-master.${NS}.svc.cluster.local:6379/0"
-            elif [ "$db" = "mongo" ] || [ "$db" = "mongodb" ]; then
-              echo "Installing MongoDB..."
-              helm upgrade --install mongodb bitnami/mongodb -n "$NS" \
-                --set auth.rootPassword="$MONGO_PASSWORD" \
-                --wait
-              export MONGO_URL="mongodb://root:${MONGO_PASSWORD}@mongodb.${NS}.svc.cluster.local:27017/?authSource=admin"
-            elif [ "$db" = "mysql" ]; then
-              echo "Installing MySQL..."
-              helm upgrade --install mysql bitnami/mysql -n "$NS" \
-                --set auth.rootPassword="$MYSQL_PASSWORD" \
-                --wait
-              export MYSQL_URL="mysql://root:${MYSQL_PASSWORD}@mysql.${NS}.svc.cluster.local:3306/appdb"
-            fi
+            echo "::group::Installing $db"
+
+            case "$db" in
+              postgres)
+                echo "Installing PostgreSQL..."
+                if helm upgrade --install postgresql bitnami/postgresql -n "$NS" \
+                  --set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD" \
+                  --set global.postgresql.auth.database="appdb" \
+                  --wait --timeout=300s; then
+                  echo "✅ PostgreSQL installed successfully"
+                  export POSTGRES_URL="postgresql://postgres:${POSTGRES_PASSWORD}@postgresql.${NS}.svc.cluster.local:5432/appdb"
+                  DB_SETUP_SUCCESS=$((DB_SETUP_SUCCESS + 1))
+                else
+                  echo "❌ Failed to install PostgreSQL"
+                fi
+                ;;
+              redis)
+                echo "Installing Redis..."
+                if helm upgrade --install redis bitnami/redis -n "$NS" \
+                  --set global.redis.password="$REDIS_PASSWORD" \
+                  --wait --timeout=300s; then
+                  echo "✅ Redis installed successfully"
+                  export REDIS_URL="redis://:${REDIS_PASSWORD}@redis-master.${NS}.svc.cluster.local:6379/0"
+                  DB_SETUP_SUCCESS=$((DB_SETUP_SUCCESS + 1))
+                else
+                  echo "❌ Failed to install Redis"
+                fi
+                ;;
+              mongo|mongodb)
+                echo "Installing MongoDB..."
+                if helm upgrade --install mongodb bitnami/mongodb -n "$NS" \
+                  --set auth.rootPassword="$MONGO_PASSWORD" \
+                  --wait --timeout=300s; then
+                  echo "✅ MongoDB installed successfully"
+                  export MONGO_URL="mongodb://root:${MONGO_PASSWORD}@mongodb.${NS}.svc.cluster.local:27017/?authSource=admin"
+                  DB_SETUP_SUCCESS=$((DB_SETUP_SUCCESS + 1))
+                else
+                  echo "❌ Failed to install MongoDB"
+                fi
+                ;;
+              mysql)
+                echo "Installing MySQL..."
+                if helm upgrade --install mysql bitnami/mysql -n "$NS" \
+                  --set auth.rootPassword="$MYSQL_PASSWORD" \
+                  --wait --timeout=300s; then
+                  echo "✅ MySQL installed successfully"
+                  export MYSQL_URL="mysql://root:${MYSQL_PASSWORD}@mysql.${NS}.svc.cluster.local:3306/appdb"
+                  DB_SETUP_SUCCESS=$((DB_SETUP_SUCCESS + 1))
+                else
+                  echo "❌ Failed to install MySQL"
+                fi
+                ;;
+              *)
+                echo "⚠️ Unknown database type: $db"
+                ;;
+            esac
+            echo "::endgroup::"
           done
-          echo "Creating/updating env secret ${NS}/${{ inputs.env_secret_name }}"
-          # Build literals dynamically
+
+          echo "📊 Database setup summary: $DB_SETUP_SUCCESS/$DB_SETUP_TOTAL successful"
+
+          # Create/update environment secret with database URLs
+          echo "::group::Creating environment secret"
           LITS=""
           [ -n "$POSTGRES_URL" ] && LITS="$LITS --from-literal=DATABASE_URL=$POSTGRES_URL"
           [ -n "$REDIS_URL" ] && LITS="$LITS --from-literal=REDIS_URL=$REDIS_URL --from-literal=CELERY_BROKER_URL=$REDIS_URL --from-literal=CELERY_RESULT_BACKEND=$REDIS_URL"
           [ -n "$MONGO_URL" ] && LITS="$LITS --from-literal=MONGO_URL=$MONGO_URL"
           [ -n "$MYSQL_URL" ] && LITS="$LITS --from-literal=MYSQL_URL=$MYSQL_URL"
+
           if [ -n "$LITS" ]; then
-            kubectl -n "$NS" create secret generic "${{ inputs.env_secret_name }}" $LITS --dry-run=client -o yaml | kubectl apply -f -
+            if kubectl -n "$NS" create secret generic "${{ inputs.env_secret_name }}" $LITS --dry-run=client -o yaml | kubectl apply -f -; then
+              echo "✅ Environment secret created/updated successfully"
+            else
+              echo "❌ Failed to create/update environment secret"
+            fi
           else
-            echo "No DB URLs were generated; skipping secret creation"
+            echo "ℹ️ No database URLs were generated; skipping secret creation"
           fi
+          echo "::endgroup::"
 
       - name: Contabo API bootstrap (ensure instance ready)
         id: contabo_bootstrap
@@ -335,43 +451,135 @@ jobs:
 
       - name: Update values in devops-k8s
         if: ${{ inputs.deploy }}
+        timeout-minutes: 5
         env:
           SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
           VALUES_PATH: ${{ inputs.values_file_path }}
           IMAGE_REPO: ${{ steps.img.outputs.repo }}
+          DEVOPS_REPO: ${{ inputs.devops_repo }}
+          GIT_USER: ${{ inputs.git_user }}
+          GIT_EMAIL: ${{ inputs.git_email }}
         run: |
           # Ensure SSH is configured for git operations
           if [ -n "${SSH_AUTH_SOCK:-}" ] && [ "$SSH_AUTH_SOCK" != "" ]; then
             echo "🔑 Using SSH for git operations"
             export SSH_AUTH_SOCK="$SSH_AUTH_SOCK"
-            git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"
+
+            # Create SSH config file for reliable git operations
+            mkdir -p ~/.ssh
+            cat > ~/.ssh/config << 'EOF'
+            Host github.com
+                HostName github.com
+                User git
+                IdentitiesOnly yes
+                StrictHostKeyChecking no
+            EOF
+            chmod 600 ~/.ssh/config
+
+            # Set SSH key path for git operations
+            if [ -n "${DOCKER_SSH_KEY_B64:-}" ]; then
+              echo "Using DOCKER_SSH_KEY for git operations"
+              echo "$DOCKER_SSH_KEY_B64" | base64 -d > ~/.ssh/id_rsa
+              chmod 600 ~/.ssh/id_rsa
+              echo "    IdentityFile ~/.ssh/id_rsa" >> ~/.ssh/config
+            elif [ -n "${SSH_PRIV:-}" ]; then
+              echo "Using SSH_PRIVATE_KEY for git operations"
+              printf "%s" "$SSH_PRIV" > ~/.ssh/id_rsa
+              chmod 600 ~/.ssh/id_rsa
+              echo "    IdentityFile ~/.ssh/id_rsa" >> ~/.ssh/config
+            fi
+
+            echo "✅ SSH configured for git operations"
           else
             echo "⚠️ SSH not configured, git operations may fail"
           fi
-          
-          git config user.name "DevOps Bot"
-          git config user.email "devops@bot.local"
-          git pull --rebase
-          yq -yi ".image.repository = \"${IMAGE_REPO}\" | .image.tag = \"${SHORT_SHA}\"" "${VALUES_PATH}"
-          git add "${VALUES_PATH}"
-          git commit -m "${{ inputs.app_name }}:${SHORT_SHA} released" || echo "No changes"
-          git push
+
+          git config user.name "$GIT_USER"
+          git config user.email "$GIT_EMAIL"
+
+          # Retry git operations with exponential backoff
+          max_retries=3
+          for ((i=1; i<=max_retries; i++)); do
+            echo "🔄 Git operation attempt $i/$max_retries"
+
+            if git pull --rebase; then
+              echo "✅ Git pull successful"
+              break
+            else
+              echo "❌ Git pull failed (attempt $i/$max_retries)"
+              if [ $i -eq $max_retries ]; then
+                echo "💥 All git pull attempts failed, continuing with local repo"
+                break
+              fi
+              sleep $((2 ** (i-1)))  # Exponential backoff: 1s, 2s, 4s
+            fi
+          done
+
+          # Update Helm values
+          if [ -f "$VALUES_PATH" ]; then
+            echo "📝 Updating Helm values: $VALUES_PATH"
+            yq -yi ".image.repository = \"${IMAGE_REPO}\" | .image.tag = \"${SHORT_SHA}\"" "${VALUES_PATH}"
+
+            if [ $? -eq 0 ]; then
+              echo "✅ Helm values updated successfully"
+
+              # Check if there are changes to commit
+              if git diff --quiet HEAD "${VALUES_PATH}"; then
+                echo "ℹ️ No changes to commit"
+              else
+                echo "💾 Committing changes"
+                git add "${VALUES_PATH}"
+
+                # Retry git commit
+                if git commit -m "${{ inputs.app_name }}:${SHORT_SHA} released"; then
+                  echo "✅ Changes committed"
+
+                  # Retry git push with exponential backoff
+                  push_max_retries=3
+                  for ((j=1; j<=push_max_retries; j++)); do
+                    echo "🔄 Git push attempt $j/$push_max_retries"
+                    if git push; then
+                      echo "✅ Git push successful"
+                      break
+                    else
+                      echo "❌ Git push failed (attempt $j/$push_max_retries)"
+                      if [ $j -eq $push_max_retries ]; then
+                        echo "💥 All git push attempts failed"
+                        echo "⚠️ Deployment will continue despite git push failure"
+                      fi
+                      sleep $((2 ** (j-1)))
+                    fi
+                  done
+                else
+                  echo "❌ Git commit failed"
+                fi
+              fi
+            else
+              echo "❌ Failed to update Helm values"
+            fi
+          else
+            echo "⚠️ Helm values file not found: $VALUES_PATH"
+          fi
 
       - name: Apply kube secrets (optional)
-        if: ${{ inputs.deploy && env.KUBE_CONFIG_B64 != '' }}
+        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        env:
+          NS: ${{ inputs.namespace }}
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           mkdir -p ~/.kube
           echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
-          kubectl get ns "${{ inputs.namespace }}" >/dev/null 2>&1 || kubectl create ns "${{ inputs.namespace }}"
+          kubectl get ns "${NS}" >/dev/null 2>&1 || kubectl create ns "${NS}"
           if [ -f kubeSecrets/devENV.yaml ]; then
             kubectl apply -f kubeSecrets/devENV.yaml || true
           fi
 
       - name: Ensure default JWT secret (when KUBE_CONFIG provided)
-        if: ${{ inputs.deploy && env.KUBE_CONFIG_B64 != '' }}
+        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
         env:
           NS: ${{ inputs.namespace }}
           SECRET_NAME: ${{ inputs.env_secret_name }}
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           set -e
           mkdir -p ~/.kube
@@ -388,11 +596,12 @@ jobs:
           fi
 
       - name: Run database migrations (Django apps)
-        if: ${{ inputs.deploy && env.KUBE_CONFIG_B64 != '' && inputs.app_name == 'erp-api' }}
+        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' && inputs.app_name == 'erp-api' }}
         env:
           NS: ${{ inputs.namespace }}
           IMAGE_REPO: ${{ steps.img.outputs.repo }}
           SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           echo "::group::Running database migrations"
           mkdir -p ~/.kube
@@ -446,4 +655,147 @@ jobs:
             docker rm -f ${{ inputs.app_name }} || true
             docker run -d --restart always --name ${{ inputs.app_name }} -p 0.0.0.0:80:80 "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
 
+      - name: Get service URLs
+        id: service_urls
+        if: ${{ inputs.deploy && secrets.KUBE_CONFIG != '' }}
+        env:
+          NS: ${{ inputs.namespace }}
+          APP_NAME: ${{ inputs.app_name }}
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          
+          # Wait for services to be ready and discover URLs
+          echo "🔍 Discovering service URLs..."
 
+          urls=""
+          max_wait_time=300  # 5 minutes timeout
+          wait_interval=15   # Check every 15 seconds
+          elapsed_time=0
+
+          while [[ $elapsed_time -lt $max_wait_time ]]; do
+            echo "⏳ Waiting for services to be ready... (${elapsed_time}s/${max_wait_time}s)"
+
+            # Get ingress URLs for the application
+            if kubectl get ingress -n "$NS" >/dev/null 2>&1; then
+              while IFS= read -r ingress; do
+                if [[ -n "$ingress" ]]; then
+                  # Extract host from ingress
+                  host=$(kubectl get ingress "$ingress" -n "$NS" -o jsonpath='{.spec.rules[0].host}' 2>/dev/null)
+
+                  if [[ -n "$host" ]]; then
+                    # Determine protocol (default to http, but check for TLS)
+                    protocol="http"
+                    if kubectl get ingress "$ingress" -n "$NS" -o jsonpath='{.spec.tls}' 2>/dev/null | grep -q "hosts"; then
+                      protocol="https"
+                    fi
+
+                    urls="${urls}${protocol}://${host}\n"
+                    echo "✅ Found ingress URL: ${protocol}://${host}"
+                  fi
+                fi
+              done < <(kubectl get ingress -n "$NS" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+            fi
+
+            # If no ingress URLs found, try to get service URLs
+            if [[ -z "$urls" ]]; then
+              if kubectl get svc "$APP_NAME" -n "$NS" >/dev/null 2>&1; then
+                service_port=$(kubectl get svc "$APP_NAME" -n "$NS" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
+
+                if [[ -n "$service_port" ]]; then
+                  # Check if service is ready (has endpoints)
+                  if kubectl get endpoints "$APP_NAME" -n "$NS" -o jsonpath='{.subsets[*].addresses}' 2>/dev/null | grep -q "ip"; then
+                    urls="http://${APP_NAME}.${NS}.svc.cluster.local:${service_port}\n"
+                    urls="${urls}(Cluster internal URL - configure ingress for external access)"
+                    echo "✅ Found service URL: http://${APP_NAME}.${NS}.svc.cluster.local:${service_port}"
+                  fi
+                fi
+              fi
+            fi
+
+            # If we found URLs, break out of the waiting loop
+            if [[ -n "$urls" ]]; then
+              echo "🎉 Service URLs discovered successfully!"
+              break
+            fi
+
+            # Wait before next check
+            sleep $wait_interval
+            elapsed_time=$((elapsed_time + wait_interval))
+          done
+
+          # Final status report
+          if [[ -n "$urls" ]]; then
+            echo "✅ Service URLs discovered after ${elapsed_time}s:"
+            echo -e "$urls"
+          else
+            echo "⚠️ No service URLs found after ${max_wait_time}s timeout"
+            echo "🔧 Services may still be starting up - check ArgoCD sync status"
+            urls="⏳ Services still starting up...\nCheck ArgoCD for sync status"
+          fi
+
+          echo "service_urls<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$urls" | sed '/^$/d' | head -5 >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Deployment Summary
+        if: ${{ inputs.deploy }}
+        run: |
+          # Determine display name for the application
+          APP_DISPLAY_NAME="${{ inputs.application_display_name || inputs.app_name }}"
+
+          echo "🚀 === ${{ inputs.deployment_summary_title }} ===" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Deployment Completed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Application Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Application:** $APP_DISPLAY_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Namespace:** ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tag:** ${{ steps.vars.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry:** ${{ steps.img.outputs.repo }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Display service URLs if available
+          if [[ -n "${{ steps.service_urls.outputs.service_urls }}" ]]; then
+            echo "### 🌐 Service URLs" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.service_urls.outputs.service_urls }}" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 🌐 Service URLs" >> $GITHUB_STEP_SUMMARY
+            echo "⏳ Services are still starting up. Check ArgoCD sync status for external URLs." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Database information if setup was enabled
+          if [[ "${{ inputs.setup_databases }}" == "true" ]]; then
+            echo "### 🗄️ Database Setup" >> $GITHUB_STEP_SUMMARY
+            echo "- **Databases:** ${{ inputs.db_types }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Secret:** ${{ inputs.env_secret_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Namespace:** ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Verify ArgoCD Sync:** Check that ArgoCD has synced the new image tag" >> $GITHUB_STEP_SUMMARY
+          echo "2. **Test Application:** Access the service URLs listed above" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Monitor Logs:** Check application and database logs for any issues" >> $GITHUB_STEP_SUMMARY
+          echo "4. **SSL Certificate:** Configure ingress with SSL certificate for HTTPS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🔧 Useful Commands" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Check ArgoCD sync status" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl get applications -n argocd" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Check application logs" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl logs -l app=${{ inputs.app_name }} -n ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Check service status" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl get pods,svc,ingress -l app=${{ inputs.app_name }} -n ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "🎉 **${{ inputs.deployment_success_message }}**" >> $GITHUB_STEP_SUMMARY

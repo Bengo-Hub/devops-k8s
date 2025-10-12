@@ -131,7 +131,7 @@ jobs:
           # Add GitHub to known hosts
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Create SSH config for git operations
+          # Create SSH config for reliable git operations (FINAL SOLUTION)
           cat > ~/.ssh/config << 'EOF'
           Host github.com
               HostName github.com
