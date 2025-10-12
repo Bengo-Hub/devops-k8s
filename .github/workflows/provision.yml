@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      skip_provision: 'false'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -154,7 +156,7 @@ jobs:
           
           echo "::endgroup::"
       - name: Summary
-        if: env.skip_provision != 'true'
+        if: ${{ env.skip_provision != 'true' }}
         run: |
           echo "::group::Cluster Provisioning Complete"
           echo "✅ cert-manager installed"
