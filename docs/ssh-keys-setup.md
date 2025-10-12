@@ -158,12 +158,27 @@ When a workflow runs with `DOCKER_SSH_KEY` configured:
       ssh-keyscan github.com >> $HOME/.ssh/known_hosts
       eval "$(ssh-agent)"
       ssh-add $HOME/.ssh/id_rsa
+      export SSH_AUTH_SOCK=$(ssh-agent -s)
+      git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"
     fi
 ```
 
 ### Git Operations in Workflows
 
-For git operations within workflows (like updating values files):
+Git operations in GitHub Actions workflows use the SSH configuration established in the "Configure SSH for build secrets" step. The workflow ensures SSH keys are properly loaded and available for git operations by:
+
+1. **Loading SSH keys** from GitHub secrets (`DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY`)
+2. **Starting SSH agent** with `eval "$(ssh-agent)"`
+3. **Adding keys** with `ssh-add`
+4. **Setting SSH_AUTH_SOCK** environment variable for git operations
+5. **Configuring git** to use SSH with `git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"`
+
+**Troubleshooting Git Operations:**
+- Verify `DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY` secrets are properly base64-encoded
+- Ensure the public key is added as a deploy key to the target repository
+- Check that "Allow write access" is enabled for push operations
+- The workflow will show "🔑 Using SSH for git operations" if SSH is configured correctly
+- **Recent Fix:** Git operations now explicitly use `SSH_AUTH_SOCK` and `IdentitiesOnly=yes` for reliable SSH key usage
 
 ```yaml
 # Example from reusable-build-deploy.yml
