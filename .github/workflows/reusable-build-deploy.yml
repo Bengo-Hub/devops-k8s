@@ -340,6 +340,15 @@ jobs:
           VALUES_PATH: ${{ inputs.values_file_path }}
           IMAGE_REPO: ${{ steps.img.outputs.repo }}
         run: |
+          # Ensure SSH is configured for git operations
+          if [ -n "${SSH_AUTH_SOCK:-}" ] && [ "$SSH_AUTH_SOCK" != "" ]; then
+            echo "🔑 Using SSH for git operations"
+            export SSH_AUTH_SOCK="$SSH_AUTH_SOCK"
+            git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"
+          else
+            echo "⚠️ SSH not configured, git operations may fail"
+          fi
+          
           git config user.name "DevOps Bot"
           git config user.email "devops@bot.local"
           git pull --rebase
