@@ -232,6 +232,71 @@ When a workflow runs with `DOCKER_SSH_KEY` configured:
 
 ### **SSH Configuration (RECOMMENDED FINAL SOLUTION)**
 
+#### Step 1: Generate SSH Key Pair on VPS
+Run these commands on your VPS (erp-k8s-prod):
+
+```bash
+# Generate SSH key pair (ED25519 recommended)
+ssh-keygen -t ed25519 -C "vps-git-access@bengoerp" -f ~/.ssh/git_deploy_key -N ""
+
+# Set proper permissions
+chmod 600 ~/.ssh/git_deploy_key
+chmod 644 ~/.ssh/git_deploy_key.pub
+
+# Display the public key (you'll need this for GitHub)
+cat ~/.ssh/git_deploy_key.pub
+```
+ A. configure ssh agent
+ ```bash
+ # Start SSH agent
+eval "$(ssh-agent -s)"
+
+# Add your SSH key to the agent
+ssh-add ~/.ssh/git_deploy_key
+
+# Verify the key is loaded
+ssh-add -l
+
+# Set SSH_AUTH_SOCK for git operations
+echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> ~/.bashrc
+```
+
+B. Configure Git to Use SSH Key
+```bash
+# Configure git to use SSH (not HTTPS)
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+
+# Test SSH connection again
+ssh -T git@github.com
+
+# Try git operations with explicit SSH key
+GIT_SSH_COMMAND="ssh -i ~/.ssh/git_deploy_key -o IdentitiesOnly=yes" git clone git@github.com:Bengo-Hub/devops-k8s.git /devops-repo
+```
+
+#### Step 2: Add Public Key to GitHub
+Copy the public key output from the command above
+Go to your GitHub repository → Settings → Deploy keys
+Click "Add deploy key"
+Paste the public key you copied
+Title: VPS Git Access
+Check "Allow write access" (needed for workflows that push changes)
+Click "Add key"
+
+#### Step 3: Configure SSH for Git Operations
+On your VPS, set up SSH to use the new key for GitHub:
+```bash
+# Add GitHub to known hosts
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+# Test SSH connection
+ssh -T -i ~/.ssh/git_deploy_key git@github.com
+
+# Test git clone
+git clone git@github.com:Bengo-Hub/devops-k8s.git /devops-repo
+```
+
+#### Step 4: Create SSH Config File
+
 The most reliable approach is to create an SSH config file that ensures git operations always use the correct SSH key:
 
 ```bash
