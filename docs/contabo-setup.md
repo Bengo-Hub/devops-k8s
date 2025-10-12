@@ -74,12 +74,11 @@ Organization-level secrets:
 
 ```bash
 # On your local machine
-ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N ""
-
+ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
+```
 # This creates:
 # - ~/.ssh/contabo_deploy_key (private key)
 # - ~/.ssh/contabo_deploy_key.pub (public key)
-```
 
 ### Add Public Key to Contabo VPS
 
