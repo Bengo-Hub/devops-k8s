@@ -20,7 +20,7 @@ grafana:
   adminPassword: "changeme"
   persistence:
     enabled: true
-    size: 5Gi
+    size: 10Gi
     accessModes:
       - ReadWriteOnce
   resources:

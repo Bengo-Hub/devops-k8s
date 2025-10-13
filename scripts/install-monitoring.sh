@@ -86,6 +86,14 @@ sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/
 echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
 echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}"
 
+# If Grafana PVC already exists, do NOT attempt to shrink it. Respect current size.
+HELM_EXTRA_OPTS=""
+GRAFANA_PVC_SIZE=$(kubectl -n monitoring get pvc prometheus-grafana -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null || true)
+if [ -n "${GRAFANA_PVC_SIZE:-}" ]; then
+  echo -e "${YELLOW}Detected existing Grafana PVC size: ${GRAFANA_PVC_SIZE} - preventing shrink on upgrade${NC}"
+  HELM_EXTRA_OPTS="$HELM_EXTRA_OPTS --set-string grafana.persistence.size=${GRAFANA_PVC_SIZE}"
+fi
+
 # Function to fix stuck Helm operations
 fix_stuck_helm() {
     local release_name=${1:-prometheus}
@@ -139,6 +147,7 @@ set +e
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   -n monitoring \
   -f "${TEMP_VALUES}" \
+  ${HELM_EXTRA_OPTS} \
   --timeout=15m \
   --wait 2>&1 | tee /tmp/helm-monitoring-install.log
 HELM_EXIT_CODE=${PIPESTATUS[0]}

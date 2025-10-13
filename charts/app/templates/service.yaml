@@ -3,11 +3,11 @@ kind: Service
 metadata:
   name: {{ include "app.fullname" . }}
   labels:
-    app: {{ include "app.name" . }}
+    app: {{ include "app.fullname" . }}
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app: {{ include "app.name" . }}
+    app: {{ include "app.fullname" . }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.targetPort }}
