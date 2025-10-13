@@ -175,20 +175,6 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    secrets:
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-      DOCKER_SSH_KEY: ${{ secrets.DOCKER_SSH_KEY }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-      MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-      CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
-      CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
-      CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
-      CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -199,43 +185,43 @@ jobs:
         id: inputs
         run: |
           # Handle both workflow_call and workflow_dispatch inputs
-          APP_NAME="${{ inputs.app_name || github.event.inputs.app_name }}"
-          REGISTRY_SERVER="${{ inputs.registry_server || github.event.inputs.registry_server || 'docker.io' }}"
-          REGISTRY_NAMESPACE="${{ inputs.registry_namespace || github.event.inputs.registry_namespace || 'codevertex' }}"
-          DOCKER_CONTEXT="${{ inputs.docker_context || github.event.inputs.docker_context || '.' }}"
-          DOCKERFILE="${{ inputs.dockerfile || github.event.inputs.dockerfile || 'Dockerfile' }}"
-          IMAGE_REPOSITORY="${{ inputs.image_repository || github.event.inputs.image_repository || '' }}"
-          DEPLOY="${{ inputs.deploy || github.event.inputs.deploy || false }}"
-          VALUES_FILE_PATH="${{ inputs.values_file_path || github.event.inputs.values_file_path }}"
-          CHART_REPO_PATH="${{ inputs.chart_repo_path || github.event.inputs.chart_repo_path || 'charts/app' }}"
-          NAMESPACE="${{ inputs.namespace || github.event.inputs.namespace || 'default' }}"
-          GIT_USER="${{ inputs.git_user || github.event.inputs.git_user || 'Titus Owuor' }}"
-          GIT_EMAIL="${{ inputs.git_email || github.event.inputs.git_email || 'titusowuor30@gmail.com' }}"
-          DEVOPS_REPO="${{ inputs.devops_repo || github.event.inputs.devops_repo || 'Bengo-Hub/devops-k8s' }}"
-          SETUP_DATABASES="${{ inputs.setup_databases || github.event.inputs.setup_databases || false }}"
-          DB_TYPES="${{ inputs.db_types || github.event.inputs.db_types || 'postgres,redis' }}"
-          ENV_SECRET_NAME="${{ inputs.env_secret_name || github.event.inputs.env_secret_name || 'app-env' }}"
-          PROVIDER="${{ inputs.provider || github.event.inputs.provider || 'contabo' }}"
-          CONTABO_API="${{ inputs.contabo_api || github.event.inputs.contabo_api || true }}"
-          CONTABO_INSTANCE_ID="${{ inputs.contabo_instance_id || github.event.inputs.contabo_instance_id || '202846760' }}"
-          CONTABO_IP="${{ inputs.contabo_ip || github.event.inputs.contabo_ip || '77.237.232.66' }}"
-          CONTABO_DATACENTER="${{ inputs.contabo_datacenter || github.event.inputs.contabo_datacenter || 'European Union 2' }}"
-          CONTABO_REGION="${{ inputs.contabo_region || github.event.inputs.contabo_region || 'EU' }}"
-          SSH_DEPLOY="${{ inputs.ssh_deploy || github.event.inputs.ssh_deploy || false }}"
-          SSH_HOST="${{ inputs.ssh_host || github.event.inputs.ssh_host || '' }}"
-          SSH_USER="${{ inputs.ssh_user || github.event.inputs.ssh_user || '' }}"
-          SSH_PORT="${{ inputs.ssh_port || github.event.inputs.ssh_port || '22' }}"
-          SSH_DEPLOY_COMMAND="${{ inputs.ssh_deploy_command || github.event.inputs.ssh_deploy_command || '' }}"
-          SKIP_FILES="${{ inputs.skip_files || github.event.inputs.skip_files || '' }}"
-          SKIP_FS_SCAN="${{ inputs.skip_fs_scan || github.event.inputs.skip_fs_scan || false }}"
-          RUN_MIGRATIONS="${{ inputs.run_migrations || github.event.inputs.run_migrations || false }}"
-          MIGRATION_IMAGE_REPO="${{ inputs.migration_image_repo || github.event.inputs.migration_image_repo || '' }}"
-          MIGRATION_COMMAND="${{ inputs.migration_command || github.event.inputs.migration_command || 'python manage.py migrate' }}"
+          APP_NAME="${APP_NAME}"
+          REGISTRY_SERVER="${REGISTRY_SERVER:-docker.io}"
+          REGISTRY_NAMESPACE="${REGISTRY_NAMESPACE:-codevertex}"
+          DOCKER_CONTEXT="${DOCKER_CONTEXT:-.}"
+          DOCKERFILE="${DOCKERFILE:-Dockerfile}"
+          IMAGE_REPOSITORY="${IMAGE_REPOSITORY:-}"
+          DEPLOY="${DEPLOY:-false}"
+          VALUES_FILE_PATH="${VALUES_FILE_PATH}"
+          CHART_REPO_PATH="${CHART_REPO_PATH:-charts/app}"
+          NAMESPACE="${NAMESPACE:-default}"
+          GIT_USER="${GIT_USER:-Titus Owuor}"
+          GIT_EMAIL="${GIT_EMAIL:-titusowuor30@gmail.com}"
+          DEVOPS_REPO="${DEVOPS_REPO:-Bengo-Hub/devops-k8s}"
+          SETUP_DATABASES="${SETUP_DATABASES:-false}"
+          DB_TYPES="${DB_TYPES:-postgres,redis}"
+          ENV_SECRET_NAME="${ENV_SECRET_NAME:-app-env}"
+          PROVIDER="${PROVIDER:-contabo}"
+          CONTABO_API="${CONTABO_API:-true}"
+          CONTABO_INSTANCE_ID="${CONTABO_INSTANCE_ID:-202846760}"
+          CONTABO_IP="${CONTABO_IP:-77.237.232.66}"
+          CONTABO_DATACENTER="${CONTABO_DATACENTER:-European Union 2}"
+          CONTABO_REGION="${CONTABO_REGION:-EU}"
+          SSH_DEPLOY="${SSH_DEPLOY:-false}"
+          SSH_HOST="${SSH_HOST:-}"
+          SSH_USER="${SSH_USER:-}"
+          SSH_PORT="${SSH_PORT:-22}"
+          SSH_DEPLOY_COMMAND="${SSH_DEPLOY_COMMAND:-}"
+          SKIP_FILES="${SKIP_FILES:-}"
+          SKIP_FS_SCAN="${SKIP_FS_SCAN:-false}"
+          RUN_MIGRATIONS="${RUN_MIGRATIONS:-false}"
+          MIGRATION_IMAGE_REPO="${MIGRATION_IMAGE_REPO:-}"
+          MIGRATION_COMMAND="${MIGRATION_COMMAND:-python manage.py migrate}"
 
           # Generic branding inputs
-          DEPLOYMENT_SUMMARY_TITLE="${{ inputs.deployment_summary_title || github.event.inputs.deployment_summary_title || 'Deployment Summary' }}"
-          DEPLOYMENT_SUCCESS_MESSAGE="${{ inputs.deployment_success_message || github.event.inputs.deployment_success_message || 'Deployment completed! Application should be accessible via the URLs above.' }}"
-          APPLICATION_DISPLAY_NAME="${{ inputs.application_display_name || github.event.inputs.application_display_name || '' }}"
+          DEPLOYMENT_SUMMARY_TITLE="${DEPLOYMENT_SUMMARY_TITLE:-Deployment Summary}"
+          DEPLOYMENT_SUCCESS_MESSAGE="${DEPLOYMENT_SUCCESS_MESSAGE:-Deployment completed! Application should be accessible via the URLs above.}"
+          APPLICATION_DISPLAY_NAME="${APPLICATION_DISPLAY_NAME:-}"
 
           # Export all inputs for use in subsequent steps
           echo "app_name=$APP_NAME" >> $GITHUB_OUTPUT
@@ -355,10 +341,10 @@ jobs:
           REG_SVR: ${{ steps.inputs.outputs.registry_server }}
           REG_NS: ${{ steps.inputs.outputs.registry_namespace }}
         run: |
-          if [ -n "${{ steps.inputs.outputs.image_repository }}" ]; then
-            echo "repo=${{ steps.inputs.outputs.image_repository }}" >> $GITHUB_OUTPUT
+          if [ -n "${IMAGE_REPOSITORY}" ]; then
+            echo "repo=${IMAGE_REPOSITORY}" >> $GITHUB_OUTPUT
           else
-            echo "repo=${REG_SVR}/${REG_NS}/${{ steps.inputs.outputs.app_name }}" >> $GITHUB_OUTPUT
+            echo "repo=${REG_SVR}/${REG_NS}/${APP_NAME}" >> $GITHUB_OUTPUT
           fi
 
       - name: Log in to registry (optional)
@@ -390,8 +376,8 @@ jobs:
         run: |
           echo "🔑 Building with SSH support"
           echo "📦 Image: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
-          DOCKER_BUILDKIT=1 docker build "${{ steps.inputs.outputs.docker_context }}" \
-            -f "${{ steps.inputs.outputs.dockerfile }}" \
+          DOCKER_BUILDKIT=1 docker build "${DOCKER_CONTEXT}" \
+            -f "${DOCKERFILE}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}" \
             --ssh default="$SSH_AUTH_SOCK"
 
@@ -400,8 +386,8 @@ jobs:
         run: |
           echo "🚫 Building without SSH (no keys configured)"
           echo "📦 Image: ${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
-          DOCKER_BUILDKIT=1 docker build "${{ steps.inputs.outputs.docker_context }}" \
-            -f "${{ steps.inputs.outputs.dockerfile }}" \
+          DOCKER_BUILDKIT=1 docker build "${DOCKER_CONTEXT}" \
+            -f "${DOCKERFILE}" \
             -t "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
 
       - name: Trivy Image scan
@@ -520,7 +506,7 @@ jobs:
           [ -n "$MYSQL_URL" ] && LITS="$LITS --from-literal=MYSQL_URL=$MYSQL_URL"
 
           if [ -n "$LITS" ]; then
-            if kubectl -n "$NS" create secret generic "${{ steps.inputs.outputs.env_secret_name }}" $LITS --dry-run=client -o yaml | kubectl apply -f -; then
+            if kubectl -n "$NS" create secret generic "${ENV_SECRET_NAME}" $LITS --dry-run=client -o yaml | kubectl apply -f -; then
               echo "✅ Environment secret created/updated successfully"
             else
               echo "❌ Failed to create/update environment secret"
@@ -640,7 +626,7 @@ jobs:
                 git add "${VALUES_PATH}"
 
                 # Retry git commit
-                if git commit -m "${{ steps.inputs.outputs.app_name }}:${SHORT_SHA} released"; then
+                if git commit -m "${APP_NAME}:${SHORT_SHA} released"; then
                   echo "✅ Changes committed"
 
                   # Retry git push with exponential backoff
@@ -715,12 +701,12 @@ jobs:
           script_stop: true
           script: |
             echo "Logging into registry"
-            echo '${{ secrets.REGISTRY_PASSWORD }}' | docker login ${{ steps.inputs.outputs.registry_server }} -u '${{ secrets.REGISTRY_USERNAME }}' --password-stdin || true
+            echo '${{ secrets.REGISTRY_PASSWORD }}' | docker login ${REGISTRY_SERVER} -u '${{ secrets.REGISTRY_USERNAME }}' --password-stdin || true
             echo "Pulling image"
-            docker pull "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+            docker pull "${IMAGE_REPO}:${SHORT_SHA}"
             echo "Restarting container"
-            docker rm -f ${{ steps.inputs.outputs.app_name }} || true
-            docker run -d --restart always --name ${{ steps.inputs.outputs.app_name }} -p 0.0.0.0:80:80 "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
+            docker rm -f ${APP_NAME} || true
+            docker run -d --restart always --name ${APP_NAME} -p 0.0.0.0:80:80 "${IMAGE_REPO}:${SHORT_SHA}"
 
       - name: Run database migrations (Django apps)
         if: ${{ steps.inputs.outputs.deploy }} && ${{ steps.inputs.outputs.run_migrations }} && ${{ secrets.KUBE_CONFIG }} != ''
@@ -731,7 +717,7 @@ jobs:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
           ENV_SECRET_NAME: ${{ steps.inputs.outputs.env_secret_name }}
         run: |
-          echo "🔄 Running database migrations for ${{ steps.inputs.outputs.app_name }}"
+          echo "🔄 Running database migrations for ${APP_NAME}"
           
           # Only run migrations if KUBE_CONFIG is available
           if [ -z "$KUBE_CONFIG_B64" ]; then
@@ -749,7 +735,7 @@ jobs:
           apiVersion: batch/v1
           kind: Job
           metadata:
-            name: ${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8}
+            name: ${APP_NAME}-migrate-${SHORT_SHA}
             namespace: ${NS}
           spec:
             ttlSecondsAfterFinished: 600
@@ -759,7 +745,7 @@ jobs:
                 restartPolicy: Never
                 containers:
                 - name: migrate
-                  image: ${IMAGE_REPO}:${SHORT_SHA::8}
+                  image: ${IMAGE_REPO}:${SHORT_SHA}
                   command: ["${MIGRATION_COMMAND}"]
                   envFrom:
                   - secretRef:
@@ -767,11 +753,11 @@ jobs:
           EOF
 
           kubectl apply -f /tmp/migrate-job.yaml
-          kubectl wait --for=condition=complete job/${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8} -n ${NS} --timeout=300s || {
+          kubectl wait --for=condition=complete job/${APP_NAME}-migrate-${SHORT_SHA} -n ${NS} --timeout=300s || {
             echo "❌ Migration job failed or timed out"
             echo "Migration job logs:"
-            kubectl logs job/${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8} -n ${NS} --tail=50 || true
-            kubectl describe job ${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8} -n ${NS} || true
+            kubectl logs job/${APP_NAME}-migrate-${SHORT_SHA} -n ${NS} --tail=50 || true
+            kubectl describe job ${APP_NAME}-migrate-${SHORT_SHA} -n ${NS} || true
             exit 1
           }
           echo "✅ Database migrations completed"
@@ -789,11 +775,11 @@ jobs:
           pkill -f kubectl || true
 
           # Database information if setup was enabled
-          if [[ "${{ steps.inputs.outputs.setup_databases }}" == "true" ]]; then
+          if [[ "${SETUP_DATABASES}" == "true" ]]; then
             echo "### 🗄️ Database Setup" >> $GITHUB_STEP_SUMMARY
-            echo "- **Databases:** ${{ steps.inputs.outputs.db_types }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Secret:** ${{ steps.inputs.outputs.env_secret_name }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Namespace:** ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Databases:** ${DB_TYPES}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Secret:** ${ENV_SECRET_NAME}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Namespace:** ${NAMESPACE}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
 
@@ -810,11 +796,11 @@ jobs:
           echo "kubectl get applications -n argocd" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Check application logs" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl logs -l app=${{ steps.inputs.outputs.app_name }} -n ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl logs -l app=${APP_NAME} -n ${NAMESPACE}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Check service status" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl get pods,svc,ingress -l app=${{ steps.inputs.outputs.app_name }} -n ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl get pods,svc,ingress -l app=${APP_NAME} -n ${NAMESPACE}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          echo "🎉 **${{ steps.inputs.outputs.deployment_success_message }}**" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **${DEPLOYMENT_SUCCESS_MESSAGE}**" >> $GITHUB_STEP_SUMMARY
