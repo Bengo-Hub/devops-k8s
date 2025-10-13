@@ -208,18 +208,42 @@ set -x  # Enable debug mode
 
 For scenarios where you need to deploy manually or troubleshoot issues outside of GitHub Actions.
 
-### Application-Specific Guides
+### Complete Manual Deployment Guides
 
-For detailed manual deployment procedures specific to each application, refer to:
+For detailed manual deployment procedures that cover the **entire deployment process from start to finish**, refer to:
 
 - **ERP API Manual Deployment**: [`bengobox-erp-api/docs/manual-deployment-guide.md`](https://github.com/Bengo-Hub/bengobox-erp-api/blob/main/docs/manual-deployment-guide.md)
 - **ERP UI Manual Deployment**: [`bengobox-erp-ui/docs/manual-deployment-guide.md`](https://github.com/Bengo-Hub/bengobox-erp-ui/blob/main/docs/manual-deployment-guide.md)
+
+### Key Features of Updated Guides
+
+#### ✅ **Complete Step-by-Step Process**
+- **Phase 1**: Prerequisites verification (tools, access, repositories)
+- **Phase 2**: Initial ArgoCD application deployment
+- **Phase 3**: Application sync monitoring with real-time feedback
+- **Phase 4**: Post-deployment verification and testing
+- **Phase 5**: Comprehensive troubleshooting and maintenance
+
+#### ✅ **Beginner-Friendly Structure**
+- **No assumptions** about prior deployment state
+- **Clear prerequisites** with verification steps
+- **Expected outputs** shown for each command
+- **Timeline guidance** for deployment phases
+- **Emergency procedures** for stuck deployments
+
+#### ✅ **Comprehensive Coverage**
+- **Initial deployment** from "no services" state
+- **Certificate management** and domain assignment
+- **LoadBalancer troubleshooting**
+- **Network connectivity testing**
+- **Resource monitoring and health checks**
 
 ### Prerequisites
 - Access to the Contabo VPS server
 - kubectl configured to access your K8s cluster
 - Access to container registry (Docker Hub)
 - Git access to repositories
+- ArgoCD CLI installed and configured
 
 ### 1. Manual Application Deployment
 
