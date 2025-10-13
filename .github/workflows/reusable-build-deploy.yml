@@ -151,39 +151,20 @@ on:
         required: false
         type: string
         description: "Comma-separated list of files to skip during Trivy filesystem scanning"
-      skip_fs_scan:
+      run_migrations:
         required: false
         type: boolean
         default: false
-        description: "Skip filesystem scanning entirely"
-    secrets:
-      REGISTRY_USERNAME:
+        description: "Run database migrations after deployment (for Django apps)"
+      migration_image_repo:
         required: false
-      REGISTRY_PASSWORD:
+        type: string
+        description: "Image repository for migration jobs (defaults to registry_server/namespace/app_name)"
+      migration_command:
         required: false
-      KUBE_CONFIG:
-        required: false
-      SSH_PRIVATE_KEY:
-        required: false
-      DOCKER_SSH_KEY:
-        required: false
-      # Optional DB credentials (auto-generated if not provided)
-      POSTGRES_PASSWORD:
-        required: false
-      REDIS_PASSWORD:
-        required: false
-      MONGO_PASSWORD:
-        required: false
-      MYSQL_PASSWORD:
-        required: false
-      CONTABO_CLIENT_ID:
-        required: false
-      CONTABO_CLIENT_SECRET:
-        required: false
-      CONTABO_API_USERNAME:
-        required: false
-      CONTABO_API_PASSWORD:
-        required: false
+        type: string
+        default: "python manage.py migrate"
+        description: "Migration command to run"
 
   # Allow manual triggering for testing and direct execution
   workflow_dispatch:
@@ -194,20 +175,6 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    secrets:
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-      DOCKER_SSH_KEY: ${{ secrets.DOCKER_SSH_KEY }}
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-      MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
-      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-      CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
-      CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
-      CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
-      CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -247,6 +214,9 @@ jobs:
           SSH_DEPLOY_COMMAND="${{ inputs.ssh_deploy_command || github.event.inputs.ssh_deploy_command || '' }}"
           SKIP_FILES="${{ inputs.skip_files || github.event.inputs.skip_files || '' }}"
           SKIP_FS_SCAN="${{ inputs.skip_fs_scan || github.event.inputs.skip_fs_scan || false }}"
+          RUN_MIGRATIONS="${{ inputs.run_migrations || github.event.inputs.run_migrations || false }}"
+          MIGRATION_IMAGE_REPO="${{ inputs.migration_image_repo || github.event.inputs.migration_image_repo || '' }}"
+          MIGRATION_COMMAND="${{ inputs.migration_command || github.event.inputs.migration_command || 'python manage.py migrate' }}"
 
           # Generic branding inputs
           DEPLOYMENT_SUMMARY_TITLE="${{ inputs.deployment_summary_title || github.event.inputs.deployment_summary_title || 'Deployment Summary' }}"
@@ -281,7 +251,9 @@ jobs:
           echo "ssh_user=$SSH_USER" >> $GITHUB_OUTPUT
           echo "ssh_port=$SSH_PORT" >> $GITHUB_OUTPUT
           echo "skip_files=$SKIP_FILES" >> $GITHUB_OUTPUT
-          echo "skip_fs_scan=$SKIP_FS_SCAN" >> $GITHUB_OUTPUT
+          echo "run_migrations=$RUN_MIGRATIONS" >> $GITHUB_OUTPUT
+          echo "migration_image_repo=$MIGRATION_IMAGE_REPO" >> $GITHUB_OUTPUT
+          echo "migration_command=$MIGRATION_COMMAND" >> $GITHUB_OUTPUT
           echo "deployment_summary_title=$DEPLOYMENT_SUMMARY_TITLE" >> $GITHUB_OUTPUT
           echo "deployment_success_message=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_OUTPUT
           echo "application_display_name=$APPLICATION_DISPLAY_NAME" >> $GITHUB_OUTPUT
@@ -316,6 +288,9 @@ jobs:
           echo "SSH_DEPLOY_COMMAND=$SSH_DEPLOY_COMMAND" >> $GITHUB_ENV
           echo "SKIP_FILES=$SKIP_FILES" >> $GITHUB_ENV
           echo "SKIP_FS_SCAN=$SKIP_FS_SCAN" >> $GITHUB_ENV
+          echo "RUN_MIGRATIONS=$RUN_MIGRATIONS" >> $GITHUB_ENV
+          echo "MIGRATION_IMAGE_REPO=$MIGRATION_IMAGE_REPO" >> $GITHUB_ENV
+          echo "MIGRATION_COMMAND=$MIGRATION_COMMAND" >> $GITHUB_ENV
           echo "DEPLOYMENT_SUMMARY_TITLE=$DEPLOYMENT_SUMMARY_TITLE" >> $GITHUB_ENV
           echo "DEPLOYMENT_SUCCESS_MESSAGE=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_ENV
           echo "APPLICATION_DISPLAY_NAME=$APPLICATION_DISPLAY_NAME" >> $GITHUB_ENV
@@ -733,89 +708,61 @@ jobs:
             docker rm -f ${{ steps.inputs.outputs.app_name }} || true
             docker run -d --restart always --name ${{ steps.inputs.outputs.app_name }} -p 0.0.0.0:80:80 "${{ steps.img.outputs.repo }}:${{ steps.vars.outputs.short_sha }}"
 
-      - name: Get service URLs
-        id: service_urls
-        if: ${{ steps.inputs.outputs.deploy }} && ${{ secrets.KUBE_CONFIG }} != ''
+      - name: Run database migrations (Django apps)
+        if: ${{ steps.inputs.outputs.deploy }} && ${{ steps.inputs.outputs.run_migrations }} && ${{ secrets.KUBE_CONFIG }} != ''
         env:
           NS: ${{ steps.inputs.outputs.namespace }}
-          APP_NAME: ${{ steps.inputs.outputs.app_name }}
+          IMAGE_REPO: ${{ steps.inputs.outputs.migration_image_repo != '' && steps.inputs.outputs.migration_image_repo || steps.img.outputs.repo }}
+          SHORT_SHA: ${{ steps.vars.outputs.short_sha }}
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+          ENV_SECRET_NAME: ${{ steps.inputs.outputs.env_secret_name }}
         run: |
-          mkdir -p ~/.kube
-          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          echo "🔄 Running database migrations for ${{ steps.inputs.outputs.app_name }}"
           
-          # Wait for services to be ready and discover URLs
-          echo "🔍 Discovering service URLs..."
-
-          urls=""
-          max_wait_time=300  # 5 minutes timeout
-          wait_interval=15   # Check every 15 seconds
-          elapsed_time=0
-
-          while [[ $elapsed_time -lt $max_wait_time ]]; do
-            echo "⏳ Waiting for services to be ready... (${elapsed_time}s/${max_wait_time}s)"
-
-            # Get ingress URLs for the application
-            if kubectl get ingress -n "$NS" >/dev/null 2>&1; then
-              while IFS= read -r ingress; do
-                if [[ -n "$ingress" ]]; then
-                  # Extract host from ingress
-                  host=$(kubectl get ingress "$ingress" -n "$NS" -o jsonpath='{.spec.rules[0].host}' 2>/dev/null)
-
-                  if [[ -n "$host" ]]; then
-                    # Determine protocol (default to http, but check for TLS)
-                    protocol="http"
-                    if kubectl get ingress "$ingress" -n "$NS" -o jsonpath='{.spec.tls}' 2>/dev/null | grep -q "hosts"; then
-                      protocol="https"
-                    fi
-
-                    urls="${urls}${protocol}://${host}\n"
-                    echo "✅ Found ingress URL: ${protocol}://${host}"
-                  fi
-                fi
-              done < <(kubectl get ingress -n "$NS" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
-            fi
-
-            # If no ingress URLs found, try to get service URLs
-            if [[ -z "$urls" ]]; then
-              if kubectl get svc "$APP_NAME" -n "$NS" >/dev/null 2>&1; then
-                service_port=$(kubectl get svc "$APP_NAME" -n "$NS" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
-
-                if [[ -n "$service_port" ]]; then
-                  # Check if service is ready (has endpoints)
-                  if kubectl get endpoints "$APP_NAME" -n "$NS" -o jsonpath='{.subsets[*].addresses}' 2>/dev/null | grep -q "ip"; then
-                    urls="http://${APP_NAME}.${NS}.svc.cluster.local:${service_port}\n"
-                    urls="${urls}(Cluster internal URL - configure ingress for external access)"
-                    echo "✅ Found service URL: http://${APP_NAME}.${NS}.svc.cluster.local:${service_port}"
-                  fi
-                fi
-              fi
-            fi
-
-            # If we found URLs, break out of the waiting loop
-            if [[ -n "$urls" ]]; then
-              echo "🎉 Service URLs discovered successfully!"
-              break
-            fi
-
-            # Wait before next check
-            sleep $wait_interval
-            elapsed_time=$((elapsed_time + wait_interval))
-          done
-
-          # Final status report
-          if [[ -n "$urls" ]]; then
-            echo "✅ Service URLs discovered after ${elapsed_time}s:"
-            echo -e "$urls"
-          else
-            echo "⚠️ No service URLs found after ${max_wait_time}s timeout"
-            echo "🔧 Services may still be starting up - check ArgoCD sync status"
-            urls="⏳ Services still starting up...\nCheck ArgoCD for sync status"
+          # Only run migrations if KUBE_CONFIG is available
+          if [ -z "$KUBE_CONFIG_B64" ]; then
+            echo "⏭️ Skipping migrations - no KUBE_CONFIG available"
+            exit 0
           fi
 
-          echo "service_urls<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$urls" | sed '/^$/d' | head -5 >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "::group::Running database migrations"
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+          # Create migration job with improved error handling
+          cat > /tmp/migrate-job.yaml <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8}
+            namespace: ${NS}
+          spec:
+            ttlSecondsAfterFinished: 600
+            backoffLimit: 3
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                - name: migrate
+                  image: ${IMAGE_REPO}:${SHORT_SHA::8}
+                  command: ["${MIGRATION_COMMAND}"]
+                  envFrom:
+                  - secretRef:
+                      name: ${ENV_SECRET_NAME}
+          EOF
+
+          kubectl apply -f /tmp/migrate-job.yaml
+          kubectl wait --for=condition=complete job/${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8} -n ${NS} --timeout=300s || {
+            echo "❌ Migration job failed or timed out"
+            echo "Migration job logs:"
+            kubectl logs job/${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8} -n ${NS} --tail=50 || true
+            kubectl describe job ${{ steps.inputs.outputs.app_name }}-migrate-${SHORT_SHA::8} -n ${NS} || true
+            exit 1
+          }
+          echo "✅ Database migrations completed"
+          echo "::endgroup::"
+
 
       # Add cleanup step to ensure no leftover processes or files
       - name: Cleanup temporary files
