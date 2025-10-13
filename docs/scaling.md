@@ -85,29 +85,58 @@ kubectl describe hpa <app-name>
 
 VPA automatically adjusts CPU and memory requests/limits based on usage patterns.
 
-### Enable VPA
+### Installation
+
+Install VPA using the provided script:
+
+```bash
+# Install VPA components
+./scripts/install-vpa.sh
+
+# Verify installation
+kubectl get pods -n kube-system | grep vpa
+```
+
+### Enable VPA in Applications
 
 ```yaml
 verticalPodAutoscaling:
   enabled: true
-  updateMode: Auto  # or "Initial" or "Recreate"
+  updateMode: "Recreate"  # Options: "Off", "Initial", "Recreate", "Auto"
   minCPU: 100m
   maxCPU: 2000m
   minMemory: 128Mi
   maxMemory: 2048Mi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits  # Update both requests and limits
+  recommendationMode: false  # Set true for recommendation-only mode
 ```
 
 ### VPA Modes
 
-- **Auto**: Continuously updates resource recommendations
+- **Off**: Only provide recommendations, don't auto-update (safest for production start)
 - **Initial**: Only sets resources on pod creation
-- **Recreate**: Updates resources by recreating pods
+- **Recreate**: Updates resources by recreating pods (recommended for production)
+- **Auto**: Continuously updates resources in-place (requires VPA Admission Controller)
+
+### Recommendation Mode
+
+When `recommendationMode: true`, VPA operates in "Off" mode regardless of `updateMode` setting, providing recommendations without applying them. This is ideal for:
+- Initial VPA deployment
+- Validating VPA recommendations
+- Testing resource optimization strategies
 
 ### Monitor VPA
 
 ```bash
-kubectl get vpa
-kubectl describe vpa <app-name>
+# View VPA resources
+kubectl get vpa --all-namespaces
+
+# Get detailed VPA information
+kubectl describe vpa <app-name> -n <namespace>
+
+# View VPA recommendations
+kubectl get vpa <app-name> -n <namespace> -o yaml | grep -A 20 "recommendation:"
 ```
 
 ## Best Practices
