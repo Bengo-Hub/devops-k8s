@@ -15,7 +15,9 @@ spec:
       labels:
         app: {{ include "app.name" . }}
       annotations:
+        {{- if .Values.podAnnotations }}
         {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
         {{- if .Values.monitoring.enabled }}
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.monitoring.prometheus.port }}"
@@ -34,8 +36,10 @@ spec:
               containerPort: {{ .Values.monitoring.prometheus.port }}
               protocol: TCP
             {{- end }}
+          {{- if .Values.env }}
           env:
             {{- toYaml .Values.env | nindent 12 }}
+          {{- end }}
           {{- if .Values.envFromSecret }}
           envFrom:
             - secretRef:
@@ -43,5 +47,3 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-
-
