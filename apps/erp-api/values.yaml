@@ -68,6 +68,8 @@ verticalPodAutoscaling:
   maxCPU: 2000m
   minMemory: 256Mi
   maxMemory: 4096Mi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
   recommendationMode: false  # Apply recommendations automatically in production
 
 

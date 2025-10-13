@@ -38,4 +38,16 @@ ingress:
 
 envFromSecret: erp-ui-env
 
+# VPA configuration for UI
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Recreate"
+  minCPU: 50m
+  maxCPU: 1000m
+  minMemory: 128Mi
+  maxMemory: 2Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: false
+
 

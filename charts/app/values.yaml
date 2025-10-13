@@ -70,19 +70,27 @@ autoscaling:
 # Vertical Pod Autoscaler configuration
 verticalPodAutoscaling:
   enabled: true
-  updateMode: "Recreate"
+  updateMode: "Recreate"  # Options: "Off", "Initial", "Recreate", "Auto"
   minCPU: 100m
   maxCPU: 2000m
   minMemory: 128Mi
   maxMemory: 4096Mi
   # Safety mechanisms
   controlledResources: ["cpu", "memory"]
-  # Recommendation-only mode for safer rollout
+  # Control what VPA updates: RequestsOnly or RequestsAndLimits
+  controlledValues: RequestsAndLimits
+  # Recommendation-only mode for safer rollout (overrides updateMode to "Off")
   recommendationMode: true
 
 ingress:
   enabled: true
   ingressClassName: nginx
+  clusterIssuer: letsencrypt-prod  # cert-manager cluster issuer
+  # Custom annotations (optional, will override defaults)
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-staging
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/rate-limit: "100"
   hosts:
     - host: example.com
       paths:

@@ -3,10 +3,24 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "app.fullname" . }}
+  labels:
+    app: {{ include "app.name" . }}
+    chart: {{ include "app.chart" . }}
   annotations:
-    kubernetes.io/ingress.class: {{ .Values.ingress.ingressClassName | default "nginx" }}
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {{- if .Values.ingress.annotations }}
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- else }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | default "letsencrypt-prod" }}
+    {{- if eq (.Values.ingress.ingressClassName | default "nginx") "nginx" }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- end }}
 spec:
+  {{- if .Values.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
   tls:
   {{- range .Values.ingress.tls }}
     - hosts:
@@ -14,6 +28,7 @@ spec:
         - {{ . | quote }}
       {{- end }}
       secretName: {{ .secretName }}
+  {{- end }}
   {{- end }}
   rules:
   {{- range .Values.ingress.hosts }}

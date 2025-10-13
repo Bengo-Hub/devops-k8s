@@ -3,15 +3,19 @@ apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
   name: {{ include "app.fullname" . }}
+  labels:
+    app: {{ include "app.name" . }}
+    chart: {{ include "app.chart" . }}
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: Deployment
     name: {{ include "app.fullname" . }}
   updatePolicy:
-    updateMode: {{ .Values.verticalPodAutoscaling.updateMode | default "Recreate" }}
     {{- if .Values.verticalPodAutoscaling.recommendationMode }}
-    # Safety: Only provide recommendations, don't auto-update
+    updateMode: "Off"  # Recommendation-only mode for safety
+    {{- else }}
+    updateMode: {{ .Values.verticalPodAutoscaling.updateMode | default "Recreate" }}
     {{- end }}
   resourcePolicy:
     containerPolicies:
@@ -23,4 +27,7 @@ spec:
           cpu: {{ .Values.verticalPodAutoscaling.maxCPU | default "2000m" }}
           memory: {{ .Values.verticalPodAutoscaling.maxMemory | default "4096Mi" }}
         controlledResources: {{ .Values.verticalPodAutoscaling.controlledResources | default (list "cpu" "memory") | toYaml | nindent 10 }}
+        {{- if .Values.verticalPodAutoscaling.controlledValues }}
+        controlledValues: {{ .Values.verticalPodAutoscaling.controlledValues }}
+        {{- end }}
 {{- end }}
