@@ -7,6 +7,8 @@ image:
   repository: ghcr.io/ORG/APP
   tag: "latest"
   pullPolicy: IfNotPresent
+  # Optional list of imagePullSecrets to use for private registries
+  pullSecrets: []
 
 service:
   type: ClusterIP
