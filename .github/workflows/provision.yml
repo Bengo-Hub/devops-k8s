@@ -98,6 +98,19 @@ jobs:
           ./scripts/install-argocd.sh
           echo "::endgroup::"
 
+      - name: Bootstrap Argo CD applications (app-of-apps)
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Bootstrapping Argo CD applications"
+          # Apply the root Application that manages apps under apps/
+          if [ -f apps/root-app.yaml ]; then
+            kubectl apply -f apps/root-app.yaml
+            echo "✅ root Application applied"
+          else
+            echo "⚠️ apps/root-app.yaml not found; skipping"
+          fi
+          echo "::endgroup::"
+
       - name: Install Monitoring (idempotent)
         if: env.skip_provision != 'true'
         env:
@@ -105,6 +118,13 @@ jobs:
         run: |
           echo "::group::Installing Monitoring Stack"
           ./scripts/install-monitoring.sh
+          echo "::endgroup::"
+
+      - name: Install Vertical Pod Autoscaler (VPA)
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Installing Vertical Pod Autoscaler"
+          ./scripts/install-vpa.sh
           echo "::endgroup::"
 
       - name: Setup Git Access (SSH Keys & Configuration)
@@ -159,10 +179,12 @@ jobs:
         if: ${{ env.skip_provision != 'true' }}
         run: |
           echo "::group::Cluster Provisioning Complete"
+          echo "✅ Storage provisioner installed"
+          echo "✅ NGINX Ingress Controller configured"
           echo "✅ cert-manager installed"
           echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
-          echo "✅ Monitoring installed (https://grafana.masterspace.co.ke)"
-          echo "✅ Databases installed (PostgreSQL + Redis in 'erp' namespace)"
+          echo "✅ Monitoring Stack installed (https://grafana.masterspace.co.ke)"
+          echo "✅ Vertical Pod Autoscaler (VPA) installed"
           echo "✅ Git SSH access configured"
           echo ""
           echo "Next steps:"
@@ -170,4 +192,5 @@ jobs:
           echo "2. Point DNS to your VPS IP (77.237.232.66)"
           echo "3. Configure Argo CD repository access"
           echo "4. Deploy applications via Argo CD"
+          echo "5. Verify VPA: kubectl get vpa --all-namespaces"
           echo "::endgroup::"

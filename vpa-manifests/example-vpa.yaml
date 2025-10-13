@@ -1,0 +1,152 @@
+# Example Vertical Pod Autoscaler Configuration
+# This file demonstrates VPA configuration for different use cases
+
+---
+# Example 1: Recommendation-only mode (Safe for production - observe first)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: example-app-vpa-recommendation
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+  updatePolicy:
+    updateMode: "Off"  # Only provide recommendations, don't auto-update
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"  # Apply to all containers
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 2000m
+          memory: 4Gi
+        controlledResources: ["cpu", "memory"]
+
+---
+# Example 2: Auto-update mode with recreation (Production-ready)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: example-app-vpa-auto
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+  updatePolicy:
+    updateMode: "Recreate"  # Automatically update by recreating pods
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "main-container"  # Specific container
+        minAllowed:
+          cpu: 250m
+          memory: 512Mi
+        maxAllowed:
+          cpu: 4000m
+          memory: 8Gi
+        controlledResources: ["cpu", "memory"]
+        # Control how aggressively VPA scales
+        controlledValues: RequestsAndLimits  # Update both requests and limits
+
+---
+# Example 3: Initial mode (Only update at pod creation)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: example-app-vpa-initial
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+  updatePolicy:
+    updateMode: "Initial"  # Only apply at pod creation, not during runtime
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 2000m
+          memory: 4Gi
+
+---
+# Example 4: VPA with eviction control (Advanced)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: example-app-vpa-eviction-control
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+  updatePolicy:
+    updateMode: "Recreate"
+    # Minimum number of replicas that must be available during updates
+    minReplicas: 2
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 2000m
+          memory: 4Gi
+        # Scaling policies
+        mode: Auto  # Let VPA decide what to scale
+
+---
+# Example 5: VPA for specific resource only (CPU only)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: example-app-vpa-cpu-only
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+  updatePolicy:
+    updateMode: "Recreate"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+        maxAllowed:
+          cpu: 4000m
+        controlledResources: ["cpu"]  # Only control CPU, not memory
+        controlledValues: RequestsAndLimits
+
+---
+# How to check VPA recommendations:
+# kubectl describe vpa example-app-vpa-recommendation
+#
+# Expected output includes:
+# Recommendation:
+#   Container Recommendations:
+#     Container Name:  main-container
+#     Lower Bound:
+#       Cpu:     250m
+#       Memory:  512Mi
+#     Target:
+#       Cpu:     500m
+#       Memory:  1Gi
+#     Uncapped Target:
+#       Cpu:     500m
+#       Memory:  1Gi
+#     Upper Bound:
+#       Cpu:     2000m
+#       Memory:  4Gi
+

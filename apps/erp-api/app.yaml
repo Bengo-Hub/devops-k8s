@@ -48,6 +48,18 @@ spec:
               secretName: erpapi-masterspace-tls
 
         envFromSecret: erp-api-env
+
+        # Vertical Pod Autoscaler for optimal resource allocation
+        verticalPodAutoscaling:
+          enabled: true
+          updateMode: "Recreate"
+          minCPU: 200m
+          maxCPU: 2000m
+          minMemory: 256Mi
+          maxMemory: 4096Mi
+          controlledResources: ["cpu", "memory"]
+          controlledValues: RequestsAndLimits
+          recommendationMode: false
   destination:
     server: https://kubernetes.default.svc
     namespace: erp
