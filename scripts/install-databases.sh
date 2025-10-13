@@ -81,18 +81,28 @@ echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
 set +e
-helm upgrade --install postgresql bitnami/postgresql \
-  -n "${NAMESPACE}" \
-  -f "${TEMP_PG_VALUES}" \
-  --timeout=10m \
-  --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
+  echo -e "${YELLOW}PostgreSQL release exists; performing safe upgrade with --reuse-values${NC}"
+  helm upgrade postgresql bitnami/postgresql \
+    -n "${NAMESPACE}" \
+    --reuse-values \
+    --timeout=10m \
+    --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+else
+  echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
+  helm install postgresql bitnami/postgresql \
+    -n "${NAMESPACE}" \
+    -f "${TEMP_PG_VALUES}" \
+    --timeout=10m \
+    --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+fi
 HELM_PG_EXIT=${PIPESTATUS[0]}
 set -e
 
 if [ $HELM_PG_EXIT -eq 0 ]; then
   echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 else
-  echo -e "${RED}PostgreSQL installation failed with exit code $HELM_PG_EXIT${NC}"
+  echo -e "${RED}PostgreSQL installation/upgrade failed with exit code $HELM_PG_EXIT${NC}"
   tail -50 /tmp/helm-postgresql-install.log || true
   kubectl get pods -n "${NAMESPACE}" || true
   exit 1
