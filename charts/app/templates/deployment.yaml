@@ -3,17 +3,17 @@ kind: Deployment
 metadata:
   name: {{ include "app.fullname" . }}
   labels:
-    app: {{ include "app.name" . }}
+    app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "app.name" . }}
+      app: {{ include "app.fullname" . }}
   template:
     metadata:
       labels:
-        app: {{ include "app.name" . }}
+        app: {{ include "app.fullname" . }}
       annotations:
         {{- if .Values.podAnnotations }}
         {{- toYaml .Values.podAnnotations | nindent 8 }}
