@@ -162,6 +162,60 @@ The system automatically triggers rollback if health checks fail:
 
 ### Common Issues and Solutions
 
+#### Ingress 503 (Service Temporarily Unavailable)
+
+**Likely causes**: Service has no endpoints (selector/label mismatch), backend pod not listening on expected port, or ingress routing to wrong service/port.
+
+**On the VPS, run:**
+```bash
+# 1) Verify ingress routing
+kubectl -n erp get ingress
+kubectl -n erp describe ingress erp-ui || true
+
+# 2) Check service and endpoints
+kubectl -n erp get svc erp-ui -o wide
+kubectl -n erp get endpoints erp-ui -o wide
+
+# If endpoints are empty => label/selector mismatch or pods not Ready
+kubectl -n erp describe svc erp-ui | sed -n '/Selector/,$p' | head -5
+kubectl -n erp get pods --show-labels | grep erp-ui || kubectl -n erp get pods --show-labels
+
+# 3) Verify pod is listening on the targetPort (default 3000)
+kubectl -n erp logs deploy/erp-ui --tail=100 || true
+kubectl -n erp exec deploy/erp-ui -- sh -lc 'wget -qO- http://127.0.0.1:3000/health || curl -sf http://127.0.0.1:3000/health || true'
+
+# 4) Ingress controller logs – look for "no endpoints" or upstream errors
+kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=200 | grep -E "endpoint|upstream|no.*endpoints|unavailable" -i || true
+
+# 5) Confirm DNS resolves to VPS IP and TLS is valid
+nslookup erp.masterspace.co.ke || dig +short erp.masterspace.co.ke
+openssl s_client -servername erp.masterspace.co.ke -connect erp.masterspace.co.ke:443 -brief </dev/null | head -5
+```
+
+**If endpoints are empty:**
+1) Compare Service selector vs Pod labels and fix mismatch (most common root cause).
+2) Sync Helm release via ArgoCD (ensures Deployment/Service labels align):
+```bash
+argocd app sync erp-ui
+```
+3) Reconcile labels quickly (temporary):
+```bash
+SEL=$(kubectl -n erp get svc erp-ui -o jsonpath='{.spec.selector.app}')
+kubectl -n erp label deploy erp-ui app="$SEL" --overwrite
+```
+
+**If pod not listening:**
+1) Check container logs for startup errors.
+2) Ensure container listens on port 3000 and chart targetPort matches.
+3) Redeploy:
+```bash
+kubectl -n erp rollout restart deploy/erp-ui
+```
+
+**If ingress misroutes:**
+1) Verify ingress backend service name and port (should be the Service name and port 80).
+2) Ensure ingress class is nginx and cert-manager issuer is correct.
+
 #### Pod Crashes
 
 **Symptoms**: Pods are restarting frequently or not starting
