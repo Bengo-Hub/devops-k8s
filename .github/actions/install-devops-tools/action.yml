@@ -43,6 +43,15 @@ runs:
         sudo apt-get install trivy -y
         trivy --version
 
+    - name: Install ArgoCD CLI
+      shell: bash
+      run: |
+        ARGOCD_VERSION="v2.13.0"
+        curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64
+        sudo install -m 0755 /tmp/argocd /usr/local/bin/argocd
+        argocd version --client || true
+        rm -f /tmp/argocd
+
     - name: Install system dependencies
       shell: bash
       run: |
