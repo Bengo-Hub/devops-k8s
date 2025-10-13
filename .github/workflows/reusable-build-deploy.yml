@@ -175,6 +175,20 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      DOCKER_SSH_KEY: ${{ secrets.DOCKER_SSH_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+      CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
+      CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
+      CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
+      CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
