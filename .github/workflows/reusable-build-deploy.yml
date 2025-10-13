@@ -147,10 +147,15 @@ on:
         type: string
         default: "22"
         description: "SSH port (default: 22)"
-      ssh_deploy_command:
+      skip_files:
         required: false
         type: string
-        description: "Custom SSH deployment command"
+        description: "Comma-separated list of files to skip during Trivy filesystem scanning"
+      skip_fs_scan:
+        required: false
+        type: boolean
+        default: false
+        description: "Skip filesystem scanning entirely"
     secrets:
       REGISTRY_USERNAME:
         required: false
@@ -240,6 +245,8 @@ jobs:
           SSH_USER="${{ inputs.ssh_user || github.event.inputs.ssh_user || '' }}"
           SSH_PORT="${{ inputs.ssh_port || github.event.inputs.ssh_port || '22' }}"
           SSH_DEPLOY_COMMAND="${{ inputs.ssh_deploy_command || github.event.inputs.ssh_deploy_command || '' }}"
+          SKIP_FILES="${{ inputs.skip_files || github.event.inputs.skip_files || '' }}"
+          SKIP_FS_SCAN="${{ inputs.skip_fs_scan || github.event.inputs.skip_fs_scan || false }}"
 
           # Generic branding inputs
           DEPLOYMENT_SUMMARY_TITLE="${{ inputs.deployment_summary_title || github.event.inputs.deployment_summary_title || 'Deployment Summary' }}"
@@ -273,7 +280,8 @@ jobs:
           echo "ssh_host=$SSH_HOST" >> $GITHUB_OUTPUT
           echo "ssh_user=$SSH_USER" >> $GITHUB_OUTPUT
           echo "ssh_port=$SSH_PORT" >> $GITHUB_OUTPUT
-          echo "ssh_deploy_command=$SSH_DEPLOY_COMMAND" >> $GITHUB_OUTPUT
+          echo "skip_files=$SKIP_FILES" >> $GITHUB_OUTPUT
+          echo "skip_fs_scan=$SKIP_FS_SCAN" >> $GITHUB_OUTPUT
           echo "deployment_summary_title=$DEPLOYMENT_SUMMARY_TITLE" >> $GITHUB_OUTPUT
           echo "deployment_success_message=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_OUTPUT
           echo "application_display_name=$APPLICATION_DISPLAY_NAME" >> $GITHUB_OUTPUT
@@ -306,6 +314,8 @@ jobs:
           echo "SSH_USER=$SSH_USER" >> $GITHUB_ENV
           echo "SSH_PORT=$SSH_PORT" >> $GITHUB_ENV
           echo "SSH_DEPLOY_COMMAND=$SSH_DEPLOY_COMMAND" >> $GITHUB_ENV
+          echo "SKIP_FILES=$SKIP_FILES" >> $GITHUB_ENV
+          echo "SKIP_FS_SCAN=$SKIP_FS_SCAN" >> $GITHUB_ENV
           echo "DEPLOYMENT_SUMMARY_TITLE=$DEPLOYMENT_SUMMARY_TITLE" >> $GITHUB_ENV
           echo "DEPLOYMENT_SUCCESS_MESSAGE=$DEPLOYMENT_SUCCESS_MESSAGE" >> $GITHUB_ENV
           echo "APPLICATION_DISPLAY_NAME=$APPLICATION_DISPLAY_NAME" >> $GITHUB_ENV
@@ -378,11 +388,13 @@ jobs:
         uses: ./.github/actions/install-devops-tools
 
       - name: Trivy FS scan
+        if: ${{ steps.inputs.outputs.skip_fs_scan != 'true' }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: fs
           scan-ref: .
           exit-code: '0'
+          skip-files: "${{ steps.inputs.outputs.skip_files }}"
 
       - name: Build image (with SSH)
         if: ${{ env.SSH_AUTH_SOCK != '' && env.SSH_AUTH_SOCK != null }}
@@ -805,35 +817,15 @@ jobs:
           echo -e "$urls" | sed '/^$/d' | head -5 >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Deployment Summary
-        if: ${{ steps.inputs.outputs.deploy }}
+      # Add cleanup step to ensure no leftover processes or files
+      - name: Cleanup temporary files
+        if: always()
         run: |
-          # Determine display name for the application
-          APP_DISPLAY_NAME="${{ steps.inputs.outputs.application_display_name || steps.inputs.outputs.app_name }}"
-
-          echo "🚀 === ${{ steps.inputs.outputs.deployment_summary_title }} ===" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## ✅ Deployment Completed Successfully" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Application Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Application:** $APP_DISPLAY_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "- **Namespace:** ${{ steps.inputs.outputs.namespace }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Tag:** ${{ steps.vars.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Registry:** ${{ steps.img.outputs.repo }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Display service URLs if available
-          if [[ -n "${{ steps.service_urls.outputs.service_urls }}" ]]; then
-            echo "### 🌐 Service URLs" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.service_urls.outputs.service_urls }}" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### 🌐 Service URLs" >> $GITHUB_STEP_SUMMARY
-            echo "⏳ Services are still starting up. Check ArgoCD sync status for external URLs." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          fi
+          # Clean up any temporary files and stop background processes
+          rm -rf $HOME/.ssh/id_rsa* 2>/dev/null || true
+          rm -f /tmp/migrate-job.yaml 2>/dev/null || true
+          # Kill any hanging kubectl processes
+          pkill -f kubectl || true
 
           # Database information if setup was enabled
           if [[ "${{ steps.inputs.outputs.setup_databases }}" == "true" ]]; then
