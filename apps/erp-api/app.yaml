@@ -10,63 +10,9 @@ spec:
     targetRevision: main
     path: charts/app
     helm:
-      values: |
-        image:
-          repository: docker.io/codevertex/erp-api
-          tag: latest
-
-        service:
-          port: 80
-          targetPort: 4000
-
-        resources:
-          requests:
-            cpu: 250m
-            memory: 512Mi
-          limits:
-            cpu: 2000m
-            memory: 2Gi
-
-        autoscaling:
-          enabled: true
-          minReplicas: 2
-          maxReplicas: 10
-          targetCPUUtilizationPercentage: 70
-          targetMemoryUtilizationPercentage: 80
-
-        ingress:
-          enabled: true
-          ingressClassName: nginx
-          hosts:
-            - host: erpapi.masterspace.co.ke
-              paths:
-                - path: /
-                  pathType: Prefix
-          tls:
-            - hosts:
-                - erpapi.masterspace.co.ke
-              secretName: erpapi-masterspace-tls
-
-        envFromSecret: erp-api-env
-
-        # Persistent storage for media uploads
-        persistence:
-          enabled: true
-          size: 20Gi
-          mountPath: /app/media
-          accessMode: ReadWriteOnce
-
-        # Vertical Pod Autoscaler for optimal resource allocation
-        verticalPodAutoscaling:
-          enabled: true
-          updateMode: "Recreate"
-          minCPU: 200m
-          maxCPU: 2000m
-          minMemory: 256Mi
-          maxMemory: 4096Mi
-          controlledResources: ["cpu", "memory"]
-          controlledValues: RequestsAndLimits
-          recommendationMode: false
+      # Use external values file (allows build.sh to update image tag)
+      valueFiles:
+        - ../../apps/erp-api/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: erp
