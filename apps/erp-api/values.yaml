@@ -6,6 +6,26 @@ service:
   port: 80
   targetPort: 4000
 
+# Health check configuration for Django API
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /api/v1/core/health/
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    httpGet:
+      path: /api/v1/core/health/
+      port: http
+    initialDelaySeconds: 45
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
 # Production resource limits for Django API
 resources:
   requests:
@@ -37,6 +57,13 @@ ingress:
       secretName: erpapi-masterspace-tls
 
 envFromSecret: erp-api-env
+
+# Persistent storage for media uploads
+persistence:
+  enabled: true
+  size: 20Gi
+  mountPath: /app/media
+  accessMode: ReadWriteOnce
 
 # Enhanced HPA with custom metrics
 autoscaling:

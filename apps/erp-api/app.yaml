@@ -49,6 +49,13 @@ spec:
 
         envFromSecret: erp-api-env
 
+        # Persistent storage for media uploads
+        persistence:
+          enabled: true
+          size: 20Gi
+          mountPath: /app/media
+          accessMode: ReadWriteOnce
+
         # Vertical Pod Autoscaler for optimal resource allocation
         verticalPodAutoscaling:
           enabled: true
@@ -69,3 +76,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - Replace=true
