@@ -102,37 +102,53 @@ fix_stuck_helm() {
     echo -e "${YELLOW}🔧 Attempting to fix stuck Helm operation for ${release_name}...${NC}"
 
     # Check for stuck operations
-    if helm status ${release_name} -n ${namespace} 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
-        echo -e "${YELLOW}📊 Found stuck operation, attempting cleanup...${NC}"
+    local status=$(helm status ${release_name} -n ${namespace} 2>/dev/null | grep "STATUS:" | awk '{print $2}')
+    
+    if [[ "$status" == "pending-upgrade" || "$status" == "pending-install" || "$status" == "pending-rollback" ]]; then
+        echo -e "${YELLOW}📊 Found stuck operation (status: $status), attempting cleanup...${NC}"
 
-        # Delete stuck pods
+        # CRITICAL: Delete the Helm secret that's locking the operation
+        echo -e "${YELLOW}🔓 Unlocking Helm release by removing pending secret...${NC}"
+        
+        # Find and delete the pending-upgrade secret
+        PENDING_SECRETS=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-upgrade,name=${release_name}" -o name 2>/dev/null || true)
+        if [ -n "$PENDING_SECRETS" ]; then
+            echo -e "${YELLOW}Deleting pending operation secrets:${NC}"
+            echo "$PENDING_SECRETS" | xargs kubectl -n ${namespace} delete 2>/dev/null || true
+        fi
+        
+        # Also clean up pending-install and pending-rollback
+        kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-install,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n ${namespace} delete 2>/dev/null || true
+        kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-rollback,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n ${namespace} delete 2>/dev/null || true
+
+        # Force delete problematic pods
+        echo -e "${YELLOW}🗑️  Force deleting stuck pods...${NC}"
         kubectl delete pods -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --force --grace-period=0 2>/dev/null || true
-
+        
         # Wait for cleanup
         sleep 10
 
-        # Try to rollback to last known good state
+        # Find the last successfully deployed revision
+        echo -e "${YELLOW}📜 Checking Helm history...${NC}"
         if helm history ${release_name} -n ${namespace} >/dev/null 2>&1; then
-            LAST_REVISION=$(helm history ${release_name} -n ${namespace} -o yaml | grep -A 5 "status:" | grep -B 5 "deployed" | head -1 | awk '{print $1}' | tail -1)
-            if [ -n "$LAST_REVISION" ] && [ "$LAST_REVISION" != "1" ]; then
-                echo -e "${YELLOW}📉 Rolling back to revision $LAST_REVISION...${NC}"
-                helm rollback ${release_name} $LAST_REVISION -n ${namespace} 2>/dev/null || true
+            # Get last deployed (successful) revision
+            LAST_DEPLOYED=$(helm history ${release_name} -n ${namespace} --max 100 -o json 2>/dev/null | jq -r '.[] | select(.status == "deployed") | .revision' | tail -1)
+            
+            if [ -n "$LAST_DEPLOYED" ] && [ "$LAST_DEPLOYED" != "null" ]; then
+                echo -e "${YELLOW}📉 Rolling back to last deployed revision: $LAST_DEPLOYED...${NC}"
+                helm rollback ${release_name} $LAST_DEPLOYED -n ${namespace} --force --wait --timeout=5m 2>/dev/null || {
+                    echo -e "${YELLOW}⚠️  Rollback command failed, but lock is removed. Proceeding...${NC}"
+                }
                 sleep 15
                 return 0
             fi
         fi
 
-        # If rollback fails, uninstall and prepare for fresh install
-        echo -e "${YELLOW}🗑️  Rolling back failed, attempting uninstall...${NC}"
-        helm uninstall ${release_name} -n ${namespace} 2>/dev/null || true
-        sleep 20
-
-        # Clean up any remaining resources
-        kubectl delete pvc -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --all 2>/dev/null || true
-        kubectl delete pv -l "app.kubernetes.io/instance=${release_name}" --all 2>/dev/null || true
-
-        sleep 20
-        echo -e "${GREEN}✅ Cleanup completed${NC}"
+        echo -e "${GREEN}✅ Helm lock removed. Ready for fresh install/upgrade${NC}"
+        return 0
+    else
+        echo -e "${GREEN}✓ No stuck operation detected (status: ${status})${NC}"
+        return 0
     fi
 }
 
