@@ -1,6 +1,8 @@
 image:
   repository: docker.io/codevertex/erp-ui
-  tag: ed37cf17
+  tag: 551cf39a
+  pullSecrets:
+    - name: registry-credentials
 service:
   port: 80
   targetPort: 3000
