@@ -36,6 +36,7 @@ Quick Links
 - **Operations**
   - **operations runbook:** [docs/OPERATIONS-RUNBOOK.md](docs/OPERATIONS-RUNBOOK.md) 📋
   - **health checks & rolling updates:** [docs/health-checks-and-rolling-updates.md](docs/health-checks-and-rolling-updates.md) 🔄
+  - **troubleshooting image tag drift:** [docs/troubleshooting-image-tag-drift.md](docs/troubleshooting-image-tag-drift.md) 🔍
   - monitoring and alerts (Prometheus, Grafana): [docs/monitoring.md](docs/monitoring.md)
   - scaling (HPA, VPA): [docs/scaling.md](docs/scaling.md)
   - security best practices: [docs/security.md](docs/security.md)
