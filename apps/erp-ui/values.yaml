@@ -1,6 +1,6 @@
 image:
-  repository: bengohub/erp-ui
-  tag: v1.0.3
+  repository: docker.io/codevertex/erp-ui
+  tag: db3c741a
 service:
   port: 80
   targetPort: 3000
