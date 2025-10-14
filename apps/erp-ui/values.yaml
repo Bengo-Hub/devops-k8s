@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-ui
-  tag: db3c741a
+  tag: ed37cf17
 service:
   port: 80
   targetPort: 3000
