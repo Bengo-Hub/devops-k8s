@@ -53,6 +53,8 @@
           - htop
           - tree
           - bash-completion
+          - postgresql-client-common
+          - postgresql-client
         state: present
 
     # ============================================================================

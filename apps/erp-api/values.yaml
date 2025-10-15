@@ -60,13 +60,9 @@ persistence:
   mountPath: /app/media
   accessMode: ReadWriteOnce
 # Enhanced HPA with custom metrics
-autoscaling:
+autoscalingCustomMetrics:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 70
-  # Custom metrics for intelligent scaling
+  # Custom metrics for intelligent scaling (requires metrics adapter)
   customMetrics:
     - type: Pods
       metricName: bengoerp_api_http_requests_per_second
