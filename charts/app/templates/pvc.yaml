@@ -6,6 +6,14 @@ metadata:
   labels:
     app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
+  annotations:
+    # Instruct Argo CD to ignore immutable PVC field differences
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/ignore-differences: |
+      jsonPointers:
+      - /spec/storageClassName
+      - /spec/volumeName
 spec:
   accessModes:
     - {{ .Values.persistence.accessMode }}
@@ -16,4 +24,3 @@ spec:
     requests:
       storage: {{ .Values.persistence.size }}
 {{- end }}
-
