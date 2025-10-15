@@ -1,15 +1,11 @@
 image:
   repository: docker.io/codevertex/erp-api
-<<<<<<< HEAD
-  tag: 346349c8
-=======
-  tag: 5cb93368
->>>>>>> ebc1d36 (erp-api:5cb93368 released)
-  pullSecrets:
-    - name: registry-credentials
+  tag: latest
+
 service:
   port: 80
   targetPort: 4000
+
 # Health check configuration for Django API
 healthCheck:
   enabled: true
@@ -29,6 +25,7 @@ healthCheck:
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 3
+
 # Production resource limits for Django API
 resources:
   requests:
@@ -37,6 +34,7 @@ resources:
   limits:
     cpu: 2000m
     memory: 2Gi
+
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
@@ -44,6 +42,7 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
+
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -56,13 +55,16 @@ ingress:
     - hosts:
         - erpapi.masterspace.co.ke
       secretName: erpapi-masterspace-tls
+
 envFromSecret: erp-api-env
+
 # Persistent storage for media uploads
 persistence:
   enabled: true
   size: 20Gi
   mountPath: /app/media
   accessMode: ReadWriteOnce
+
 # Enhanced HPA with custom metrics
 autoscaling:
   enabled: true
@@ -84,6 +86,7 @@ autoscaling:
       metricName: bengoerp_api_active_users
       targetType: AverageValue
       targetAverageValue: 100
+
 # Production-ready VPA configuration
 verticalPodAutoscaling:
   enabled: true
@@ -94,4 +97,6 @@ verticalPodAutoscaling:
   maxMemory: 4096Mi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
-  recommendationMode: false # Apply recommendations automatically in production
+  recommendationMode: false  # Apply recommendations automatically in production
+
+
