@@ -29,6 +29,11 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm version
 
+      - name: Install PostgreSQL client (psql)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client postgresql-client-common
+
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}

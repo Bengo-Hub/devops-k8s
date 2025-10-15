@@ -10,8 +10,23 @@ Prerequisites
 - Helm 3 installed locally
 - GitHub organization secrets configured
 
+Step 0: Provision Deployment Tools (Ansible)
+--------------------------------------------
+
+Optionally provision all required deployment tools (kubectl, helm, argocd, trivy, yq, kubeconform, k9s, stern, VPA) on your VPS using the included Ansible playbook `provision.yml`.
+
+```bash
+# From your local machine with Ansible installed
+ansible-playbook -i "YOUR_VPS_IP," -u root -k provision.yml
+
+# After completion, verify tools on the VPS
+ssh root@YOUR_VPS_IP "kubectl version --client && helm version && argocd version && trivy --version && yq --version"
+```
+
+See `docs/provisioning.md` for details and version pins.
+
 Step 1: Choose Kubernetes Distribution
----------------------------------------
+--------------------------------------
 
 **Read First:** `docs/k8s-comparison.md` to decide between kubeadm and k3s.
 
