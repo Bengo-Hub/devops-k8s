@@ -1,4 +1,4 @@
-{{- if .Values.persistence.enabled }}
+{{- if and .Values.persistence.enabled (not (lookup "v1" "PersistentVolumeClaim" .Release.Namespace (include "app.fullname" .) "-media")) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -7,7 +7,6 @@ metadata:
     app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
   annotations:
-    # Instruct Argo CD to ignore immutable PVC field differences
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/ignore-differences: |
