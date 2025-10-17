@@ -88,7 +88,6 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: false # Apply recommendations automatically in production
-
 # Celery Worker configuration for async task processing
 celeryWorker:
   enabled: true
@@ -110,7 +109,6 @@ celeryWorker:
     periodSeconds: 60
     timeoutSeconds: 10
     failureThreshold: 3
-
 # Celery Beat scheduler for periodic tasks
 celeryBeat:
   enabled: true
