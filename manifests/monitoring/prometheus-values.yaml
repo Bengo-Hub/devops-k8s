@@ -35,6 +35,9 @@ grafana:
     runAsUser: 472
     runAsGroup: 472
     fsGroup: 472
+  # Disable initContainers to avoid non-root policy violations
+  initChownData:
+    enabled: false
   ingress:
     enabled: true
     ingressClassName: nginx
