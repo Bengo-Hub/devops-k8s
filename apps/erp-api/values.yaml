@@ -88,3 +88,41 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: false # Apply recommendations automatically in production
+
+# Celery Worker configuration for async task processing
+celeryWorker:
+  enabled: true
+  replicaCount: 2
+  app: ProcureProKEAPI
+  logLevel: info
+  concurrency: 4
+  maxTasksPerChild: 100
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 60
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+# Celery Beat scheduler for periodic tasks
+celeryBeat:
+  enabled: true
+  app: ProcureProKEAPI
+  logLevel: info
+  scheduler: django_celery_beat.schedulers:DatabaseScheduler
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    enabled: false

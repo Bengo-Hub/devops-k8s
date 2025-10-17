@@ -1,0 +1,64 @@
+{{- if .Values.celeryBeat.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}-celery-beat
+  labels:
+    app: {{ include "app.fullname" . }}-celery-beat
+    chart: {{ include "app.chart" . }}
+    component: celery-beat
+spec:
+  replicas: 1  # Beat scheduler should only run once
+  selector:
+    matchLabels:
+      app: {{ include "app.fullname" . }}-celery-beat
+      component: celery-beat
+  template:
+    metadata:
+      labels:
+        app: {{ include "app.fullname" . }}-celery-beat
+        component: celery-beat
+      annotations:
+        {{- if .Values.celeryBeat.podAnnotations }}
+        {{- toYaml .Values.celeryBeat.podAnnotations | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: celery-beat
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery"]
+          args:
+            - "-A"
+            - "{{ .Values.celeryBeat.app | default "ProcureProKEAPI" }}"
+            - "beat"
+            - "--loglevel={{ .Values.celeryBeat.logLevel | default "info" }}"
+            - "--scheduler={{ .Values.celeryBeat.scheduler | default "django_celery_beat.schedulers:DatabaseScheduler" }}"
+          {{- if .Values.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envFromSecret }}
+          {{- end }}
+          {{- if .Values.celeryBeat.env }}
+          env:
+            {{- toYaml .Values.celeryBeat.env | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.celeryBeat.resources | nindent 12 }}
+          {{- if .Values.celeryBeat.persistence.enabled }}
+          volumeMounts:
+            - name: celerybeat-schedule
+              mountPath: /app/celerybeat-schedule
+          {{- end }}
+      {{- if .Values.celeryBeat.persistence.enabled }}
+      volumes:
+        - name: celerybeat-schedule
+          persistentVolumeClaim:
+            claimName: {{ include "app.fullname" . }}-celerybeat-schedule
+      {{- end }}
+{{- end }}
+

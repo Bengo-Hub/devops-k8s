@@ -1,0 +1,70 @@
+{{- if .Values.celeryWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}-celery-worker
+  labels:
+    app: {{ include "app.fullname" . }}-celery-worker
+    chart: {{ include "app.chart" . }}
+    component: celery-worker
+spec:
+  replicas: {{ .Values.celeryWorker.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "app.fullname" . }}-celery-worker
+      component: celery-worker
+  template:
+    metadata:
+      labels:
+        app: {{ include "app.fullname" . }}-celery-worker
+        component: celery-worker
+      annotations:
+        {{- if .Values.celeryWorker.podAnnotations }}
+        {{- toYaml .Values.celeryWorker.podAnnotations | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: celery-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery"]
+          args:
+            - "-A"
+            - "{{ .Values.celeryWorker.app | default "ProcureProKEAPI" }}"
+            - "worker"
+            - "--loglevel={{ .Values.celeryWorker.logLevel | default "info" }}"
+            - "--concurrency={{ .Values.celeryWorker.concurrency | default "4" }}"
+            - "--max-tasks-per-child={{ .Values.celeryWorker.maxTasksPerChild | default "100" }}"
+          {{- if .Values.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envFromSecret }}
+          {{- end }}
+          {{- if .Values.celeryWorker.env }}
+          env:
+            {{- toYaml .Values.celeryWorker.env | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.celeryWorker.resources | nindent 12 }}
+          {{- if .Values.celeryWorker.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - "{{ .Values.celeryWorker.app | default "ProcureProKEAPI" }}"
+                - inspect
+                - ping
+                - -d
+                - celery@$HOSTNAME
+            initialDelaySeconds: {{ .Values.celeryWorker.livenessProbe.initialDelaySeconds | default 30 }}
+            periodSeconds: {{ .Values.celeryWorker.livenessProbe.periodSeconds | default 60 }}
+            timeoutSeconds: {{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 10 }}
+            failureThreshold: {{ .Values.celeryWorker.livenessProbe.failureThreshold | default 3 }}
+          {{- end }}
+{{- end }}
+
