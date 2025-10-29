@@ -5,7 +5,7 @@ image:
     - name: registry-credentials
 service:
   port: 80
-  targetPort: 8080
+  targetPort: 4000
 # Health check configuration for .NET API
 healthCheck:
   enabled: true
