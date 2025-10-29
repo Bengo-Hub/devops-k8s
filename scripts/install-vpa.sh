@@ -38,6 +38,14 @@ if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
   CURRENT_VERSION=$(kubectl get deployment -n kube-system vpa-recommender -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -oP '(?<=:v)\d+\.\d+\.\d+' || echo "unknown")
   echo -e "${BLUE}Current VPA version: ${CURRENT_VERSION}${NC}"
   
+  # Check if running in CI/CD (non-interactive)
+  if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || "${FORCE_INSTALL:-}" == "true" ]]; then
+    echo -e "${BLUE}Running in CI/CD or FORCE_INSTALL=true; skipping VPA upgrade${NC}"
+    echo -e "${GREEN}VPA is already installed and running${NC}"
+    exit 0
+  fi
+  
+  # Interactive mode - ask user
   read -p "Do you want to upgrade/reinstall VPA? (y/N): " -n 1 -r
   echo
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
