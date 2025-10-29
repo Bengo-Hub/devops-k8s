@@ -79,36 +79,46 @@ ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 ```
 
-Step 3: Install Databases
--------------------------
+Step 3: Install Databases (PostgreSQL & Redis)
+-----------------------------------------------
 
-The ERP system requires PostgreSQL and Redis. Choose your deployment strategy:
+The ERP system requires PostgreSQL and Redis. The provisioning workflow installs these automatically.
 
-### Option A: In-Cluster Databases (Recommended) ⭐
+### Automated Installation (Included in provision.yml workflow) ⭐
+
+The `.github/workflows/provision.yml` automatically installs databases with:
+- Environment variables from GitHub secrets (if set)
+- Auto-generated secure passwords (if secrets not provided)
+- Idempotent operation (skips if already healthy)
+
+**GitHub Secrets (Optional but Recommended):**
+```yaml
+POSTGRES_PASSWORD: "YourSecurePassword"  # Sets initial PostgreSQL password
+REDIS_PASSWORD: "YourSecurePassword"     # Sets initial Redis password
+PG_DATABASE: "bengo_erp"                 # Database name (default: bengo_erp)
+DB_NAMESPACE: "erp"                      # Namespace (default: erp)
+```
+
+### Manual Installation (If needed)
 
 ```bash
-# Install PostgreSQL + Redis into cluster
+# Set passwords (optional - will auto-generate if not set)
+export POSTGRES_PASSWORD="Vertex2020!"
+export REDIS_PASSWORD="Vertex2020!"
+export PG_DATABASE="bengo_erp"
+export NAMESPACE="erp"
+
+# Install databases (idempotent - skips if healthy)
 ./scripts/install-databases.sh
 
-# This will output connection credentials
-# Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml with the passwords
-# Apply the secret
-kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+# Retrieve credentials
+kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d
+kubectl get secret redis -n erp -o jsonpath='{.data.redis-password}' | base64 -d
 ```
 
-**Pros:** Auto-scaling, health checks, K8s-managed persistence
-**See:** `docs/database-setup.md` for detailed guide
+**Note:** Application deployments automatically retrieve these passwords from Kubernetes secrets. No manual configuration needed!
 
-### Option B: External VPS Databases
-
-```bash
-# SSH into VPS and install manually
-# See docs/database-setup.md Option 2
-
-# Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
-# with external database connection strings
-kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
-```
+**See:** `docs/secrets-management.md` for credential flow details
 
 Step 4: Install Core Infrastructure
 -----------------------------------

@@ -72,6 +72,27 @@ Relationship to CI/CD Workflows
 -------------------------------
 
 - The GitHub Actions workflows for ERP API/UI assume a working K8s cluster and access via `KUBE_CONFIG`.
+- The provisioning workflow (`.github/workflows/provision.yml`) runs in this order:
+
+**Provisioning Order:**
+1. Storage Provisioner (local-path or default)
+2. **Databases (PostgreSQL & Redis)** ⭐ NEW
+3. NGINX Ingress Controller
+4. cert-manager (TLS certificates)
+5. Argo CD (GitOps)
+6. Monitoring Stack (Prometheus/Grafana)
+7. Vertical Pod Autoscaler (VPA)
+8. Git SSH Access Setup
+
+**Database Installation Details:**
+- Uses `scripts/install-databases.sh`
+- Idempotent: Skips if PostgreSQL/Redis already healthy
+- Uses `POSTGRES_PASSWORD`/`REDIS_PASSWORD` from GitHub secrets (if set)
+- Auto-generates secure passwords if secrets not provided
+- Stores passwords in Kubernetes secrets (source of truth)
+- Application deployments retrieve passwords from these secrets automatically
+
+**See:** `docs/secrets-management.md` for password flow details
 - Provisioning ensures the VPS has the tooling for manual operations and emergency fixes.
 - Automated deployments (build.sh) handle: image build, push, Helm values updates, ArgoCD sync, DB setup, migrations, and health checks.
 
