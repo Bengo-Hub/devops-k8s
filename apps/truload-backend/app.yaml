@@ -24,12 +24,12 @@ spec:
       - CreateNamespace=true
       # Remove Replace=true - it forces replacement of immutable resources (PVCs) which fails
       # Normal sync with ignore-differences annotations on resources handles this properly
-    ignoreDifferences:
-      # Application-level ignore for immutable PVC fields
-      - group: ""
-        kind: PersistentVolumeClaim
-        jsonPointers:
-          - /spec/volumeName
-          - /spec/volumeMode
-          - /status
+  # Application-level ignore for immutable PVC fields (must be at spec level, not under syncPolicy)
+  ignoreDifferences:
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/volumeMode
+        - /status
 
