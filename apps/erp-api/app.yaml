@@ -22,9 +22,10 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true
       # Remove Replace=true - it forces replacement of immutable resources (PVCs) which fails
-      # Normal sync with ignore-differences annotations on resources handles this properly
-    ignoreDifferences:
+      # RespectIgnoreDifferences tells ArgoCD to honor the ignoreDifferences config below
+  ignoreDifferences:
       # Application-level ignore for immutable PVC fields
       - group: ""
         kind: PersistentVolumeClaim
