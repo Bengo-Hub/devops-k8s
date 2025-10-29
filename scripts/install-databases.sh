@@ -101,7 +101,20 @@ PG_HELM_ARGS+=(--set fips.openssl=false)
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   # Check if PostgreSQL is healthy
-  if kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+  IS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
+  
+  # If POSTGRES_PASSWORD is explicitly set, ALWAYS upgrade to ensure password sync
+  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    echo -e "${YELLOW}Explicit POSTGRES_PASSWORD provided - updating PostgreSQL to ensure password sync${NC}"
+    helm upgrade postgresql bitnami/postgresql \
+      -n "${NAMESPACE}" \
+      --reset-values \
+      -f "${TEMP_PG_VALUES}" \
+      "${PG_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+    HELM_PG_EXIT=${PIPESTATUS[0]}
+  elif [[ "$IS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ PostgreSQL already installed and healthy - skipping${NC}"
     HELM_PG_EXIT=0
   else
@@ -109,7 +122,6 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     helm upgrade postgresql bitnami/postgresql \
       -n "${NAMESPACE}" \
       --reuse-values \
-      "${PG_HELM_ARGS[@]}" \
       --timeout=10m \
       --wait 2>&1 | tee /tmp/helm-postgresql-install.log
     HELM_PG_EXIT=${PIPESTATUS[0]}
@@ -154,21 +166,34 @@ fi
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
   # Check if Redis is healthy
-  if kubectl -n "${NAMESPACE}" get statefulset redis-master -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+  IS_REDIS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset redis-master -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
+  
+  # If REDIS_PASSWORD is explicitly set, ALWAYS upgrade to ensure password sync
+  if [[ -n "${REDIS_PASSWORD:-}" ]]; then
+    echo -e "${YELLOW}Explicit REDIS_PASSWORD provided - updating Redis to ensure password sync${NC}"
+    helm upgrade redis bitnami/redis \
+      -n "${NAMESPACE}" \
+      --reset-values \
+      -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+      "${REDIS_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-redis-install.log
+    HELM_REDIS_EXIT=${PIPESTATUS[0]}
+  elif [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ Redis already installed and healthy - skipping${NC}"
     HELM_REDIS_EXIT=0
   else
     echo -e "${YELLOW}Redis exists but not ready; performing safe upgrade${NC}"
-    helm upgrade --install redis bitnami/redis \
+    helm upgrade redis bitnami/redis \
       -n "${NAMESPACE}" \
-      "${REDIS_HELM_ARGS[@]}" \
+      --reuse-values \
       --timeout=10m \
       --wait 2>&1 | tee /tmp/helm-redis-install.log
     HELM_REDIS_EXIT=${PIPESTATUS[0]}
   fi
 else
   echo -e "${YELLOW}Redis not found; installing fresh${NC}"
-  helm upgrade --install redis bitnami/redis \
+  helm install redis bitnami/redis \
     -n "${NAMESPACE}" \
     "${REDIS_HELM_ARGS[@]}" \
     --timeout=10m \
