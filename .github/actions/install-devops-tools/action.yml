@@ -22,14 +22,19 @@ runs:
     - name: Install Helm
       shell: bash
       run: |
+        # Check if Helm is already installed (from cache or system)
+        if command -v helm &> /dev/null; then
+          echo "✓ Helm already installed"
+          helm version
+          exit 0
+        fi
+        
+        # Try to install Helm
         curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash || {
-          echo "⚠️ Helm installation script failed - may be transient network issue"
-          echo "Retrying with apt repository..."
-          curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
-          sudo apt-get install apt-transport-https --yes
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-          sudo apt-get update
-          sudo apt-get install helm
+          echo "⚠️ Network connectivity issue - cannot install Helm"
+          echo "This is a transient GitHub Actions infrastructure issue"
+          echo "Please retry the workflow in a few minutes"
+          exit 1
         }
         helm version
 
