@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: latest
+  tag: 10ee5aff
   pullSecrets:
     - name: registry-credentials
 service:
@@ -51,7 +51,7 @@ ingress:
   tls:
     - hosts:
         - truloadapitest.masterspace.co.ke
-      secretName: truload-api-tls  # Will use existing cert-manager certificate
+      secretName: truload-api-tls # Will use existing cert-manager certificate
 envFromSecret: truload-backend-env
 # Persistent storage for file uploads
 persistence:
@@ -76,4 +76,3 @@ celeryWorker:
   enabled: false
 celeryBeat:
   enabled: false
-
