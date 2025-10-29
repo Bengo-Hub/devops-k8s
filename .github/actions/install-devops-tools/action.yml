@@ -22,16 +22,15 @@ runs:
     - name: Install Helm
       shell: bash
       run: |
-        # Try official script first, fallback to direct download if it fails
-        if ! curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; then
-          echo "Official script failed, trying direct download..."
-          HELM_VERSION="v3.16.1"
-          curl -fsSL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -o /tmp/helm.tar.gz
-          tar -zxvf /tmp/helm.tar.gz -C /tmp
-          sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
-          sudo chmod +x /usr/local/bin/helm
-          rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
-        fi
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash || {
+          echo "⚠️ Helm installation script failed - may be transient network issue"
+          echo "Retrying with apt repository..."
+          curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+          sudo apt-get install apt-transport-https --yes
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+          sudo apt-get update
+          sudo apt-get install helm
+        }
         helm version
 
     - name: Install yq
