@@ -100,13 +100,20 @@ PG_HELM_ARGS+=(--set fips.openssl=false)
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  echo -e "${YELLOW}PostgreSQL release exists; performing safe upgrade${NC}"
-  helm upgrade postgresql bitnami/postgresql \
-    -n "${NAMESPACE}" \
-    --reuse-values \
-    "${PG_HELM_ARGS[@]}" \
-    --timeout=10m \
-    --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+  # Check if PostgreSQL is healthy
+  if kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+    echo -e "${GREEN}✓ PostgreSQL already installed and healthy - skipping${NC}"
+    HELM_PG_EXIT=0
+  else
+    echo -e "${YELLOW}PostgreSQL exists but not ready; performing safe upgrade${NC}"
+    helm upgrade postgresql bitnami/postgresql \
+      -n "${NAMESPACE}" \
+      --reuse-values \
+      "${PG_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+    HELM_PG_EXIT=${PIPESTATUS[0]}
+  fi
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
   helm install postgresql bitnami/postgresql \
@@ -114,8 +121,8 @@ else
     "${PG_HELM_ARGS[@]}" \
     --timeout=10m \
     --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+  HELM_PG_EXIT=${PIPESTATUS[0]}
 fi
-HELM_PG_EXIT=${PIPESTATUS[0]}
 set -e
 
 if [ $HELM_PG_EXIT -eq 0 ]; then
@@ -145,12 +152,29 @@ else
 fi
 
 set +e
-helm upgrade --install redis bitnami/redis \
-  -n "${NAMESPACE}" \
-  "${REDIS_HELM_ARGS[@]}" \
-  --timeout=10m \
-  --wait 2>&1 | tee /tmp/helm-redis-install.log
-HELM_REDIS_EXIT=${PIPESTATUS[0]}
+if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
+  # Check if Redis is healthy
+  if kubectl -n "${NAMESPACE}" get statefulset redis-master -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+    echo -e "${GREEN}✓ Redis already installed and healthy - skipping${NC}"
+    HELM_REDIS_EXIT=0
+  else
+    echo -e "${YELLOW}Redis exists but not ready; performing safe upgrade${NC}"
+    helm upgrade --install redis bitnami/redis \
+      -n "${NAMESPACE}" \
+      "${REDIS_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-redis-install.log
+    HELM_REDIS_EXIT=${PIPESTATUS[0]}
+  fi
+else
+  echo -e "${YELLOW}Redis not found; installing fresh${NC}"
+  helm upgrade --install redis bitnami/redis \
+    -n "${NAMESPACE}" \
+    "${REDIS_HELM_ARGS[@]}" \
+    --timeout=10m \
+    --wait 2>&1 | tee /tmp/helm-redis-install.log
+  HELM_REDIS_EXIT=${PIPESTATUS[0]}
+fi
 set -e
 
 if [ $HELM_REDIS_EXIT -eq 0 ]; then

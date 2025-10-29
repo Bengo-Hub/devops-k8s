@@ -80,6 +80,20 @@ jobs:
           ./scripts/install-storage-provisioner.sh
           echo "::endgroup::"
 
+      - name: Install databases (PostgreSQL & Redis)
+        if: env.skip_provision != 'true'
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE || 'bengo_erp' }}
+          DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'erp' }}
+        run: |
+          echo "::group::Installing Databases (PostgreSQL & Redis)"
+          export NAMESPACE=${DB_NAMESPACE}
+          export PG_DATABASE=${PG_DATABASE}
+          ./scripts/install-databases.sh
+          echo "::endgroup::"
+
       - name: Configure ingress controller (idempotent)
         if: env.skip_provision != 'true'
         run: |
@@ -185,6 +199,7 @@ jobs:
         run: |
           echo "::group::Cluster Provisioning Complete"
           echo "✅ Storage provisioner installed"
+          echo "✅ Databases installed (PostgreSQL & Redis in erp namespace)"
           echo "✅ NGINX Ingress Controller configured"
           echo "✅ cert-manager installed"
           echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
@@ -192,10 +207,14 @@ jobs:
           echo "✅ Vertical Pod Autoscaler (VPA) installed"
           echo "✅ Git SSH access configured"
           echo ""
+          echo "Database Credentials:"
+          echo "- PostgreSQL: kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d"
+          echo "- Redis: kubectl get secret redis -n erp -o jsonpath='{.data.redis-password}' | base64 -d"
+          echo ""
           echo "Next steps:"
           echo "1. Set up GitHub deploy key (see workflow output above)"
           echo "2. Point DNS to your VPS IP (77.237.232.66)"
           echo "3. Configure Argo CD repository access"
-          echo "4. Deploy applications via Argo CD"
+          echo "4. Deploy applications via Argo CD (they will auto-connect to databases)"
           echo "5. Verify VPA: kubectl get vpa --all-namespaces"
           echo "::endgroup::"
