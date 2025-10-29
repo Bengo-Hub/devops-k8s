@@ -111,6 +111,8 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       --reset-values \
       -f "${TEMP_PG_VALUES}" \
       "${PG_HELM_ARGS[@]}" \
+      --set global.defaultFips=false \
+      --set fips.openssl=false \
       --timeout=10m \
       --wait 2>&1 | tee /tmp/helm-postgresql-install.log
     HELM_PG_EXIT=${PIPESTATUS[0]}
