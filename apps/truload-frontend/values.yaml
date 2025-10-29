@@ -45,12 +45,9 @@ ingress:
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    # SSL redirect enabled - cert-manager creates separate solver ingress for ACME
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # Don't force-redirect ACME challenges (needed for certificate validation)
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      if ($uri !~* "^/.well-known/acme-challenge/") {
-        return 301 https://$host$request_uri;
-      }
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
     - host: truloadtest.masterspace.co.ke
       paths:
