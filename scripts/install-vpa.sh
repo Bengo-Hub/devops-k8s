@@ -12,11 +12,12 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Default configuration
-VPA_VERSION=${VPA_VERSION:-1.1.2}
+VPA_VERSION=${VPA_VERSION:-1.2.0}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/vpa-manifests"
 
 echo -e "${GREEN}Installing Vertical Pod Autoscaler (VPA) v${VPA_VERSION}...${NC}"
+echo -e "${BLUE}Note: Use VPA_VERSION env var to override (e.g., VPA_VERSION=1.1.0)${NC}"
 
 # Pre-flight checks
 if ! command -v kubectl &> /dev/null; then
@@ -54,21 +55,62 @@ VPA_MANIFEST="${MANIFESTS_DIR}/vpa-v${VPA_VERSION}.yaml"
 if [ ! -f "$VPA_MANIFEST" ]; then
   echo -e "${YELLOW}Downloading VPA v${VPA_VERSION} manifests...${NC}"
   
-  # Try to download from GitHub releases
-  if curl -fsSL "https://github.com/kubernetes/autoscaler/releases/download/vertical-pod-autoscaler-${VPA_VERSION}/vpa-v${VPA_VERSION}.yaml" -o "$VPA_MANIFEST"; then
-    echo -e "${GREEN}✓ VPA manifests downloaded successfully${NC}"
-  else
-    echo -e "${YELLOW}Failed to download from releases. Trying alternative method...${NC}"
-    
-    # Alternative: Download from raw GitHub
-    if curl -fsSL "https://raw.githubusercontent.com/kubernetes/autoscaler/vertical-pod-autoscaler-${VPA_VERSION}/vertical-pod-autoscaler/deploy/vpa-v${VPA_VERSION}.yaml" -o "$VPA_MANIFEST"; then
-      echo -e "${GREEN}✓ VPA manifests downloaded successfully${NC}"
+  # VPA manifests are in the autoscaler repo, not as releases
+  # Download individual components and combine
+  TEMP_DIR=$(mktemp -d)
+  
+  echo -e "${BLUE}Downloading VPA components from GitHub...${NC}"
+  
+  # Base URL for VPA components
+  VPA_BASE_URL="https://raw.githubusercontent.com/kubernetes/autoscaler/vertical-pod-autoscaler-${VPA_VERSION}/vertical-pod-autoscaler/deploy"
+  
+  # Download all required components
+  COMPONENTS=(
+    "vpa-v1-crd-gen.yaml"
+    "vpa-rbac.yaml"
+    "recommender-deployment.yaml"
+    "updater-deployment.yaml"
+    "admission-controller-deployment.yaml"
+  )
+  
+  for component in "${COMPONENTS[@]}"; do
+    if curl -fsSL "${VPA_BASE_URL}/${component}" -o "${TEMP_DIR}/${component}"; then
+      echo -e "${GREEN}  ✓ Downloaded ${component}${NC}"
     else
-      echo -e "${RED}Failed to download VPA manifests. Please check version ${VPA_VERSION} exists.${NC}"
-      echo -e "${YELLOW}Available versions: https://github.com/kubernetes/autoscaler/releases${NC}"
-      exit 1
+      echo -e "${YELLOW}  ⚠ Could not download ${component}, trying without version suffix...${NC}"
+      # Some versions use slightly different file names
+      component_alt=$(echo "$component" | sed 's/-gen//g')
+      curl -fsSL "${VPA_BASE_URL}/${component_alt}" -o "${TEMP_DIR}/${component}" 2>/dev/null || true
     fi
-  fi
+  done
+  
+  # Combine all components into single manifest
+  cat "${TEMP_DIR}"/*.yaml > "$VPA_MANIFEST" 2>/dev/null || {
+    echo -e "${RED}Failed to combine VPA manifests${NC}"
+    echo -e "${YELLOW}Trying direct installation from repo...${NC}"
+    
+    # Fallback: Clone repo and use install script
+    git clone --depth 1 --branch vertical-pod-autoscaler-${VPA_VERSION} \
+      https://github.com/kubernetes/autoscaler.git "${TEMP_DIR}/autoscaler" 2>/dev/null || {
+      echo -e "${RED}Failed to clone autoscaler repo${NC}"
+      echo -e "${YELLOW}Available versions: https://github.com/kubernetes/autoscaler/tags${NC}"
+      echo -e "${BLUE}Try: VPA_VERSION=1.2.0 ./scripts/install-vpa.sh${NC}"
+      rm -rf "${TEMP_DIR}"
+      exit 1
+    }
+    
+    # Use the official install script
+    cd "${TEMP_DIR}/autoscaler/vertical-pod-autoscaler"
+    ./hack/vpa-up.sh
+    cd - >/dev/null
+    rm -rf "${TEMP_DIR}"
+    
+    echo -e "${GREEN}✓ VPA installed via official script${NC}"
+    exit 0
+  }
+  
+  rm -rf "${TEMP_DIR}"
+  echo -e "${GREEN}✓ VPA manifests prepared${NC}"
 else
   echo -e "${GREEN}✓ VPA manifests already exist: ${VPA_MANIFEST}${NC}"
 fi
