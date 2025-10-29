@@ -1,0 +1,75 @@
+image:
+  repository: docker.io/codevertex/truload-frontend
+  tag: latest
+  pullSecrets:
+    - name: registry-credentials
+service:
+  port: 80
+  targetPort: 3000
+# Health check configuration for Next.js
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /api/health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    httpGet:
+      path: /api/health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+# Production resource limits for Next.js
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Horizontal autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: truloadtest.masterspace.co.ke
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - truloadtest.masterspace.co.ke
+      secretName: truload-frontend-tls  # Will use existing cert-manager certificate
+envFromSecret: truload-frontend-env
+# No persistence needed for frontend
+persistence:
+  enabled: false
+# VPA configuration
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Auto"
+  minCPU: 100m
+  maxCPU: 500m
+  minMemory: 128Mi
+  maxMemory: 512Mi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: false
+# No Celery for Next.js frontend
+celeryWorker:
+  enabled: false
+celeryBeat:
+  enabled: false
+

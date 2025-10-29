@@ -80,7 +80,7 @@ jobs:
           ./scripts/install-storage-provisioner.sh
           echo "::endgroup::"
 
-      - name: Install databases (PostgreSQL & Redis)
+      - name: Install databases (PostgreSQL & Redis - Shared)
         if: env.skip_provision != 'true'
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -88,10 +88,20 @@ jobs:
           PG_DATABASE: ${{ secrets.PG_DATABASE || 'bengo_erp' }}
           DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'erp' }}
         run: |
-          echo "::group::Installing Databases (PostgreSQL & Redis)"
+          echo "::group::Installing Shared Databases (PostgreSQL & Redis)"
           export NAMESPACE=${DB_NAMESPACE}
           export PG_DATABASE=${PG_DATABASE}
           ./scripts/install-databases.sh
+          echo "::endgroup::"
+      
+      - name: Install RabbitMQ (TruLoad namespace)
+        if: env.skip_provision != 'true'
+        env:
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
+          RABBITMQ_NAMESPACE: ${{ secrets.RABBITMQ_NAMESPACE || 'truload' }}
+        run: |
+          echo "::group::Installing RabbitMQ for TruLoad"
+          ./scripts/install-rabbitmq.sh
           echo "::endgroup::"
 
       - name: Configure ingress controller (idempotent)
@@ -194,12 +204,14 @@ jobs:
           echo "4. Test: git clone git@github.com:Bengo-Hub/devops-k8s.git"
           
           echo "::endgroup::"
+      
       - name: Summary
         if: ${{ env.skip_provision != 'true' }}
         run: |
           echo "::group::Cluster Provisioning Complete"
           echo "✅ Storage provisioner installed"
-          echo "✅ Databases installed (PostgreSQL & Redis in erp namespace)"
+          echo "✅ Shared Databases installed (PostgreSQL & Redis in erp namespace)"
+          echo "✅ RabbitMQ installed (in truload namespace)"
           echo "✅ NGINX Ingress Controller configured"
           echo "✅ cert-manager installed"
           echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
@@ -208,8 +220,9 @@ jobs:
           echo "✅ Git SSH access configured"
           echo ""
           echo "Database Credentials:"
-          echo "- PostgreSQL: kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d"
-          echo "- Redis: kubectl get secret redis -n erp -o jsonpath='{.data.redis-password}' | base64 -d"
+          echo "- PostgreSQL (shared, erp namespace): kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d"
+          echo "- Redis (shared, erp namespace): kubectl get secret redis -n erp -o jsonpath='{.data.redis-password}' | base64 -d"
+          echo "- RabbitMQ (truload namespace): kubectl get secret rabbitmq -n truload -o jsonpath='{.data.rabbitmq-password}' | base64 -d"
           echo ""
           echo "Next steps:"
           echo "1. Set up GitHub deploy key (see workflow output above)"
