@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: 53974698
+  tag: f207ffd0
   pullSecrets:
     - name: registry-credentials
 service:
