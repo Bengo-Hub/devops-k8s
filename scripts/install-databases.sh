@@ -80,19 +80,38 @@ sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VAL
 echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
+# Build Helm arguments - prioritize environment variables
+PG_HELM_ARGS=()
+
+# Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets)
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+  echo -e "${GREEN}Using POSTGRES_PASSWORD from environment/GitHub secrets (priority)${NC}"
+  PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
+  PG_HELM_ARGS+=(--set global.postgresql.auth.database="$PG_DATABASE")
+# Priority 2: Use values file (for fresh installs without env var)
+else
+  echo -e "${YELLOW}No POSTGRES_PASSWORD in environment; using values file or auto-generated${NC}"
+  PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
+fi
+
+# Add FIPS configuration for newer chart versions
+PG_HELM_ARGS+=(--set global.defaultFips=false)
+PG_HELM_ARGS+=(--set fips.openssl=false)
+
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  echo -e "${YELLOW}PostgreSQL release exists; performing safe upgrade with --reuse-values${NC}"
+  echo -e "${YELLOW}PostgreSQL release exists; performing safe upgrade${NC}"
   helm upgrade postgresql bitnami/postgresql \
     -n "${NAMESPACE}" \
     --reuse-values \
+    "${PG_HELM_ARGS[@]}" \
     --timeout=10m \
     --wait 2>&1 | tee /tmp/helm-postgresql-install.log
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
   helm install postgresql bitnami/postgresql \
     -n "${NAMESPACE}" \
-    -f "${TEMP_PG_VALUES}" \
+    "${PG_HELM_ARGS[@]}" \
     --timeout=10m \
     --wait 2>&1 | tee /tmp/helm-postgresql-install.log
 fi
@@ -112,10 +131,23 @@ fi
 echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
 echo -e "${BLUE}This may take 3-5 minutes...${NC}"
 
+# Build Helm arguments - prioritize environment variables
+REDIS_HELM_ARGS=()
+
+# Priority 1: Use REDIS_PASSWORD from environment (GitHub secrets)
+if [[ -n "${REDIS_PASSWORD:-}" ]]; then
+  echo -e "${GREEN}Using REDIS_PASSWORD from environment/GitHub secrets (priority)${NC}"
+  REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
+# Priority 2: Use values file (for fresh installs without env var)
+else
+  echo -e "${YELLOW}No REDIS_PASSWORD in environment; using values file or auto-generated${NC}"
+  REDIS_HELM_ARGS+=(-f "${MANIFESTS_DIR}/databases/redis-values.yaml")
+fi
+
 set +e
 helm upgrade --install redis bitnami/redis \
   -n "${NAMESPACE}" \
-  -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+  "${REDIS_HELM_ARGS[@]}" \
   --timeout=10m \
   --wait 2>&1 | tee /tmp/helm-redis-install.log
 HELM_REDIS_EXIT=${PIPESTATUS[0]}
