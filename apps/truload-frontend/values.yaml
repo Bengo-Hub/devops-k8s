@@ -13,18 +13,18 @@ healthCheck:
     httpGet:
       path: /api/health
       port: http
-    initialDelaySeconds: 10
+    initialDelaySeconds: 20
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 3
+    failureThreshold: 5
   liveness:
     httpGet:
       path: /api/health
       port: http
-    initialDelaySeconds: 30
+    initialDelaySeconds: 40
     periodSeconds: 20
     timeoutSeconds: 5
-    failureThreshold: 3
+    failureThreshold: 5
 # Production resource limits for Next.js
 resources:
   requests:

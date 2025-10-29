@@ -13,18 +13,18 @@ healthCheck:
     httpGet:
       path: /health
       port: http
-    initialDelaySeconds: 15
+    initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 3
+    failureThreshold: 6
   liveness:
     httpGet:
       path: /health
       port: http
-    initialDelaySeconds: 45
+    initialDelaySeconds: 60
     periodSeconds: 20
     timeoutSeconds: 5
-    failureThreshold: 3
+    failureThreshold: 5
 # Production resource limits for .NET API
 resources:
   requests:
