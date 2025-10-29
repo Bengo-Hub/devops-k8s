@@ -9,6 +9,12 @@ global:
       username: "erp_user"
       password: ""         # Leave empty, will be auto-generated
       database: "bengo_erp"
+  # FIPS compliance settings (required for newer chart versions)
+  defaultFips: false
+
+# FIPS OpenSSL configuration
+fips:
+  openssl: false
 
 ## Primary PostgreSQL configuration
 primary:

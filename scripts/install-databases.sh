@@ -103,19 +103,28 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   # Check if PostgreSQL is healthy
   IS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
   
-  # If POSTGRES_PASSWORD is explicitly set, ALWAYS upgrade to ensure password sync
+  # If POSTGRES_PASSWORD is explicitly set, check if it matches current secret
   if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-    echo -e "${YELLOW}Explicit POSTGRES_PASSWORD provided - updating PostgreSQL to ensure password sync${NC}"
-    helm upgrade postgresql bitnami/postgresql \
-      -n "${NAMESPACE}" \
-      --reset-values \
-      -f "${TEMP_PG_VALUES}" \
-      "${PG_HELM_ARGS[@]}" \
-      --set global.defaultFips=false \
-      --set fips.openssl=false \
-      --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-    HELM_PG_EXIT=${PIPESTATUS[0]}
+    # Get current password from secret
+    CURRENT_PG_PASS=$(kubectl -n "${NAMESPACE}" get secret postgresql -o jsonpath='{.data.postgres-password}' 2>/dev/null | base64 -d || true)
+    
+    if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" ]]; then
+      echo -e "${GREEN}✓ PostgreSQL password unchanged - skipping upgrade${NC}"
+      echo -e "${BLUE}Current secret password matches provided POSTGRES_PASSWORD${NC}"
+      HELM_PG_EXIT=0
+    else
+      echo -e "${YELLOW}Password mismatch detected - updating PostgreSQL to sync password${NC}"
+      echo -e "${BLUE}Current password length: ${#CURRENT_PG_PASS} chars${NC}"
+      echo -e "${BLUE}New password length: ${#POSTGRES_PASSWORD} chars${NC}"
+      helm upgrade postgresql bitnami/postgresql \
+        -n "${NAMESPACE}" \
+        --reset-values \
+        -f "${TEMP_PG_VALUES}" \
+        "${PG_HELM_ARGS[@]}" \
+        --timeout=10m \
+        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+      HELM_PG_EXIT=${PIPESTATUS[0]}
+    fi
   elif [[ "$IS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ PostgreSQL already installed and healthy - skipping${NC}"
     HELM_PG_EXIT=0
@@ -170,17 +179,28 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
   # Check if Redis is healthy
   IS_REDIS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset redis-master -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
   
-  # If REDIS_PASSWORD is explicitly set, ALWAYS upgrade to ensure password sync
+  # If REDIS_PASSWORD is explicitly set, check if it matches current secret
   if [[ -n "${REDIS_PASSWORD:-}" ]]; then
-    echo -e "${YELLOW}Explicit REDIS_PASSWORD provided - updating Redis to ensure password sync${NC}"
-    helm upgrade redis bitnami/redis \
-      -n "${NAMESPACE}" \
-      --reset-values \
-      -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-      "${REDIS_HELM_ARGS[@]}" \
-      --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-redis-install.log
-    HELM_REDIS_EXIT=${PIPESTATUS[0]}
+    # Get current password from secret
+    CURRENT_REDIS_PASS=$(kubectl -n "${NAMESPACE}" get secret redis -o jsonpath='{.data.redis-password}' 2>/dev/null | base64 -d || true)
+    
+    if [[ "$CURRENT_REDIS_PASS" == "$REDIS_PASSWORD" ]]; then
+      echo -e "${GREEN}✓ Redis password unchanged - skipping upgrade${NC}"
+      echo -e "${BLUE}Current secret password matches provided REDIS_PASSWORD${NC}"
+      HELM_REDIS_EXIT=0
+    else
+      echo -e "${YELLOW}Password mismatch detected - updating Redis to sync password${NC}"
+      echo -e "${BLUE}Current password length: ${#CURRENT_REDIS_PASS} chars${NC}"
+      echo -e "${BLUE}New password length: ${#REDIS_PASSWORD} chars${NC}"
+      helm upgrade redis bitnami/redis \
+        -n "${NAMESPACE}" \
+        --reset-values \
+        -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+        "${REDIS_HELM_ARGS[@]}" \
+        --timeout=10m \
+        --wait 2>&1 | tee /tmp/helm-redis-install.log
+      HELM_REDIS_EXIT=${PIPESTATUS[0]}
+    fi
   elif [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ Redis already installed and healthy - skipping${NC}"
     HELM_REDIS_EXIT=0
