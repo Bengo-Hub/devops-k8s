@@ -16,18 +16,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install kubectl
-        run: |
-          set -e
-          VER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-          curl -LO https://dl.k8s.io/release/${VER}/bin/linux/amd64/kubectl
-          sudo install -m 0755 kubectl /usr/local/bin/kubectl
-          kubectl version --client=true
-
-      - name: Install Helm
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm version
+      - name: Install DevOps tools (kubectl, helm, yq, argocd)
+        uses: ./.github/actions/install-devops-tools
+        with:
+          install_trivy: 'false'
 
       - name: Install PostgreSQL client (psql)
         run: |
