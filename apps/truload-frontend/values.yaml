@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/truload-frontend
-  tag: latest
+  tag: 06d31dda
   pullSecrets:
     - name: registry-credentials
 service:
@@ -51,7 +51,7 @@ ingress:
   tls:
     - hosts:
         - truloadtest.masterspace.co.ke
-      secretName: truload-frontend-tls  # Will use existing cert-manager certificate
+      secretName: truload-frontend-tls # Will use existing cert-manager certificate
 envFromSecret: truload-frontend-env
 # No persistence needed for frontend
 persistence:
@@ -72,4 +72,3 @@ celeryWorker:
   enabled: false
 celeryBeat:
   enabled: false
-
