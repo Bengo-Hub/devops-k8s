@@ -1,0 +1,79 @@
+image:
+  repository: docker.io/codevertex/truload-backend
+  tag: latest
+  pullSecrets:
+    - name: registry-credentials
+service:
+  port: 80
+  targetPort: 8080
+# Health check configuration for .NET API
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 45
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+# Production resource limits for .NET API
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+# Horizontal autoscaling based on CPU and memory
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: truloadapitest.masterspace.co.ke
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - truloadapitest.masterspace.co.ke
+      secretName: truload-api-tls  # Will use existing cert-manager certificate
+envFromSecret: truload-backend-env
+# Persistent storage for file uploads
+persistence:
+  enabled: true
+  size: 10Gi
+  mountPath: /app/uploads
+  accessMode: ReadWriteOnce
+  storageClass: local-path
+# VPA configuration
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Auto"
+  minCPU: 200m
+  maxCPU: 1000m
+  minMemory: 256Mi
+  maxMemory: 2Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: false
+# No Celery for .NET app
+celeryWorker:
+  enabled: false
+celeryBeat:
+  enabled: false
+

@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: truload-backend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: charts/app
+    helm:
+      # Use external values file (allows build.sh to update image tag)
+      valueFiles:
+        - ../../apps/truload-backend/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: truload
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Remove Replace=true - it forces replacement of immutable resources (PVCs) which fails
+      # Normal sync with ignore-differences annotations on resources handles this properly
+    ignoreDifferences:
+      # Application-level ignore for immutable PVC fields
+      - group: ""
+        kind: PersistentVolumeClaim
+        jsonPointers:
+          - /spec/volumeName
+          - /spec/volumeMode
+          - /status
+
