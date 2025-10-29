@@ -43,6 +43,14 @@ autoscaling:
 ingress:
   enabled: true
   ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Don't force-redirect ACME challenges (needed for certificate validation)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      if ($uri !~* "^/.well-known/acme-challenge/") {
+        return 301 https://$host$request_uri;
+      }
   hosts:
     - host: truloadtest.masterspace.co.ke
       paths:
