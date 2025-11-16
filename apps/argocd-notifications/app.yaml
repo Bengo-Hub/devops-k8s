@@ -6,28 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://argoproj.github.io/argo-helm
-    chart: argocd-notifications
-    targetRevision: ">=1.0.0"
-    helm:
-      values: |-
-        applicationName: argocd
-        config:
-          logLevel: info
-          serviceName: argocd-notifications
-        notifiers:
-          service.webhook.default: {}
-        subscriptions: []
-        triggers:
-          - name: on-sync-status-unknown
-            condition: app.status.operationState.phase in ['Error', 'Failed']
-            template: app-sync-failed
-          - name: on-sync-status-running
-            condition: app.status.operationState.phase in ['Running']
-            template: app-sync-running
-          - name: on-sync-status-succeeded
-            condition: app.status.sync.status in ['Synced']
-            template: app-sync-succeeded
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests/argocd-notifications
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
