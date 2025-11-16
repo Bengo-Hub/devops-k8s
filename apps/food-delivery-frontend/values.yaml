@@ -1,0 +1,86 @@
+nameOverride: food-delivery-frontend
+fullnameOverride: food-delivery-frontend
+
+replicaCount: 3
+
+image:
+  repository: docker.io/codevertex/food-delivery-frontend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry-credentials
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 15
+
+strategy:
+  type: RollingUpdate
+
+env:
+  - name: NEXT_PUBLIC_API_URL
+    value: https://fooddeliveryapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_NOTIFICATIONS_URL
+    value: https://notificationsapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_MAPBOX_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: food-delivery-frontend-secrets
+        key: mapboxToken
+  - name: NEXT_PUBLIC_SENTRY_DSN
+    valueFrom:
+      secretKeyRef:
+        name: food-delivery-frontend-secrets
+        key: sentryDsn
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 768Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 12
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: fooddeliveryapp.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - fooddeliveryapp.codevertexitsolutions.com
+      secretName: food-delivery-frontend-tls
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: false
+
+serviceMonitor:
+  enabled: false
