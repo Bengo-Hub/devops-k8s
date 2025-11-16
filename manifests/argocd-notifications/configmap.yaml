@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.email: |
+    host: ${secret:argocd-notifications-secret:email-smtp-host}
+    port: ${secret:argocd-notifications-secret:email-smtp-port}
+    username: ${secret:argocd-notifications-secret:email-username}
+    password: ${secret:argocd-notifications-secret:email-password}
+    from: ${secret:argocd-notifications-secret:email-from}
+    # Set one of the TLS options based on your SMTP server
+    startTLS: ${secret:argocd-notifications-secret:email-starttls}
+    # insecureSkipVerify: "false"
+
+  # Services (non-sensitive). Sensitive values should come from the Secret via ${secret:...} refs.
+  service.webhook.default: |
+    url: ${secret:argocd-notifications-secret:webhook-url}
+    headers:
+      X-Auth-Token: ${secret:argocd-notifications-secret:token}
+
+  # Basic templates
+  template.app-sync-running: |
+    message: |
+      Application {{.app.metadata.name}} is syncing in {{.app.status.operationState.phase}} phase.
+    webhook:
+      default:
+        method: POST
+        body: |
+          {
+            "event": "app-sync-running",
+            "app": "{{.app.metadata.name}}",
+            "phase": "{{.app.status.operationState.phase}}",
+            "status": "{{.app.status.sync.status}}",
+            "project": "{{.app.spec.project}}",
+            "url": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}"
+          }
+
+  template.app-sync-succeeded: |
+    message: |
+      Application {{.app.metadata.name}} sync succeeded (status: {{.app.status.sync.status}}).
+    email:
+      subject: "[Argo CD] {{.app.metadata.name}} sync succeeded"
+      to:
+        - ${secret:argocd-notifications-secret:email-to}
+      body: |
+        Application {{.app.metadata.name}} sync succeeded.
+        Project: {{.app.spec.project}}
+        Status: {{.app.status.sync.status}}
+        URL: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}
+    webhook:
+      default:
+        method: POST
+        body: |
+          {
+            "event": "app-sync-succeeded",
+            "app": "{{.app.metadata.name}}",
+            "status": "{{.app.status.sync.status}}",
+            "project": "{{.app.spec.project}}",
+            "url": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}"
+          }
+
+  template.app-sync-failed: |
+    message: |
+      Application {{.app.metadata.name}} sync failed (phase: {{.app.status.operationState.phase}}).
+    email:
+      subject: "[Argo CD] {{.app.metadata.name}} sync failed"
+      to:
+        - ${secret:argocd-notifications-secret:email-to}
+      body: |
+        Application {{.app.metadata.name}} sync failed.
+        Phase: {{.app.status.operationState.phase}}
+        Status: {{.app.status.sync.status}}
+        URL: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}
+    webhook:
+      default:
+        method: POST
+        body: |
+          {
+            "event": "app-sync-failed",
+            "app": "{{.app.metadata.name}}",
+            "phase": "{{.app.status.operationState.phase}}",
+            "status": "{{.app.status.sync.status}}",
+            "project": "{{.app.spec.project}}",
+            "url": "{{.context.argocdUrl}}/applications/{{.app.metadata.name}}"
+          }
+
+  # Triggers
+  trigger.on-sync-status-running: |
+    when: app.status.operationState.phase in ['Running']
+    send: [app-sync-running]
+
+  trigger.on-sync-status-succeeded: |
+    when: app.status.sync.status in ['Synced']
+    send: [app-sync-succeeded]
+
+  trigger.on-sync-status-unknown: |
+    when: app.status.operationState.phase in ['Error', 'Failed']
+    send: [app-sync-failed]
+
+  # Optional: default subscriptions list (empty by default)
+  # subscription.default: |
+  #   recipients:
+  #   - webhook:default
+
+
