@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-api
-  tag: 34e45c7c
+  tag: a0c9427b
   pullSecrets:
     - name: registry-credentials
 service:
