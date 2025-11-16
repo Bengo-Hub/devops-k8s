@@ -1,0 +1,98 @@
+nameOverride: treasury-app
+fullnameOverride: treasury-app
+
+replicaCount: 2
+
+image:
+  repository: docker.io/codevertex/treasury-app
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry-credentials
+
+service:
+  type: ClusterIP
+  port: 4000
+  targetPort: 4000
+
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 15
+
+strategy:
+  type: RollingUpdate
+
+env:
+  - name: TREASURY_APP_ENV
+    value: production
+  - name: TREASURY_HTTP_PORT
+    value: "4000"
+  - name: TREASURY_POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: treasury-app-secrets
+        key: postgresUrl
+  - name: TREASURY_REDIS_ADDR
+    value: redis-master.treasury.svc.cluster.local:6380
+  - name: TREASURY_NATS_URL
+    value: nats://nats.messaging.svc.cluster.local:4222
+  - name: TREASURY_STORAGE_ENDPOINT
+    value: http://minio.storage.svc.cluster.local:9000
+  - name: TREASURY_STORAGE_BUCKET
+    value: treasury-artifacts
+  - name: TREASURY_OTLP_ENDPOINT
+    value: http://otel-collector.monitoring.svc.cluster.local:4317
+
+resources:
+  limits:
+    cpu: 1500m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: treasury.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - treasury.codevertexitsolutions.com
+      secretName: treasury-app-tls

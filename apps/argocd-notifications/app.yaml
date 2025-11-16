@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd-notifications
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argocd-notifications
+    targetRevision: 2.8.2
+    helm:
+      values: |-
+        applicationName: argocd
+        config:
+          logLevel: info
+          serviceName: argocd-notifications
+        notifiers:
+          service.webhook.default: {}
+        subscriptions: []
+        triggers:
+          - name: on-sync-status-unknown
+            condition: app.status.operationState.phase in ['Error', 'Failed']
+            template: app-sync-failed
+          - name: on-sync-status-running
+            condition: app.status.operationState.phase in ['Running']
+            template: app-sync-running
+          - name: on-sync-status-succeeded
+            condition: app.status.sync.status in ['Synced']
+            template: app-sync-succeeded
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -174,3 +174,9 @@ serviceMonitor:
       app: "{{ include \"app.name\" . }}"
 
 
+# Celery components are disabled by default for generic apps (e.g., UI)
+celeryWorker:
+  enabled: false
+
+celeryBeat:
+  enabled: false
