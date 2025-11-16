@@ -1,0 +1,99 @@
+nameOverride: food-delivery-backend
+fullnameOverride: food-delivery-backend
+
+replicaCount: 2
+
+image:
+  repository: docker.io/codevertex/food-delivery-backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry-credentials
+
+service:
+  type: ClusterIP
+  port: 4000
+  targetPort: 4000
+
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 15
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+env:
+  - name: FOOD_DELIVERY_APP_ENV
+    value: production
+  - name: FOOD_DELIVERY_POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: food-delivery-backend-secrets
+        key: postgresUrl
+  - name: FOOD_DELIVERY_REDIS_ADDR
+    value: redis-master.food-delivery.svc.cluster.local:6379
+  - name: FOOD_DELIVERY_NATS_URL
+    value: nats://nats.messaging.svc.cluster.local:4222
+  - name: FOOD_DELIVERY_OTLP_ENDPOINT
+    value: http://otel-collector.monitoring.svc.cluster.local:4317
+  - name: FOOD_DELIVERY_EVENTS_STREAM
+    value: food-delivery
+  - name: FOOD_DELIVERY_HTTP_PORT
+    value: "4000"
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 75
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: fooddeliveryapi.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - fooddeliveryapi.codevertexitsolutions.com
+      secretName: food-delivery-backend-tls

@@ -1,0 +1,116 @@
+nameOverride: notifications-app
+fullnameOverride: notifications-app
+
+replicaCount: 2
+
+image:
+  repository: docker.io/codevertex/notifications-app
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry-credentials
+
+service:
+  type: ClusterIP
+  port: 4000
+  targetPort: 4000
+
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+strategy:
+  type: RollingUpdate
+
+env:
+  - name: NOTIFICATIONS_APP_ENV
+    value: production
+  - name: NOTIFICATIONS_HTTP_PORT
+    value: "4000"
+  - name: NOTIFICATIONS_POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: notifications-app-secrets
+        key: postgresUrl
+  - name: NOTIFICATIONS_REDIS_ADDR
+    value: redis-master.notifications.svc.cluster.local:6381
+  - name: NOTIFICATIONS_NATS_URL
+    value: nats://nats.messaging.svc.cluster.local:4222
+  - name: NOTIFICATIONS_SENDGRID_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: notifications-provider-secrets
+        key: sendgridApiKey
+  - name: NOTIFICATIONS_TWILIO_ACCOUNT_SID
+    valueFrom:
+      secretKeyRef:
+        name: notifications-provider-secrets
+        key: twilioAccountSid
+  - name: NOTIFICATIONS_TWILIO_AUTH_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: notifications-provider-secrets
+        key: twilioAuthToken
+  - name: NOTIFICATIONS_FCM_SERVICE_ACCOUNT
+    valueFrom:
+      secretKeyRef:
+        name: notifications-provider-secrets
+        key: fcmServiceAccount
+  - name: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
+    value: Urban Cafe <hello@bengobox.com>
+  - name: NOTIFICATIONS_OTLP_ENDPOINT
+    value: http://otel-collector.monitoring.svc.cluster.local:4317
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1.5Gi
+  requests:
+    cpu: 300m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 55
+  targetMemoryUtilizationPercentage: 70
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - host: notifications.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - notifications.codevertexitsolutions.com
+      secretName: notifications-app-tls
