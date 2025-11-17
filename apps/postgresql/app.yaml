@@ -10,8 +10,111 @@ spec:
     chart: postgresql
     targetRevision: 15.5.26
     helm:
-      valueFiles:
-        - ../../manifests/databases/postgresql-values.yaml
+      values: |
+        ## Global settings
+        global:
+          postgresql:
+            auth:
+              postgresPassword: "" # Leave empty, will be auto-generated
+              username: "erp_user"
+              password: ""         # Leave empty, will be auto-generated
+              database: "bengo_erp"
+          # FIPS compliance settings (required for newer chart versions)
+          defaultFips: false
+
+        # FIPS OpenSSL configuration
+        fips:
+          openssl: false
+
+        ## Primary PostgreSQL configuration
+        primary:
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          priorityClassName: db-critical
+          
+          persistence:
+            enabled: true
+            size: 20Gi  # Adjust based on data size
+            storageClass: ""  # Use default storage class
+          
+          ## PostgreSQL tuning
+          extendedConfiguration: |
+            max_connections = 200
+            shared_buffers = 512MB
+            effective_cache_size = 1536MB
+            work_mem = 2621kB
+            maintenance_work_mem = 128MB
+            checkpoint_completion_target = 0.9
+            wal_buffers = 16MB
+            default_statistics_target = 100
+            random_page_cost = 1.1
+            effective_io_concurrency = 200
+            min_wal_size = 1GB
+            max_wal_size = 4GB
+          
+          ## Health checks
+          livenessProbe:
+            enabled: true
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          
+          readinessProbe:
+            enabled: true
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+        ## Read replicas (optional, for scaling reads)
+        readReplicas:
+          replicaCount: 0  # Set to 1+ for read replicas
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          priorityClassName: db-critical
+          
+          persistence:
+            enabled: true
+            size: 20Gi
+
+        ## Metrics for Prometheus
+        metrics:
+          enabled: true
+          serviceMonitor:
+            enabled: true
+            namespace: infra
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+
+        ## Backup configuration
+        backup:
+          enabled: false  # Set to true if using built-in backup
+          cronjob:
+            schedule: "0 2 * * *"  # Daily at 2 AM
+            storage:
+              size: 10Gi
+
+        ## Network policy (restrict access)
+        networkPolicy:
+          enabled: false  # Set to true for production
+          allowExternal: false
+          explicitNamespacesSelector: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: infra
