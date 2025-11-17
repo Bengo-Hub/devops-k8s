@@ -25,7 +25,8 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       # Cleanup enabled by default (can be disabled via workflow input)
-      ENABLE_CLEANUP: ${{ github.event.inputs.enable_cleanup != false }}
+      # Defaults to 'true' if not explicitly set to false
+      ENABLE_CLEANUP: ${{ github.event.inputs.enable_cleanup == false && 'false' || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,15 +75,22 @@ jobs:
           fi
           echo "::endgroup::"
 
-      - name: Cleanup cluster (opt-in only)
-        if: env.skip_provision != 'true' && env.ENABLE_CLEANUP == 'true'
+      - name: Cleanup cluster (enabled by default)
+        if: env.skip_provision != 'true'
+        env:
+          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
-          echo "::group::Cleaning up cluster (ENABLE_CLEANUP=true)"
-          echo "⚠️ WARNING: This will delete ALL applications and data!"
-          echo "⚠️ Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
-          export ENABLE_CLEANUP=true
-          export FORCE_CLEANUP=true
-          ./scripts/cleanup-cluster.sh
+          echo "::group::Cleaning up cluster"
+          echo "ENABLE_CLEANUP=${ENABLE_CLEANUP}"
+          if [ "$ENABLE_CLEANUP" = "true" ]; then
+            echo "⚠️ WARNING: This will delete ALL applications and data!"
+            echo "⚠️ Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
+            export ENABLE_CLEANUP=true
+            export FORCE_CLEANUP=true
+            ./scripts/cleanup-cluster.sh
+          else
+            echo "ℹ️ Cleanup disabled (ENABLE_CLEANUP=false) - skipping cleanup step"
+          fi
           echo "::endgroup::"
 
       - name: Ensure scripts executable
@@ -104,6 +112,7 @@ jobs:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
+          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
           echo "::group::Installing Shared Databases (PostgreSQL & Redis in ${DB_NAMESPACE} namespace)"
           echo "Installing shared infrastructure databases..."
@@ -122,6 +131,7 @@ jobs:
         env:
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
           RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
+          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
           echo "::group::Installing RabbitMQ (Shared Infrastructure in ${RABBITMQ_NAMESPACE} namespace)"
           echo "Installing RabbitMQ as shared infrastructure..."
@@ -184,6 +194,7 @@ jobs:
         env:
           GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
           MONITORING_NAMESPACE: ${{ env.MONITORING_NAMESPACE }}
+          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
           echo "::group::Installing Monitoring Stack"
           ./scripts/install-monitoring.sh
