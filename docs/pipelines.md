@@ -131,6 +131,61 @@ spec:
 - **Self-Healing**: Applications automatically recover from failures
 - **Prune**: Removes resources that are no longer defined in the manifests
 
+## Centralized Infra & Autoscaling Reuse
+
+- Core infra is managed via Argo CD apps:
+  - Monitoring: `apps/monitoring/app.yaml`
+  - Metrics: `apps/metrics-server/app.yaml`
+  - Event autoscaling: `apps/keda/app.yaml`
+  - Databases: `apps/postgresql/app.yaml`, `apps/redis/app.yaml`, `apps/rabbitmq/app.yaml`
+- Ensure these are Healthy/Synced so HPA/VPA/KEDA and monitoring function across all apps.
+
+### Using the Shared Helm Chart Features
+
+All apps using `charts/app` inherit:
+- HPA: `templates/hpa.yaml` driven by `autoscaling.*` in values.
+- VPA: `templates/vpa.yaml` toggled by `verticalPodAutoscaling.*`.
+- KEDA: `templates/keda-scaledobject.yaml` toggled by `keda.*`.
+
+Example values override:
+```yaml
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Recreate"
+  recommendationMode: false
+
+keda:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  triggers:
+    - type: redis
+      metadata:
+        address: "redis-master.infra.svc:6379"
+        listName: "celery"
+        listLength: "100"
+      authenticationRef:
+        name: redis-auth
+```
+
+Create a corresponding `TriggerAuthentication` in the app namespace pointing to broker credentials.
+
+### Connecting to Shared Databases/Brokers
+
+- Postgres, Redis, RabbitMQ are deployed to `infra` namespace.
+- Service DNS:
+  - Postgres: `postgresql.infra.svc.cluster.local:5432`
+  - Redis: `redis-master.infra.svc.cluster.local:6379`
+  - RabbitMQ: `rabbitmq.infra.svc.cluster.local:5672`
+- Set these in your app secrets/env and align pools/timeouts; HPA will scale app pods while PriorityClass ensures DBs stay scheduled under pressure.
+
 ## Security Best Practices
 
 ### Dynamic Secret Generation

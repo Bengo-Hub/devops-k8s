@@ -455,3 +455,57 @@ Add validation steps to your deployment pipeline:
 ```
 
 This comprehensive scaling documentation ensures optimal resource utilization and application performance across all deployment environments.
+
+## Queue-driven Autoscaling (KEDA)
+
+KEDA scales consumers (e.g., Celery workers) based on queue depth or external events.
+
+### Install KEDA
+
+KEDA is deployed via ArgoCD (`apps/keda/app.yaml`) and exposes the `ScaledObject` CRD.
+
+### Enable KEDA for an App
+
+1. Ensure the application chart values enable KEDA and provide triggers:
+
+```yaml
+keda:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  triggers:
+    - type: redis
+      metadata:
+        address: "redis-master.infra.svc:6379"
+        listName: "celery"
+        listLength: "100"
+      authenticationRef:
+        name: redis-auth
+```
+
+2. Create a `TriggerAuthentication` with broker credentials:
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-auth
+  namespace: <app-namespace>
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: redis-credentials
+      key: redis-password
+```
+
+3. Validate scaling:
+
+```bash
+kubectl get scaledobject -A
+kubectl describe scaledobject <name> -n <namespace>
+```
+
+### Notes
+- Prefer `TriggerAuthentication` with Secrets; avoid embedding credentials in values.
+- For RabbitMQ, use the `rabbitmq` trigger with `queueName` and `host` parameters.
+- Combine KEDA (depth-based) with HPA (CPU/memory) where appropriate.

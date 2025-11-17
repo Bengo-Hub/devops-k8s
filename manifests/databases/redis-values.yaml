@@ -18,6 +18,7 @@ master:
     limits:
       memory: "1Gi"
       cpu: "500m"
+  priorityClassName: db-critical
   
   persistence:
     enabled: true
