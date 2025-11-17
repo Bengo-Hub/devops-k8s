@@ -165,10 +165,17 @@ echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
 # Build Helm arguments - prioritize environment variables
-# IMPORTANT: Order matters - values file first, then --set flags override
+# CRITICAL: FIPS must be set FIRST to avoid chart validation errors
+# Chart version 15.5.26+ validates FIPS during template rendering
 PG_HELM_ARGS=()
 
-# Always use values file first for complete configuration (includes FIPS settings)
+# CRITICAL: Set FIPS configuration FIRST before any other values
+# This ensures FIPS is available when chart validates templates
+# Must use --set (not --set-string) for boolean false values
+PG_HELM_ARGS+=(--set global.defaultFips=false)
+PG_HELM_ARGS+=(--set fips.openssl=false)
+
+# Always use values file for complete configuration (includes FIPS settings as backup)
 PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
 # Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets)
@@ -185,12 +192,10 @@ if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
   PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
 fi
 
-# CRITICAL: Always explicitly set FIPS configuration via --set flags
-# These MUST be set to avoid chart validation errors
-# Chart version 15.5.26+ requires explicit FIPS configuration
-# Using --set-string to ensure boolean values are properly set
-PG_HELM_ARGS+=(--set-string global.defaultFips=false)
-PG_HELM_ARGS+=(--set-string fips.openssl=false)
+# Ensure FIPS is set again at the end to override any values file issues
+# This provides redundancy to ensure FIPS is always set
+PG_HELM_ARGS+=(--set global.defaultFips=false)
+PG_HELM_ARGS+=(--set fips.openssl=false)
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
