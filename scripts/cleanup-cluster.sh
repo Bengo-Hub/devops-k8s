@@ -18,21 +18,17 @@ SKIP_SYSTEM_NAMESPACES=true  # Don't delete kube-system, kube-public, etc.
 ENABLE_CLEANUP=${ENABLE_CLEANUP:-true}
 FORCE_CLEANUP=${FORCE_CLEANUP:-true}
 
-# CRITICAL SAFETY CHECK: Cleanup is disabled by default
+# Safety check: Cleanup can be disabled by setting ENABLE_CLEANUP=false
 if [ "$ENABLE_CLEANUP" != "true" ]; then
     echo -e "${RED}========================================${NC}"
     echo -e "${RED}  CLUSTER CLEANUP DISABLED${NC}"
     echo -e "${RED}========================================${NC}"
     echo ""
-    echo -e "${YELLOW}Cleanup is disabled by default for safety.${NC}"
+    echo -e "${YELLOW}Cleanup is disabled (ENABLE_CLEANUP=false).${NC}"
     echo -e "${YELLOW}To enable cleanup, set ENABLE_CLEANUP=true:${NC}"
     echo ""
     echo -e "${BLUE}  export ENABLE_CLEANUP=true${NC}"
     echo -e "${BLUE}  ./scripts/cleanup-cluster.sh${NC}"
-    echo ""
-    echo -e "${YELLOW}Or in GitHub Actions workflow:${NC}"
-    echo -e "${BLUE}  env:${NC}"
-    echo -e "${BLUE}    ENABLE_CLEANUP: 'true'${NC}"
     echo ""
     exit 0
 fi

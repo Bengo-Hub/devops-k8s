@@ -25,7 +25,7 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       # Cleanup enabled by default (can be disabled via workflow input)
-      ENABLE_CLEANUP: ${{ github.event.inputs.enable_cleanup != false && (github.event.inputs.enable_cleanup == true || true) }}
+      ENABLE_CLEANUP: ${{ github.event.inputs.enable_cleanup != false }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
