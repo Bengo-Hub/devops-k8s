@@ -1,10 +1,10 @@
-nameOverride: food-delivery-backend
-fullnameOverride: food-delivery-backend
+nameOverride: cafe-backend
+fullnameOverride: cafe-backend
 
 replicaCount: 2
 
 image:
-  repository: docker.io/codevertex/food-delivery-backend
+  repository: docker.io/codevertex/cafe-backend
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -37,22 +37,22 @@ strategy:
     maxUnavailable: 0
 
 env:
-  - name: FOOD_DELIVERY_APP_ENV
+  - name: CAFE_APP_ENV
     value: production
-  - name: FOOD_DELIVERY_POSTGRES_URL
+  - name: CAFE_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: food-delivery-backend-secrets
+        name: cafe-backend-secrets
         key: postgresUrl
-  - name: FOOD_DELIVERY_REDIS_ADDR
-    value: redis-master.food-delivery.svc.cluster.local:6379
-  - name: FOOD_DELIVERY_NATS_URL
+  - name: CAFE_REDIS_ADDR
+    value: redis-master.cafe.svc.cluster.local:6379
+  - name: CAFE_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: FOOD_DELIVERY_OTLP_ENDPOINT
+  - name: CAFE_OTLP_ENDPOINT
     value: http://otel-collector.monitoring.svc.cluster.local:4317
-  - name: FOOD_DELIVERY_EVENTS_STREAM
-    value: food-delivery
-  - name: FOOD_DELIVERY_HTTP_PORT
+  - name: CAFE_EVENTS_STREAM
+    value: cafe
+  - name: CAFE_HTTP_PORT
     value: "4000"
 
 resources:
@@ -89,11 +89,11 @@ ingress:
   enabled: true
   ingressClassName: nginx
   hosts:
-    - host: fooddeliveryapi.codevertexitsolutions.com
+    - host: cafeapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - fooddeliveryapi.codevertexitsolutions.com
-      secretName: food-delivery-backend-tls
+        - cafeapi.codevertexitsolutions.com
+      secretName: cafe-backend-tls
