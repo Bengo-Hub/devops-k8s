@@ -3,6 +3,8 @@ Database Setup Guide
 
 This guide covers setting up shared database infrastructure for all services in the cluster. PostgreSQL and Redis are deployed as shared infrastructure in the `infra` namespace, with each service having its own unique database on the PostgreSQL instance.
 
+> **📖 For Per-Service Database Setup**: See [Per-Service Database Setup Guide](./per-service-database-setup.md) for details on how per-service databases are created and managed using a common admin user.
+
 Database Architecture
 --------------------
 
