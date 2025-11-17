@@ -165,13 +165,12 @@ echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
 # Build Helm arguments - prioritize environment variables
-# CRITICAL: FIPS must be set FIRST to avoid chart validation errors
-# Chart version 15.5.26+ validates FIPS during template rendering
+# Using chart version 15.5.20 to avoid FIPS validation bug in 15.5.26+
+# Still setting FIPS for compatibility with future versions
 PG_HELM_ARGS=()
 
-# CRITICAL: Set FIPS configuration FIRST before any other values
-# This ensures FIPS is available when chart validates templates
-# Must use --set (not --set-string) for boolean false values
+# Set FIPS configuration first (for compatibility)
+# Chart version 15.5.20 doesn't require this, but we set it for forward compatibility
 PG_HELM_ARGS+=(--set global.defaultFips=false)
 PG_HELM_ARGS+=(--set fips.openssl=false)
 
@@ -192,8 +191,7 @@ if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
   PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
 fi
 
-# Ensure FIPS is set again at the end to override any values file issues
-# This provides redundancy to ensure FIPS is always set
+# Redundant FIPS setting for extra safety
 PG_HELM_ARGS+=(--set global.defaultFips=false)
 PG_HELM_ARGS+=(--set fips.openssl=false)
 
@@ -216,6 +214,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       echo -e "${BLUE}Current password length: ${#CURRENT_PG_PASS} chars${NC}"
       echo -e "${BLUE}New password length: ${#POSTGRES_PASSWORD} chars${NC}"
       helm upgrade postgresql bitnami/postgresql \
+        --version 15.5.20 \
         -n "${NAMESPACE}" \
         --reset-values \
         "${PG_HELM_ARGS[@]}" \
@@ -229,6 +228,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   else
     echo -e "${YELLOW}PostgreSQL exists but not ready; performing safe upgrade${NC}"
     helm upgrade postgresql bitnami/postgresql \
+      --version 15.5.20 \
       -n "${NAMESPACE}" \
       --reuse-values \
       --timeout=10m \
@@ -259,6 +259,7 @@ else
   echo -e "${GREEN}✓ FIPS configuration verified (set $FIPS_SET_COUNT times)${NC}"
   
   helm install postgresql bitnami/postgresql \
+    --version 15.5.20 \
     -n "${NAMESPACE}" \
     "${PG_HELM_ARGS[@]}" \
     --timeout=10m \
