@@ -238,40 +238,69 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
   
+  # Check for ANY existing PostgreSQL resources (including StatefulSets that might recreate resources)
+  echo -e "${BLUE}Checking for any existing PostgreSQL resources...${NC}"
+  
+  # Check for StatefulSets first (these recreate resources)
+  STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
+  if [ -n "$STATEFULSETS" ]; then
+    echo -e "${YELLOW}Found PostgreSQL StatefulSet (this recreates resources):${NC}"
+    echo "$STATEFULSETS"
+    echo -e "${YELLOW}Deleting StatefulSet first to stop resource recreation...${NC}"
+    kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+    echo -e "${GREEN}✓ StatefulSet deleted${NC}"
+  fi
+  
+  # Check for failed/pending Helm release
+  HELM_RELEASE_STATUS=$(helm -n "${NAMESPACE}" status postgresql -o json 2>/dev/null | grep -o '"status":"[^"]*"' || true)
+  if [ -n "$HELM_RELEASE_STATUS" ]; then
+    echo -e "${YELLOW}Found existing Helm release: ${HELM_RELEASE_STATUS}${NC}"
+    echo -e "${YELLOW}Uninstalling existing Helm release...${NC}"
+    helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
+    echo -e "${GREEN}✓ Helm release uninstalled${NC}"
+    sleep 3
+  fi
+  
   # Check for orphaned resources from previous installations
-  echo -e "${BLUE}Checking for orphaned PostgreSQL resources...${NC}"
+  echo -e "${BLUE}Checking for remaining orphaned PostgreSQL resources...${NC}"
   ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service,secret -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
   
   if [ -n "$ORPHANED_RESOURCES" ]; then
-    echo -e "${YELLOW}Found orphaned PostgreSQL resources from previous installation:${NC}"
+    echo -e "${YELLOW}Found remaining orphaned PostgreSQL resources:${NC}"
     echo "$ORPHANED_RESOURCES"
     echo -e "${YELLOW}Cleaning up orphaned resources to allow fresh installation...${NC}"
     
-    # Delete orphaned resources that might conflict with Helm
-    # NetworkPolicy and ConfigMaps must be removed first
+    # Delete all orphaned resources in the correct order
+    # 1. StatefulSets (if any remain)
+    kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --grace-period=0 --force 2>/dev/null || true
+    
+    # 2. Pods (force delete to avoid waiting for graceful shutdown)
+    kubectl delete pod -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --grace-period=0 --force 2>/dev/null || true
+    
+    # 3. Services
+    kubectl delete service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
+    
+    # 4. NetworkPolicy and ConfigMaps
     kubectl delete networkpolicy -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
     kubectl delete configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
     
-    # Also delete services as they can cause conflicts
-    kubectl delete service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
-    
     # Wait for resources to be fully deleted
     echo -e "${BLUE}Waiting for resources to be fully deleted...${NC}"
-    sleep 5
+    sleep 10
     
     # Verify deletion
-    REMAINING=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+    REMAINING=$(kubectl get statefulset,pod,networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
     if [ -n "$REMAINING" ]; then
-      echo -e "${YELLOW}Warning: Some resources still exist:${NC}"
+      echo -e "${RED}ERROR: Resources still exist after cleanup:${NC}"
       echo "$REMAINING"
-      echo -e "${YELLOW}Waiting additional 5 seconds...${NC}"
-      sleep 5
+      echo -e "${RED}Manual cleanup may be required. Aborting.${NC}"
+      exit 1
     fi
     
     # Keep secrets as they contain passwords we might want to preserve
     echo -e "${BLUE}Note: Keeping existing secrets to preserve credentials${NC}"
     
-    echo -e "${GREEN}✓ Orphaned resources cleaned up${NC}"
+    echo -e "${GREEN}✓ All orphaned resources cleaned up${NC}"
   else
     echo -e "${GREEN}✓ No orphaned resources found${NC}"
   fi
