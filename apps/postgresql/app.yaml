@@ -22,9 +22,11 @@ spec:
               password: ""         # Leave empty, will be auto-generated (or set via POSTGRES_ADMIN_PASSWORD env)
               database: "postgres" # Use postgres as default, services create their own databases
           # FIPS compliance settings (required for newer chart versions)
+          # Must be explicitly set to false to avoid chart validation errors
           defaultFips: false
         
         # FIPS OpenSSL configuration
+        # Must be explicitly set to avoid chart validation errors
         fips:
           openssl: false
 
