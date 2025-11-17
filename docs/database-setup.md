@@ -1,17 +1,21 @@
 Database Setup Guide
 ===================
 
-The ERP system requires PostgreSQL (primary database) and Redis (cache + Celery broker). This guide covers both in-cluster Kubernetes deployment (recommended) and external database options.
+This guide covers setting up shared database infrastructure for all services in the cluster. PostgreSQL and Redis are deployed as shared infrastructure in the `infra` namespace, with each service having its own unique database on the PostgreSQL instance.
 
-Database Requirements
+Database Architecture
 --------------------
 
-### ERP API Stack:
-- **PostgreSQL** - Primary relational database
-- **Redis** - Cache, sessions, and Celery message broker
+### Shared Infrastructure:
+- **PostgreSQL** - Shared PostgreSQL service/engine deployed in `infra` namespace
+  - Each service has its own **unique database** on this shared PostgreSQL instance
+  - Example databases: `cafe`, `erp`, `treasury`, `notifications`, etc.
+- **Redis** - Shared Redis instance for cache, sessions, and message broker
+  - Services can use different Redis databases (0, 1, 2, etc.) for isolation
 
-### NOT Required:
-- MongoDB (not used by this ERP system)
+### Key Concept:
+- **Shared Service, Unique Databases**: All services connect to the same PostgreSQL service (`postgresql.infra.svc.cluster.local`), but each service uses its own database name.
+- This allows efficient resource utilization while maintaining data isolation between services.
 
 ---
 
@@ -65,24 +69,40 @@ Deployment Options
 ### Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│          Kubernetes Cluster             │
-│                                         │
-│  ┌──────────┐       ┌──────────┐      │
-│  │ ERP API  │──────▶│PostgreSQL│      │
-│  │          │       │ StatefulSet│     │
-│  │          │       └──────────┘      │
-│  │          │             │           │
-│  │          │       ┌──────────┐      │
-│  │          │──────▶│  Redis   │      │
-│  └──────────┘       │Deployment│      │
-│                     └──────────┘      │
-│                           │           │
-│                     ┌──────────┐      │
-│                     │Persistent│      │
-│                     │ Volumes  │      │
-│                     └──────────┘      │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│          Kubernetes Cluster                            │
+│                                                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐           │
+│  │Service A │  │Service B │  │Service C │           │
+│  │(cafe)    │  │(erp)     │  │(treasury)│           │
+│  └────┬──────┘  └────┬─────┘  └────┬─────┘           │
+│       │             │              │                 │
+│       └─────────────┼──────────────┘                 │
+│                     │                                 │
+│              ┌──────▼──────┐                         │
+│              │ PostgreSQL  │                          │
+│              │ (infra ns)  │                          │
+│              │             │                          │
+│              │ Databases:  │                          │
+│              │ - cafe      │                          │
+│              │ - erp       │                          │
+│              │ - treasury  │                          │
+│              └──────┬──────┘                          │
+│                     │                                 │
+│              ┌──────▼──────┐                         │
+│              │   Redis     │                          │
+│              │ (infra ns)   │                          │
+│              │             │                          │
+│              │ DB 0: cafe  │                          │
+│              │ DB 1: erp   │                          │
+│              │ DB 2: ...    │                          │
+│              └─────────────┘                          │
+│                                                        │
+│              ┌──────────┐                             │
+│              │Persistent│                             │
+│              │ Volumes  │                             │
+│              └──────────┘                             │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### Quick Install (Automated)
@@ -100,17 +120,19 @@ DB_NAMESPACE=myapp PG_DATABASE=myapp_db ./scripts/install-databases.sh
 The script will:
 - Check for kubectl connectivity
 - Add Bitnami Helm repository
-- Create namespace (default: erp)
+- Create namespace (default: `infra` for shared infrastructure)
 - Install PostgreSQL with production config (20GB storage, optimized settings)
 - Install Redis with production config (8GB storage, LRU eviction)
 - Display connection strings and credentials
 - Provide next steps for secret configuration
 
-**Default Configuration:**
+**Shared Infrastructure Configuration:**
 - Namespace: `infra` (shared infrastructure namespace)
-- PostgreSQL Database: `bengo_erp`
-- PostgreSQL Host: `postgresql.infra.svc.cluster.local:5432`
-- Redis Host: `redis-master.infra.svc.cluster.local:6379`
+- PostgreSQL Service: `postgresql.infra.svc.cluster.local:5432`
+  - Each service creates its own database on this shared PostgreSQL instance
+  - Example databases: `cafe`, `erp`, `treasury`, `notifications`
+- Redis Service: `redis-master.infra.svc.cluster.local:6379`
+  - Services can use different Redis database numbers (0, 1, 2, etc.) for isolation
 
 ---
 
@@ -149,7 +171,8 @@ export POSTGRES_PASSWORD=$(kubectl get secret postgresql \
 echo "PostgreSQL Password: $POSTGRES_PASSWORD"
 
 # Connection string format:
-# postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/bengo_erp
+# postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
+# Example: postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
 ```
 
 ### 2. Redis Deployment
@@ -183,12 +206,14 @@ After installation, the script outputs connection strings. Update your app's sec
 
 ```bash
 # Example output from install-databases.sh:
-# PostgreSQL: postgresql://postgres:abc123xyz@postgresql.infra.svc.cluster.local:5432/bengo_erp
+# PostgreSQL: postgresql://postgres:abc123xyz@postgresql.infra.svc.cluster.local:5432/my_database
 # Redis: redis://:xyz789abc@redis-master.infra.svc.cluster.local:6379/0
 
-# Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml with these values
+# Update your service's kubeSecrets/devENV.yaml with these values
+# Example: Update Cafe/cafe-backend/KubeSecrets/devENV.yaml
 # Then apply:
-kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+kubectl apply -f your-service/KubeSecrets/devENV.yaml
+# Example: kubectl apply -f Cafe/cafe-backend/KubeSecrets/devENV.yaml
 ```
 
 **Note:** The automated script displays the exact credentials you need to copy.
@@ -198,35 +223,55 @@ kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
 Create initialization job to set up the database schema:
 
 ```bash
-# Apply database init job
-kubectl apply -f manifests/databases/erp-db-init-job.yaml
+# Create a database initialization job for your service
+# Replace 'my-service' and 'my_database' with your actual service and database names
+# Example: For cafe service with 'cafe' database
+
+# Create init job manifest (example)
+cat <<EOF | kubectl apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: my-service-db-init
+  namespace: my-service
+spec:
+  template:
+    spec:
+      containers:
+      - name: init
+        image: my-service:latest
+        command: ["/bin/sh", "-c", "your-migration-command"]
+      restartPolicy: Never
+EOF
 
 # Wait for completion
-kubectl wait --for=condition=complete job/erp-db-init -n erp --timeout=300s
+kubectl wait --for=condition=complete job/my-service-db-init -n my-service --timeout=300s
 
 # Check logs
-kubectl logs job/erp-db-init -n erp
+kubectl logs job/my-service-db-init -n my-service
 ```
 
-**Note:** Update the job manifest with your actual image tag before applying.
+**Note:** Each service should create its own database initialization job. Update the job manifest with your actual image tag and migration commands before applying.
 
 ### 5. Alternative: Manual Secret Update
 
-If not using the automated script output, update `BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml` manually:
+If not using the automated script output, update your service's secret manifest manually (e.g., `kubeSecrets/devENV.yaml`):
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: erp-api-env
-  namespace: erp
+  name: my-service-env  # Replace with your service name (e.g., cafe-backend-env)
+  namespace: my-service  # Replace with your service namespace (e.g., cafe)
 type: Opaque
 stringData:
-  # PostgreSQL - In-cluster
-  DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/bengo_erp"
+  # PostgreSQL - Connect to shared PostgreSQL service, use your service's database
+  # Each service has its own database on the shared PostgreSQL instance
+  DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/my_database"
+  # Example: DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/cafe"
   DB_HOST: "postgresql.infra.svc.cluster.local"
   DB_PORT: "5432"
-  DB_NAME: "bengo_erp"
+  DB_NAME: "my_database"  # Replace with your service's database name (e.g., "cafe", "erp", "treasury")
   DB_USER: "postgres"
   DB_PASSWORD: "CHANGE_ME"
   
@@ -246,11 +291,13 @@ stringData:
 ### 6. Apply Updated Secret
 
 ```bash
-# Apply to cluster
-kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml
+# Apply to cluster (replace with your service path)
+kubectl apply -f your-service/KubeSecrets/devENV.yaml
+# Example: kubectl apply -f Cafe/cafe-backend/KubeSecrets/devENV.yaml
 
-# Verify
-kubectl get secret erp-api-env -n erp -o yaml
+# Verify (replace with your service secret name and namespace)
+kubectl get secret my-service-env -n my-service -o yaml
+# Example: kubectl get secret cafe-backend-env -n cafe -o yaml
 ```
 
 ---
@@ -265,12 +312,12 @@ jobs:
   deploy:
     uses: Bengo-Hub/devops-k8s/.github/workflows/reusable-build-deploy.yml@main
     with:
-      app_name: erp-api
+      app_name: my-service  # Replace with your service name (e.g., cafe-backend)
       deploy: true
-      namespace: erp
+      namespace: my-service  # Replace with your service namespace (e.g., cafe)
       setup_databases: true       # Enable automated DB setup
       db_types: postgres,redis    # Databases to install
-      env_secret_name: erp-api-env
+      env_secret_name: my-service-env  # Replace with your service secret name
     secrets:
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}  # Optional; auto-generated if omitted
@@ -309,14 +356,17 @@ apt-get install -y postgresql postgresql-contrib
 systemctl start postgresql
 systemctl enable postgresql
 
-# Create database and user
+# Create database and user (replace with your service name)
 sudo -u postgres psql <<EOF
-CREATE DATABASE bengo_erp;
-CREATE USER erp_user WITH PASSWORD 'CHANGE_ME_STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON DATABASE bengo_erp TO erp_user;
-ALTER DATABASE bengo_erp OWNER TO erp_user;
+CREATE DATABASE my_service_db;  # Replace with your service database name (e.g., cafe)
+CREATE USER my_service_user WITH PASSWORD 'CHANGE_ME_STRONG_PASSWORD';  # Replace with your service user
+GRANT ALL PRIVILEGES ON DATABASE my_service_db TO my_service_user;
+ALTER DATABASE my_service_db OWNER TO my_service_user;
 \q
 EOF
+# Example for cafe service:
+# CREATE DATABASE cafe;
+# CREATE USER cafe_user WITH PASSWORD 'CHANGE_ME_STRONG_PASSWORD';
 
 # Configure remote access (if K8s is on different server)
 echo "host all all 0.0.0.0/0 md5" >> /etc/postgresql/*/main/pg_hba.conf
@@ -343,24 +393,25 @@ systemctl restart redis-server
 systemctl enable redis-server
 ```
 
-### 3. Update ERP API Secret (External DB)
+### 3. Update Service Secret (External DB)
 
-Update `BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml`:
+Update your service's secret manifest (e.g., `KubeSecrets/devENV.yaml`):
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: erp-api-env
-  namespace: erp
+  name: my-service-env  # Replace with your service name (e.g., cafe-backend-env)
+  namespace: my-service  # Replace with your service namespace (e.g., cafe)
 type: Opaque
 stringData:
   # PostgreSQL - External VPS
-  DATABASE_URL: "postgresql://erp_user:PASSWORD@VPS_IP_OR_HOSTNAME:5432/bengo_erp"
+  DATABASE_URL: "postgresql://my_service_user:PASSWORD@VPS_IP_OR_HOSTNAME:5432/my_service_db"
+  # Example: DATABASE_URL: "postgresql://cafe_user:PASSWORD@VPS_IP_OR_HOSTNAME:5432/cafe"
   DB_HOST: "VPS_IP_OR_HOSTNAME"
   DB_PORT: "5432"
-  DB_NAME: "bengo_erp"
-  DB_USER: "erp_user"
+  DB_NAME: "my_service_db"  # Replace with your service database name
+  DB_USER: "my_service_user"  # Replace with your service database user
   DB_PASSWORD: "PASSWORD"
   
   # Redis - External VPS
@@ -386,9 +437,9 @@ jobs:
   deploy:
     uses: codevertex/devops-k8s/.github/workflows/reusable-build-deploy.yml@main
     with:
-      app_name: erp-api
+      app_name: my-service  # Replace with your service name (e.g., cafe-backend)
       deploy: true
-      namespace: erp
+      namespace: my-service  # Replace with your service namespace (e.g., cafe)
       # Database setup (optional)
       setup_databases: true  # Will install PostgreSQL + Redis if enabled
     secrets:
@@ -405,42 +456,49 @@ jobs:
 ### Backups (In-Cluster)
 
 ```bash
-# Backup PostgreSQL
-kubectl exec -n erp postgresql-0 -- \
-  pg_dump -U postgres bengo_erp > backup-$(date +%Y%m%d).sql
+# Backup PostgreSQL (databases are in infra namespace)
+# Replace 'my_database' with your service's database name
+kubectl exec -n infra postgresql-0 -- \
+  pg_dump -U postgres my_database > backup-$(date +%Y%m%d).sql
+# Example: kubectl exec -n infra postgresql-0 -- pg_dump -U postgres cafe > backup-$(date +%Y%m%d).sql
 
-# Restore PostgreSQL
-kubectl exec -i -n erp postgresql-0 -- \
-  psql -U postgres bengo_erp < backup-20250109.sql
+# Restore PostgreSQL (replace with your database name)
+kubectl exec -i -n infra postgresql-0 -- \
+  psql -U postgres my_database < backup-20250109.sql
+# Example: kubectl exec -i -n infra postgresql-0 -- psql -U postgres cafe < backup-20250109.sql
 ```
 
 ### Backups (External VPS)
 
 ```bash
-# Create backup script
-cat > /root/backup-erp-db.sh <<'EOF'
+# Create backup script (replace with your service database and user names)
+cat > /root/backup-my-service-db.sh <<'EOF'
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-pg_dump -U erp_user bengo_erp | gzip > /backup/bengo_erp_$DATE.sql.gz
+pg_dump -U my_service_user my_service_db | gzip > /backup/my_service_db_$DATE.sql.gz
+# Example: pg_dump -U cafe_user cafe | gzip > /backup/cafe_$DATE.sql.gz
 # Keep only last 7 days
-find /backup -name "bengo_erp_*.sql.gz" -mtime +7 -delete
+find /backup -name "my_service_db_*.sql.gz" -mtime +7 -delete
+# Example: find /backup -name "cafe_*.sql.gz" -mtime +7 -delete
 EOF
 
-chmod +x /root/backup-erp-db.sh
+chmod +x /root/backup-my-service-db.sh
 
 # Add to cron (daily at 2 AM)
-echo "0 2 * * * /root/backup-erp-db.sh" | crontab -
+echo "0 2 * * * /root/backup-my-service-db.sh" | crontab -
 ```
 
 ### Monitoring
 
 ```bash
-# PostgreSQL stats
-kubectl exec -n erp postgresql-0 -- \
-  psql -U postgres -c "SELECT * FROM pg_stat_database WHERE datname='bengo_erp';"
+# PostgreSQL stats (databases are in infra namespace)
+# Replace 'my_database' with your service's database name
+kubectl exec -n infra postgresql-0 -- \
+  psql -U postgres -c "SELECT * FROM pg_stat_database WHERE datname='my_database';"
+# Example: kubectl exec -n infra postgresql-0 -- psql -U postgres -c "SELECT * FROM pg_stat_database WHERE datname='cafe';"
 
-# Redis info
-kubectl exec -n erp redis-master-0 -- redis-cli INFO
+# Redis info (databases are in infra namespace)
+kubectl exec -n infra redis-master-0 -- redis-cli INFO
 ```
 
 ### Scaling
@@ -465,7 +523,8 @@ helm upgrade redis bitnami/redis \
 
 ```bash
 # PostgreSQL
-postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/bengo_erp
+postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
+# Example: postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
 
 # Redis (cache - db 0)
 redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0
@@ -478,7 +537,8 @@ redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/1
 
 ```bash
 # PostgreSQL
-postgresql://erp_user:PASSWORD@VPS_IP:5432/bengo_erp
+postgresql://my_service_user:PASSWORD@VPS_IP:5432/my_service_db
+# Example: postgresql://cafe_user:PASSWORD@VPS_IP:5432/cafe
 
 # Redis
 redis://:PASSWORD@VPS_IP:6379/0
@@ -501,36 +561,40 @@ redis://localhost:6379/0
 ### Cannot connect to PostgreSQL
 
 ```bash
-# Check pod status
-kubectl get pods -n erp -l app.kubernetes.io/name=postgresql
+# Check pod status (databases are in infra namespace)
+kubectl get pods -n infra -l app.kubernetes.io/name=postgresql
 
-# Check service
-kubectl get svc -n erp postgresql
+# Check service (databases are in infra namespace)
+kubectl get svc -n infra postgresql
 
-# Test connection from API pod
-kubectl exec -n erp deployment/erp-api -- \
+# Test connection from your service pod (replace with your service namespace and deployment name)
+kubectl exec -n my-service deployment/my-service-app -- \
   python manage.py dbshell
+# Example: kubectl exec -n cafe deployment/cafe-backend -- python manage.py dbshell
 ```
 
 ### Cannot connect to Redis
 
 ```bash
-# Check Redis
-kubectl get pods -n erp -l app.kubernetes.io/name=redis
+# Check Redis (databases are in infra namespace)
+kubectl get pods -n infra -l app.kubernetes.io/name=redis
 
-# Test connection
-kubectl exec -n erp deployment/erp-api -- \
+# Test connection from your service pod (replace with your service namespace and deployment name)
+kubectl exec -n my-service deployment/my-service-app -- \
   python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0'); print(r.ping())"
+# Example: kubectl exec -n cafe deployment/cafe-backend -- python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0'); print(r.ping())"
 ```
 
 ### Database initialization fails
 
 ```bash
-# Check init job logs
-kubectl logs job/erp-db-init -n erp
+# Check init job logs (replace with your service init job name and namespace)
+kubectl logs job/my-service-db-init -n my-service
+# Example: kubectl logs job/cafe-db-init -n cafe
 
-# Manually run migrations
-kubectl exec -n erp deployment/erp-api -- \
+# Manually run migrations (replace with your service namespace and deployment name)
+kubectl exec -n my-service deployment/my-service-app -- \
+# Example: kubectl exec -n cafe deployment/cafe-backend -- \
   python manage.py migrate
 ```
 

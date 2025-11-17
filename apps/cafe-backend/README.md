@@ -1,14 +1,14 @@
-# Food Delivery Backend
+# Cafe Backend
 
-ArgoCD application for deploying the Go backend that powers ordering, logistics, and integrations for the Food Delivery platform.
+ArgoCD application for deploying the Go backend that powers ordering, logistics, and integrations for the Cafe platform.
 
 ## Configuration Highlights
 
-- Namespace: `food-delivery`
-- Image: `ghcr.io/bengobox/food-delivery-backend`
+- Namespace: `cafe`
+- Image: `ghcr.io/bengobox/cafe-backend`
 - Health endpoint: `/healthz`
 - Metrics endpoint: `/metrics`
-- Secrets: `food-delivery-backend-secrets` should expose `postgresUrl`
+- Secrets: `cafe-backend-secrets` should expose `postgresUrl`
 - External dependencies
   - PostgreSQL: `postgres://...` (managed secret)
   - Redis: `redis-master.infra.svc.cluster.local:6379`

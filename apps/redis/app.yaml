@@ -10,8 +10,101 @@ spec:
     chart: redis
     targetRevision: 19.0.1
     helm:
-      valueFiles:
-        - ../../manifests/databases/redis-values.yaml
+      values: |
+        ## Global settings
+        global:
+          redis:
+            password: ""  # Leave empty, will be auto-generated
+
+        ## Architecture
+        architecture: standalone  # Use 'replication' for HA with replicas
+
+        ## Master configuration
+        master:
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          priorityClassName: db-critical
+          
+          persistence:
+            enabled: true
+            size: 8Gi
+            storageClass: ""  # Use default storage class
+          
+          ## Redis configuration
+          configuration: |
+            # Memory management
+            maxmemory 768mb
+            maxmemory-policy allkeys-lru
+            # Performance
+            tcp-backlog 511
+            timeout 0
+            tcp-keepalive 300
+            # Persistence
+            save 900 1
+            save 300 10
+            save 60 10000
+          
+          ## Health checks
+          livenessProbe:
+            enabled: true
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 5
+          
+          readinessProbe:
+            enabled: true
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 5
+
+        ## Replica configuration (if architecture: replication)
+        replica:
+          replicaCount: 0  # Set to 1+ for high availability
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          persistence:
+            enabled: true
+            size: 8Gi
+
+        ## Metrics for Prometheus
+        metrics:
+          enabled: true
+          serviceMonitor:
+            enabled: true
+            namespace: infra
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+
+        ## Sentinel (if using replication for HA)
+        sentinel:
+          enabled: false  # Set to true for automatic failover
+          quorum: 2
+          downAfterMilliseconds: 5000
+          failoverTimeout: 10000
+
+        ## Network policy
+        networkPolicy:
+          enabled: false  # Set to true for production
+          allowExternal: false
   destination:
     server: https://kubernetes.default.svc
     namespace: infra
