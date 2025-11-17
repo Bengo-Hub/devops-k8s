@@ -13,12 +13,12 @@ Production Readiness Checklist
 ### Core Services
 - [x] Argo CD deployed (argocd.masterspace.co.ke)
 - [x] Prometheus + Grafana monitoring (grafana.masterspace.co.ke)
-- [x] PostgreSQL in-cluster (erp namespace)
-- [x] Redis in-cluster (erp namespace)
+- [x] PostgreSQL in-cluster (infra namespace)
+- [x] Redis in-cluster (infra namespace)
 
 ### Credentials
-- [x] PostgreSQL: `postgres:TFRodWXeeh@postgresql.erp.svc.cluster.local:5432/bengo_erp`
-- [x] Redis: `:6rBAAUdugT@redis-master.erp.svc.cluster.local:6379`
+- [x] PostgreSQL: `postgres:TFRodWXeeh@postgresql.infra.svc.cluster.local:5432/bengo_erp`
+- [x] Redis: `:6rBAAUdugT@redis-master.infra.svc.cluster.local:6379`
 
 ---
 

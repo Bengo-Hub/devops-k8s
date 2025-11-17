@@ -107,10 +107,10 @@ The script will:
 - Provide next steps for secret configuration
 
 **Default Configuration:**
-- Namespace: `erp`
+- Namespace: `infra` (shared infrastructure namespace)
 - PostgreSQL Database: `bengo_erp`
-- PostgreSQL Host: `postgresql.erp.svc.cluster.local:5432`
-- Redis Host: `redis-master.erp.svc.cluster.local:6379`
+- PostgreSQL Host: `postgresql.infra.svc.cluster.local:5432`
+- Redis Host: `redis-master.infra.svc.cluster.local:6379`
 
 ---
 
@@ -127,12 +127,12 @@ We'll use Bitnami PostgreSQL Helm chart for production-ready setup.
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
 
-# Create namespace
-kubectl create namespace erp
+# Create namespace (if not exists)
+kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
 
 # Install PostgreSQL
 helm install postgresql bitnami/postgresql \
-  -n erp \
+  -n infra \
   -f manifests/databases/postgresql-values.yaml \
   --timeout=10m \
   --wait
@@ -143,13 +143,13 @@ helm install postgresql bitnami/postgresql \
 ```bash
 # Get password
 export POSTGRES_PASSWORD=$(kubectl get secret postgresql \
-  -n erp \
+  -n infra \
   -o jsonpath="{.data.postgres-password}" | base64 -d)
 
 echo "PostgreSQL Password: $POSTGRES_PASSWORD"
 
 # Connection string format:
-# postgresql://postgres:PASSWORD@postgresql.erp.svc.cluster.local:5432/bengo_erp
+# postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/bengo_erp
 ```
 
 ### 2. Redis Deployment
@@ -157,7 +157,7 @@ echo "PostgreSQL Password: $POSTGRES_PASSWORD"
 ```bash
 # Install Redis
 helm install redis bitnami/redis \
-  -n erp \
+  -n infra \
   -f manifests/databases/redis-values.yaml \
   --timeout=10m \
   --wait
@@ -168,13 +168,13 @@ helm install redis bitnami/redis \
 ```bash
 # Get password
 export REDIS_PASSWORD=$(kubectl get secret redis \
-  -n erp \
+  -n infra \
   -o jsonpath="{.data.redis-password}" | base64 -d)
 
 echo "Redis Password: $REDIS_PASSWORD"
 
 # Connection string format:
-# redis://:PASSWORD@redis-master.erp.svc.cluster.local:6379/0
+# redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0
 ```
 
 ### 3. Update Application Secrets
@@ -183,8 +183,8 @@ After installation, the script outputs connection strings. Update your app's sec
 
 ```bash
 # Example output from install-databases.sh:
-# PostgreSQL: postgresql://postgres:abc123xyz@postgresql.erp.svc.cluster.local:5432/bengo_erp
-# Redis: redis://:xyz789abc@redis-master.erp.svc.cluster.local:6379/0
+# PostgreSQL: postgresql://postgres:abc123xyz@postgresql.infra.svc.cluster.local:5432/bengo_erp
+# Redis: redis://:xyz789abc@redis-master.infra.svc.cluster.local:6379/0
 
 # Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml with these values
 # Then apply:
@@ -223,17 +223,17 @@ metadata:
 type: Opaque
 stringData:
   # PostgreSQL - In-cluster
-  DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.erp.svc.cluster.local:5432/bengo_erp"
-  DB_HOST: "postgresql.erp.svc.cluster.local"
+  DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/bengo_erp"
+  DB_HOST: "postgresql.infra.svc.cluster.local"
   DB_PORT: "5432"
   DB_NAME: "bengo_erp"
   DB_USER: "postgres"
   DB_PASSWORD: "CHANGE_ME"
   
   # Redis - In-cluster
-  REDIS_URL: "redis://:CHANGE_ME@redis-master.erp.svc.cluster.local:6379/0"
-  CELERY_BROKER_URL: "redis://:CHANGE_ME@redis-master.erp.svc.cluster.local:6379/0"
-  CELERY_RESULT_BACKEND: "redis://:CHANGE_ME@redis-master.erp.svc.cluster.local:6379/0"
+  REDIS_URL: "redis://:CHANGE_ME@redis-master.infra.svc.cluster.local:6379/0"
+  CELERY_BROKER_URL: "redis://:CHANGE_ME@redis-master.infra.svc.cluster.local:6379/0"
+  CELERY_RESULT_BACKEND: "redis://:CHANGE_ME@redis-master.infra.svc.cluster.local:6379/0"
   
   # Django
   DJANGO_SECRET_KEY: "CHANGE_ME_TO_RANDOM_50_CHAR_STRING"
@@ -465,13 +465,13 @@ helm upgrade redis bitnami/redis \
 
 ```bash
 # PostgreSQL
-postgresql://postgres:PASSWORD@postgresql.erp.svc.cluster.local:5432/bengo_erp
+postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/bengo_erp
 
 # Redis (cache - db 0)
-redis://:PASSWORD@redis-master.erp.svc.cluster.local:6379/0
+redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0
 
 # Redis (Celery - db 1)
-redis://:PASSWORD@redis-master.erp.svc.cluster.local:6379/1
+redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/1
 ```
 
 ### External VPS
@@ -520,7 +520,7 @@ kubectl get pods -n erp -l app.kubernetes.io/name=redis
 
 # Test connection
 kubectl exec -n erp deployment/erp-api -- \
-  python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.erp.svc.cluster.local:6379/0'); print(r.ping())"
+  python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0'); print(r.ping())"
 ```
 
 ### Database initialization fails

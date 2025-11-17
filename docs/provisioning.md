@@ -113,7 +113,7 @@ psql --version
 
 # Example connection (adjust host, db, user, and password as needed)
 PGPASSWORD="$POSTGRES_PASSWORD" psql \
-  -h postgresql.erp.svc.cluster.local \
+  -h postgresql.infra.svc.cluster.local \
   -U postgres \
   -d bengo_erp \
   -c "SELECT NOW();"
