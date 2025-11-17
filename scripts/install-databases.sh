@@ -12,14 +12,14 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-NAMESPACE=${DB_NAMESPACE:-erp}
-PG_DATABASE=${PG_DATABASE:-bengo_erp}
+NAMESPACE=${DB_NAMESPACE:-infra}
+PG_DATABASE=${PG_DATABASE:-postgres}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
 
-echo -e "${GREEN}Installing ERP Databases (Production)...${NC}"
+echo -e "${GREEN}Installing Shared Infrastructure Databases (Production)...${NC}"
 echo -e "${BLUE}Namespace: ${NAMESPACE}${NC}"
-echo -e "${BLUE}PostgreSQL Database: ${PG_DATABASE}${NC}"
+echo -e "${BLUE}PostgreSQL Database: ${PG_DATABASE} (services create their own databases)${NC}"
 
 # Pre-flight checks
 if ! command -v kubectl &> /dev/null; then
@@ -88,15 +88,20 @@ if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
   echo -e "${GREEN}Using POSTGRES_PASSWORD from environment/GitHub secrets (priority)${NC}"
   PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
   PG_HELM_ARGS+=(--set global.postgresql.auth.database="$PG_DATABASE")
-# Priority 2: Use values file (for fresh installs without env var)
-else
-  echo -e "${YELLOW}No POSTGRES_PASSWORD in environment; using values file or auto-generated${NC}"
-  PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 fi
 
-# Add FIPS configuration for newer chart versions
+# Add admin_user password if provided
+if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
+  echo -e "${GREEN}Using POSTGRES_ADMIN_PASSWORD for admin_user${NC}"
+  PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
+fi
+
+# Always add FIPS configuration (required for chart version 15.5.26+)
 PG_HELM_ARGS+=(--set global.defaultFips=false)
 PG_HELM_ARGS+=(--set fips.openssl=false)
+
+# Always use values file for complete configuration
+PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
@@ -239,19 +244,24 @@ echo -e "${GREEN}=== Database Installation Complete ===${NC}"
 echo ""
 echo -e "${YELLOW}Retrieving credentials...${NC}"
 
-# Get PostgreSQL password
+# Get PostgreSQL passwords
 echo ""
 echo -e "${BLUE}PostgreSQL Credentials:${NC}"
 POSTGRES_PASSWORD=$(kubectl get secret postgresql -n "${NAMESPACE}" -o jsonpath="{.data.postgres-password}" 2>/dev/null | base64 -d || echo "")
+ADMIN_PASSWORD=$(kubectl get secret postgresql -n "${NAMESPACE}" -o jsonpath="{.data.admin-user-password}" 2>/dev/null | base64 -d || echo "$POSTGRES_PASSWORD")
+
 if [ -n "$POSTGRES_PASSWORD" ]; then
   echo "  Host: postgresql.${NAMESPACE}.svc.cluster.local"
   echo "  Port: 5432"
-  echo "  Database: ${PG_DATABASE}"
-  echo "  User: postgres"
-  echo "  Password: $POSTGRES_PASSWORD"
+  echo "  Database: ${PG_DATABASE} (services create their own databases)"
   echo ""
-  echo "  Connection String:"
-  echo "  postgresql://postgres:$POSTGRES_PASSWORD@postgresql.${NAMESPACE}.svc.cluster.local:5432/${PG_DATABASE}"
+  echo "  Admin User (admin_user) - for managing per-service databases:"
+  echo "    Password: ${ADMIN_PASSWORD}"
+  echo "    Connection: postgresql://admin_user:${ADMIN_PASSWORD}@postgresql.${NAMESPACE}.svc.cluster.local:5432/postgres"
+  echo ""
+  echo "  Postgres Superuser:"
+  echo "    Password: $POSTGRES_PASSWORD"
+  echo "    Connection: postgresql://postgres:$POSTGRES_PASSWORD@postgresql.${NAMESPACE}.svc.cluster.local:5432/postgres"
 else
   echo -e "${RED}  Failed to retrieve PostgreSQL password${NC}"
 fi
@@ -276,9 +286,9 @@ fi
 
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
-echo "1. Update BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml with these credentials"
-echo "2. Apply the secret: kubectl apply -f BengoERP/bengobox-erp-api/kubeSecrets/devENV.yaml"
-echo "3. Run database initialization: kubectl apply -f manifests/databases/erp-db-init-job.yaml"
-echo "4. Deploy ERP API via Argo CD"
+echo "1. Each service will automatically create its own database during deployment"
+echo "2. Services use create-service-database.sh script to create databases"
+echo "3. Update service secrets with connection strings pointing to infra namespace"
+echo "4. Deploy services via Argo CD - databases will be created automatically"
 echo ""
 echo -e "${GREEN}Done!${NC}"
