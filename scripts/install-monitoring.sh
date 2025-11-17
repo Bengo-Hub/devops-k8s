@@ -83,9 +83,24 @@ cp "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" "${TEMP_VALUES}"
 sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
   sed -i '' "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
 
+# Source common functions for cleanup logic
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+  source "${SCRIPT_DIR}/common.sh"
+fi
+
 # Install or upgrade kube-prometheus-stack (idempotent)
 echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
 echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}"
+
+# Note: Monitoring uses helm upgrade --install which is idempotent
+# Only cleanup orphaned resources if cleanup mode is active
+if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
+  echo -e "${BLUE}Cleanup mode active - checking for orphaned monitoring resources...${NC}"
+  # Clean up any orphaned resources before install
+  kubectl delete statefulset,deployment,pod,service -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=prometheus" --wait=true --grace-period=0 --force 2>/dev/null || true
+  sleep 5
+fi
 
 # If Grafana PVC already exists, do NOT attempt to shrink it. Respect current size.
 HELM_EXTRA_OPTS=""

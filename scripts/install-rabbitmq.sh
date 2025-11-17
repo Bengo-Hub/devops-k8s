@@ -68,6 +68,12 @@ RABBITMQ_HELM_ARGS+=(--set persistence.size="10Gi")
 # Metrics
 RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
+# Source common functions for cleanup logic
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+  source "${SCRIPT_DIR}/common.sh"
+fi
+
 set +e
 if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
   # Check if RabbitMQ is healthy
@@ -108,6 +114,35 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
   fi
 else
   echo -e "${YELLOW}RabbitMQ not found; installing fresh${NC}"
+  
+  # Only clean up orphaned resources if cleanup mode is active
+  if is_cleanup_mode; then
+    echo -e "${BLUE}Cleanup mode active - checking for orphaned RabbitMQ resources...${NC}"
+    # Clean up any orphaned resources
+    kubectl delete statefulset,pod,service -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq --wait=true --grace-period=0 --force 2>/dev/null || true
+    sleep 5
+  else
+    echo -e "${BLUE}Cleanup mode inactive - checking for existing resources to update...${NC}"
+    # If StatefulSet exists but Helm release doesn't, try upgrade
+    if kubectl get statefulset rabbitmq -n "${NAMESPACE}" >/dev/null 2>&1; then
+      echo -e "${YELLOW}RabbitMQ StatefulSet exists but Helm release missing - attempting upgrade...${NC}"
+      helm upgrade rabbitmq bitnami/rabbitmq \
+        -n "${NAMESPACE}" \
+        "${RABBITMQ_HELM_ARGS[@]}" \
+        --timeout=10m \
+        --wait 2>&1 | tee /tmp/helm-rabbitmq-install.log
+      HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
+      set -e
+      if [ $HELM_RABBITMQ_EXIT -eq 0 ]; then
+        echo -e "${GREEN}✓ RabbitMQ upgraded${NC}"
+        exit 0
+      else
+        echo -e "${RED}RabbitMQ upgrade failed${NC}"
+        exit 1
+      fi
+    fi
+  fi
+  
   helm install rabbitmq bitnami/rabbitmq \
     -n "${NAMESPACE}" \
     "${RABBITMQ_HELM_ARGS[@]}" \

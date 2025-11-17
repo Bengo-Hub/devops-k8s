@@ -238,117 +238,80 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
   
-  # Check for ANY existing PostgreSQL resources (including StatefulSets that might recreate resources)
-  echo -e "${BLUE}Checking for any existing PostgreSQL resources...${NC}"
-  
-  # Check for StatefulSets first (these recreate resources)
-  STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
-  if [ -n "$STATEFULSETS" ]; then
-    echo -e "${YELLOW}Found PostgreSQL StatefulSet (this recreates resources):${NC}"
-    echo "$STATEFULSETS"
-    echo -e "${YELLOW}Deleting StatefulSet first to stop resource recreation...${NC}"
-    kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-    echo -e "${GREEN}✓ StatefulSet deleted${NC}"
+  # Source common functions for cleanup logic
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "${SCRIPT_DIR}/common.sh" ]; then
+    source "${SCRIPT_DIR}/common.sh"
   fi
   
-  # Check for failed/pending Helm release (check more thoroughly)
-  if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
-    HELM_RELEASE_STATUS=$(helm -n "${NAMESPACE}" status postgresql -o json 2>/dev/null | grep -o '"status":"[^"]*"' || echo "unknown")
-    echo -e "${YELLOW}Found existing Helm release: ${HELM_RELEASE_STATUS}${NC}"
-    echo -e "${YELLOW}Uninstalling existing Helm release...${NC}"
-    helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
-    echo -e "${GREEN}✓ Helm release uninstalled${NC}"
-    sleep 5
-  fi
-  
-  # Also check for any Helm secrets (these can cause issues)
-  HELM_SECRETS=$(kubectl get secret -n "${NAMESPACE}" -l owner=helm,name=postgresql -o name 2>/dev/null || true)
-  if [ -n "$HELM_SECRETS" ]; then
-    echo -e "${YELLOW}Found Helm release secrets, deleting...${NC}"
-    kubectl delete secret -n "${NAMESPACE}" -l owner=helm,name=postgresql --wait=true 2>/dev/null || true
-    sleep 2
-  fi
-  
-  # Check for orphaned resources from previous installations
-  echo -e "${BLUE}Checking for remaining orphaned PostgreSQL resources...${NC}"
-  ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service,secret -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
-  
-  if [ -n "$ORPHANED_RESOURCES" ]; then
-    echo -e "${YELLOW}Found remaining orphaned PostgreSQL resources:${NC}"
-    echo "$ORPHANED_RESOURCES"
-    echo -e "${YELLOW}Cleaning up orphaned resources to allow fresh installation...${NC}"
+  # Only clean up orphaned resources if cleanup mode is active
+  if is_cleanup_mode; then
+    echo -e "${BLUE}Cleanup mode active - checking for orphaned PostgreSQL resources...${NC}"
     
-    # Delete all orphaned resources in the correct order
-    # 1. StatefulSets (if any remain)
-    kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --grace-period=0 --force 2>/dev/null || true
-    
-    # 2. Pods (force delete to avoid waiting for graceful shutdown)
-    kubectl delete pod -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --grace-period=0 --force 2>/dev/null || true
-    
-    # 3. Services
-    kubectl delete service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
-    
-    # 4. NetworkPolicy (check for finalizers first)
-    NETWORKPOLICIES=$(kubectl get networkpolicy -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
-    if [ -n "$NETWORKPOLICIES" ]; then
-      for np in $NETWORKPOLICIES; do
-        # Remove finalizers if present
-        kubectl patch "$np" -n "${NAMESPACE}" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-      done
-      kubectl delete networkpolicy -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
+    # Check for StatefulSets first (these recreate resources)
+    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
+    if [ -n "$STATEFULSETS" ]; then
+      echo -e "${YELLOW}Found PostgreSQL StatefulSet - deleting (cleanup mode)...${NC}"
+      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
     fi
     
-    # 5. ConfigMaps
-    kubectl delete configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
-    
-    # Wait for resources to be fully deleted
-    echo -e "${BLUE}Waiting for resources to be fully deleted...${NC}"
-    sleep 10
-    
-    # Verify deletion
-    REMAINING=$(kubectl get statefulset,pod,networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
-    if [ -n "$REMAINING" ]; then
-      echo -e "${RED}ERROR: Resources still exist after cleanup:${NC}"
-      echo "$REMAINING"
-      echo -e "${RED}Manual cleanup may be required. Aborting.${NC}"
-      exit 1
+    # Check for failed/pending Helm release
+    if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
+      echo -e "${YELLOW}Found existing Helm release - uninstalling (cleanup mode)...${NC}"
+      helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
+      sleep 5
     fi
     
-    # Keep secrets as they contain passwords we might want to preserve
-    echo -e "${BLUE}Note: Keeping existing secrets to preserve credentials${NC}"
+    # Clean up orphaned resources
+    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+    if [ -n "$ORPHANED_RESOURCES" ]; then
+      echo -e "${YELLOW}Cleaning up orphaned resources (cleanup mode)...${NC}"
+      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+      sleep 10
+    fi
     
-    echo -e "${GREEN}✓ All orphaned resources cleaned up${NC}"
+    # Final NetworkPolicy check
+    FINAL_NP_CHECK=$(kubectl get networkpolicy postgresql -n "${NAMESPACE}" -o name 2>/dev/null || true)
+    if [ -n "$FINAL_NP_CHECK" ]; then
+      kubectl patch networkpolicy postgresql -n "${NAMESPACE}" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+      kubectl delete networkpolicy postgresql -n "${NAMESPACE}" --wait=true --grace-period=0 2>/dev/null || true
+      sleep 5
+    fi
   else
-    echo -e "${GREEN}✓ No orphaned resources found${NC}"
-  fi
-  
-  # Final verification - check NetworkPolicy specifically right before install
-  FINAL_NP_CHECK=$(kubectl get networkpolicy postgresql -n "${NAMESPACE}" -o name 2>/dev/null || true)
-  if [ -n "$FINAL_NP_CHECK" ]; then
-    echo -e "${RED}ERROR: NetworkPolicy 'postgresql' still exists right before Helm install!${NC}"
-    echo -e "${YELLOW}Attempting final cleanup...${NC}"
-    kubectl patch networkpolicy postgresql -n "${NAMESPACE}" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-    kubectl delete networkpolicy postgresql -n "${NAMESPACE}" --wait=true --grace-period=0 2>/dev/null || true
-    sleep 5
-    
-    # Verify it's gone
-    FINAL_NP_CHECK2=$(kubectl get networkpolicy postgresql -n "${NAMESPACE}" -o name 2>/dev/null || true)
-    if [ -n "$FINAL_NP_CHECK2" ]; then
-      echo -e "${RED}ERROR: NetworkPolicy still exists after final cleanup. Manual intervention required.${NC}"
-      echo -e "${YELLOW}Run: kubectl delete networkpolicy postgresql -n ${NAMESPACE} --force --grace-period=0${NC}"
-      exit 1
+    echo -e "${BLUE}Cleanup mode inactive - checking for existing resources to update...${NC}"
+    # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
+    if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
+      echo -e "${YELLOW}PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade...${NC}"
+      helm upgrade postgresql bitnami/postgresql \
+        --version 16.7.27 \
+        -n "${NAMESPACE}" \
+        "${PG_HELM_ARGS[@]}" \
+        --timeout=10m \
+        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+      HELM_PG_EXIT=${PIPESTATUS[0]}
+      set -e
+      if [ $HELM_PG_EXIT -eq 0 ]; then
+        echo -e "${GREEN}✓ PostgreSQL upgraded${NC}"
+      else
+        echo -e "${RED}PostgreSQL upgrade failed${NC}"
+        exit 1
+      fi
+      # Skip to Redis installation
+      HELM_PG_EXIT=0
     fi
   fi
   
-  echo -e "${BLUE}Helm command will be: helm install postgresql bitnami/postgresql -n ${NAMESPACE} ${PG_HELM_ARGS[*]}${NC}"
-  
-  helm install postgresql bitnami/postgresql \
-    --version 16.7.27 \
-    -n "${NAMESPACE}" \
-    "${PG_HELM_ARGS[@]}" \
-    --timeout=10m \
-    --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-  HELM_PG_EXIT=${PIPESTATUS[0]}
+  # Install PostgreSQL if cleanup mode or no existing resources
+  if [ "${HELM_PG_EXIT:-1}" != "0" ]; then
+    echo -e "${BLUE}Installing PostgreSQL...${NC}"
+    helm install postgresql bitnami/postgresql \
+      --version 16.7.27 \
+      -n "${NAMESPACE}" \
+      "${PG_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+    HELM_PG_EXIT=${PIPESTATUS[0]}
+  fi
 fi
 set -e
 
