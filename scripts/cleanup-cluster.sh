@@ -14,7 +14,28 @@ NC='\033[0m'
 
 # Configuration
 SKIP_SYSTEM_NAMESPACES=true  # Don't delete kube-system, kube-public, etc.
-FORCE_CLEANUP=false
+# CRITICAL: Cleanup is opt-in only - must explicitly set ENABLE_CLEANUP=true
+ENABLE_CLEANUP=${ENABLE_CLEANUP:-false}
+FORCE_CLEANUP=${FORCE_CLEANUP:-false}
+
+# CRITICAL SAFETY CHECK: Cleanup is disabled by default
+if [ "$ENABLE_CLEANUP" != "true" ]; then
+    echo -e "${RED}========================================${NC}"
+    echo -e "${RED}  CLUSTER CLEANUP DISABLED${NC}"
+    echo -e "${RED}========================================${NC}"
+    echo ""
+    echo -e "${YELLOW}Cleanup is disabled by default for safety.${NC}"
+    echo -e "${YELLOW}To enable cleanup, set ENABLE_CLEANUP=true:${NC}"
+    echo ""
+    echo -e "${BLUE}  export ENABLE_CLEANUP=true${NC}"
+    echo -e "${BLUE}  ./scripts/cleanup-cluster.sh${NC}"
+    echo ""
+    echo -e "${YELLOW}Or in GitHub Actions workflow:${NC}"
+    echo -e "${BLUE}  env:${NC}"
+    echo -e "${BLUE}    ENABLE_CLEANUP: 'true'${NC}"
+    echo ""
+    exit 0
+fi
 
 echo -e "${RED}========================================${NC}"
 echo -e "${RED}  CLUSTER CLEANUP SCRIPT${NC}"
@@ -27,7 +48,7 @@ echo -e "${YELLOW}  - All PVCs and data${NC}"
 echo -e "${YELLOW}  - All ArgoCD applications${NC}"
 echo ""
 
-# Confirmation
+# Confirmation (unless FORCE_CLEANUP is set)
 if [ "$FORCE_CLEANUP" != "true" ]; then
     read -p "Are you sure you want to proceed? (type 'yes' to continue): " confirm
     if [ "$confirm" != "yes" ]; then

@@ -129,7 +129,8 @@ else
 fi
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
-echo "1. Ensure DNS: ${ARGOCD_DOMAIN} → Your VPS IP (77.237.232.66)"
+VPS_IP=${VPS_IP:-YOUR_VPS_IP}
+echo "1. Ensure DNS: ${ARGOCD_DOMAIN} → Your VPS IP (${VPS_IP})"
 echo "2. Wait for cert-manager to provision TLS (~2 mins)"
 echo "3. Visit https://${ARGOCD_DOMAIN} and login"
 echo "4. Change admin password immediately"

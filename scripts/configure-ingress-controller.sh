@@ -61,7 +61,8 @@ if [ "$POD_HOSTNET" = "true" ]; then
       echo "2. Backend service not ready"
       echo "3. Certificate validation issues (use HTTP first)"
       echo ""
-      echo "Try: curl -H 'Host: grafana.masterspace.co.ke' http://77.237.232.66/"
+      VPS_IP=${VPS_IP:-YOUR_VPS_IP}
+      echo "Try: curl -H 'Host: <your-domain>' http://${VPS_IP}/"
       exit 0
     fi
   fi
@@ -93,13 +94,16 @@ echo ""
 echo -e "${BLUE}Service Configuration:${NC}"
 kubectl get svc -n ingress-nginx ingress-nginx-controller
 echo ""
+VPS_IP=${VPS_IP:-YOUR_VPS_IP}
+GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
+ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.masterspace.co.ke}
+
 echo -e "${GREEN}✓ Ingress controller now using hostNetwork${NC}"
 echo -e "${YELLOW}Your services should now be accessible at:${NC}"
-echo "  - http://77.237.232.66 (and any domain pointing to this IP)"
-echo "  - https://grafana.masterspace.co.ke"
-echo "  - https://argocd.masterspace.co.ke"
-echo "  - https://erpapi.masterspace.co.ke"
-echo "  - https://erp.masterspace.co.ke"
+echo "  - http://${VPS_IP} (and any domain pointing to this IP)"
+echo "  - https://${GRAFANA_DOMAIN}"
+echo "  - https://${ARGOCD_DOMAIN}"
+echo "  - https://<your-app-domains>"
 echo ""
 echo -e "${BLUE}Verify ingress resources:${NC}"
 echo "kubectl get ingress -A"

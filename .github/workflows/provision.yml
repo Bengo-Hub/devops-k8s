@@ -3,7 +3,13 @@ name: Provision Cluster Services
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      enable_cleanup:
+        description: 'Enable cluster cleanup (DANGEROUS - deletes all data)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   provision:
@@ -12,6 +18,14 @@ jobs:
       contents: read
     env:
       skip_provision: 'false'
+      # Configurable domains and IPs via GitHub secrets (with defaults)
+      VPS_IP: ${{ secrets.VPS_IP || 'YOUR_VPS_IP' }}
+      ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.masterspace.co.ke' }}
+      GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
+      DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
+      MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
+      # Cleanup is opt-in only - never runs by default
+      ENABLE_CLEANUP: ${{ github.event.inputs.enable_cleanup || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,6 +74,16 @@ jobs:
           fi
           echo "::endgroup::"
 
+      - name: Cleanup cluster (opt-in only)
+        if: env.skip_provision != 'true' && env.ENABLE_CLEANUP == 'true'
+        run: |
+          echo "::group::Cleaning up cluster (ENABLE_CLEANUP=true)"
+          echo "⚠️ WARNING: This will delete ALL applications and data!"
+          export ENABLE_CLEANUP=true
+          export FORCE_CLEANUP=true
+          ./scripts/cleanup-cluster.sh
+          echo "::endgroup::"
+
       - name: Ensure scripts executable
         if: env.skip_provision != 'true'
         run: |
@@ -78,9 +102,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
+          DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
         run: |
-          echo "::group::Installing Shared Databases (PostgreSQL & Redis in infra namespace)"
+          echo "::group::Installing Shared Databases (PostgreSQL & Redis in ${DB_NAMESPACE} namespace)"
           echo "Installing shared infrastructure databases..."
           echo "Namespace: ${DB_NAMESPACE}"
           echo "PostgreSQL will create admin_user for managing per-service databases"
@@ -96,9 +120,9 @@ jobs:
         if: env.skip_provision != 'true'
         env:
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
-          RABBITMQ_NAMESPACE: ${{ secrets.RABBITMQ_NAMESPACE || 'infra' }}
+          RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
         run: |
-          echo "::group::Installing RabbitMQ (Shared Infrastructure in infra namespace)"
+          echo "::group::Installing RabbitMQ (Shared Infrastructure in ${RABBITMQ_NAMESPACE} namespace)"
           echo "Installing RabbitMQ as shared infrastructure..."
           echo "Namespace: ${RABBITMQ_NAMESPACE}"
           ./scripts/install-rabbitmq.sh
@@ -123,7 +147,7 @@ jobs:
       - name: Install Argo CD (idempotent)
         if: env.skip_provision != 'true'
         env:
-          ARGOCD_DOMAIN: argocd.masterspace.co.ke
+          ARGOCD_DOMAIN: ${{ env.ARGOCD_DOMAIN }}
         run: |
           echo "::group::Installing Argo CD"
           ./scripts/install-argocd.sh
@@ -157,7 +181,8 @@ jobs:
       - name: Install Monitoring (idempotent)
         if: env.skip_provision != 'true'
         env:
-          GRAFANA_DOMAIN: grafana.masterspace.co.ke
+          GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
+          MONITORING_NAMESPACE: ${{ env.MONITORING_NAMESPACE }}
         run: |
           echo "::group::Installing Monitoring Stack"
           ./scripts/install-monitoring.sh
@@ -173,7 +198,7 @@ jobs:
       - name: Setup Git Access (SSH Keys & Configuration)
         if: env.skip_provision != 'true'
         env:
-          VPS_IP: ${{ secrets.VPS_IP }}
+          VPS_IP: ${{ env.VPS_IP }}
         run: |
           echo "::group::Setting up Git SSH Access"
           
@@ -221,36 +246,47 @@ jobs:
       
       - name: Summary
         if: ${{ env.skip_provision != 'true' }}
+        env:
+          VPS_IP: ${{ env.VPS_IP }}
+          ARGOCD_DOMAIN: ${{ env.ARGOCD_DOMAIN }}
+          GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
+          DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
         run: |
           echo "::group::Cluster Provisioning Complete"
           echo "✅ Storage provisioner installed"
-          echo "✅ Shared Databases installed (PostgreSQL & Redis in infra namespace)"
+          echo "✅ Shared Databases installed (PostgreSQL & Redis in ${DB_NAMESPACE} namespace)"
           echo "  - PostgreSQL admin_user created for managing per-service databases"
           echo "  - Each service creates its own database during deployment"
-          echo "✅ RabbitMQ installed (shared infrastructure in infra namespace)"
+          echo "✅ RabbitMQ installed (shared infrastructure in ${DB_NAMESPACE} namespace)"
           echo "✅ NGINX Ingress Controller configured"
           echo "✅ cert-manager installed"
-          echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
-          echo "✅ Monitoring Stack installed (https://grafana.masterspace.co.ke) in infra namespace"
+          echo "✅ Argo CD installed (https://${ARGOCD_DOMAIN})"
+          echo "✅ Monitoring Stack installed (https://${GRAFANA_DOMAIN}) in ${DB_NAMESPACE} namespace"
           echo "✅ Vertical Pod Autoscaler (VPA) installed"
           echo "✅ Git SSH access configured"
           echo ""
-          echo "Shared Infrastructure Credentials (infra namespace):"
-          echo "- PostgreSQL admin_user: kubectl get secret postgresql -n infra -o jsonpath='{.data.admin-user-password}' | base64 -d"
-          echo "- PostgreSQL postgres user: kubectl get secret postgresql -n infra -o jsonpath='{.data.postgres-password}' | base64 -d"
-          echo "- Redis: kubectl get secret redis -n infra -o jsonpath='{.data.redis-password}' | base64 -d"
-          echo "- RabbitMQ: kubectl get secret rabbitmq -n infra -o jsonpath='{.data.rabbitmq-password}' | base64 -d"
+          echo "Shared Infrastructure Credentials (${DB_NAMESPACE} namespace):"
+          echo "- PostgreSQL admin_user: kubectl get secret postgresql -n ${DB_NAMESPACE} -o jsonpath='{.data.admin-user-password}' | base64 -d"
+          echo "- PostgreSQL postgres user: kubectl get secret postgresql -n ${DB_NAMESPACE} -o jsonpath='{.data.postgres-password}' | base64 -d"
+          echo "- Redis: kubectl get secret redis -n ${DB_NAMESPACE} -o jsonpath='{.data.redis-password}' | base64 -d"
+          echo "- RabbitMQ: kubectl get secret rabbitmq -n ${DB_NAMESPACE} -o jsonpath='{.data.rabbitmq-password}' | base64 -d"
           echo ""
           echo "Per-Service Databases:"
           echo "- Each service (cafe-backend, erp-api, treasury-app, notifications-app) creates its own database"
           echo "- Database names: cafe, bengo_erp, treasury, notifications"
           echo "- Databases are created automatically during service deployment"
           echo ""
+          echo "Configuration (via GitHub Secrets):"
+          echo "- VPS_IP: ${VPS_IP}"
+          echo "- ARGOCD_DOMAIN: ${ARGOCD_DOMAIN}"
+          echo "- GRAFANA_DOMAIN: ${GRAFANA_DOMAIN}"
+          echo "- DB_NAMESPACE: ${DB_NAMESPACE}"
+          echo ""
           echo "Next steps:"
           echo "1. Set up GitHub deploy key (see workflow output above)"
-          echo "2. Point DNS to your VPS IP (77.237.232.66)"
+          echo "2. Point DNS to your VPS IP (${VPS_IP})"
           echo "3. Configure Argo CD repository access"
           echo "4. Deploy applications via Argo CD (they will auto-create databases)"
-          echo "5. Verify databases: kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -d postgres -c '\l'"
+          echo "5. Verify databases: kubectl -n ${DB_NAMESPACE} exec -it postgresql-0 -- psql -U admin_user -d postgres -c '\l'"
           echo "6. Verify VPA: kubectl get vpa --all-namespaces"
           echo "::endgroup::"

@@ -21,9 +21,22 @@ Contabo API (optional, for provider=contabo):
 
 Database automation (optional; auto-generated if omitted):
 - POSTGRES_PASSWORD: PostgreSQL superuser password
+- POSTGRES_ADMIN_PASSWORD: PostgreSQL admin_user password (for per-service DB management)
 - REDIS_PASSWORD: Redis password
 - MONGO_PASSWORD: MongoDB root password
 - MYSQL_PASSWORD: MySQL root password
+
+Infrastructure configuration (optional; defaults shown):
+- VPS_IP: VPS IP address (default: YOUR_VPS_IP)
+- ARGOCD_DOMAIN: ArgoCD domain (default: argocd.masterspace.co.ke)
+- GRAFANA_DOMAIN: Grafana domain (default: grafana.masterspace.co.ke)
+- DB_NAMESPACE: Namespace for shared databases (default: infra)
+- MONITORING_NAMESPACE: Namespace for monitoring stack (default: infra)
+- RABBITMQ_NAMESPACE: Namespace for RabbitMQ (default: infra)
+- RABBITMQ_PASSWORD: RabbitMQ password (default: rabbitmq)
+
+Cleanup (opt-in only):
+- ENABLE_CLEANUP: Set to 'true' to enable cluster cleanup (default: false, NEVER runs by default)
 
 Contact emails:
 - Org email: codevertexitsolutions@gmail.com
