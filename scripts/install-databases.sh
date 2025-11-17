@@ -165,9 +165,14 @@ echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
 # Build Helm arguments - prioritize environment variables
+# IMPORTANT: Order matters - values file first, then --set flags override
 PG_HELM_ARGS=()
 
+# Always use values file first for complete configuration (includes FIPS settings)
+PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
+
 # Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets)
+# These --set flags will override values file
 if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
   echo -e "${GREEN}Using POSTGRES_PASSWORD from environment/GitHub secrets (priority)${NC}"
   PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
@@ -180,12 +185,11 @@ if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
   PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
 fi
 
-# Always add FIPS configuration (required for chart version 15.5.26+)
+# CRITICAL: Always explicitly set FIPS configuration via --set flags
+# These MUST be set to avoid chart validation errors
+# Chart version 15.5.26+ requires explicit FIPS configuration
 PG_HELM_ARGS+=(--set global.defaultFips=false)
 PG_HELM_ARGS+=(--set fips.openssl=false)
-
-# Always use values file for complete configuration
-PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
@@ -208,7 +212,6 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       helm upgrade postgresql bitnami/postgresql \
         -n "${NAMESPACE}" \
         --reset-values \
-        -f "${TEMP_PG_VALUES}" \
         "${PG_HELM_ARGS[@]}" \
         --timeout=10m \
         --wait 2>&1 | tee /tmp/helm-postgresql-install.log
@@ -228,6 +231,21 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   fi
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
+  echo -e "${BLUE}Helm command will be: helm install postgresql bitnami/postgresql -n ${NAMESPACE} ${PG_HELM_ARGS[*]}${NC}"
+  echo -e "${BLUE}Verifying FIPS configuration is present...${NC}"
+  
+  # Verify FIPS settings are in the values file
+  if ! grep -q "defaultFips" "${TEMP_PG_VALUES}" || ! grep -q "openssl" "${TEMP_PG_VALUES}"; then
+    echo -e "${RED}ERROR: FIPS configuration missing from values file!${NC}"
+    exit 1
+  fi
+  
+  # Verify --set flags include FIPS
+  if ! printf '%s\n' "${PG_HELM_ARGS[@]}" | grep -q "defaultFips\|openssl"; then
+    echo -e "${RED}ERROR: FIPS --set flags missing!${NC}"
+    exit 1
+  fi
+  
   helm install postgresql bitnami/postgresql \
     -n "${NAMESPACE}" \
     "${PG_HELM_ARGS[@]}" \
