@@ -11,7 +11,7 @@ ArgoCD application deploying the Treasury Go service responsible for payments, s
 - Secrets: `treasury-app-secrets` should expose `postgresUrl`
 - External dependencies:
   - PostgreSQL instance reachable via `postgresUrl`
-  - Redis: `redis-master.treasury.svc.cluster.local:6380`
+  - Redis: `redis-master.infra.svc.cluster.local:6379`
   - NATS JetStream cluster: `nats.messaging.svc.cluster.local`
   - MinIO/S3 endpoint for settlement artifacts
   - OTEL collector for tracing/metrics export

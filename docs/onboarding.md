@@ -64,8 +64,9 @@ metadata:
 type: Opaque
 stringData:
   # Database (if using automated setup, these will be auto-populated)
-  DATABASE_URL: "postgresql://postgres:PASSWORD@postgresql.my-namespace.svc.cluster.local:5432/mydb"
-  REDIS_URL: "redis://:PASSWORD@redis-master.my-namespace.svc.cluster.local:6379/0"
+  # Note: Shared databases (PostgreSQL, Redis, RabbitMQ) are deployed in the 'infra' namespace
+  DATABASE_URL: "postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/mydb"
+  REDIS_URL: "redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0"
   
   # App-specific variables
   JWT_SECRET: ""  # Auto-generated if empty

@@ -45,11 +45,11 @@ env:
         name: cafe-backend-secrets
         key: postgresUrl
   - name: CAFE_REDIS_ADDR
-    value: redis-master.cafe.svc.cluster.local:6379
+    value: redis-master.infra.svc.cluster.local:6379
   - name: CAFE_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: CAFE_OTLP_ENDPOINT
-    value: http://otel-collector.monitoring.svc.cluster.local:4317
+    value: http://otel-collector.infra.svc.cluster.local:4317
   - name: CAFE_EVENTS_STREAM
     value: cafe
   - name: CAFE_HTTP_PORT
@@ -79,7 +79,7 @@ monitoring:
 
 serviceMonitor:
   enabled: true
-  namespace: monitoring
+  namespace: infra
   interval: 30s
   scrapeTimeout: 10s
   labels:

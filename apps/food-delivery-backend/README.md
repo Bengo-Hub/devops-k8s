@@ -11,7 +11,7 @@ ArgoCD application for deploying the Go backend that powers ordering, logistics,
 - Secrets: `food-delivery-backend-secrets` should expose `postgresUrl`
 - External dependencies
   - PostgreSQL: `postgres://...` (managed secret)
-  - Redis: `redis-master.food-delivery.svc.cluster.local:6379`
+  - Redis: `redis-master.infra.svc.cluster.local:6379`
   - NATS JetStream: `nats.messaging.svc.cluster.local`
   - OTEL collector for telemetry
 

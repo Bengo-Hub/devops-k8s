@@ -118,7 +118,7 @@ if [[ -n "${PG_ADMIN_PASS:-}" && -n "${REDIS_PASS:-}" && -n "${DATABASE_URL:-}" 
     echo ""
     echo "Migration should work. If it still fails, check:"
     echo "  - Migration job has correct imagePullSecrets"
-    echo "  - Pod can resolve DNS (postgresql.erp.svc.cluster.local)"
+    echo "  - Pod can resolve DNS (postgresql.infra.svc.cluster.local)"
     echo "  - Network policies allow pod-to-pod communication"
 else
     echo "❌ Some credentials are missing. Run these commands to fix:"
@@ -134,7 +134,7 @@ else
         echo "# Update erp-api-env with DATABASE_URL:"
         echo "PG_PASS=\$(kubectl -n $NAMESPACE get secret postgresql -o jsonpath='{.data.postgres-password}' | base64 -d)"
         echo "kubectl -n $NAMESPACE patch secret erp-api-env -p \\"
-        echo "  \"{\\\"stringData\\\":{\\\"DATABASE_URL\\\":\\\"postgresql://postgres:\${PG_PASS}@postgresql.${NAMESPACE}.svc.cluster.local:5432/bengo_erp\\\"}}\""
+        echo "  \"{\\\"stringData\\\":{\\\"DATABASE_URL\\\":\\\"postgresql://postgres:\${PG_PASS}@postgresql.infra.svc.cluster.local:5432/bengo_erp\\\"}}\""
         echo ""
     fi
 fi
