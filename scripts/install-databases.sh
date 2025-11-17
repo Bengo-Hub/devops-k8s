@@ -241,16 +241,22 @@ else
   echo -e "${BLUE}Verifying FIPS configuration is present...${NC}"
   
   # Verify FIPS settings are in the values file
-  if ! grep -q "defaultFips" "${TEMP_PG_VALUES}" || ! grep -q "openssl" "${TEMP_PG_VALUES}"; then
-    echo -e "${RED}ERROR: FIPS configuration missing from values file!${NC}"
+  if ! grep -q "defaultFips.*false" "${TEMP_PG_VALUES}" || ! grep -q "openssl.*false" "${TEMP_PG_VALUES}"; then
+    echo -e "${RED}ERROR: FIPS configuration missing or incorrect in values file!${NC}"
+    echo -e "${YELLOW}Values file contents:${NC}"
+    cat "${TEMP_PG_VALUES}" | head -20
     exit 1
   fi
   
-  # Verify --set flags include FIPS
-  if ! printf '%s\n' "${PG_HELM_ARGS[@]}" | grep -q "defaultFips\|openssl"; then
-    echo -e "${RED}ERROR: FIPS --set flags missing!${NC}"
+  # Verify --set flags include FIPS (should appear at least twice - beginning and end)
+  FIPS_SET_COUNT=$(printf '%s\n' "${PG_HELM_ARGS[@]}" | grep -c "defaultFips\|openssl" || echo "0")
+  if [ "$FIPS_SET_COUNT" -lt 2 ]; then
+    echo -e "${RED}ERROR: FIPS --set flags missing! Found $FIPS_SET_COUNT flags, expected at least 2${NC}"
+    echo -e "${YELLOW}Helm args: ${PG_HELM_ARGS[*]}${NC}"
     exit 1
   fi
+  
+  echo -e "${GREEN}✓ FIPS configuration verified (set $FIPS_SET_COUNT times)${NC}"
   
   helm install postgresql bitnami/postgresql \
     -n "${NAMESPACE}" \
