@@ -84,13 +84,13 @@ The build.sh script handles the complete deployment process:
 | `DEPLOY` | Enable/disable deployment phase | `true` |
 | `SETUP_DATABASES` | Enable/disable database setup | `true` (API), `false` (UI) |
 | `DB_TYPES` | Comma-separated database list | `postgres,redis` |
-| `NAMESPACE` | Kubernetes namespace | `erp` |
-| `ENV_SECRET_NAME` | Kubernetes secret name | `erp-api-env` / `erp-ui-env` |
+| `NAMESPACE` | Kubernetes namespace | `my-service` (service-specific) |
+| `ENV_SECRET_NAME` | Kubernetes secret name | `my-service-env` (service-specific) |
 | `REGISTRY_SERVER` | Container registry | `docker.io` |
 | `REGISTRY_NAMESPACE` | Registry namespace | `codevertex` |
-| `APP_NAME` | Application identifier | `erp-api` / `erp-ui` |
-| `GIT_USER` | Git commit author name | `Titus Owuor` |
-| `GIT_EMAIL` | Git commit author email | `titusowuor30@gmail.com` |
+| `APP_NAME` | Application identifier | `my-service` (service-specific) |
+| `GIT_USER` | Git commit author name | Your name |
+| `GIT_EMAIL` | Git commit author email | your.email@example.com |
 | `DEVOPS_REPO` | DevOps repository path | `Bengo-Hub/devops-k8s` |
 
 ### ArgoCD Application Configuration
@@ -100,7 +100,7 @@ The build.sh script handles the complete deployment process:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: erp-api  # or erp-ui
+  name: my-service  # Service-specific name (e.g., cafe-backend, erp-api, treasury-app)
   namespace: argocd
 spec:
   project: default
@@ -112,12 +112,12 @@ spec:
       values: |
         # Embedded Helm values with image tags
         image:
-          repository: docker.io/codevertex/erp-api
+          repository: docker.io/codevertex/my-service
           tag: <specific-commit-id>
         # ... other configuration
   destination:
     server: https://kubernetes.default.svc
-    namespace: erp
+    namespace: my-service  # Service-specific namespace
   syncPolicy:
     automated:
       prune: true
@@ -180,12 +180,14 @@ Create a corresponding `TriggerAuthentication` in the app namespace pointing to 
 
 ### Connecting to Shared Databases/Brokers
 
-- Postgres, Redis, RabbitMQ are deployed to `infra` namespace.
-- Service DNS:
-  - Postgres: `postgresql.infra.svc.cluster.local:5432`
+- **PostgreSQL, Redis, RabbitMQ** are deployed to the `infra` namespace as shared infrastructure.
+- **Important**: While the database services are shared, each service has its own **unique database** on the PostgreSQL instance.
+- Service DNS (same for all services):
+  - PostgreSQL: `postgresql.infra.svc.cluster.local:5432`
   - Redis: `redis-master.infra.svc.cluster.local:6379`
   - RabbitMQ: `rabbitmq.infra.svc.cluster.local:5672`
-- Set these in your app secrets/env and align pools/timeouts; HPA will scale app pods while PriorityClass ensures DBs stay scheduled under pressure.
+- **Database naming**: Each service uses its own database name (e.g., `cafe`, `erp`, `treasury`, `notifications`) on the shared PostgreSQL service.
+- Set these connection strings in your app secrets/env and align pools/timeouts; HPA will scale app pods while PriorityClass ensures DBs stay scheduled under pressure.
 
 ## Security Best Practices
 
@@ -308,9 +310,10 @@ For detailed manual deployment procedures that cover the **entire deployment pro
 # Navigate to devops-k8s directory
 cd /path/to/devops-k8s
 
-# Apply ArgoCD applications
-kubectl apply -f apps/erp-api/app.yaml -n argocd
-kubectl apply -f apps/erp-ui/app.yaml -n argocd
+# Apply ArgoCD applications (replace with your service names)
+kubectl apply -f apps/my-service/app.yaml -n argocd
+# Example: kubectl apply -f apps/cafe-backend/app.yaml -n argocd
+# Example: kubectl apply -f apps/erp-api/app.yaml -n argocd
 
 # Verify applications are created
 kubectl get applications.argoproj.io -n argocd
@@ -321,9 +324,9 @@ kubectl get applications.argoproj.io -n argocd
 # Watch application status
 kubectl get applications.argoproj.io -n argocd -w
 
-# Get detailed application information
-argocd app get erp-api
-argocd app get erp-ui
+# Get detailed application information (replace with your service name)
+argocd app get my-service
+# Example: argocd app get cafe-backend
 
 # Check if applications are syncing
 kubectl get applications.argoproj.io -n argocd -o jsonpath='{.items[*].status.sync.status}'
@@ -333,70 +336,77 @@ kubectl get applications.argoproj.io -n argocd -o jsonpath='{.items[*].status.sy
 
 #### Check Current Resources
 ```bash
-# Check all resources in erp namespace
-kubectl get all,ingress,secrets,pvc -n erp
+# Check all resources in your service namespace (replace 'my-service' with your namespace)
+kubectl get all,ingress,secrets,pvc -n my-service
+# Example: kubectl get all,ingress,secrets,pvc -n cafe
 
 # Check specific resource types
-kubectl get deployments -n erp
-kubectl get services -n erp
-kubectl get ingress -n erp
+kubectl get deployments -n my-service
+kubectl get services -n my-service
+kubectl get ingress -n my-service
 ```
 
 #### View Application Logs
 ```bash
 # Get pod names
-kubectl get pods -n erp
+kubectl get pods -n my-service
 
-# View logs for specific pods
-kubectl logs -f deployment/erp-api -n erp
-kubectl logs -f deployment/erp-ui -n erp
+# View logs for specific pods (replace with your deployment name)
+kubectl logs -f deployment/my-service-app -n my-service
+# Example: kubectl logs -f deployment/cafe-backend -n cafe
 ```
 
 #### Check Ingress Configuration
 ```bash
 # Describe ingress for troubleshooting
-kubectl describe ingress -n erp
+kubectl describe ingress -n my-service
 
 # Check if ingress is properly configured
-kubectl get ingress -n erp -o yaml
+kubectl get ingress -n my-service -o yaml
 ```
 
 ### 3. Manual Database Operations
 
 #### Check Database Status
 ```bash
-# Check PostgreSQL deployment
-kubectl get deployments -n erp -l app.kubernetes.io/name=postgresql
+# Check PostgreSQL deployment (databases are in infra namespace)
+kubectl get deployments -n infra -l app.kubernetes.io/name=postgresql
 
-# Check Redis deployment
-kubectl get deployments -n erp -l app.kubernetes.io/name=redis
+# Check Redis deployment (databases are in infra namespace)
+kubectl get deployments -n infra -l app.kubernetes.io/name=redis
 
-# Check database services
-kubectl get services -n erp -l app.kubernetes.io/name=postgresql
-kubectl get services -n erp -l app.kubernetes.io/name=redis
+# Check database services (databases are in infra namespace)
+kubectl get services -n infra -l app.kubernetes.io/name=postgresql
+kubectl get services -n infra -l app.kubernetes.io/name=redis
 ```
 
 #### Database Connection Testing
 ```bash
-# Get database credentials (be careful with sensitive data)
-kubectl get secret erp-api-env -n erp -o yaml
+# Get database credentials from your service secret (replace with your service name)
+kubectl get secret my-service-env -n my-service -o yaml
+# Example: kubectl get secret cafe-backend-env -n cafe -o yaml
 
-# Test database connectivity (replace with actual credentials)
-kubectl run postgres-client --rm -i --tty --image postgres:13 -- psql -h postgresql.infra.svc.cluster.local -U postgres -d appdb
+# Test database connectivity (replace with your database name)
+# Each service has its own database on the shared PostgreSQL instance
+kubectl run postgres-client --rm -i --tty --image postgres:13 -- psql -h postgresql.infra.svc.cluster.local -U postgres -d my_database
+# Example: kubectl run postgres-client --rm -i --tty --image postgres:13 -- psql -h postgresql.infra.svc.cluster.local -U postgres -d cafe
 ```
 
 ### 4. Manual Certificate Management
 
 #### Check Certificate Status
 ```bash
-# Check cert-manager certificates
-kubectl get certificates -n erp
+# Check cert-manager certificates (replace with your service namespace)
+kubectl get certificates -n my-service
+# Example: kubectl get certificates -n cafe
 
-# Check certificate details
-kubectl describe certificate erp-masterspace-tls -n erp
+# Check certificate details (replace with your certificate name)
+kubectl describe certificate my-service-tls -n my-service
+# Example: kubectl describe certificate cafe-masterspace-tls -n cafe
 
-# Check if certificates are ready
-kubectl get certificates -n erp -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
+# Check if certificates are ready (replace with your service namespace)
+kubectl get certificates -n my-service -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
+# Example: kubectl get certificates -n cafe -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
 ```
 
 #### Renew Certificates Manually
