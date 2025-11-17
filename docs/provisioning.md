@@ -76,21 +76,36 @@ Relationship to CI/CD Workflows
 
 **Provisioning Order:**
 1. Storage Provisioner (local-path or default)
-2. **Databases (PostgreSQL & Redis)** ⭐ NEW
-3. NGINX Ingress Controller
-4. cert-manager (TLS certificates)
-5. Argo CD (GitOps)
-6. Monitoring Stack (Prometheus/Grafana)
-7. Vertical Pod Autoscaler (VPA)
-8. Git SSH Access Setup
+2. **Shared Databases (PostgreSQL & Redis in infra namespace)** ⭐
+3. **RabbitMQ (Shared Infrastructure in infra namespace)** ⭐
+4. NGINX Ingress Controller
+5. cert-manager (TLS certificates)
+6. Argo CD (GitOps)
+7. Monitoring Stack (Prometheus/Grafana in infra namespace)
+8. Vertical Pod Autoscaler (VPA)
+9. Git SSH Access Setup
 
-**Database Installation Details:**
-- Uses `scripts/install-databases.sh`
-- Idempotent: Skips if PostgreSQL/Redis already healthy
-- Uses `POSTGRES_PASSWORD`/`REDIS_PASSWORD` from GitHub secrets (if set)
-- Auto-generates secure passwords if secrets not provided
-- Stores passwords in Kubernetes secrets (source of truth)
-- Application deployments retrieve passwords from these secrets automatically
+**Shared Infrastructure Installation Details:**
+- **PostgreSQL & Redis**: Uses `scripts/install-databases.sh`
+  - Installed in `infra` namespace (shared infrastructure)
+  - Creates `admin_user` with superuser privileges for managing per-service databases
+  - Uses `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD` from GitHub secrets
+  - Auto-generates secure passwords if secrets not provided
+  - Each service creates its own database during deployment (cafe, bengo_erp, treasury, notifications)
+  
+- **RabbitMQ**: Uses `scripts/install-rabbitmq.sh`
+  - Installed in `infra` namespace (shared infrastructure)
+  - Uses `RABBITMQ_PASSWORD` from GitHub secrets
+  - All services can use the shared RabbitMQ instance
+
+- **Monitoring**: Installed in `infra` namespace
+  - Prometheus and Grafana deployed as shared infrastructure
+  - ServiceMonitor resources reference `infra` namespace
+
+**Per-Service Database Creation:**
+- Each service's build script automatically creates its database using `create-service-database.sh`
+- Databases are created on first deployment, not during provisioning
+- See `docs/per-service-database-setup.md` for details
 
 **See:** `docs/secrets-management.md` for password flow details
 - Provisioning ensures the VPS has the tooling for manual operations and emergency fixes.
@@ -111,12 +126,19 @@ The playbook and provisioning workflow install the PostgreSQL client tools (`pos
 ```bash
 psql --version
 
-# Example connection (adjust host, db, user, and password as needed)
-PGPASSWORD="$POSTGRES_PASSWORD" psql \
+# Example connection using admin_user (adjust host, db, user, and password as needed)
+PGPASSWORD="$POSTGRES_ADMIN_PASSWORD" psql \
   -h postgresql.infra.svc.cluster.local \
-  -U postgres \
-  -d bengo_erp \
+  -U admin_user \
+  -d postgres \
   -c "SELECT NOW();"
+
+# List all service databases
+PGPASSWORD="$POSTGRES_ADMIN_PASSWORD" psql \
+  -h postgresql.infra.svc.cluster.local \
+  -U admin_user \
+  -d postgres \
+  -c "\l"
 ```
 
 

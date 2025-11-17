@@ -72,28 +72,38 @@ jobs:
           ./scripts/install-storage-provisioner.sh
           echo "::endgroup::"
 
-      - name: Install databases (PostgreSQL & Redis - Shared)
+      - name: Install databases (PostgreSQL & Redis - Shared Infrastructure)
         if: env.skip_provision != 'true'
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          PG_DATABASE: ${{ secrets.PG_DATABASE || 'bengo_erp' }}
-          DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'erp' }}
+          DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
         run: |
-          echo "::group::Installing Shared Databases (PostgreSQL & Redis)"
+          echo "::group::Installing Shared Databases (PostgreSQL & Redis in infra namespace)"
+          echo "Installing shared infrastructure databases..."
+          echo "Namespace: ${DB_NAMESPACE}"
+          echo "PostgreSQL will create admin_user for managing per-service databases"
           export NAMESPACE=${DB_NAMESPACE}
-          export PG_DATABASE=${PG_DATABASE}
+          export PG_DATABASE=postgres
           ./scripts/install-databases.sh
+          echo "✅ Shared databases installed in ${DB_NAMESPACE} namespace"
+          echo "✅ PostgreSQL admin_user created (can create per-service databases)"
+          echo "✅ Each service will create its own database during deployment"
           echo "::endgroup::"
       
-      - name: Install RabbitMQ (TruLoad namespace)
+      - name: Install RabbitMQ (Shared Infrastructure)
         if: env.skip_provision != 'true'
         env:
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
-          RABBITMQ_NAMESPACE: ${{ secrets.RABBITMQ_NAMESPACE || 'truload' }}
+          RABBITMQ_NAMESPACE: ${{ secrets.RABBITMQ_NAMESPACE || 'infra' }}
         run: |
-          echo "::group::Installing RabbitMQ for TruLoad"
+          echo "::group::Installing RabbitMQ (Shared Infrastructure in infra namespace)"
+          echo "Installing RabbitMQ as shared infrastructure..."
+          echo "Namespace: ${RABBITMQ_NAMESPACE}"
           ./scripts/install-rabbitmq.sh
+          echo "✅ RabbitMQ installed in ${RABBITMQ_NAMESPACE} namespace"
+          echo "✅ All services can use shared RabbitMQ instance"
           echo "::endgroup::"
 
       - name: Configure ingress controller (idempotent)
@@ -214,24 +224,33 @@ jobs:
         run: |
           echo "::group::Cluster Provisioning Complete"
           echo "✅ Storage provisioner installed"
-          echo "✅ Shared Databases installed (PostgreSQL & Redis in erp namespace)"
-          echo "✅ RabbitMQ installed (in truload namespace)"
+          echo "✅ Shared Databases installed (PostgreSQL & Redis in infra namespace)"
+          echo "  - PostgreSQL admin_user created for managing per-service databases"
+          echo "  - Each service creates its own database during deployment"
+          echo "✅ RabbitMQ installed (shared infrastructure in infra namespace)"
           echo "✅ NGINX Ingress Controller configured"
           echo "✅ cert-manager installed"
           echo "✅ Argo CD installed (https://argocd.masterspace.co.ke)"
-          echo "✅ Monitoring Stack installed (https://grafana.masterspace.co.ke)"
+          echo "✅ Monitoring Stack installed (https://grafana.masterspace.co.ke) in infra namespace"
           echo "✅ Vertical Pod Autoscaler (VPA) installed"
           echo "✅ Git SSH access configured"
           echo ""
-          echo "Database Credentials:"
-          echo "- PostgreSQL (shared, erp namespace): kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d"
-          echo "- Redis (shared, erp namespace): kubectl get secret redis -n erp -o jsonpath='{.data.redis-password}' | base64 -d"
-          echo "- RabbitMQ (truload namespace): kubectl get secret rabbitmq -n truload -o jsonpath='{.data.rabbitmq-password}' | base64 -d"
+          echo "Shared Infrastructure Credentials (infra namespace):"
+          echo "- PostgreSQL admin_user: kubectl get secret postgresql -n infra -o jsonpath='{.data.admin-user-password}' | base64 -d"
+          echo "- PostgreSQL postgres user: kubectl get secret postgresql -n infra -o jsonpath='{.data.postgres-password}' | base64 -d"
+          echo "- Redis: kubectl get secret redis -n infra -o jsonpath='{.data.redis-password}' | base64 -d"
+          echo "- RabbitMQ: kubectl get secret rabbitmq -n infra -o jsonpath='{.data.rabbitmq-password}' | base64 -d"
+          echo ""
+          echo "Per-Service Databases:"
+          echo "- Each service (cafe-backend, erp-api, treasury-app, notifications-app) creates its own database"
+          echo "- Database names: cafe, bengo_erp, treasury, notifications"
+          echo "- Databases are created automatically during service deployment"
           echo ""
           echo "Next steps:"
           echo "1. Set up GitHub deploy key (see workflow output above)"
           echo "2. Point DNS to your VPS IP (77.237.232.66)"
           echo "3. Configure Argo CD repository access"
-          echo "4. Deploy applications via Argo CD (they will auto-connect to databases)"
-          echo "5. Verify VPA: kubectl get vpa --all-namespaces"
+          echo "4. Deploy applications via Argo CD (they will auto-create databases)"
+          echo "5. Verify databases: kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -d postgres -c '\l'"
+          echo "6. Verify VPA: kubectl get vpa --all-namespaces"
           echo "::endgroup::"
