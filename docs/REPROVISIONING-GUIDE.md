@@ -40,7 +40,27 @@ This guide provides step-by-step instructions for completely cleaning and reprov
 
 ## Step 1: Cleanup Existing Resources
 
-### Option A: Automated Cleanup Script
+### Recommended: Full Reprovisioning Script
+
+Use the consolidated script to handle cleanup **and** provisioning end-to-end:
+
+```bash
+# Cleanup enabled by default (set ENABLE_CLEANUP=false to skip)
+./scripts/reprovision-cluster.sh
+
+# To force cleanup without confirmation:
+export ENABLE_CLEANUP=true
+export FORCE_CLEANUP=true
+./scripts/reprovision-cluster.sh
+```
+
+This script will:
+1. Run `cleanup-cluster.sh` (if `ENABLE_CLEANUP=true`)
+2. Install storage provisioner, databases, RabbitMQ, ingress, cert-manager, Argo CD, monitoring, and VPA
+3. Bootstrap ArgoCD applications
+4. Verify installation at the end
+
+### Option A: Cleanup Only
 
 ```bash
 # Cleanup is opt-in only - must explicitly enable
@@ -53,7 +73,7 @@ export FORCE_CLEANUP=true
 ./scripts/cleanup-cluster.sh
 ```
 
-The script will:
+The cleanup script will:
 1. Uninstall all Helm releases
 2. Delete all ArgoCD applications
 3. Delete all application namespaces

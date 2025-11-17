@@ -235,6 +235,8 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       --wait 2>&1 | tee /tmp/helm-postgresql-install.log
     HELM_PG_EXIT=${PIPESTATUS[0]}
   fi
+POSTGRES_DEPLOYED=false
+
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
   
@@ -292,17 +294,17 @@ else
       set -e
       if [ $HELM_PG_EXIT -eq 0 ]; then
         echo -e "${GREEN}✓ PostgreSQL upgraded${NC}"
+        POSTGRES_DEPLOYED=true
       else
-        echo -e "${RED}PostgreSQL upgrade failed${NC}"
-        exit 1
+        echo -e "${YELLOW}PostgreSQL upgrade failed (release missing). Falling back to fresh install...${NC}"
+        POSTGRES_DEPLOYED=false
+        HELM_PG_EXIT=1
       fi
-      # Skip to Redis installation
-      HELM_PG_EXIT=0
     fi
   fi
   
   # Install PostgreSQL if cleanup mode or no existing resources
-  if [ "${HELM_PG_EXIT:-1}" != "0" ]; then
+  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
     echo -e "${BLUE}Installing PostgreSQL...${NC}"
     helm install postgresql bitnami/postgresql \
       --version 16.7.27 \
@@ -311,6 +313,9 @@ else
       --timeout=10m \
       --wait 2>&1 | tee /tmp/helm-postgresql-install.log
     HELM_PG_EXIT=${PIPESTATUS[0]}
+    if [ $HELM_PG_EXIT -eq 0 ]; then
+      POSTGRES_DEPLOYED=true
+    fi
   fi
 fi
 set -e
