@@ -43,7 +43,13 @@ This guide provides step-by-step instructions for completely cleaning and reprov
 ### Option A: Automated Cleanup Script
 
 ```bash
-# Run the comprehensive cleanup script
+# Cleanup is opt-in only - must explicitly enable
+export ENABLE_CLEANUP=true
+./scripts/cleanup-cluster.sh
+
+# Or with force (no confirmation prompt)
+export ENABLE_CLEANUP=true
+export FORCE_CLEANUP=true
 ./scripts/cleanup-cluster.sh
 ```
 

@@ -214,7 +214,8 @@ main() {
       echo "  APP_NAME=erp-api $0 status"
       echo "  APP_NAME=erp-api $0 history"
       echo "  APP_NAME=erp-api ROLLBACK_VERSION=2 $0 rollback"
-      echo "  APP_NAME=erp-api AUTO_ROLLBACK=true HEALTH_CHECK_URL=https://erpapi.masterspace.co.ke/api/v1/core/health/ $0 auto-rollback"
+      HEALTH_CHECK_URL=${HEALTH_CHECK_URL:-https://your-api-domain.com/api/v1/core/health/}
+      echo "  APP_NAME=erp-api AUTO_ROLLBACK=true HEALTH_CHECK_URL=${HEALTH_CHECK_URL} $0 auto-rollback"
       exit 1
       ;;
   esac
