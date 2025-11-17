@@ -8,7 +8,7 @@ on:
       enable_cleanup:
         description: 'Enable cluster cleanup (DANGEROUS - deletes all data)'
         required: false
-        default: false
+        default: true
         type: boolean
 
 jobs:
@@ -79,6 +79,7 @@ jobs:
         run: |
           echo "::group::Cleaning up cluster (ENABLE_CLEANUP=true)"
           echo "⚠️ WARNING: This will delete ALL applications and data!"
+          echo "⚠️ Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
           export ENABLE_CLEANUP=true
           export FORCE_CLEANUP=true
           ./scripts/cleanup-cluster.sh
