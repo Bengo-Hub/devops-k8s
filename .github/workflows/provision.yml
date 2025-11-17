@@ -77,6 +77,11 @@ jobs:
           fi
           echo "::endgroup::"
 
+      - name: Ensure scripts executable
+        if: env.skip_provision != 'true'
+        run: |
+          chmod +x scripts/*.sh || true
+
       - name: Cleanup cluster (enabled by default)
         if: env.skip_provision != 'true'
         env:
@@ -94,11 +99,6 @@ jobs:
             echo "ℹ️ Cleanup disabled (ENABLE_CLEANUP=false) - skipping cleanup step"
           fi
           echo "::endgroup::"
-
-      - name: Ensure scripts executable
-        if: env.skip_provision != 'true'
-        run: |
-          chmod +x scripts/*.sh || true
 
       - name: Install storage provisioner (idempotent)
         if: env.skip_provision != 'true'
