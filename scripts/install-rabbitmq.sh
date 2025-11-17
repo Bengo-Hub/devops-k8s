@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# RabbitMQ installation script for TruLoad namespace
-# Installs RabbitMQ in dedicated truload namespace
+# RabbitMQ installation script for shared infrastructure
+# Installs RabbitMQ in infra namespace as shared infrastructure
 # Part of devops-k8s infrastructure provisioning
 
 set -euo pipefail
@@ -9,15 +9,16 @@ set -euo pipefail
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 # Configuration
-NAMESPACE=${RABBITMQ_NAMESPACE:-truload}
+NAMESPACE=${RABBITMQ_NAMESPACE:-infra}
 RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq}
 RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-user}
 
 echo -e "${BLUE}================================================================${NC}"
-echo -e "${GREEN}Installing RabbitMQ (TruLoad Namespace)${NC}"
+echo -e "${GREEN}Installing RabbitMQ (Shared Infrastructure)${NC}"
 echo -e "${BLUE}================================================================${NC}"
 echo -e "  Namespace: ${NAMESPACE}"
 echo -e "  Username: ${RABBITMQ_USERNAME}"
+echo -e "  Purpose: Shared message broker for all services"
 
 # Ensure kubectl is configured
 if ! kubectl cluster-info &>/dev/null; then
