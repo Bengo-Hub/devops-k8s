@@ -15,19 +15,35 @@ spec:
         global:
           postgresql:
             auth:
-              postgresPassword: "" # Leave empty, will be auto-generated
-              username: "erp_user"
-              password: ""         # Leave empty, will be auto-generated
-              database: "bengo_erp"
+              postgresPassword: "" # Leave empty, will be auto-generated (or set via POSTGRES_PASSWORD env)
+              # Common admin user for accessing all service databases
+              # This user can create databases and manage users for all services
+              username: "admin_user"
+              password: ""         # Leave empty, will be auto-generated (or set via POSTGRES_ADMIN_PASSWORD env)
+              database: "postgres" # Use postgres as default, services create their own databases
           # FIPS compliance settings (required for newer chart versions)
           defaultFips: false
-
+        
         # FIPS OpenSSL configuration
         fips:
           openssl: false
 
         ## Primary PostgreSQL configuration
         primary:
+          ## Create admin user with superuser privileges for managing all service databases
+          ## This allows services to create their own databases using this admin user
+          initdb:
+            scripts:
+              create-admin-user.sql: |
+                -- Ensure admin_user has superuser privileges for managing all service databases
+                -- The user is created by the chart's auth.username setting, but we ensure proper privileges
+                DO $$
+                BEGIN
+                  IF EXISTS (SELECT FROM pg_user WHERE usename = 'admin_user') THEN
+                    ALTER USER admin_user WITH SUPERUSER CREATEDB;
+                  END IF;
+                END
+                $$;
           resources:
             requests:
               memory: "512Mi"
