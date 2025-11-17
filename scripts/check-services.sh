@@ -58,7 +58,9 @@ echo "If Grafana shows 404:"
 echo "1. Check ingress exists: kubectl get ingress -n monitoring"
 echo "2. Check certificate: kubectl get certificate -n monitoring"
 echo "3. Describe ingress: kubectl describe ingress -n monitoring"
-echo "4. Check DNS: nslookup grafana.masterspace.co.ke (should point to 77.237.232.66)"
+GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
+VPS_IP=${VPS_IP:-YOUR_VPS_IP}
+echo "4. Check DNS: nslookup ${GRAFANA_DOMAIN} (should point to ${VPS_IP})"
 echo "5. Check ingress controller logs: kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller"
 echo ""
 echo "Port-forward alternatives:"
