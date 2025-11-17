@@ -1,0 +1,32 @@
+## Bitnami RabbitMQ Helm Chart Values
+## Shared Broker for Asynchronous Workloads
+
+auth:
+  username: user
+  # password: ""  # Prefer setting via external secret; if empty, chart will generate
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+
+priorityClassName: db-critical
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+
+networkPolicy:
+  enabled: false
+
+

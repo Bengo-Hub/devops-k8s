@@ -173,6 +173,27 @@ spec:
 
 Apply: `kubectl apply -f apps/root-app.yaml`
 
+Core Infrastructure via Argo CD
+-------------------------------
+
+The following cluster-wide components are managed as Argo CD Applications under `apps/`:
+
+- `apps/monitoring/app.yaml`: kube-prometheus-stack (Prometheus, Grafana, Alertmanager)
+- `apps/metrics-server/app.yaml`: metrics-server (required for HPA)
+- `apps/keda/app.yaml`: KEDA (event/queue-driven autoscaling)
+- `apps/postgresql/app.yaml`: Bitnami PostgreSQL (shared infra)
+- `apps/redis/app.yaml`: Bitnami Redis (shared infra)
+- `apps/rabbitmq/app.yaml`: Bitnami RabbitMQ (shared infra)
+
+These appear in the Argo CD UI when `apps/root-app.yaml` is applied (App-of-Apps). Ensure these are Healthy/Synced for autoscaling and monitoring to function.
+
+Argo CD Metrics in Grafana/Prometheus
+-------------------------------------
+
+- ServiceMonitors for Argo CD server and repo-server are provided at:
+  - `manifests/monitoring/argocd-servicemonitor.yaml`
+- After monitoring stack is synced, check Prometheus targets and import an Argo CD dashboard in Grafana if desired.
+
 Monitoring Deployments
 ---------------------
 

@@ -180,3 +180,21 @@ celeryWorker:
 
 celeryBeat:
   enabled: false
+
+# KEDA ScaledObject configuration (queue-driven autoscaling)
+keda:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 20
+  pollingInterval: 15
+  cooldownPeriod: 120
+  triggers: []
+  # Example triggers:
+  # triggers:
+  #   - type: redis
+  #     metadata:
+  #       address: "redis-master.infra.svc:6379"
+  #       listName: "celery"
+  #       listLength: "100"
+  #     authenticationRef:
+  #       name: redis-auth  # a TriggerAuthentication resource referencing a Secret

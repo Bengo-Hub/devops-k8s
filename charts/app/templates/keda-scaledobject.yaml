@@ -1,0 +1,19 @@
+{{- if and .Values.keda.enabled .Values.keda.triggers }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "app.name" . }}
+spec:
+  scaleTargetRef:
+    name: {{ include "app.fullname" . }}
+  minReplicaCount: {{ .Values.keda.minReplicas | default .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.keda.maxReplicas | default .Values.autoscaling.maxReplicas }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod | default 120 }}
+  pollingInterval: {{ .Values.keda.pollingInterval | default 15 }}
+  triggers:
+{{ toYaml .Values.keda.triggers | indent 4 }}
+{{- end }}
+
+
