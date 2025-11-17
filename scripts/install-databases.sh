@@ -248,8 +248,25 @@ else
     echo -e "${YELLOW}Cleaning up orphaned resources to allow fresh installation...${NC}"
     
     # Delete orphaned resources that might conflict with Helm
-    kubectl delete networkpolicy -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-    kubectl delete configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    # NetworkPolicy and ConfigMaps must be removed first
+    kubectl delete networkpolicy -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
+    kubectl delete configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
+    
+    # Also delete services as they can cause conflicts
+    kubectl delete service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true 2>/dev/null || true
+    
+    # Wait for resources to be fully deleted
+    echo -e "${BLUE}Waiting for resources to be fully deleted...${NC}"
+    sleep 5
+    
+    # Verify deletion
+    REMAINING=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+    if [ -n "$REMAINING" ]; then
+      echo -e "${YELLOW}Warning: Some resources still exist:${NC}"
+      echo "$REMAINING"
+      echo -e "${YELLOW}Waiting additional 5 seconds...${NC}"
+      sleep 5
+    fi
     
     # Keep secrets as they contain passwords we might want to preserve
     echo -e "${BLUE}Note: Keeping existing secrets to preserve credentials${NC}"
