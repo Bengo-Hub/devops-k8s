@@ -70,11 +70,95 @@ else
   echo -e "${GREEN}✓ Namespace '${NAMESPACE}' created${NC}"
 fi
 
-# Update postgresql-values.yaml with dynamic database name
+# Create temporary PostgreSQL values file with proper FIPS configuration
 TEMP_PG_VALUES=/tmp/postgresql-values-prod.yaml
-cp "${MANIFESTS_DIR}/databases/postgresql-values.yaml" "${TEMP_PG_VALUES}"
-sed -i "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
-  sed -i '' "s|database: \"bengo_erp\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
+cat > "${TEMP_PG_VALUES}" <<'VALUES_EOF'
+## Global settings
+global:
+  postgresql:
+    auth:
+      postgresPassword: "" # Leave empty, will be auto-generated
+      username: "admin_user"
+      password: ""         # Leave empty, will be auto-generated
+      database: "postgres"
+  # FIPS compliance settings (required for newer chart versions)
+  defaultFips: false
+
+# FIPS OpenSSL configuration
+fips:
+  openssl: false
+
+## Primary PostgreSQL configuration
+primary:
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  priorityClassName: db-critical
+  
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ""
+  
+  ## PostgreSQL tuning
+  extendedConfiguration: |
+    max_connections = 200
+    shared_buffers = 512MB
+    effective_cache_size = 1536MB
+    work_mem = 2621kB
+    maintenance_work_mem = 128MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+  
+  ## Health checks
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+## Metrics for Prometheus
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: infra
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+## Network policy
+networkPolicy:
+  enabled: false
+  allowExternal: false
+VALUES_EOF
+
+# Update database name if different from default
+if [[ "$PG_DATABASE" != "postgres" ]]; then
+  sed -i "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
+    sed -i '' "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
+fi
 
 # Install or upgrade PostgreSQL (idempotent)
 echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
