@@ -133,12 +133,13 @@ spec:
 
 ## Centralized Infra & Autoscaling Reuse
 
-- Core infra is managed via Argo CD apps:
-  - Monitoring: `apps/monitoring/app.yaml`
-  - Metrics: `apps/metrics-server/app.yaml`
-  - Event autoscaling: `apps/keda/app.yaml`
-  - Databases: `apps/postgresql/app.yaml`, `apps/redis/app.yaml`, `apps/rabbitmq/app.yaml`
+- Core infra is managed via Argo CD apps and deployed to the `infra` namespace:
+  - Monitoring: `apps/monitoring/app.yaml` (deployed to `infra` namespace)
+  - Metrics: `apps/metrics-server/app.yaml` (deployed to `kube-system` namespace)
+  - Event autoscaling: `apps/keda/app.yaml` (deployed to `infra` namespace)
+  - Databases: `apps/postgresql/app.yaml`, `apps/redis/app.yaml`, `apps/rabbitmq/app.yaml` (all deployed to `infra` namespace)
 - Ensure these are Healthy/Synced so HPA/VPA/KEDA and monitoring function across all apps.
+- All shared infrastructure services (databases, monitoring, autoscaling) are accessible from any app namespace via service DNS in the `infra` namespace.
 
 ### Using the Shared Helm Chart Features
 
@@ -381,7 +382,7 @@ kubectl get services -n erp -l app.kubernetes.io/name=redis
 kubectl get secret erp-api-env -n erp -o yaml
 
 # Test database connectivity (replace with actual credentials)
-kubectl run postgres-client --rm -i --tty --image postgres:13 -- psql -h postgresql.erp.svc.cluster.local -U postgres -d appdb
+kubectl run postgres-client --rm -i --tty --image postgres:13 -- psql -h postgresql.infra.svc.cluster.local -U postgres -d appdb
 ```
 
 ### 4. Manual Certificate Management

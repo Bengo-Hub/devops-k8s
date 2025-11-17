@@ -14,7 +14,7 @@ spec:
         - ../../manifests/monitoring/prometheus-values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: monitoring
+    namespace: infra
   syncPolicy:
     automated:
       prune: true

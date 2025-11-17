@@ -44,7 +44,7 @@ env:
         name: treasury-app-secrets
         key: postgresUrl
   - name: TREASURY_REDIS_ADDR
-    value: redis-master.treasury.svc.cluster.local:6380
+    value: redis-master.infra.svc.cluster.local:6379
   - name: TREASURY_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: TREASURY_STORAGE_ENDPOINT
@@ -52,7 +52,7 @@ env:
   - name: TREASURY_STORAGE_BUCKET
     value: treasury-artifacts
   - name: TREASURY_OTLP_ENDPOINT
-    value: http://otel-collector.monitoring.svc.cluster.local:4317
+    value: http://otel-collector.infra.svc.cluster.local:4317
 
 resources:
   limits:
@@ -78,7 +78,7 @@ monitoring:
 
 serviceMonitor:
   enabled: true
-  namespace: monitoring
+  namespace: infra
   interval: 30s
   scrapeTimeout: 10s
   labels:

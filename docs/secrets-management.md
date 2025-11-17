@@ -208,12 +208,12 @@ kubectl get secret erp-api-env -n erp \
 ### Test Connection:
 ```bash
 # Test PostgreSQL connection with retrieved password
-export PG_PASS=$(kubectl get secret postgresql -n erp \
+export PG_PASS=$(kubectl get secret postgresql -n infra \
   -o jsonpath='{.data.postgres-password}' | base64 -d)
 
 kubectl run psql-test --rm -it --restart=Never \
   --image=postgres:15 --env PGPASSWORD=$PG_PASS \
-  -- psql -h postgresql.erp.svc.cluster.local \
+  -- psql -h postgresql.infra.svc.cluster.local \
   -U postgres -d bengo_erp -c "SELECT version();"
 ```
 
