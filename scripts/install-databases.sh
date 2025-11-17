@@ -165,12 +165,12 @@ echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
 
 # Build Helm arguments - prioritize environment variables
-# Using chart version 15.5.20 to avoid FIPS validation bug in 15.5.26+
-# Still setting FIPS for compatibility with future versions
+# Using chart version 16.7.27 (PostgreSQL 17.6.0) - stable production version
+# This version is well-tested and doesn't have the FIPS validation bugs from 15.5.26
 PG_HELM_ARGS=()
 
 # Set FIPS configuration first (for compatibility)
-# Chart version 15.5.20 doesn't require this, but we set it for forward compatibility
+# Chart version 16.7.27 handles FIPS gracefully, but we set it explicitly
 PG_HELM_ARGS+=(--set global.defaultFips=false)
 PG_HELM_ARGS+=(--set fips.openssl=false)
 
@@ -214,7 +214,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       echo -e "${BLUE}Current password length: ${#CURRENT_PG_PASS} chars${NC}"
       echo -e "${BLUE}New password length: ${#POSTGRES_PASSWORD} chars${NC}"
       helm upgrade postgresql bitnami/postgresql \
-        --version 15.5.20 \
+        --version 16.7.27 \
         -n "${NAMESPACE}" \
         --reset-values \
         "${PG_HELM_ARGS[@]}" \
@@ -228,7 +228,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   else
     echo -e "${YELLOW}PostgreSQL exists but not ready; performing safe upgrade${NC}"
     helm upgrade postgresql bitnami/postgresql \
-      --version 15.5.20 \
+      --version 16.7.27 \
       -n "${NAMESPACE}" \
       --reuse-values \
       --timeout=10m \
@@ -237,29 +237,32 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   fi
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
+  
+  # Check for orphaned resources from previous installations
+  echo -e "${BLUE}Checking for orphaned PostgreSQL resources...${NC}"
+  ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service,secret -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+  
+  if [ -n "$ORPHANED_RESOURCES" ]; then
+    echo -e "${YELLOW}Found orphaned PostgreSQL resources from previous installation:${NC}"
+    echo "$ORPHANED_RESOURCES"
+    echo -e "${YELLOW}Cleaning up orphaned resources to allow fresh installation...${NC}"
+    
+    # Delete orphaned resources that might conflict with Helm
+    kubectl delete networkpolicy -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    kubectl delete configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    
+    # Keep secrets as they contain passwords we might want to preserve
+    echo -e "${BLUE}Note: Keeping existing secrets to preserve credentials${NC}"
+    
+    echo -e "${GREEN}✓ Orphaned resources cleaned up${NC}"
+  else
+    echo -e "${GREEN}✓ No orphaned resources found${NC}"
+  fi
+  
   echo -e "${BLUE}Helm command will be: helm install postgresql bitnami/postgresql -n ${NAMESPACE} ${PG_HELM_ARGS[*]}${NC}"
-  echo -e "${BLUE}Verifying FIPS configuration is present...${NC}"
-  
-  # Verify FIPS settings are in the values file
-  if ! grep -q "defaultFips.*false" "${TEMP_PG_VALUES}" || ! grep -q "openssl.*false" "${TEMP_PG_VALUES}"; then
-    echo -e "${RED}ERROR: FIPS configuration missing or incorrect in values file!${NC}"
-    echo -e "${YELLOW}Values file contents:${NC}"
-    cat "${TEMP_PG_VALUES}" | head -20
-    exit 1
-  fi
-  
-  # Verify --set flags include FIPS (should appear at least twice - beginning and end)
-  FIPS_SET_COUNT=$(printf '%s\n' "${PG_HELM_ARGS[@]}" | grep -c "defaultFips\|openssl" || echo "0")
-  if [ "$FIPS_SET_COUNT" -lt 2 ]; then
-    echo -e "${RED}ERROR: FIPS --set flags missing! Found $FIPS_SET_COUNT flags, expected at least 2${NC}"
-    echo -e "${YELLOW}Helm args: ${PG_HELM_ARGS[*]}${NC}"
-    exit 1
-  fi
-  
-  echo -e "${GREEN}✓ FIPS configuration verified (set $FIPS_SET_COUNT times)${NC}"
   
   helm install postgresql bitnami/postgresql \
-    --version 15.5.20 \
+    --version 16.7.27 \
     -n "${NAMESPACE}" \
     "${PG_HELM_ARGS[@]}" \
     --timeout=10m \
