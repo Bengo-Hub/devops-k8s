@@ -67,13 +67,14 @@ echo -e "${YELLOW}Adding Helm repositories...${NC}"
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
 helm repo update
 
-# Create monitoring namespace
-if kubectl get namespace monitoring >/dev/null 2>&1; then
-  echo -e "${GREEN}✓ Namespace 'monitoring' already exists${NC}"
+# Create infra namespace (monitoring is deployed here as shared infrastructure)
+MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-infra}
+if kubectl get namespace "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
+  echo -e "${GREEN}✓ Namespace '${MONITORING_NAMESPACE}' already exists${NC}"
 else
-  echo -e "${YELLOW}Creating namespace 'monitoring'...${NC}"
-  kubectl create namespace monitoring
-  echo -e "${GREEN}✓ Namespace 'monitoring' created${NC}"
+  echo -e "${YELLOW}Creating namespace '${MONITORING_NAMESPACE}'...${NC}"
+  kubectl create namespace "${MONITORING_NAMESPACE}"
+  echo -e "${GREEN}✓ Namespace '${MONITORING_NAMESPACE}' created${NC}"
 fi
 
 # Update prometheus-values.yaml with dynamic domain
@@ -88,7 +89,7 @@ echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}
 
 # If Grafana PVC already exists, do NOT attempt to shrink it. Respect current size.
 HELM_EXTRA_OPTS=""
-GRAFANA_PVC_SIZE=$(kubectl -n monitoring get pvc prometheus-grafana -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null || true)
+GRAFANA_PVC_SIZE=$(kubectl -n "${MONITORING_NAMESPACE}" get pvc prometheus-grafana -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null || true)
 if [ -n "${GRAFANA_PVC_SIZE:-}" ]; then
   echo -e "${YELLOW}Detected existing Grafana PVC size: ${GRAFANA_PVC_SIZE} - preventing shrink on upgrade${NC}"
   HELM_EXTRA_OPTS="$HELM_EXTRA_OPTS --set-string grafana.persistence.size=${GRAFANA_PVC_SIZE}"
@@ -97,7 +98,7 @@ fi
 # Function to fix stuck Helm operations
 fix_stuck_helm() {
     local release_name=${1:-prometheus}
-    local namespace=${2:-monitoring}
+    local namespace=${2:-${MONITORING_NAMESPACE}}
 
     echo -e "${YELLOW}🔧 Attempting to fix stuck Helm operation for ${release_name}...${NC}"
 
@@ -153,15 +154,15 @@ fix_stuck_helm() {
 }
 
 # Check for stuck operations first
-if helm status prometheus -n monitoring 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
+if helm status prometheus -n "${MONITORING_NAMESPACE}" 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
     echo -e "${YELLOW}⚠️  Detected stuck Helm operation. Running fix...${NC}"
-    fix_stuck_helm prometheus monitoring
+    fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
 fi
 
 # Run Helm with output to both stdout and capture exit code
 set +e
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-  -n monitoring \
+  -n "${MONITORING_NAMESPACE}" \
   -f "${TEMP_VALUES}" \
   ${HELM_EXTRA_OPTS} \
   --timeout=15m \
@@ -179,16 +180,16 @@ else
   tail -50 /tmp/helm-monitoring-install.log || true
   echo ""
   echo -e "${YELLOW}Pod status:${NC}"
-  kubectl get pods -n monitoring || true
+  kubectl get pods -n "${MONITORING_NAMESPACE}" || true
   echo ""
   echo -e "${YELLOW}Helm status:${NC}"
-  helm -n monitoring status prometheus || true
+  helm -n "${MONITORING_NAMESPACE}" status prometheus || true
   echo ""
 
   # Check for common failure patterns and attempt fixes
   if grep -q "another operation.*in progress" /tmp/helm-monitoring-install.log 2>/dev/null; then
     echo -e "${YELLOW}🔧 Stuck operation detected during installation. Running fix...${NC}"
-    fix_stuck_helm prometheus monitoring
+    fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
     echo -e "${BLUE}🔄 Please retry the installation after cleanup completes${NC}"
   fi
 
@@ -208,7 +209,7 @@ echo ""
 echo -e "${BLUE}Grafana Access Information:${NC}"
 echo "  URL: https://${GRAFANA_DOMAIN}"
 echo "  Username: admin"
-GRAFANA_PASSWORD=$(kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" 2>/dev/null | base64 -d || echo "")
+GRAFANA_PASSWORD=$(kubectl get secret -n "${MONITORING_NAMESPACE}" prometheus-grafana -o jsonpath="{.data.admin-password}" 2>/dev/null | base64 -d || echo "")
 if [ -n "$GRAFANA_PASSWORD" ]; then
   echo "  Password: $GRAFANA_PASSWORD"
 else
@@ -223,10 +224,10 @@ echo "4. Import dashboards (315, 6417, 1860) - see docs/monitoring.md"
 echo "5. Configure Alertmanager email: kubectl apply -f manifests/monitoring/alertmanager-config.yaml"
 echo ""
 echo -e "${BLUE}Alternative Access (port-forward):${NC}"
-echo "kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+echo "kubectl port-forward -n ${MONITORING_NAMESPACE} svc/prometheus-grafana 3000:80"
 echo "Then visit: http://localhost:3000"
 echo ""
 echo -e "${BLUE}Prometheus:${NC}"
-echo "kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090"
+echo "kubectl port-forward -n ${MONITORING_NAMESPACE} svc/prometheus-kube-prometheus-prometheus 9090:9090"
 echo "Then visit: http://localhost:9090"
 echo ""
