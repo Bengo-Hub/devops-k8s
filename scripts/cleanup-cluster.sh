@@ -14,7 +14,7 @@ NC='\033[0m'
 
 # Configuration
 SKIP_SYSTEM_NAMESPACES=true  # Don't delete kube-system, kube-public, etc.
-# CRITICAL: Cleanup is opt-in only - must explicitly set ENABLE_CLEANUP=true
+# Cleanup enabled by default (can be disabled by setting ENABLE_CLEANUP=false)
 ENABLE_CLEANUP=${ENABLE_CLEANUP:-true}
 FORCE_CLEANUP=${FORCE_CLEANUP:-true}
 
