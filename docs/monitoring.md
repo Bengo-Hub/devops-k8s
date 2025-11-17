@@ -11,6 +11,8 @@ Stack Components
 - **kube-state-metrics**: Kubernetes object metrics
 - **node-exporter**: Node-level metrics
 - **Loki** (optional): Log aggregation
+ - **KEDA** (optional): Event/queue-driven autoscaling metrics when installed
+ - **Argo CD Metrics**: Argo CD server and repo-server Prometheus endpoints
 
 Prerequisites
 -------------
@@ -130,6 +132,13 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 
 ```bash
 kubectl apply -f manifests/monitoring/erp-alerts.yaml
+```
+
+### 5. Enable Argo CD and Infra Monitoring
+
+```bash
+kubectl apply -f manifests/monitoring/argocd-servicemonitor.yaml
+kubectl apply -f manifests/monitoring/db-queue-alerts.yaml
 ```
 
 ### 5. Verify Installation
@@ -612,5 +621,12 @@ kubectl get servicemonitor -n monitoring
 - Verify ServiceMonitor labels match Prometheus selector
 - Check application exposes /metrics endpoint
 - Review Prometheus logs for scrape errors
+
+KEDA & HPA/VPA Visibility
+-------------------------
+
+- HPA: Use `kubectl get hpa` and Grafana dashboards to view replicas and utilization.
+- VPA: Use `kubectl get vpa -A` and review recommendations; dashboards include VPA panels.
+- KEDA: Use `kubectl get scaledobject -A`; KEDA metrics are available once KEDA is installed.
 
 
