@@ -188,8 +188,9 @@ fi
 # CRITICAL: Always explicitly set FIPS configuration via --set flags
 # These MUST be set to avoid chart validation errors
 # Chart version 15.5.26+ requires explicit FIPS configuration
-PG_HELM_ARGS+=(--set global.defaultFips=false)
-PG_HELM_ARGS+=(--set fips.openssl=false)
+# Using --set-string to ensure boolean values are properly set
+PG_HELM_ARGS+=(--set-string global.defaultFips=false)
+PG_HELM_ARGS+=(--set-string fips.openssl=false)
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
