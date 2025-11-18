@@ -290,8 +290,8 @@ else
   
   # Source common functions for cleanup logic
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [ -f "${SCRIPT_DIR}/common.sh" ]; then
-    source "${SCRIPT_DIR}/common.sh"
+  if [ -f "${SCRIPT_DIR}/../tools/common.sh" ]; then
+    source "${SCRIPT_DIR}/../tools/common.sh"
   fi
   
   # Only clean up orphaned resources if cleanup mode is active

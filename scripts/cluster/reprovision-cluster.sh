@@ -18,6 +18,8 @@ FORCE_CLEANUP=${FORCE_CLEANUP:-true}
 SKIP_PROVISION=${SKIP_PROVISION:-false}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INFRA_DIR="${SCRIPT_DIR}/../infrastructure"
+MONITORING_DIR="${SCRIPT_DIR}/../monitoring"
 
 echo -e "${RED}========================================${NC}"
 echo -e "${RED}  CLUSTER REPROVISIONING SCRIPT${NC}"
@@ -73,36 +75,36 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     
     # 1. Storage provisioner
     echo -e "${BLUE}[1/9] Installing storage provisioner...${NC}"
-    "${SCRIPT_DIR}/install-storage-provisioner.sh"
+    "${INFRA_DIR}/install-storage-provisioner.sh"
     echo ""
     
     # 2. Databases (PostgreSQL & Redis)
     echo -e "${BLUE}[2/9] Installing databases (PostgreSQL & Redis)...${NC}"
     export NAMESPACE=${DB_NAMESPACE:-infra}
     export PG_DATABASE=postgres
-    "${SCRIPT_DIR}/install-databases.sh"
+    "${INFRA_DIR}/install-databases.sh"
     echo ""
     
     # 3. RabbitMQ
     echo -e "${BLUE}[3/9] Installing RabbitMQ...${NC}"
     export RABBITMQ_NAMESPACE=${DB_NAMESPACE:-infra}
-    "${SCRIPT_DIR}/install-rabbitmq.sh"
+    "${INFRA_DIR}/install-rabbitmq.sh"
     echo ""
     
     # 4. Ingress Controller
     echo -e "${BLUE}[4/9] Configuring ingress controller...${NC}"
-    "${SCRIPT_DIR}/configure-ingress-controller.sh"
+    "${INFRA_DIR}/configure-ingress-controller.sh"
     echo ""
     
     # 5. cert-manager
     echo -e "${BLUE}[5/9] Installing cert-manager...${NC}"
-    "${SCRIPT_DIR}/install-cert-manager.sh"
+    "${INFRA_DIR}/install-cert-manager.sh"
     echo ""
     
     # 6. Argo CD
     echo -e "${BLUE}[6/9] Installing Argo CD...${NC}"
     export ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.masterspace.co.ke}
-    "${SCRIPT_DIR}/install-argocd.sh"
+    "${INFRA_DIR}/install-argocd.sh"
     echo ""
     
     # 7. Bootstrap ArgoCD applications
@@ -123,12 +125,12 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     echo -e "${BLUE}[8/9] Installing monitoring stack...${NC}"
     export GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
     export MONITORING_NAMESPACE=${DB_NAMESPACE:-infra}
-    "${SCRIPT_DIR}/install-monitoring.sh"
+    "${MONITORING_DIR}/install-monitoring.sh"
     echo ""
     
     # 9. VPA
     echo -e "${BLUE}[9/9] Installing Vertical Pod Autoscaler...${NC}"
-    "${SCRIPT_DIR}/install-vpa.sh"
+    "${INFRA_DIR}/install-vpa.sh"
     echo ""
     
     echo -e "${GREEN}✓ Reprovisioning complete${NC}"

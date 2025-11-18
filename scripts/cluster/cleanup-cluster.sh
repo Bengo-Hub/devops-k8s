@@ -35,7 +35,7 @@ if [ "$ENABLE_CLEANUP" != "true" ]; then
 fi
 
 echo -e "${RED}========================================${NC}"
-echo -e "${RED}  CLUSTER CLEANUP SCRIPT${NC}"
+echo -e "${RED}  COMPLETE CLUSTER CLEANUP SCRIPT${NC}"
 echo -e "${RED}========================================${NC}"
 echo ""
 echo -e "${YELLOW}WARNING: This script will delete:${NC}"
@@ -43,6 +43,9 @@ echo -e "${YELLOW}  - All application namespaces${NC}"
 echo -e "${YELLOW}  - All Helm releases${NC}"
 echo -e "${YELLOW}  - All PVCs and data${NC}"
 echo -e "${YELLOW}  - All ArgoCD applications${NC}"
+echo -e "${YELLOW}  - Stop Kubernetes runtime${NC}"
+echo -e "${YELLOW}  - Stop Docker/containerd runtime${NC}"
+echo -e "${YELLOW}  - Clean all container images and volumes${NC}"
 echo ""
 
 # Confirmation (unless FORCE_CLEANUP is set)
@@ -432,6 +435,140 @@ if [ -n "$APP_NAMESPACES" ]; then
     echo -e "${YELLOW}  These may need manual cleanup.${NC}"
 else
     echo -e "${GREEN}✓ All application namespaces cleaned up${NC}"
+fi
+
+echo ""
+echo -e "${BLUE}Step 8: Stopping Kubernetes and Container Runtimes...${NC}"
+
+# Function to stop Kubernetes runtime
+stop_kubernetes_runtime() {
+    echo -e "${YELLOW}  Stopping Kubernetes runtime...${NC}"
+    
+    # Stop kubelet
+    if systemctl is-active --quiet kubelet 2>/dev/null; then
+        echo -e "${BLUE}    Stopping kubelet...${NC}"
+        systemctl stop kubelet 2>/dev/null || true
+        systemctl disable kubelet 2>/dev/null || true
+    fi
+    
+    # Stop kube-proxy (if running as systemd service)
+    if systemctl is-active --quiet kube-proxy 2>/dev/null; then
+        echo -e "${BLUE}    Stopping kube-proxy...${NC}"
+        systemctl stop kube-proxy 2>/dev/null || true
+    fi
+    
+    # Stop kube-scheduler (if running as systemd service)
+    if systemctl is-active --quiet kube-scheduler 2>/dev/null; then
+        echo -e "${BLUE}    Stopping kube-scheduler...${NC}"
+        systemctl stop kube-scheduler 2>/dev/null || true
+    fi
+    
+    # Stop kube-controller-manager (if running as systemd service)
+    if systemctl is-active --quiet kube-controller-manager 2>/dev/null; then
+        echo -e "${BLUE}    Stopping kube-controller-manager...${NC}"
+        systemctl stop kube-controller-manager 2>/dev/null || true
+    fi
+    
+    # Stop kube-apiserver (if running as systemd service)
+    if systemctl is-active --quiet kube-apiserver 2>/dev/null; then
+        echo -e "${BLUE}    Stopping kube-apiserver...${NC}"
+        systemctl stop kube-apiserver 2>/dev/null || true
+    fi
+    
+    # Reset kubeadm (if kubeadm was used)
+    if command -v kubeadm &> /dev/null; then
+        echo -e "${BLUE}    Resetting kubeadm cluster...${NC}"
+        kubeadm reset --force 2>/dev/null || true
+    fi
+    
+    echo -e "${GREEN}  ✓ Kubernetes runtime stopped${NC}"
+}
+
+# Function to stop Docker runtime
+stop_docker_runtime() {
+    echo -e "${YELLOW}  Stopping Docker runtime...${NC}"
+    
+    # Stop Docker daemon
+    if systemctl is-active --quiet docker 2>/dev/null; then
+        echo -e "${BLUE}    Stopping Docker daemon...${NC}"
+        systemctl stop docker 2>/dev/null || true
+        systemctl disable docker 2>/dev/null || true
+    fi
+    
+    # Stop containerd
+    if systemctl is-active --quiet containerd 2>/dev/null; then
+        echo -e "${BLUE}    Stopping containerd...${NC}"
+        systemctl stop containerd 2>/dev/null || true
+        systemctl disable containerd 2>/dev/null || true
+    fi
+    
+    # Clean Docker data
+    if command -v docker &> /dev/null; then
+        echo -e "${BLUE}    Cleaning Docker data...${NC}"
+        docker system prune -af --volumes 2>/dev/null || true
+    fi
+    
+    # Clean containerd data
+    if command -v crictl &> /dev/null; then
+        echo -e "${BLUE}    Cleaning containerd data...${NC}"
+        crictl rmi --all 2>/dev/null || true
+        crictl rmp --all 2>/dev/null || true
+    fi
+    
+    # Remove Docker/containerd data directories
+    echo -e "${BLUE}    Removing runtime data directories...${NC}"
+    rm -rf /var/lib/docker/* 2>/dev/null || true
+    rm -rf /var/lib/containerd/* 2>/dev/null || true
+    rm -rf /var/lib/cni/* 2>/dev/null || true
+    rm -rf /etc/cni/net.d/* 2>/dev/null || true
+    
+    echo -e "${GREEN}  ✓ Docker/containerd runtime stopped and cleaned${NC}"
+}
+
+# Function to clean Kubernetes data
+clean_kubernetes_data() {
+    echo -e "${YELLOW}  Cleaning Kubernetes data directories...${NC}"
+    
+    # Remove Kubernetes data
+    rm -rf /etc/kubernetes/* 2>/dev/null || true
+    rm -rf /var/lib/kubelet/* 2>/dev/null || true
+    rm -rf /var/lib/etcd/* 2>/dev/null || true
+    rm -rf ~/.kube/* 2>/dev/null || true
+    
+    # Clean iptables rules
+    echo -e "${BLUE}    Cleaning iptables rules...${NC}"
+    iptables -F 2>/dev/null || true
+    iptables -t nat -F 2>/dev/null || true
+    iptables -t mangle -F 2>/dev/null || true
+    iptables -X 2>/dev/null || true
+    ip6tables -F 2>/dev/null || true
+    ip6tables -t nat -F 2>/dev/null || true
+    ip6tables -X 2>/dev/null || true
+    
+    # Remove CNI configs
+    rm -rf /etc/cni/net.d/* 2>/dev/null || true
+    rm -rf /opt/cni/bin/* 2>/dev/null || true
+    
+    echo -e "${GREEN}  ✓ Kubernetes data cleaned${NC}"
+}
+
+# Check if we're running on the cluster node (not from CI/CD)
+if [ -f "/etc/kubernetes/admin.conf" ] || systemctl is-active --quiet kubelet 2>/dev/null; then
+    echo -e "${YELLOW}  Detected cluster node - performing full runtime cleanup${NC}"
+    
+    # Stop Kubernetes runtime
+    stop_kubernetes_runtime
+    
+    # Stop Docker/containerd runtime
+    stop_docker_runtime
+    
+    # Clean Kubernetes data
+    clean_kubernetes_data
+    
+    echo -e "${GREEN}✓ Runtime cleanup complete${NC}"
+else
+    echo -e "${BLUE}  Running from remote (CI/CD) - skipping runtime cleanup${NC}"
+    echo -e "${BLUE}  Runtime cleanup must be run directly on the cluster node${NC}"
 fi
 
 echo ""
