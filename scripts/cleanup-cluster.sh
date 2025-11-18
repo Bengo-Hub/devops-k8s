@@ -162,6 +162,13 @@ fi
 echo -e "${GREEN}✓ ArgoCD Applications deleted${NC}"
 echo ""
 
+# Remove ArgoCD CRDs early to avoid finalizer hangs
+echo -e "${BLUE}Step 2.5: Removing ArgoCD CRDs...${NC}"
+kubectl delete crd applications.argoproj.io --wait=true --grace-period=0 2>/dev/null || true
+kubectl delete crd applicationprojects.argoproj.io --wait=true --grace-period=0 2>/dev/null || true
+echo -e "${GREEN}✓ ArgoCD CRDs removed (if present)${NC}"
+echo ""
+
 echo -e "${BLUE}Step 3: Deleting all application namespaces...${NC}"
 
 # First, explicitly delete known application namespaces
