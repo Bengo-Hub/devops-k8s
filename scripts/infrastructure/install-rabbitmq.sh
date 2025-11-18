@@ -70,8 +70,8 @@ RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
 # Source common functions for cleanup logic
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "${SCRIPT_DIR}/common.sh" ]; then
-  source "${SCRIPT_DIR}/common.sh"
+if [ -f "${SCRIPT_DIR}/../tools/common.sh" ]; then
+  source "${SCRIPT_DIR}/../tools/common.sh"
 fi
 
 set +e

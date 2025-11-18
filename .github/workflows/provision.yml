@@ -1,10 +1,15 @@
-name: Provision Cluster Services
+name: Provision Cluster Services (Complete Setup)
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
     inputs:
+      setup_cluster:
+        description: 'Set up Kubernetes cluster from scratch (requires VPS access). Set to false to skip.'
+        required: false
+        default: false
+        type: boolean
       enable_cleanup:
         description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Set to false to disable.'
         required: false
@@ -20,15 +25,19 @@ jobs:
       skip_provision: 'false'
       # Configurable domains and IPs via GitHub secrets (with defaults)
       VPS_IP: ${{ secrets.VPS_IP || 'YOUR_VPS_IP' }}
+      VPS_USER: ${{ secrets.VPS_USER || 'root' }}
       ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.masterspace.co.ke' }}
       GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
+      CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
       # Cleanup ENABLED by default (can be disabled via workflow input)
-      # Defaults to true for push events; respects workflow_dispatch input
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.enable_cleanup == 'false' && 'false' || 'true')
         || 'true' }}
+      SETUP_CLUSTER: ${{ github.event_name == 'workflow_dispatch'
+        && (github.event.inputs.setup_cluster == 'true' && 'true' || 'false')
+        || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,6 +52,133 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y postgresql-client postgresql-client-common
 
+      - name: Setup SSH for VPS access
+        if: env.SETUP_CLUSTER == 'true'
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          echo "::group::Setting up SSH for VPS access"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "⚠️  SSH_PRIVATE_KEY not provided. Skipping cluster setup."
+            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/vps_key
+          chmod 600 ~/.ssh/vps_key
+          
+          # Add VPS to known hosts
+          ssh-keyscan -H ${VPS_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          # Test SSH connection
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" || {
+            echo "❌ Failed to connect to VPS. Check SSH_PRIVATE_KEY and VPS_IP."
+            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            exit 0
+          }
+          
+          echo "✅ SSH connection established"
+          echo "SETUP_CLUSTER=true" >> $GITHUB_ENV
+          echo "::endgroup::"
+
+      - name: Setup VPS (Initial Server Configuration)
+        if: env.SETUP_CLUSTER == 'true'
+        run: |
+          echo "::group::VPS Initial Setup"
+          echo "Setting up VPS: ${VPS_IP}"
+          
+          # Copy scripts to VPS
+          scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=no \
+            -r scripts/cluster/* ${VPS_USER}@${VPS_IP}:/tmp/k8s-setup/ || true
+          
+          # Run VPS setup
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << 'EOF'
+            set -e
+            mkdir -p /tmp/k8s-setup
+            cd /tmp/k8s-setup
+            
+            # Make scripts executable
+            chmod +x *.sh || true
+            
+            # Run VPS setup
+            if [ -f setup-vps.sh ]; then
+              CLUSTER_NAME=${CLUSTER_NAME:-mss-prod} bash setup-vps.sh
+            else
+              echo "⚠️  setup-vps.sh not found, skipping VPS setup"
+            fi
+          EOF
+          
+          echo "✅ VPS setup complete"
+          echo "::endgroup::"
+
+      - name: Setup Container Runtime (containerd)
+        if: env.SETUP_CLUSTER == 'true'
+        run: |
+          echo "::group::Container Runtime Setup"
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << 'EOF'
+            set -e
+            cd /tmp/k8s-setup
+            
+            if [ -f setup-containerd.sh ]; then
+              bash setup-containerd.sh
+            else
+              echo "⚠️  setup-containerd.sh not found"
+            fi
+          EOF
+          echo "✅ Container runtime setup complete"
+          echo "::endgroup::"
+
+      - name: Setup Kubernetes Cluster
+        if: env.SETUP_CLUSTER == 'true'
+        env:
+          CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
+          VPS_IP: ${{ env.VPS_IP }}
+        run: |
+          echo "::group::Kubernetes Cluster Setup"
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << EOF
+            set -e
+            cd /tmp/k8s-setup
+            
+            if [ -f setup-kubernetes.sh ]; then
+              CLUSTER_NAME=${CLUSTER_NAME} VPS_IP=${VPS_IP} bash setup-kubernetes.sh
+            else
+              echo "⚠️  setup-kubernetes.sh not found"
+            fi
+          EOF
+          
+          # Retrieve kubeconfig
+          echo "::group::Retrieving kubeconfig"
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} \
+            "cat /root/.kube/config" > /tmp/kubeconfig || \
+            ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} \
+            "cat /home/ubuntu/.kube/config" > /tmp/kubeconfig || true
+          
+          if [ -f /tmp/kubeconfig ]; then
+            # Update server address if needed
+            sed -i "s|server: https://.*:6443|server: https://${VPS_IP}:6443|" /tmp/kubeconfig
+            
+            # Display base64 kubeconfig
+            echo ""
+            echo "🔑 BASE64-ENCODED KUBECONFIG (Copy this to GitHub secret KUBE_CONFIG):"
+            echo "=========================================="
+            cat /tmp/kubeconfig | base64 -w 0
+            echo ""
+            echo "=========================================="
+            echo ""
+            echo "📋 NEXT STEPS:"
+            echo "1. Copy the base64 kubeconfig above"
+            echo "2. Go to: https://github.com/Bengo-Hub/devops-k8s/settings/secrets/actions"
+            echo "3. Add secret: KUBE_CONFIG (paste the base64 value)"
+            echo "4. Re-run this workflow to continue with infrastructure provisioning"
+            echo ""
+          fi
+          echo "::endgroup::"
+          echo "::endgroup::"
+
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
@@ -50,7 +186,11 @@ jobs:
           echo "::group::Checking KUBE_CONFIG"
           if [ -z "$KUBE_CONFIG_B64" ]; then
             echo "❌ KUBE_CONFIG secret not provided."
-            echo "Please set KUBE_CONFIG at org/repo level with base64-encoded kubeconfig."
+            if [ "$SETUP_CLUSTER" = "true" ]; then
+              echo "⚠️  Cluster was just set up. Please copy the kubeconfig from above and add it as KUBE_CONFIG secret."
+            else
+              echo "Please set KUBE_CONFIG at org/repo level with base64-encoded kubeconfig."
+            fi
             echo "skip_provision=true" >> $GITHUB_ENV
             echo "::endgroup::"
             exit 0
@@ -80,7 +220,8 @@ jobs:
       - name: Ensure scripts executable
         if: env.skip_provision != 'true'
         run: |
-          chmod +x scripts/*.sh || true
+          chmod +x scripts/**/*.sh || true
+          chmod +x scripts/*/*.sh || true
 
       - name: Check cluster health
         if: env.skip_provision != 'true'
@@ -94,7 +235,7 @@ jobs:
           if [ "$PENDING_COUNT" -gt 0 ]; then
             echo "⚠️  Warning: Found $PENDING_COUNT Pending pods"
             echo "Running diagnostics..."
-            ./scripts/diagnose-pending-pods.sh || true
+            ./scripts/diagnostics/diagnose-pending-pods.sh || true
           else
             echo "✅ No Pending pods found"
           fi
@@ -113,7 +254,7 @@ jobs:
             echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
             export ENABLE_CLEANUP=true
             export FORCE_CLEANUP=true
-            ./scripts/cleanup-cluster.sh
+            ./scripts/cluster/cleanup-cluster.sh
           else
             echo "✅ Cleanup DISABLED - Skipping cluster cleanup"
             echo "ℹ️  Existing infrastructure will be preserved"
@@ -125,7 +266,7 @@ jobs:
         if: env.skip_provision != 'true'
         run: |
           echo "::group::Installing Storage Provisioner"
-          ./scripts/install-storage-provisioner.sh
+          ./scripts/infrastructure/install-storage-provisioner.sh
           echo "::endgroup::"
 
       - name: Install databases (PostgreSQL & Redis - Shared Infrastructure)
@@ -143,7 +284,7 @@ jobs:
           echo "PostgreSQL will create admin_user for managing per-service databases"
           export NAMESPACE=${DB_NAMESPACE}
           export PG_DATABASE=postgres
-          ./scripts/install-databases.sh
+          ./scripts/infrastructure/install-databases.sh
           echo "✅ Shared databases installed in ${DB_NAMESPACE} namespace"
           echo "✅ PostgreSQL admin_user created (can create per-service databases)"
           echo "✅ Each service will create its own database during deployment"
@@ -159,7 +300,7 @@ jobs:
           echo "::group::Installing RabbitMQ (Shared Infrastructure in ${RABBITMQ_NAMESPACE} namespace)"
           echo "Installing RabbitMQ as shared infrastructure..."
           echo "Namespace: ${RABBITMQ_NAMESPACE}"
-          ./scripts/install-rabbitmq.sh
+          ./scripts/infrastructure/install-rabbitmq.sh
           echo "✅ RabbitMQ installed in ${RABBITMQ_NAMESPACE} namespace"
           echo "✅ All services can use shared RabbitMQ instance"
           echo "::endgroup::"
@@ -168,14 +309,14 @@ jobs:
         if: env.skip_provision != 'true'
         run: |
           echo "::group::Configuring NGINX Ingress Controller"
-          ./scripts/configure-ingress-controller.sh
+          ./scripts/infrastructure/configure-ingress-controller.sh
           echo "::endgroup::"
 
       - name: Install cert-manager (idempotent)
         if: env.skip_provision != 'true'
         run: |
           echo "::group::Installing cert-manager"
-          ./scripts/install-cert-manager.sh
+          ./scripts/infrastructure/install-cert-manager.sh
           echo "::endgroup::"
 
       - name: Install Argo CD (idempotent)
@@ -184,7 +325,7 @@ jobs:
           ARGOCD_DOMAIN: ${{ env.ARGOCD_DOMAIN }}
         run: |
           echo "::group::Installing Argo CD"
-          ./scripts/install-argocd.sh
+          ./scripts/infrastructure/install-argocd.sh
           echo "::endgroup::"
 
       - name: Bootstrap Argo CD applications (app-of-apps)
@@ -220,14 +361,14 @@ jobs:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
           echo "::group::Installing Monitoring Stack"
-          ./scripts/install-monitoring.sh
+          ./scripts/monitoring/install-monitoring.sh
           echo "::endgroup::"
 
       - name: Install Vertical Pod Autoscaler (VPA)
         if: env.skip_provision != 'true'
         run: |
           echo "::group::Installing Vertical Pod Autoscaler"
-          ./scripts/install-vpa.sh
+          ./scripts/infrastructure/install-vpa.sh
           echo "::endgroup::"
 
       - name: Setup Git Access (SSH Keys & Configuration)
@@ -254,7 +395,7 @@ jobs:
           # Add GitHub to known hosts
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Create SSH config for reliable git operations (FINAL SOLUTION)
+          # Create SSH config for reliable git operations
           cat > ~/.ssh/config << 'EOF'
           Host github.com
               HostName github.com
@@ -266,6 +407,7 @@ jobs:
           chmod 600 ~/.ssh/config
           
           # Display public key for deploy key setup
+          echo ""
           echo "🔑 PUBLIC KEY FOR GITHUB DEPLOY KEY:"
           echo "====================================="
           cat ~/.ssh/git_deploy_key.pub
@@ -276,6 +418,7 @@ jobs:
           echo "2. Go to: https://github.com/Bengo-Hub/devops-k8s/settings/keys"
           echo "3. Add deploy key with 'Allow write access' enabled"
           echo "4. Test: git clone git@github.com:Bengo-Hub/devops-k8s.git"
+          echo ""
           
           echo "::endgroup::"
       
