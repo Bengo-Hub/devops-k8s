@@ -87,26 +87,39 @@ jobs:
 
       - name: Setup VPS (Initial Server Configuration)
         if: env.SETUP_CLUSTER == 'true'
+        env:
+          CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
         run: |
           echo "::group::VPS Initial Setup"
           echo "Setting up VPS: ${VPS_IP}"
           
-          # Copy scripts to VPS
+          # Copy all necessary scripts to VPS
+          echo "Copying scripts to VPS..."
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} "mkdir -p /tmp/k8s-setup/cluster /tmp/k8s-setup/infrastructure /tmp/k8s-setup/tools" || true
+          
+          # Copy cluster setup scripts
           scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=no \
-            -r scripts/cluster/* ${VPS_USER}@${VPS_IP}:/tmp/k8s-setup/ || true
+            scripts/cluster/setup-vps.sh \
+            scripts/cluster/setup-containerd.sh \
+            scripts/cluster/setup-kubernetes.sh \
+            ${VPS_USER}@${VPS_IP}:/tmp/k8s-setup/cluster/ || true
+          
+          # Copy common.sh (needed by some scripts)
+          scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=no \
+            scripts/tools/common.sh \
+            ${VPS_USER}@${VPS_IP}:/tmp/k8s-setup/tools/ || true
           
           # Run VPS setup
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << 'EOF'
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << EOF
             set -e
-            mkdir -p /tmp/k8s-setup
-            cd /tmp/k8s-setup
+            cd /tmp/k8s-setup/cluster
             
             # Make scripts executable
             chmod +x *.sh || true
             
             # Run VPS setup
             if [ -f setup-vps.sh ]; then
-              CLUSTER_NAME=${CLUSTER_NAME:-mss-prod} bash setup-vps.sh
+              CLUSTER_NAME=${CLUSTER_NAME} bash setup-vps.sh
             else
               echo "⚠️  setup-vps.sh not found, skipping VPS setup"
             fi
@@ -121,7 +134,7 @@ jobs:
           echo "::group::Container Runtime Setup"
           ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << 'EOF'
             set -e
-            cd /tmp/k8s-setup
+            cd /tmp/k8s-setup/cluster
             
             if [ -f setup-containerd.sh ]; then
               bash setup-containerd.sh
@@ -141,7 +154,7 @@ jobs:
           echo "::group::Kubernetes Cluster Setup"
           ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << EOF
             set -e
-            cd /tmp/k8s-setup
+            cd /tmp/k8s-setup/cluster
             
             if [ -f setup-kubernetes.sh ]; then
               CLUSTER_NAME=${CLUSTER_NAME} VPS_IP=${VPS_IP} bash setup-kubernetes.sh
@@ -149,6 +162,10 @@ jobs:
               echo "⚠️  setup-kubernetes.sh not found"
             fi
           EOF
+          
+          # Wait for cluster to be ready
+          echo "Waiting for cluster to stabilize..."
+          sleep 30
           
           # Retrieve kubeconfig
           echo "::group::Retrieving kubeconfig"
@@ -241,36 +258,51 @@ jobs:
           fi
           echo "::endgroup::"
 
-      - name: Cleanup cluster (ENABLED by default)
+      - name: Check and fix etcd space (if needed)
         if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Checking etcd Space"
+          # Check if etcd space fix script exists and run it
+          # The script will check etcd status and fix if needed
+          if [ -f ./scripts/cluster/fix-etcd-space.sh ]; then
+            echo "Running etcd space check and fix..."
+            ./scripts/cluster/fix-etcd-space.sh || echo "⚠️  etcd check completed (may need manual intervention if issues persist)"
+          else
+            echo "⚠️  etcd fix script not found - skipping etcd space check"
+            echo "If you encounter 'database space exceeded' errors, run fix-etcd-space.sh manually on the cluster node"
+          fi
+          echo "::endgroup::"
+
+      - name: Cleanup cluster (ENABLED by default)
+        if: env.skip_provision != 'true' && env.ENABLE_CLEANUP == 'true'
         env:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
+          FORCE_CLEANUP: 'true'
         run: |
           echo "::group::Cluster Cleanup"
           echo "ENABLE_CLEANUP=${ENABLE_CLEANUP}"
-          if [ "$ENABLE_CLEANUP" = "true" ]; then
-            echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
-            echo "⚠️  Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
-            echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
-            export ENABLE_CLEANUP=true
-            export FORCE_CLEANUP=true
-            ./scripts/cluster/cleanup-cluster.sh
-          else
-            echo "✅ Cleanup DISABLED - Skipping cluster cleanup"
-            echo "ℹ️  Existing infrastructure will be preserved"
-            echo "ℹ️  To disable cleanup, set enable_cleanup=false when running workflow manually"
-          fi
+          echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
+          echo "⚠️  Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
+          echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
+          export ENABLE_CLEANUP=true
+          export FORCE_CLEANUP=true
+          ./scripts/cluster/cleanup-cluster.sh
+          echo "✅ Cleanup complete"
           echo "::endgroup::"
 
       - name: Install storage provisioner (idempotent)
         if: env.skip_provision != 'true'
+        timeout-minutes: 10
         run: |
           echo "::group::Installing Storage Provisioner"
+          echo "This step is required before installing databases (for PVCs)"
           ./scripts/infrastructure/install-storage-provisioner.sh
+          echo "✅ Storage provisioner installed"
           echo "::endgroup::"
 
       - name: Install databases (PostgreSQL & Redis - Shared Infrastructure)
         if: env.skip_provision != 'true'
+        timeout-minutes: 20
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD }}
@@ -282,6 +314,7 @@ jobs:
           echo "Installing shared infrastructure databases..."
           echo "Namespace: ${DB_NAMESPACE}"
           echo "PostgreSQL will create admin_user for managing per-service databases"
+          echo "Note: This may take 10-15 minutes for first installation"
           export NAMESPACE=${DB_NAMESPACE}
           export PG_DATABASE=postgres
           ./scripts/infrastructure/install-databases.sh
@@ -292,6 +325,7 @@ jobs:
       
       - name: Install RabbitMQ (Shared Infrastructure)
         if: env.skip_provision != 'true'
+        timeout-minutes: 15
         env:
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
           RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
@@ -300,6 +334,7 @@ jobs:
           echo "::group::Installing RabbitMQ (Shared Infrastructure in ${RABBITMQ_NAMESPACE} namespace)"
           echo "Installing RabbitMQ as shared infrastructure..."
           echo "Namespace: ${RABBITMQ_NAMESPACE}"
+          echo "Note: This may take 5-10 minutes"
           ./scripts/infrastructure/install-rabbitmq.sh
           echo "✅ RabbitMQ installed in ${RABBITMQ_NAMESPACE} namespace"
           echo "✅ All services can use shared RabbitMQ instance"
@@ -307,25 +342,34 @@ jobs:
 
       - name: Configure ingress controller (idempotent)
         if: env.skip_provision != 'true'
+        timeout-minutes: 10
         run: |
           echo "::group::Configuring NGINX Ingress Controller"
+          echo "Installing NGINX Ingress Controller (required for cert-manager and ArgoCD)"
           ./scripts/infrastructure/configure-ingress-controller.sh
+          echo "✅ Ingress controller configured"
           echo "::endgroup::"
 
       - name: Install cert-manager (idempotent)
         if: env.skip_provision != 'true'
+        timeout-minutes: 10
         run: |
           echo "::group::Installing cert-manager"
+          echo "Installing cert-manager for TLS certificates (required for ArgoCD and monitoring)"
           ./scripts/infrastructure/install-cert-manager.sh
+          echo "✅ cert-manager installed"
           echo "::endgroup::"
 
       - name: Install Argo CD (idempotent)
         if: env.skip_provision != 'true'
+        timeout-minutes: 15
         env:
           ARGOCD_DOMAIN: ${{ env.ARGOCD_DOMAIN }}
         run: |
           echo "::group::Installing Argo CD"
+          echo "Installing ArgoCD GitOps tool (requires cert-manager for TLS)"
           ./scripts/infrastructure/install-argocd.sh
+          echo "✅ ArgoCD installed"
           echo "::endgroup::"
 
       - name: Bootstrap Argo CD applications (app-of-apps)
@@ -355,20 +399,27 @@ jobs:
 
       - name: Install Monitoring (idempotent)
         if: env.skip_provision != 'true'
+        timeout-minutes: 20
         env:
           GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
           MONITORING_NAMESPACE: ${{ env.MONITORING_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
           echo "::group::Installing Monitoring Stack"
+          echo "Installing Prometheus + Grafana monitoring stack"
+          echo "Note: This may take 10-15 minutes"
           ./scripts/monitoring/install-monitoring.sh
+          echo "✅ Monitoring stack installed"
           echo "::endgroup::"
 
       - name: Install Vertical Pod Autoscaler (VPA)
         if: env.skip_provision != 'true'
+        timeout-minutes: 10
         run: |
           echo "::group::Installing Vertical Pod Autoscaler"
+          echo "Installing VPA for automatic pod resource optimization"
           ./scripts/infrastructure/install-vpa.sh
+          echo "✅ VPA installed"
           echo "::endgroup::"
 
       - name: Setup Git Access (SSH Keys & Configuration)
