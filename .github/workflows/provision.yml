@@ -24,8 +24,15 @@ jobs:
     env:
       skip_provision: 'false'
       # Configurable domains and IPs via GitHub secrets (with defaults)
-      VPS_IP: ${{ secrets.SSH_HOST || secrets.VPS_IP || 'YOUR_VPS_IP' }}
+      # Priority: SSH_HOST > VPS_IP > Contabo API fallback
+      VPS_IP: ${{ secrets.SSH_HOST || secrets.VPS_IP || '' }}
       VPS_USER: ${{ secrets.SSH_USER || secrets.VPS_USER || 'root' }}
+      # Contabo API credentials (for fallback)
+      CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
+      CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
+      CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
+      CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
+      CONTABO_INSTANCE_ID: ${{ secrets.CONTABO_INSTANCE_ID || '' }}
       ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.masterspace.co.ke' }}
       GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
@@ -47,16 +54,57 @@ jobs:
         with:
           install_trivy: 'false'
 
-      - name: Install PostgreSQL client (psql)
+      - name: Install PostgreSQL client (psql) and jq
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y postgresql-client postgresql-client-common
+          sudo apt-get install -y postgresql-client postgresql-client-common jq curl
+
+      - name: Get VPS IP from Contabo API (if needed)
+        id: get_vps_ip
+        if: ${{ env.SETUP_CLUSTER == 'true' && (env.VPS_IP == '' || env.VPS_IP == 'YOUR_VPS_IP') }}
+        env:
+          CONTABO_CLIENT_ID: ${{ env.CONTABO_CLIENT_ID }}
+          CONTABO_CLIENT_SECRET: ${{ env.CONTABO_CLIENT_SECRET }}
+          CONTABO_API_USERNAME: ${{ env.CONTABO_API_USERNAME }}
+          CONTABO_API_PASSWORD: ${{ env.CONTABO_API_PASSWORD }}
+          CONTABO_INSTANCE_ID: ${{ env.CONTABO_INSTANCE_ID }}
+        run: |
+          echo "::group::Getting VPS IP from Contabo API"
+          echo "VPS_IP not set, attempting to get from Contabo API..."
+          
+          # Source the Contabo API helper script
+          source ./scripts/tools/contabo-api.sh
+          
+          # Get VPS IP from Contabo API
+          VPS_IP_FROM_API=$(get_vps_ip_from_contabo 2>&1) || {
+            echo "⚠️  Failed to get VPS IP from Contabo API"
+            echo "Error: $VPS_IP_FROM_API"
+            echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
+            echo "::endgroup::"
+            exit 0
+          }
+          
+          if [ -n "$VPS_IP_FROM_API" ] && [ "$VPS_IP_FROM_API" != "null" ]; then
+            echo "✅ Got VPS IP from Contabo API: ${VPS_IP_FROM_API}"
+            echo "VPS_IP=${VPS_IP_FROM_API}" >> $GITHUB_ENV
+            echo "vps_ip_from_api=${VPS_IP_FROM_API}" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Could not get VPS IP from Contabo API"
+            echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
+          fi
+          echo "::endgroup::"
 
       - name: Setup SSH for VPS access
         id: setup_ssh
         if: ${{ env.SETUP_CLUSTER == 'true' }}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VPS_IP: ${{ env.VPS_IP || steps.get_vps_ip.outputs.vps_ip_from_api }}
+          CONTABO_CLIENT_ID: ${{ env.CONTABO_CLIENT_ID }}
+          CONTABO_CLIENT_SECRET: ${{ env.CONTABO_CLIENT_SECRET }}
+          CONTABO_API_USERNAME: ${{ env.CONTABO_API_USERNAME }}
+          CONTABO_API_PASSWORD: ${{ env.CONTABO_API_PASSWORD }}
+          CONTABO_INSTANCE_ID: ${{ env.CONTABO_INSTANCE_ID }}
         run: |
           echo "::group::Setting up SSH for VPS access"
           echo "SETUP_CLUSTER=${SETUP_CLUSTER}"
@@ -79,6 +127,7 @@ jobs:
           if [ "$VPS_IP" = "YOUR_VPS_IP" ] || [ -z "$VPS_IP" ]; then
             echo "❌ VPS IP/Host not configured."
             echo "⚠️  Please set SSH_HOST (or VPS_IP) in GitHub secrets"
+            echo "⚠️  Or configure Contabo API credentials (CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET, etc.)"
             echo "⚠️  Current value: ${VPS_IP}"
             echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
             echo "ssh_success=false" >> $GITHUB_OUTPUT
@@ -167,18 +216,61 @@ jobs:
           
           # Test SSH connection
           echo "Testing SSH connection to ${VPS_USER}@${VPS_IP}..."
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" || {
-            echo "❌ Failed to connect to VPS at ${VPS_USER}@${VPS_IP}"
-            echo "⚠️  Check the following:"
-            echo "   1. SSH_HOST secret is set correctly (current: ${VPS_IP})"
-            echo "   2. SSH_USER secret is set correctly (current: ${VPS_USER})"
-            echo "   3. SSH_PRIVATE_KEY secret matches the public key on the VPS"
-            echo "   4. VPS firewall allows SSH connections"
-            echo "   5. VPS is accessible from GitHub Actions runners"
-            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-            echo "ssh_success=false" >> $GITHUB_OUTPUT
-            exit 0
-          }
+          SSH_TEST=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
+          SSH_EXIT_CODE=$?
+          
+          if [ $SSH_EXIT_CODE -ne 0 ]; then
+            echo "⚠️  Initial SSH connection failed. Error: ${SSH_TEST}"
+            echo "Attempting Contabo API fallback..."
+            
+            # Try Contabo API fallback if credentials are available
+            if [ -n "${CONTABO_CLIENT_ID:-}" ] && [ -n "${CONTABO_CLIENT_SECRET:-}" ] && \
+               [ -n "${CONTABO_API_USERNAME:-}" ] && [ -n "${CONTABO_API_PASSWORD:-}" ]; then
+              
+              echo "Using Contabo API to check VPS status and get IP..."
+              source ./scripts/tools/contabo-api.sh
+              
+              # Try to start VPS if stopped
+              if [ -n "${CONTABO_INSTANCE_ID:-}" ]; then
+                echo "Checking VPS status and starting if needed..."
+                start_vps_if_stopped 2>&1 || echo "⚠️  Could not start VPS via API"
+              fi
+              
+              # Try to get updated IP from Contabo API
+              NEW_VPS_IP=$(get_vps_ip_from_contabo 2>&1 | tail -1)
+              if [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" != "null" ] && [ "$NEW_VPS_IP" != "$VPS_IP" ]; then
+                echo "✅ Got updated VPS IP from Contabo API: ${NEW_VPS_IP}"
+                VPS_IP="$NEW_VPS_IP"
+                echo "VPS_IP=${NEW_VPS_IP}" >> $GITHUB_ENV
+                
+                # Add new IP to known hosts
+                ssh-keyscan -H ${VPS_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
+                
+                # Retry SSH connection with new IP
+                echo "Retrying SSH connection with updated IP..."
+                SSH_TEST=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
+                SSH_EXIT_CODE=$?
+              fi
+            fi
+            
+            # Final check after fallback attempts
+            if [ $SSH_EXIT_CODE -ne 0 ]; then
+              echo "❌ SSH connection failed after all attempts."
+              echo "Error: ${SSH_TEST}"
+              echo ""
+              echo "Troubleshooting steps:"
+              echo "1. Verify SSH_HOST secret is set correctly"
+              echo "2. Verify SSH_PRIVATE_KEY secret matches the public key on VPS"
+              echo "3. Check VPS firewall allows SSH (port 22)"
+              echo "4. Verify VPS is running (check Contabo dashboard)"
+              echo "5. Try manual SSH: ssh -i ~/.ssh/vps_key ${VPS_USER}@${VPS_IP}"
+              echo ""
+              echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+              echo "ssh_success=false" >> $GITHUB_OUTPUT
+              echo "::endgroup::"
+              exit 0
+            fi
+          fi
           
           echo "✅ SSH connection established to ${VPS_USER}@${VPS_IP}"
           echo "SETUP_CLUSTER=true" >> $GITHUB_ENV
