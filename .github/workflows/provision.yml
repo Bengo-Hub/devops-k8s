@@ -61,35 +61,66 @@ jobs:
 
       - name: Get VPS IP from Contabo API (if needed)
         id: get_vps_ip
-        if: ${{ env.SETUP_CLUSTER == 'true' && (env.VPS_IP == '' || env.VPS_IP == 'YOUR_VPS_IP') }}
+        if: ${{ env.SETUP_CLUSTER == 'true' }}
         env:
           CONTABO_CLIENT_ID: ${{ env.CONTABO_CLIENT_ID }}
           CONTABO_CLIENT_SECRET: ${{ env.CONTABO_CLIENT_SECRET }}
           CONTABO_API_USERNAME: ${{ env.CONTABO_API_USERNAME }}
           CONTABO_API_PASSWORD: ${{ env.CONTABO_API_PASSWORD }}
           CONTABO_INSTANCE_ID: ${{ env.CONTABO_INSTANCE_ID }}
+          CURRENT_VPS_IP: ${{ env.VPS_IP }}
         run: |
           echo "::group::Getting VPS IP from Contabo API"
-          echo "VPS_IP not set, attempting to get from Contabo API..."
+          echo "Current VPS_IP value: '${CURRENT_VPS_IP}'"
           
-          # Source the Contabo API helper script
-          source ./scripts/tools/contabo-api.sh
-          
-          # Get VPS IP from Contabo API
-          VPS_IP_FROM_API=$(get_vps_ip_from_contabo 2>&1) || {
-            echo "⚠️  Failed to get VPS IP from Contabo API"
-            echo "Error: $VPS_IP_FROM_API"
-            echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
-            echo "::endgroup::"
-            exit 0
-          }
-          
-          if [ -n "$VPS_IP_FROM_API" ] && [ "$VPS_IP_FROM_API" != "null" ]; then
-            echo "✅ Got VPS IP from Contabo API: ${VPS_IP_FROM_API}"
-            echo "VPS_IP=${VPS_IP_FROM_API}" >> $GITHUB_ENV
-            echo "vps_ip_from_api=${VPS_IP_FROM_API}" >> $GITHUB_OUTPUT
+          # Check if VPS_IP is empty or invalid
+          if [ -z "${CURRENT_VPS_IP}" ] || \
+             [ "${CURRENT_VPS_IP}" = "YOUR_VPS_IP" ] || \
+             [ "${CURRENT_VPS_IP}" = "your_vps_ip" ] || \
+             [ "${CURRENT_VPS_IP}" = "YOUR_VPS_IP" ] || \
+             echo "${CURRENT_VPS_IP}" | grep -qi "your.*vps.*ip"; then
+            echo "⚠️  VPS_IP is empty or invalid (${CURRENT_VPS_IP}), attempting to get from Contabo API..."
+            
+            # Check if Contabo API credentials are available
+            if [ -z "${CONTABO_CLIENT_ID}" ] || [ -z "${CONTABO_CLIENT_SECRET}" ] || \
+               [ -z "${CONTABO_API_USERNAME}" ] || [ -z "${CONTABO_API_PASSWORD}" ]; then
+              echo "❌ Contabo API credentials not available"
+              echo "⚠️  Please set SSH_HOST secret or configure Contabo API credentials"
+              echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
+              echo "::endgroup::"
+              exit 0
+            fi
+            
+            # Source the Contabo API helper script
+            source ./scripts/tools/contabo-api.sh
+            
+            # Get VPS IP from Contabo API
+            echo "Calling Contabo API to get VPS IP..."
+            # Capture stderr for display, stdout for IP
+            VPS_IP_FROM_API=$(get_vps_ip_from_contabo 2>&1)
+            API_EXIT_CODE=$?
+            
+            if [ $API_EXIT_CODE -eq 0 ] && [ -n "$VPS_IP_FROM_API" ]; then
+              # Extract just the IP address (handles colored output and messages)
+              CLEAN_IP=$(echo "$VPS_IP_FROM_API" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+              
+              if [ -n "$CLEAN_IP" ] && [ "$CLEAN_IP" != "null" ]; then
+                echo "✅ Got VPS IP from Contabo API: ${CLEAN_IP}"
+                echo "VPS_IP=${CLEAN_IP}" >> $GITHUB_ENV
+                echo "vps_ip_from_api=${CLEAN_IP}" >> $GITHUB_OUTPUT
+              else
+                echo "⚠️  Could not extract valid IP from Contabo API response"
+                echo "Full response: $VPS_IP_FROM_API"
+                echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "⚠️  Failed to get VPS IP from Contabo API (exit code: $API_EXIT_CODE)"
+              echo "Error output: $VPS_IP_FROM_API"
+              echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "⚠️  Could not get VPS IP from Contabo API"
+            echo "✅ VPS_IP is already set: ${CURRENT_VPS_IP}"
+            echo "Skipping Contabo API lookup"
             echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
           fi
           echo "::endgroup::"
@@ -99,7 +130,7 @@ jobs:
         if: ${{ env.SETUP_CLUSTER == 'true' }}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VPS_IP: ${{ env.VPS_IP || steps.get_vps_ip.outputs.vps_ip_from_api }}
+          VPS_IP: ${{ steps.get_vps_ip.outputs.vps_ip_from_api || env.VPS_IP }}
           CONTABO_CLIENT_ID: ${{ env.CONTABO_CLIENT_ID }}
           CONTABO_CLIENT_SECRET: ${{ env.CONTABO_CLIENT_SECRET }}
           CONTABO_API_USERNAME: ${{ env.CONTABO_API_USERNAME }}
@@ -124,15 +155,35 @@ jobs:
             exit 0
           fi
           
-          if [ "$VPS_IP" = "YOUR_VPS_IP" ] || [ -z "$VPS_IP" ]; then
-            echo "❌ VPS IP/Host not configured."
-            echo "⚠️  Please set SSH_HOST (or VPS_IP) in GitHub secrets"
+          # Validate VPS_IP - check if it's empty, invalid, or a placeholder
+          if [ -z "$VPS_IP" ] || \
+             [ "$VPS_IP" = "YOUR_VPS_IP" ] || \
+             [ "$VPS_IP" = "your_vps_ip" ] || \
+             echo "$VPS_IP" | grep -qiE "your.*vps.*ip|placeholder|example"; then
+            echo "❌ VPS IP/Host not configured or invalid."
+            echo "⚠️  Current value: '${VPS_IP}'"
+            echo "⚠️  Please set SSH_HOST secret in GitHub secrets"
             echo "⚠️  Or configure Contabo API credentials (CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET, etc.)"
-            echo "⚠️  Current value: ${VPS_IP}"
+            echo ""
+            echo "The Contabo API step should have provided an IP. Checking if it ran..."
+            if [ -z "${steps.get_vps_ip.outputs.vps_ip_from_api}" ]; then
+              echo "❌ Contabo API step did not provide an IP address"
+              echo "⚠️  This might indicate:"
+              echo "   1. Contabo API credentials are missing or incorrect"
+              echo "   2. Contabo API call failed"
+              echo "   3. VPS instance ID is incorrect"
+            fi
             echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
             echo "ssh_success=false" >> $GITHUB_OUTPUT
             echo "::endgroup::"
             exit 0
+          fi
+          
+          # Validate IP format (basic check)
+          if ! echo "$VPS_IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
+            echo "⚠️  VPS_IP format appears invalid: '${VPS_IP}'"
+            echo "⚠️  Expected: IP address (e.g., 192.168.1.1) or hostname (e.g., vps.example.com)"
+            echo "⚠️  Continuing anyway, but SSH connection may fail..."
           fi
           
           # Clean and validate SSH private key
