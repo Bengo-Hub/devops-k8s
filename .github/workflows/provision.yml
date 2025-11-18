@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       enable_cleanup:
-        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Set to true to enable.'
+        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Set to false to disable.'
         required: false
-        default: false
+        default: true
         type: boolean
 
 jobs:
@@ -24,11 +24,11 @@ jobs:
       GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
-      # Cleanup DISABLED by default (can be enabled via workflow input)
-      # Defaults to false for push events; respects workflow_dispatch input
+      # Cleanup ENABLED by default (can be disabled via workflow input)
+      # Defaults to true for push events; respects workflow_dispatch input
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || 'false' }}
+        && (github.event.inputs.enable_cleanup == 'false' && 'false' || 'true')
+        || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,23 +82,42 @@ jobs:
         run: |
           chmod +x scripts/*.sh || true
 
-      - name: Cleanup cluster (DISABLED by default)
+      - name: Check cluster health
+        if: env.skip_provision != 'true'
+        run: |
+          echo "::group::Cluster Health Check"
+          echo "Checking cluster status..."
+          kubectl get nodes || true
+          
+          # Check for Pending pods
+          PENDING_COUNT=$(kubectl get pods -A --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l || echo "0")
+          if [ "$PENDING_COUNT" -gt 0 ]; then
+            echo "⚠️  Warning: Found $PENDING_COUNT Pending pods"
+            echo "Running diagnostics..."
+            ./scripts/diagnose-pending-pods.sh || true
+          else
+            echo "✅ No Pending pods found"
+          fi
+          echo "::endgroup::"
+
+      - name: Cleanup cluster (ENABLED by default)
         if: env.skip_provision != 'true'
         env:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
-          echo "::group::Cluster Cleanup Check"
+          echo "::group::Cluster Cleanup"
           echo "ENABLE_CLEANUP=${ENABLE_CLEANUP}"
           if [ "$ENABLE_CLEANUP" = "true" ]; then
-            echo "⚠️ WARNING: Cleanup is ENABLED - This will delete ALL applications and data!"
-            echo "⚠️ Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
+            echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
+            echo "⚠️  Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
+            echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
             export ENABLE_CLEANUP=true
             export FORCE_CLEANUP=true
             ./scripts/cleanup-cluster.sh
           else
             echo "✅ Cleanup DISABLED - Skipping cluster cleanup"
             echo "ℹ️  Existing infrastructure will be preserved"
-            echo "ℹ️  To enable cleanup, set enable_cleanup=true when running workflow manually"
+            echo "ℹ️  To disable cleanup, set enable_cleanup=false when running workflow manually"
           fi
           echo "::endgroup::"
 
