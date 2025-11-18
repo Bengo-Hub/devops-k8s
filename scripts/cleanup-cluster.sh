@@ -87,10 +87,37 @@ APP_NAMESPACES=(
     "treasury"
     "notifications"
     "auth-service"
+    "food-delivery"
 )
 
 # Get all namespaces
 ALL_NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}')
+
+force_delete_namespace() {
+    local ns=$1
+    echo -e "${BLUE}    Deleting namespace: ${ns}${NC}"
+    kubectl delete namespace "$ns" --wait=true --grace-period=0 --force 2>/dev/null || true
+
+    for attempt in {1..6}; do
+        if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+            echo -e "${GREEN}    ✓ Namespace ${ns} deleted${NC}"
+            return 0
+        fi
+
+        PHASE=$(kubectl get namespace "$ns" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$PHASE" = "Terminating" ]; then
+            echo -e "${YELLOW}      Namespace ${ns} stuck terminating - removing finalizers (attempt ${attempt})${NC}"
+            TMP_FILE="/tmp/namespace-${ns}.json"
+            kubectl get namespace "$ns" -o json | jq 'del(.spec.finalizers[])' > "${TMP_FILE}" 2>/dev/null || true
+            kubectl replace --raw "/api/v1/namespaces/${ns}/finalize" -f "${TMP_FILE}" >/dev/null 2>&1 || true
+            rm -f "${TMP_FILE}" 2>/dev/null || true
+        fi
+        sleep 5
+    done
+
+    echo -e "${YELLOW}      Namespace ${ns} still present after forced cleanup - manual intervention may be required${NC}"
+    return 1
+}
 
 echo -e "${BLUE}Step 1: Uninstalling all Helm releases...${NC}"
 for ns in $ALL_NAMESPACES; do
@@ -141,8 +168,6 @@ echo -e "${BLUE}Step 3: Deleting all application namespaces...${NC}"
 echo -e "${YELLOW}  Deleting known application namespaces...${NC}"
 for ns in "${APP_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" >/dev/null 2>&1; then
-        echo -e "${BLUE}    Deleting namespace: $ns${NC}"
-        
         # Remove finalizers from all resources in namespace
         echo -e "${BLUE}      Removing finalizers from resources in $ns...${NC}"
         kubectl get all,pvc,configmap,secret,networkpolicy -n "$ns" -o json 2>/dev/null | \
@@ -159,7 +184,7 @@ for ns in "${APP_NAMESPACES[@]}"; do
         kubectl patch namespace "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
         
         # Force delete namespace
-        kubectl delete namespace "$ns" --wait=true --grace-period=0 --force 2>/dev/null || true
+        force_delete_namespace "$ns"
     fi
 done
 
@@ -193,8 +218,6 @@ for ns in $ALL_NAMESPACES; do
     fi
     
     if kubectl get namespace "$ns" >/dev/null 2>&1; then
-        echo -e "${BLUE}    Deleting namespace: $ns${NC}"
-        
         # Remove finalizers from all resources
         kubectl get all,pvc,configmap,secret,networkpolicy -n "$ns" -o json 2>/dev/null | \
             jq -r '.items[] | select(.metadata.finalizers != null) | "\(.kind)/\(.metadata.name)"' 2>/dev/null | \
@@ -210,7 +233,7 @@ for ns in $ALL_NAMESPACES; do
         kubectl patch namespace "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
         
         # Force delete namespace
-        kubectl delete namespace "$ns" --wait=true --grace-period=0 --force 2>/dev/null || true
+        force_delete_namespace "$ns"
     fi
 done
 echo -e "${GREEN}✓ Application namespaces deleted${NC}"
