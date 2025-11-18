@@ -333,7 +333,10 @@ jobs:
               fi
               
               # Try to get updated IP from Contabo API
-              NEW_VPS_IP=$(get_vps_ip_from_contabo 2>&1 | tail -1)
+              echo "Getting updated IP from Contabo API..."
+              NEW_VPS_IP_RAW=$(get_vps_ip_from_contabo 2>&1)
+              NEW_VPS_IP=$(echo "$NEW_VPS_IP_RAW" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+              
               if [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" != "null" ] && [ "$NEW_VPS_IP" != "$VPS_IP" ]; then
                 echo "✅ Got updated VPS IP from Contabo API: ${NEW_VPS_IP}"
                 VPS_IP="$NEW_VPS_IP"
@@ -344,8 +347,14 @@ jobs:
                 
                 # Retry SSH connection with new IP
                 echo "Retrying SSH connection with updated IP..."
-                SSH_TEST=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
+                SSH_OUTPUT=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o LogLevel=ERROR ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
                 SSH_EXIT_CODE=$?
+              elif [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" = "$VPS_IP" ]; then
+                echo "⚠️  Contabo API returned same IP: ${NEW_VPS_IP}"
+                echo "IP is correct, but SSH connection still failing"
+              else
+                echo "⚠️  Could not get updated IP from Contabo API"
+                echo "API response: $NEW_VPS_IP_RAW"
               fi
             fi
             
