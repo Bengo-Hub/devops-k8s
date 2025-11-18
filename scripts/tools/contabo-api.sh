@@ -12,7 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Contabo API endpoints
-CONTABO_AUTH_URL="https://auth.contabo.com/oauth2/token"
+# Using the correct Contabo auth endpoint (matches contabo_auth_token.sh)
+CONTABO_AUTH_URL="https://auth.contabo.com/auth/realms/contabo/protocol/openid-connect/token"
 CONTABO_API_URL="https://api.contabo.com/v1/compute/instances"
 
 # Function to get Contabo OAuth token
@@ -31,8 +32,11 @@ get_contabo_token() {
     echo -e "${BLUE}Getting Contabo OAuth token...${NC}"
     
     local RESPONSE=$(curl -s -X POST "$CONTABO_AUTH_URL" \
-        -H 'Content-Type: application/x-www-form-urlencoded' \
-        -d "grant_type=password&username=${USERNAME}&password=${PASSWORD}&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&scope=openid" || echo "")
+        -d "client_id=${CLIENT_ID}" \
+        -d "client_secret=${CLIENT_SECRET}" \
+        --data-urlencode "username=${USERNAME}" \
+        --data-urlencode "password=${PASSWORD}" \
+        -d "grant_type=password" || echo "")
     
     if [ -z "$RESPONSE" ]; then
         echo -e "${RED}❌ Failed to connect to Contabo API${NC}"
