@@ -97,6 +97,24 @@ echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}
 # Only cleanup orphaned resources if cleanup mode is active
 if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
   echo -e "${BLUE}Cleanup mode active - checking for orphaned monitoring resources...${NC}"
+  
+  # Clean up any orphaned ingresses first (prevents webhook validation errors)
+  echo -e "${YELLOW}Cleaning up orphaned monitoring ingresses...${NC}"
+  kubectl delete ingress -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/name=grafana" --wait=false 2>/dev/null || true
+  kubectl delete ingress -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=prometheus" --wait=false 2>/dev/null || true
+  kubectl delete ingress -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=monitoring" --wait=false 2>/dev/null || true
+  
+  # Also check for ingresses matching the Grafana domain
+  ORPHANED_GRAFANA_INGRESS=$(kubectl get ingress -n "${MONITORING_NAMESPACE}" -o json 2>/dev/null | \
+    jq -r ".items[] | select(.spec.rules[]?.host == \"${GRAFANA_DOMAIN}\") | .metadata.name" 2>/dev/null || true)
+  
+  if [ -n "$ORPHANED_GRAFANA_INGRESS" ]; then
+    echo -e "${YELLOW}Found orphaned ingress(es) for ${GRAFANA_DOMAIN}: $ORPHANED_GRAFANA_INGRESS${NC}"
+    for ing in $ORPHANED_GRAFANA_INGRESS; do
+      kubectl delete ingress "$ing" -n "${MONITORING_NAMESPACE}" --wait=false 2>/dev/null || true
+    done
+  fi
+  
   # Clean up any orphaned resources before install
   kubectl delete statefulset,deployment,pod,service -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=prometheus" --wait=true --grace-period=0 --force 2>/dev/null || true
   sleep 5
@@ -168,6 +186,33 @@ fix_stuck_helm() {
     fi
 }
 
+# Check for and clean up conflicting ingress resources
+echo -e "${YELLOW}Checking for conflicting ingress resources...${NC}"
+CONFLICTING_INGRESSES=$(kubectl get ingress -n "${MONITORING_NAMESPACE}" -o json 2>/dev/null | \
+  jq -r ".items[] | select(.spec.rules[]?.host == \"${GRAFANA_DOMAIN}\") | .metadata.name" 2>/dev/null || true)
+
+if [ -n "$CONFLICTING_INGRESSES" ]; then
+  echo -e "${YELLOW}Found conflicting ingress(es) for ${GRAFANA_DOMAIN}:${NC}"
+  echo "$CONFLICTING_INGRESSES"
+  
+  # Check if this is from a previous monitoring installation
+  for ingress_name in $CONFLICTING_INGRESSES; do
+    INGRESS_LABELS=$(kubectl get ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels}' 2>/dev/null || true)
+    
+    # If it's from monitoring/grafana, safe to delete
+    if echo "$INGRESS_LABELS" | grep -q "grafana\|prometheus\|monitoring"; then
+      echo -e "${YELLOW}Deleting conflicting monitoring ingress: $ingress_name${NC}"
+      kubectl delete ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" --wait=false 2>/dev/null || true
+    else
+      echo -e "${RED}⚠️  Warning: Ingress $ingress_name exists but doesn't appear to be from monitoring stack${NC}"
+      echo -e "${RED}    You may need to manually resolve this conflict${NC}"
+    fi
+  done
+  
+  sleep 5
+  echo -e "${GREEN}✓ Conflicting ingresses cleaned up${NC}"
+fi
+
 # Check for stuck operations first
 if helm status prometheus -n "${MONITORING_NAMESPACE}" 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
     echo -e "${YELLOW}⚠️  Detected stuck Helm operation. Running fix...${NC}"
@@ -206,6 +251,43 @@ else
     echo -e "${YELLOW}🔧 Stuck operation detected during installation. Running fix...${NC}"
     fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
     echo -e "${BLUE}🔄 Please retry the installation after cleanup completes${NC}"
+  elif grep -q "host.*is already defined in ingress" /tmp/helm-monitoring-install.log 2>/dev/null; then
+    echo -e "${YELLOW}🔧 Ingress conflict detected. Cleaning up conflicting ingresses...${NC}"
+    
+    # Extract the conflicting ingress name from the error
+    CONFLICTING_INGRESS=$(grep "is already defined in ingress" /tmp/helm-monitoring-install.log | sed -n 's/.*ingress \([^ ]*\).*/\1/p' | head -1)
+    
+    if [ -n "$CONFLICTING_INGRESS" ]; then
+      # Parse namespace/name format
+      INGRESS_NS=$(echo "$CONFLICTING_INGRESS" | cut -d'/' -f1)
+      INGRESS_NAME=$(echo "$CONFLICTING_INGRESS" | cut -d'/' -f2)
+      
+      echo -e "${YELLOW}Deleting conflicting ingress: $INGRESS_NS/$INGRESS_NAME${NC}"
+      kubectl delete ingress "$INGRESS_NAME" -n "$INGRESS_NS" --wait=false 2>/dev/null || true
+      
+      # Also clean up any other monitoring-related ingresses
+      kubectl delete ingress -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/name=grafana" --wait=false 2>/dev/null || true
+      kubectl delete ingress -n "${MONITORING_NAMESPACE}" -l "app.kubernetes.io/instance=prometheus" --wait=false 2>/dev/null || true
+      
+      sleep 10
+      
+      echo -e "${BLUE}🔄 Retrying installation after ingress cleanup...${NC}"
+      helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+        -n "${MONITORING_NAMESPACE}" \
+        -f "${TEMP_VALUES}" \
+        ${HELM_EXTRA_OPTS} \
+        --timeout=15m \
+        --wait 2>&1 | tee /tmp/helm-monitoring-install-retry.log
+      
+      RETRY_EXIT=$?
+      if [ $RETRY_EXIT -eq 0 ]; then
+        echo -e "${GREEN}✓ Installation succeeded after ingress cleanup!${NC}"
+        exit 0
+      else
+        echo -e "${RED}Installation still failed after retry. Check logs.${NC}"
+        tail -50 /tmp/helm-monitoring-install-retry.log || true
+      fi
+    fi
   fi
 
   echo -e "${RED}Check /tmp/helm-monitoring-install.log for full details${NC}"
