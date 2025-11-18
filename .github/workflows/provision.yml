@@ -8,7 +8,7 @@ on:
       setup_cluster:
         description: 'Set up Kubernetes cluster from scratch (requires VPS access). Set to false to skip.'
         required: false
-        default: false
+        default: true
         type: boolean
       enable_cleanup:
         description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Set to false to disable.'
@@ -36,8 +36,8 @@ jobs:
         && (github.event.inputs.enable_cleanup == 'false' && 'false' || 'true')
         || 'true' }}
       SETUP_CLUSTER: ${{ github.event_name == 'workflow_dispatch'
-        && github.event.inputs.setup_cluster == 'true'
-        && 'true' || 'false' }}
+        && (github.event.inputs.setup_cluster == 'false' && 'false' || 'true')
+        || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
 
       - name: Setup SSH for VPS access
         id: setup_ssh
-        if: ${{ env.SETUP_CLUSTER == 'true' || github.event_name == 'push' }}
+        if: ${{ env.SETUP_CLUSTER == 'true' }}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
@@ -280,7 +280,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Cleanup cluster (ENABLED by default)
-        if: env.skip_provision != 'true' && env.ENABLE_CLEANUP == 'true'
+        if: ${{ env.skip_provision != 'true' && env.ENABLE_CLEANUP == 'true' }}
         env:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
           FORCE_CLEANUP: 'true'
