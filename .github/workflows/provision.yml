@@ -86,8 +86,80 @@ jobs:
             exit 0
           fi
           
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/vps_key
+          # Clean and validate SSH private key
+          echo "Processing SSH private key..."
+          # Remove any leading/trailing whitespace and normalize line endings
+          CLEANED_KEY=$(echo "$SSH_PRIVATE_KEY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -d '\r')
+          
+          # Check if key is base64 encoded (common mistake)
+          if echo "$CLEANED_KEY" | grep -q "^[A-Za-z0-9+/=]*$" && ! echo "$CLEANED_KEY" | grep -q "BEGIN.*PRIVATE KEY"; then
+            echo "⚠️  Key appears to be base64 encoded. Attempting to decode..."
+            CLEANED_KEY=$(echo "$CLEANED_KEY" | base64 -d 2>/dev/null || echo "$CLEANED_KEY")
+          fi
+          
+          # Check if key has proper format (starts with -----BEGIN and ends with -----END)
+          if ! echo "$CLEANED_KEY" | grep -q "BEGIN.*PRIVATE KEY"; then
+            echo "❌ Invalid SSH private key format."
+            echo "⚠️  Key must start with '-----BEGIN ... PRIVATE KEY-----'"
+            echo "⚠️  Please check your SSH_PRIVATE_KEY secret"
+            echo "⚠️  Common issues:"
+            echo "   - Key is base64 encoded (we tried to decode, but failed)"
+            echo "   - Key has extra whitespace or newlines"
+            echo "   - Wrong key format (needs RSA, ED25519, or ECDSA private key)"
+            echo "   - Key might be a public key instead of private key"
+            echo ""
+            echo "📋 How to fix:"
+            echo "   1. Get your private key file (usually ~/.ssh/id_rsa or ~/.ssh/id_ed25519)"
+            echo "   2. Copy the ENTIRE key including BEGIN and END lines"
+            echo "   3. Paste it into GitHub secret SSH_PRIVATE_KEY"
+            echo "   4. Ensure no extra spaces or characters"
+            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "ssh_success=false" >> $GITHUB_OUTPUT
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          # Write cleaned key to file with proper formatting
+          echo "$CLEANED_KEY" > ~/.ssh/vps_key
           chmod 600 ~/.ssh/vps_key
+          
+          # Verify key file was created correctly
+          if [ ! -f ~/.ssh/vps_key ] || [ ! -s ~/.ssh/vps_key ]; then
+            echo "❌ Failed to write SSH key file"
+            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "ssh_success=false" >> $GITHUB_OUTPUT
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          # Test key format using ssh-keygen (non-destructive check)
+          echo "Validating SSH key format..."
+          KEY_VALIDATION=$(ssh-keygen -l -f ~/.ssh/vps_key 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "❌ SSH key format validation failed"
+            echo "Error details: ${KEY_VALIDATION}"
+            echo ""
+            echo "⚠️  The SSH_PRIVATE_KEY secret appears to be invalid or corrupted"
+            echo "⚠️  Please verify:"
+            echo "   1. Key is a valid private key (not public key)"
+            echo "   2. Key includes BEGIN and END markers"
+            echo "   3. Key has no extra characters or encoding issues"
+            echo "   4. If copied from a file, ensure all lines are included"
+            echo "   5. Key file permissions are correct (should be 600)"
+            echo ""
+            echo "📋 To regenerate a new key pair:"
+            echo "   ssh-keygen -t ed25519 -C 'github-actions@bengoerp' -f ~/.ssh/vps_key"
+            echo "   Then copy ~/.ssh/vps_key content to GitHub secret"
+            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "ssh_success=false" >> $GITHUB_OUTPUT
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          KEY_TYPE=$(echo "$KEY_VALIDATION" | awk '{print $4}' || echo "unknown")
+          KEY_FINGERPRINT=$(echo "$KEY_VALIDATION" | awk '{print $2}' || echo "unknown")
+          KEY_BITS=$(echo "$KEY_VALIDATION" | awk '{print $1}' || echo "unknown")
+          echo "✅ SSH key validated: ${KEY_TYPE} ${KEY_BITS} bits (${KEY_FINGERPRINT})"
           
           # Add VPS to known hosts
           echo "Adding ${VPS_IP} to known hosts..."
