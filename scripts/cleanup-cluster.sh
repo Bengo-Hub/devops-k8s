@@ -195,6 +195,9 @@ for ns in "${APP_NAMESPACES[@]}"; do
     fi
 done
 
+# Refresh namespace list after deleting known namespaces
+ALL_NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}')
+
 # Then delete any remaining non-system namespaces
 echo -e "${YELLOW}  Deleting remaining non-system namespaces...${NC}"
 for ns in $ALL_NAMESPACES; do
@@ -355,4 +358,3 @@ echo -e "${BLUE}Next steps:${NC}"
 echo -e "${BLUE}  1. Run provisioning workflow: .github/workflows/provision.yml${NC}"
 echo -e "${BLUE}  2. Or run provisioning scripts manually${NC}"
 echo ""
-
