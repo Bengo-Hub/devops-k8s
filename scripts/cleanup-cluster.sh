@@ -1,9 +1,10 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail  # Removed -e so script continues on errors
 
 # Comprehensive Cluster Cleanup Script
 # Removes all namespaces, services, and resources for fresh reprovisioning
 # WARNING: This will delete ALL applications and data!
+# NOTE: Script continues even if some operations fail, reporting warnings instead
 
 # Colors
 RED='\033[0;31m'
@@ -87,6 +88,9 @@ SYSTEM_NAMESPACES=(
     "kube-public"
     "kube-node-lease"
     "kubernetes-dashboard"
+    "calico-system"
+    "calico-apiserver"
+    "tigera-operator"
 )
 
 # Application namespaces to explicitly clean (in addition to auto-detection)
@@ -170,12 +174,12 @@ force_delete_namespace() {
         fi
         
         # Wait longer between attempts for deletions to propagate
-        echo -e "${BLUE}      Waiting 10 seconds before next check...${NC}"
-        sleep 10
+        echo -e "${BLUE}      Waiting 1 seconds before next check...${NC}"
+        sleep 1
     done
 
-    echo -e "${YELLOW}      Namespace ${ns} still present after forced cleanup - manual intervention may be required${NC}"
-    return 1
+    echo -e "${YELLOW}      ⚠ Namespace ${ns} still present after forced cleanup - will continue with other namespaces${NC}"
+    return 0  # Don't fail the script, just warn
 }
 
 echo -e "${BLUE}Step 1: Uninstalling all Helm releases...${NC}"
