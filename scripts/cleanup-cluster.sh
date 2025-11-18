@@ -95,6 +95,13 @@ ALL_NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}')
 
 force_delete_namespace() {
     local ns=$1
+    
+    # Validate namespace parameter is not empty
+    if [ -z "$ns" ]; then
+        echo -e "${YELLOW}    Warning: Empty namespace parameter, skipping...${NC}"
+        return 1
+    fi
+    
     echo -e "${BLUE}    Deleting namespace: ${ns}${NC}"
     kubectl delete namespace "$ns" --wait=true --grace-period=0 --force 2>/dev/null || true
 
@@ -108,9 +115,18 @@ force_delete_namespace() {
         if [ "$PHASE" = "Terminating" ]; then
             echo -e "${YELLOW}      Namespace ${ns} stuck terminating - removing finalizers (attempt ${attempt})${NC}"
             TMP_FILE="/tmp/namespace-${ns}.json"
-            kubectl get namespace "$ns" -o json | jq '.spec.finalizers = []' > "${TMP_FILE}" 2>/dev/null || true
-            kubectl replace --raw "/api/v1/namespaces/${ns}/finalize" -f "${TMP_FILE}" >/dev/null 2>&1 || true
-            rm -f "${TMP_FILE}" 2>/dev/null || true
+            
+            # Ensure we capture the namespace JSON successfully
+            if kubectl get namespace "$ns" -o json > "${TMP_FILE}" 2>/dev/null; then
+                # Remove finalizers from the captured JSON
+                jq '.spec.finalizers = []' "${TMP_FILE}" > "${TMP_FILE}.tmp" 2>/dev/null || true
+                mv "${TMP_FILE}.tmp" "${TMP_FILE}" 2>/dev/null || true
+                
+                # Apply the finalization
+                kubectl replace --raw "/api/v1/namespaces/${ns}/finalize" -f "${TMP_FILE}" >/dev/null 2>&1 || true
+            fi
+            
+            rm -f "${TMP_FILE}" "${TMP_FILE}.tmp" 2>/dev/null || true
         fi
         sleep 5
     done
@@ -121,6 +137,9 @@ force_delete_namespace() {
 
 echo -e "${BLUE}Step 1: Uninstalling all Helm releases...${NC}"
 for ns in $ALL_NAMESPACES; do
+    # Skip empty namespace names
+    [ -z "$ns" ] && continue
+    
     # Skip system namespaces
     if [ "$SKIP_SYSTEM_NAMESPACES" = "true" ]; then
         skip=false
@@ -174,6 +193,9 @@ echo -e "${BLUE}Step 3: Deleting all application namespaces...${NC}"
 # First, explicitly delete known application namespaces
 echo -e "${YELLOW}  Deleting known application namespaces...${NC}"
 for ns in "${APP_NAMESPACES[@]}"; do
+    # Skip empty namespace names
+    [ -z "$ns" ] && continue
+    
     if kubectl get namespace "$ns" >/dev/null 2>&1; then
         # Remove finalizers from all resources in namespace
         echo -e "${BLUE}      Removing finalizers from resources in $ns...${NC}"
@@ -201,6 +223,9 @@ ALL_NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}')
 # Then delete any remaining non-system namespaces
 echo -e "${YELLOW}  Deleting remaining non-system namespaces...${NC}"
 for ns in $ALL_NAMESPACES; do
+    # Skip empty namespace names
+    [ -z "$ns" ] && continue
+    
     # Skip system namespaces
     if [ "$SKIP_SYSTEM_NAMESPACES" = "true" ]; then
         skip=false
@@ -254,6 +279,9 @@ echo -e "${BLUE}Step 4: Cleaning up remaining resources...${NC}"
 # Delete PVCs that might be stuck
 echo -e "${YELLOW}  Cleaning up PVCs...${NC}"
 for ns in $ALL_NAMESPACES; do
+    # Skip empty namespace names
+    [ -z "$ns" ] && continue
+    
     if [ "$SKIP_SYSTEM_NAMESPACES" = "true" ]; then
         skip=false
         for sys_ns in "${SYSTEM_NAMESPACES[@]}"; do
@@ -300,6 +328,9 @@ echo -e "${BLUE}Step 5: Force deleting stuck resources...${NC}"
 # Force delete any remaining StatefulSets, Deployments, Pods
 echo -e "${YELLOW}  Force deleting remaining workloads...${NC}"
 for ns in "${APP_NAMESPACES[@]}"; do
+    # Skip empty namespace names
+    [ -z "$ns" ] && continue
+    
     if kubectl get namespace "$ns" >/dev/null 2>&1; then
         # Force delete StatefulSets
         kubectl get statefulset -n "$ns" -o name 2>/dev/null | while read -r ss; do
@@ -327,6 +358,9 @@ REMAINING_NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.n
 APP_NAMESPACES=""
 
 for ns in $REMAINING_NAMESPACES; do
+    # Skip empty namespace names
+    [ -z "$ns" ] && continue
+    
     skip=false
     for sys_ns in "${SYSTEM_NAMESPACES[@]}"; do
         if [ "$ns" = "$sys_ns" ]; then
