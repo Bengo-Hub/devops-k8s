@@ -36,8 +36,8 @@ jobs:
         && (github.event.inputs.enable_cleanup == 'false' && 'false' || 'true')
         || 'true' }}
       SETUP_CLUSTER: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.setup_cluster == 'true' && 'true' || 'false')
-        || 'false' }}
+        && github.event.inputs.setup_cluster == 'true'
+        && 'true' || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,17 +53,21 @@ jobs:
           sudo apt-get install -y postgresql-client postgresql-client-common
 
       - name: Setup SSH for VPS access
-        if: env.SETUP_CLUSTER == 'true'
+        id: setup_ssh
+        if: ${{ env.SETUP_CLUSTER == 'true' || github.event_name == 'push' }}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           echo "::group::Setting up SSH for VPS access"
+          echo "SETUP_CLUSTER=${SETUP_CLUSTER}"
+          echo "Event: ${GITHUB_EVENT_NAME}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           
           if [ -z "$SSH_PRIVATE_KEY" ]; then
             echo "⚠️  SSH_PRIVATE_KEY not provided. Skipping cluster setup."
             echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "ssh_success=false" >> $GITHUB_OUTPUT
             echo "::endgroup::"
             exit 0
           fi
@@ -78,15 +82,17 @@ jobs:
           ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" || {
             echo "❌ Failed to connect to VPS. Check SSH_PRIVATE_KEY and VPS_IP."
             echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "ssh_success=false" >> $GITHUB_OUTPUT
             exit 0
           }
           
           echo "✅ SSH connection established"
           echo "SETUP_CLUSTER=true" >> $GITHUB_ENV
+          echo "ssh_success=true" >> $GITHUB_OUTPUT
           echo "::endgroup::"
 
       - name: Setup VPS (Initial Server Configuration)
-        if: env.SETUP_CLUSTER == 'true'
+        if: ${{ env.SETUP_CLUSTER == 'true' || (steps.setup_ssh.outcome == 'success' && steps.setup_ssh.outputs.ssh_success == 'true') }}
         env:
           CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
         run: |
@@ -129,7 +135,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Setup Container Runtime (containerd)
-        if: env.SETUP_CLUSTER == 'true'
+        if: ${{ env.SETUP_CLUSTER == 'true' || (steps.setup_ssh.outcome == 'success' && steps.setup_ssh.outputs.ssh_success == 'true') }}
         run: |
           echo "::group::Container Runtime Setup"
           ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << 'EOF'
@@ -146,7 +152,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Setup Kubernetes Cluster
-        if: env.SETUP_CLUSTER == 'true'
+        if: ${{ env.SETUP_CLUSTER == 'true' || (steps.setup_ssh.outcome == 'success' && steps.setup_ssh.outputs.ssh_success == 'true') }}
         env:
           CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
           VPS_IP: ${{ env.VPS_IP }}
