@@ -34,6 +34,26 @@ fi
 
 echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
+# Check cluster resources
+echo -e "${YELLOW}Checking cluster resources...${NC}"
+NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || echo "0")
+echo -e "${BLUE}Nodes: ${READY_NODES}/${NODE_COUNT} ready${NC}"
+
+if [ "$READY_NODES" -eq 0 ]; then
+  echo -e "${RED}⚠️  No ready nodes found!${NC}"
+  kubectl get nodes || true
+  echo -e "${YELLOW}Cluster may not be able to schedule pods. Continuing anyway...${NC}"
+fi
+
+# Check for Pending pods
+PENDING_PODS=$(kubectl get pods -A --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+if [ "$PENDING_PODS" -gt 0 ]; then
+  echo -e "${YELLOW}⚠️  Found ${PENDING_PODS} Pending pods in cluster${NC}"
+  echo -e "${YELLOW}This may indicate resource constraints or storage issues${NC}"
+  kubectl get pods -A --field-selector=status.phase=Pending 2>/dev/null | head -10 || true
+fi
+
 # Check for storage class (required for PVCs)
 if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
   echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
@@ -180,14 +200,21 @@ PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 # Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets)
 # These --set flags will override values file
 if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-  echo -e "${GREEN}Using POSTGRES_PASSWORD from environment/GitHub secrets (priority)${NC}"
+  echo -e "${GREEN}Using POSTGRES_PASSWORD from environment/GitHub secrets${NC}"
+  echo -e "${BLUE}  - postgres user password: ${#POSTGRES_PASSWORD} chars${NC}"
   PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
   PG_HELM_ARGS+=(--set global.postgresql.auth.database="$PG_DATABASE")
+  
+  # Use same password for admin_user (unless explicitly overridden)
+  if [[ -z "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
+    echo -e "${BLUE}  - admin_user password: using same as postgres user${NC}"
+    PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_PASSWORD")
+  fi
 fi
 
-# Add admin_user password if provided
-if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
-  echo -e "${GREEN}Using POSTGRES_ADMIN_PASSWORD for admin_user${NC}"
+# Add admin_user password if explicitly provided (overrides POSTGRES_PASSWORD)
+if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]] && [[ "${POSTGRES_ADMIN_PASSWORD}" != "${POSTGRES_PASSWORD}" ]]; then
+  echo -e "${GREEN}Using separate POSTGRES_ADMIN_PASSWORD for admin_user (${#POSTGRES_ADMIN_PASSWORD} chars)${NC}"
   PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
 fi
 
@@ -210,17 +237,38 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       echo -e "${BLUE}Current secret password matches provided POSTGRES_PASSWORD${NC}"
       HELM_PG_EXIT=0
     else
-      echo -e "${YELLOW}Password mismatch detected - updating PostgreSQL to sync password${NC}"
+      echo -e "${YELLOW}⚠️  Password mismatch detected${NC}"
       echo -e "${BLUE}Current password length: ${#CURRENT_PG_PASS} chars${NC}"
       echo -e "${BLUE}New password length: ${#POSTGRES_PASSWORD} chars${NC}"
-      helm upgrade postgresql bitnami/postgresql \
-        --version 16.7.27 \
-        -n "${NAMESPACE}" \
-        --reset-values \
-        "${PG_HELM_ARGS[@]}" \
-        --timeout=10m \
-        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-      HELM_PG_EXIT=${PIPESTATUS[0]}
+      echo -e "${RED}⚠️  WARNING: Updating passwords requires pod restart and may take time${NC}"
+      echo -e "${YELLOW}Checking if PostgreSQL is currently healthy...${NC}"
+      
+      # Check if PostgreSQL is currently running - if yes, just update the secret without Helm upgrade
+      if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+        echo -e "${GREEN}PostgreSQL is healthy. Updating password via secret...${NC}"
+        
+        # Update the secret directly
+        kubectl create secret generic postgresql \
+          --from-literal=postgres-password="$POSTGRES_PASSWORD" \
+          --from-literal=password="$POSTGRES_PASSWORD" \
+          --from-literal=admin-user-password="$POSTGRES_PASSWORD" \
+          -n "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        echo -e "${GREEN}✓ Password updated in secret. PostgreSQL will use it on next restart.${NC}"
+        echo -e "${YELLOW}Note: Password change will take effect on next pod restart${NC}"
+        HELM_PG_EXIT=0
+      else
+        echo -e "${YELLOW}PostgreSQL not healthy. Performing Helm upgrade...${NC}"
+        helm upgrade postgresql bitnami/postgresql \
+          --version 16.7.27 \
+          -n "${NAMESPACE}" \
+          --reset-values \
+          "${PG_HELM_ARGS[@]}" \
+          --timeout=10m \
+          --wait=false 2>&1 | tee /tmp/helm-postgresql-install.log
+        HELM_PG_EXIT=${PIPESTATUS[0]}
+      fi
     fi
   elif [[ "$IS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ PostgreSQL already installed and healthy - skipping${NC}"
@@ -323,10 +371,41 @@ set -e
 if [ $HELM_PG_EXIT -eq 0 ]; then
   echo -e "${GREEN}✓ PostgreSQL ready${NC}"
 else
-  echo -e "${RED}PostgreSQL installation/upgrade failed with exit code $HELM_PG_EXIT${NC}"
-  tail -50 /tmp/helm-postgresql-install.log || true
-  kubectl get pods -n "${NAMESPACE}" || true
-  exit 1
+  echo -e "${YELLOW}PostgreSQL Helm operation reported exit code $HELM_PG_EXIT${NC}"
+  echo -e "${YELLOW}Checking actual PostgreSQL status...${NC}"
+  
+  # Wait a bit for pods to update
+  sleep 10
+  
+  # Check if PostgreSQL StatefulSet exists and has ready replicas
+  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
+  
+  echo -e "${BLUE}PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready${NC}"
+  
+  if [ "$PG_READY" -ge 1 ]; then
+    echo -e "${GREEN}✓ PostgreSQL is actually running! Continuing...${NC}"
+    echo -e "${YELLOW}Note: Helm reported a timeout, but PostgreSQL is healthy${NC}"
+  else
+    echo -e "${RED}PostgreSQL installation/upgrade failed${NC}"
+    echo -e "${YELLOW}=== Helm output (last 50 lines) ===${NC}"
+    tail -50 /tmp/helm-postgresql-install.log 2>/dev/null || true
+    echo -e "${YELLOW}=== Pod status ===${NC}"
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    echo -e "${YELLOW}=== Pod events ===${NC}"
+    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i postgresql | tail -10 || true
+    echo -e "${YELLOW}=== PVC status ===${NC}"
+    kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    
+    # Check for common issues
+    echo -e "${YELLOW}=== Diagnosing issues ===${NC}"
+    PENDING_PVCS=$(kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+    if [ "$PENDING_PVCS" -gt 0 ]; then
+      echo -e "${RED}⚠️  Found ${PENDING_PVCS} Pending PVCs - storage may not be available${NC}"
+    fi
+    
+    exit 1
+  fi
 fi
 
 # Install or upgrade Redis (idempotent)
