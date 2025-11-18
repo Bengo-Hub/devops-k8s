@@ -59,12 +59,25 @@ if ! command -v kubectl &> /dev/null; then
     exit 1
 fi
 
+if ! command -v jq &> /dev/null; then
+    echo -e "${YELLOW}⚠ jq command not found. Attempting to install...${NC}"
+    if command -v apt-get &> /dev/null; then
+        apt-get update -y >/dev/null 2>&1 && apt-get install -y jq >/dev/null 2>&1 || \
+        sudo apt-get update -y >/dev/null 2>&1 && sudo apt-get install -y jq >/dev/null 2>&1 || \
+        echo -e "${RED}Failed to install jq. Some cleanup operations may fail.${NC}"
+    elif command -v yum &> /dev/null; then
+        yum install -y jq >/dev/null 2>&1 || sudo yum install -y jq >/dev/null 2>&1 || \
+        echo -e "${RED}Failed to install jq. Some cleanup operations may fail.${NC}"
+    fi
+fi
+
 if ! kubectl cluster-info >/dev/null 2>&1; then
     echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}✓ Connected to cluster${NC}"
+echo -e "${GREEN}✓ jq is available: $(jq --version 2>&1)${NC}"
 echo ""
 
 # System namespaces to preserve
@@ -103,32 +116,62 @@ force_delete_namespace() {
     fi
     
     echo -e "${BLUE}    Deleting namespace: ${ns}${NC}"
-    kubectl delete namespace "$ns" --wait=true --grace-period=0 --force 2>/dev/null || true
+    kubectl delete namespace "$ns" --wait=false --grace-period=0 --force 2>&1 | head -n 5 || true
 
-    for attempt in {1..6}; do
+    for attempt in {1..10}; do
+        # Check if namespace still exists
         if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
             echo -e "${GREEN}    ✓ Namespace ${ns} deleted${NC}"
             return 0
         fi
 
         PHASE=$(kubectl get namespace "$ns" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        echo -e "${BLUE}      Namespace ${ns} status: ${PHASE:-Active} (attempt ${attempt}/10)${NC}"
         if [ "$PHASE" = "Terminating" ]; then
             echo -e "${YELLOW}      Namespace ${ns} stuck terminating - removing finalizers (attempt ${attempt})${NC}"
+            
+            # Method 1: Remove finalizers using kubectl patch
+            echo -e "${BLUE}        Attempting to patch namespace finalizers...${NC}"
+            kubectl patch namespace "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            kubectl patch namespace "$ns" -p '{"spec":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            
+            # Method 2: Use the finalize endpoint (same as manual working command)
             TMP_FILE="/tmp/namespace-${ns}.json"
+            echo -e "${BLUE}        Attempting finalize endpoint method...${NC}"
             
-            # Ensure we capture the namespace JSON successfully
-            if kubectl get namespace "$ns" -o json > "${TMP_FILE}" 2>/dev/null; then
-                # Remove finalizers from the captured JSON
-                jq '.spec.finalizers = []' "${TMP_FILE}" > "${TMP_FILE}.tmp" 2>/dev/null || true
-                mv "${TMP_FILE}.tmp" "${TMP_FILE}" 2>/dev/null || true
-                
-                # Apply the finalization
-                kubectl replace --raw "/api/v1/namespaces/${ns}/finalize" -f "${TMP_FILE}" >/dev/null 2>&1 || true
+            # Get namespace JSON and remove finalizers
+            if kubectl get namespace "$ns" -o json 2>/dev/null > "${TMP_FILE}.raw"; then
+                if command -v jq &> /dev/null; then
+                    jq '.spec.finalizers = []' "${TMP_FILE}.raw" > "${TMP_FILE}" 2>&1
+                    JQ_EXIT=$?
+                    if [ $JQ_EXIT -eq 0 ] && [ -s "${TMP_FILE}" ]; then
+                        echo -e "${BLUE}        Applying finalize to namespace ${ns}...${NC}"
+                        FINALIZE_OUTPUT=$(kubectl replace --raw "/api/v1/namespaces/${ns}/finalize" -f "${TMP_FILE}" 2>&1)
+                        FINALIZE_EXIT=$?
+                        if [ $FINALIZE_EXIT -ne 0 ]; then
+                            echo -e "${YELLOW}        Finalize failed: ${FINALIZE_OUTPUT}${NC}" | head -n 3
+                        else
+                            echo -e "${GREEN}        ✓ Finalize applied${NC}"
+                        fi
+                    else
+                        echo -e "${YELLOW}        jq processing failed or produced empty output${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}        jq not available, skipping finalize method${NC}"
+                fi
+            else
+                echo -e "${YELLOW}        Could not get namespace ${ns} JSON${NC}"
             fi
+            rm -f "${TMP_FILE}" "${TMP_FILE}.raw" 2>/dev/null || true
             
-            rm -f "${TMP_FILE}" "${TMP_FILE}.tmp" 2>/dev/null || true
+            # Method 3: Force delete all resources in the namespace
+            echo -e "${BLUE}        Force deleting resources in namespace...${NC}"
+            kubectl delete all --all -n "$ns" --grace-period=0 --force 2>/dev/null || true
         fi
-        sleep 5
+        
+        # Wait longer between attempts for deletions to propagate
+        echo -e "${BLUE}      Waiting 10 seconds before next check...${NC}"
+        sleep 10
     done
 
     echo -e "${YELLOW}      Namespace ${ns} still present after forced cleanup - manual intervention may be required${NC}"
