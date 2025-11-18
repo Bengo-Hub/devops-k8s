@@ -108,7 +108,7 @@ force_delete_namespace() {
         if [ "$PHASE" = "Terminating" ]; then
             echo -e "${YELLOW}      Namespace ${ns} stuck terminating - removing finalizers (attempt ${attempt})${NC}"
             TMP_FILE="/tmp/namespace-${ns}.json"
-            kubectl get namespace "$ns" -o json | jq 'del(.spec.finalizers[])' > "${TMP_FILE}" 2>/dev/null || true
+            kubectl get namespace "$ns" -o json | jq '.spec.finalizers = []' > "${TMP_FILE}" 2>/dev/null || true
             kubectl replace --raw "/api/v1/namespaces/${ns}/finalize" -f "${TMP_FILE}" >/dev/null 2>&1 || true
             rm -f "${TMP_FILE}" 2>/dev/null || true
         fi
