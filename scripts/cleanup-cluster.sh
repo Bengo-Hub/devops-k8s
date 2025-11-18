@@ -90,7 +90,11 @@ SYSTEM_NAMESPACES=(
     "kubernetes-dashboard"
     "calico-system"
     "calico-apiserver"
+    "cert-manager"
+    "ingress-nginx"
     "tigera-operator"
+    "prometheus-operator"
+    "grafana"
 )
 
 # Application namespaces to explicitly clean (in addition to auto-detection)
