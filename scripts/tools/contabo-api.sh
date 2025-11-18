@@ -115,7 +115,8 @@ get_vps_ip_from_contabo() {
         return 1
     fi
     
-    echo -e "${GREEN}✓ Found VPS IP: ${IP}${NC}"
+    echo -e "${GREEN}✓ Found VPS IP: ${IP}${NC}" >&2
+    # Output only the IP address (no colors) to stdout for easy parsing
     echo "$IP"
     return 0
 }
