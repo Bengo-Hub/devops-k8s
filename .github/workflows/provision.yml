@@ -261,17 +261,62 @@ jobs:
           KEY_BITS=$(echo "$KEY_VALIDATION" | awk '{print $1}' || echo "unknown")
           echo "✅ SSH key validated: ${KEY_TYPE} ${KEY_BITS} bits (${KEY_FINGERPRINT})"
           
+          # Debug: Show IP info without exposing the actual IP
+          IP_LENGTH=${#VPS_IP}
+          IP_FIRST_CHAR=${VPS_IP:0:1}
+          IP_LAST_CHAR=${VPS_IP: -1}
+          echo "VPS_IP info: length=${IP_LENGTH}, starts with '${IP_FIRST_CHAR}', ends with '${IP_LAST_CHAR}'"
+          
+          # Validate IP format before attempting SSH
+          if ! echo "$VPS_IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
+            echo "❌ VPS_IP format is invalid: '${VPS_IP}'"
+            echo "⚠️  Expected format: IP address (e.g., 192.168.1.1) or hostname (e.g., vps.example.com)"
+            echo "⚠️  Attempting Contabo API fallback..."
+            
+            # Try Contabo API fallback
+            if [ -n "${CONTABO_CLIENT_ID:-}" ] && [ -n "${CONTABO_CLIENT_SECRET:-}" ] && \
+               [ -n "${CONTABO_API_USERNAME:-}" ] && [ -n "${CONTABO_API_PASSWORD:-}" ]; then
+              echo "Using Contabo API to get correct VPS IP..."
+              source ./scripts/tools/contabo-api.sh
+              
+              NEW_VPS_IP=$(get_vps_ip_from_contabo 2>&1 | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+              if [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" != "null" ]; then
+                echo "✅ Got VPS IP from Contabo API: ${NEW_VPS_IP}"
+                VPS_IP="$NEW_VPS_IP"
+                echo "VPS_IP=${NEW_VPS_IP}" >> $GITHUB_ENV
+              else
+                echo "❌ Could not get VPS IP from Contabo API"
+                echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+                echo "ssh_success=false" >> $GITHUB_OUTPUT
+                echo "::endgroup::"
+                exit 0
+              fi
+            else
+              echo "❌ Contabo API credentials not available"
+              echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+              echo "ssh_success=false" >> $GITHUB_OUTPUT
+              echo "::endgroup::"
+              exit 0
+            fi
+          fi
+          
           # Add VPS to known hosts
           echo "Adding ${VPS_IP} to known hosts..."
           ssh-keyscan -H ${VPS_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Test SSH connection
+          # Test SSH connection with verbose output for debugging
           echo "Testing SSH connection to ${VPS_USER}@${VPS_IP}..."
-          SSH_TEST=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
+          echo "SSH command: ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -v ${VPS_USER}@${VPS_IP} 'echo SSH connection successful'"
+          
+          # Capture both stdout and stderr
+          SSH_OUTPUT=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o LogLevel=ERROR ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
           SSH_EXIT_CODE=$?
           
           if [ $SSH_EXIT_CODE -ne 0 ]; then
-            echo "⚠️  Initial SSH connection failed. Error: ${SSH_TEST}"
+            echo "❌ SSH connection failed (exit code: ${SSH_EXIT_CODE})"
+            echo "SSH error output:"
+            echo "${SSH_OUTPUT}"
+            echo ""
             echo "Attempting Contabo API fallback..."
             
             # Try Contabo API fallback if credentials are available
@@ -306,15 +351,21 @@ jobs:
             
             # Final check after fallback attempts
             if [ $SSH_EXIT_CODE -ne 0 ]; then
-              echo "❌ SSH connection failed after all attempts."
-              echo "Error: ${SSH_TEST}"
+              echo "❌ SSH connection failed after all attempts (exit code: ${SSH_EXIT_CODE})"
+              echo "Final SSH error output:"
+              echo "${SSH_OUTPUT}"
               echo ""
               echo "Troubleshooting steps:"
-              echo "1. Verify SSH_HOST secret is set correctly"
+              echo "1. Verify SSH_HOST secret is set correctly (should be IP address or hostname)"
               echo "2. Verify SSH_PRIVATE_KEY secret matches the public key on VPS"
               echo "3. Check VPS firewall allows SSH (port 22)"
               echo "4. Verify VPS is running (check Contabo dashboard)"
-              echo "5. Try manual SSH: ssh -i ~/.ssh/vps_key ${VPS_USER}@${VPS_IP}"
+              echo "5. Verify VPS_IP is correct: Check Contabo API or SSH_HOST secret"
+              echo "6. Try manual SSH: ssh -i ~/.ssh/vps_key ${VPS_USER}@${VPS_IP}"
+              echo ""
+              echo "Common SSH exit codes:"
+              echo "  - 255: Connection failed (host unreachable, wrong IP, firewall blocking)"
+              echo "  - 1: Authentication failed (wrong key or user)"
               echo ""
               echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
               echo "ssh_success=false" >> $GITHUB_OUTPUT
