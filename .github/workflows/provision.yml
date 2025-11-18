@@ -24,8 +24,8 @@ jobs:
     env:
       skip_provision: 'false'
       # Configurable domains and IPs via GitHub secrets (with defaults)
-      VPS_IP: ${{ secrets.VPS_IP || 'YOUR_VPS_IP' }}
-      VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+      VPS_IP: ${{ secrets.SSH_HOST || secrets.VPS_IP || 'YOUR_VPS_IP' }}
+      VPS_USER: ${{ secrets.SSH_USER || secrets.VPS_USER || 'root' }}
       ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.masterspace.co.ke' }}
       GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
@@ -61,11 +61,25 @@ jobs:
           echo "::group::Setting up SSH for VPS access"
           echo "SETUP_CLUSTER=${SETUP_CLUSTER}"
           echo "Event: ${GITHUB_EVENT_NAME}"
+          echo "VPS_IP=${VPS_IP}"
+          echo "VPS_USER=${VPS_USER}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           
+          # Check for required secrets
           if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "⚠️  SSH_PRIVATE_KEY not provided. Skipping cluster setup."
+            echo "❌ SSH_PRIVATE_KEY secret not provided."
+            echo "⚠️  Please set SSH_PRIVATE_KEY in GitHub secrets (Organization or Repository level)"
+            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
+            echo "ssh_success=false" >> $GITHUB_OUTPUT
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          if [ "$VPS_IP" = "YOUR_VPS_IP" ] || [ -z "$VPS_IP" ]; then
+            echo "❌ VPS IP/Host not configured."
+            echo "⚠️  Please set SSH_HOST (or VPS_IP) in GitHub secrets"
+            echo "⚠️  Current value: ${VPS_IP}"
             echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
             echo "ssh_success=false" >> $GITHUB_OUTPUT
             echo "::endgroup::"
@@ -76,17 +90,25 @@ jobs:
           chmod 600 ~/.ssh/vps_key
           
           # Add VPS to known hosts
+          echo "Adding ${VPS_IP} to known hosts..."
           ssh-keyscan -H ${VPS_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
           
           # Test SSH connection
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" || {
-            echo "❌ Failed to connect to VPS. Check SSH_PRIVATE_KEY and VPS_IP."
+          echo "Testing SSH connection to ${VPS_USER}@${VPS_IP}..."
+          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" || {
+            echo "❌ Failed to connect to VPS at ${VPS_USER}@${VPS_IP}"
+            echo "⚠️  Check the following:"
+            echo "   1. SSH_HOST secret is set correctly (current: ${VPS_IP})"
+            echo "   2. SSH_USER secret is set correctly (current: ${VPS_USER})"
+            echo "   3. SSH_PRIVATE_KEY secret matches the public key on the VPS"
+            echo "   4. VPS firewall allows SSH connections"
+            echo "   5. VPS is accessible from GitHub Actions runners"
             echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
             echo "ssh_success=false" >> $GITHUB_OUTPUT
             exit 0
           }
           
-          echo "✅ SSH connection established"
+          echo "✅ SSH connection established to ${VPS_USER}@${VPS_IP}"
           echo "SETUP_CLUSTER=true" >> $GITHUB_ENV
           echo "ssh_success=true" >> $GITHUB_OUTPUT
           echo "::endgroup::"
