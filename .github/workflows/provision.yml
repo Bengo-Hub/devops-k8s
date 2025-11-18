@@ -73,19 +73,51 @@ jobs:
           echo "::group::Getting VPS IP from Contabo API"
           echo "Current VPS_IP value: '${CURRENT_VPS_IP}'"
           
-          # Check if VPS_IP is empty or invalid
-          if [ -z "${CURRENT_VPS_IP}" ] || \
-             [ "${CURRENT_VPS_IP}" = "YOUR_VPS_IP" ] || \
-             [ "${CURRENT_VPS_IP}" = "your_vps_ip" ] || \
-             [ "${CURRENT_VPS_IP}" = "YOUR_VPS_IP" ] || \
-             echo "${CURRENT_VPS_IP}" | grep -qi "your.*vps.*ip"; then
-            echo "⚠️  VPS_IP is empty or invalid (${CURRENT_VPS_IP}), attempting to get from Contabo API..."
+          # Function to validate IP address format
+          is_valid_ip() {
+            local ip="$1"
+            # Check if it's a valid IPv4 address
+            if echo "$ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+              # Validate each octet is 0-255
+              IFS='.' read -r -a octets <<< "$ip"
+              for octet in "${octets[@]}"; do
+                if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
+                  return 1
+                fi
+              done
+              return 0
+            fi
+            # Check if it's a valid hostname (contains at least one dot and valid chars)
+            if echo "$ip" | grep -qE '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
+              return 0
+            fi
+            return 1
+          }
+          
+          # Check if VPS_IP is empty, invalid, or a placeholder
+          NEED_CONTABO_API=false
+          
+          if [ -z "${CURRENT_VPS_IP}" ]; then
+            echo "⚠️  VPS_IP is empty"
+            NEED_CONTABO_API=true
+          elif echo "${CURRENT_VPS_IP}" | grep -qiE "your.*vps.*ip|placeholder|example|YOUR_VPS_IP|your_vps_ip"; then
+            echo "⚠️  VPS_IP appears to be a placeholder: '${CURRENT_VPS_IP}'"
+            NEED_CONTABO_API=true
+          elif ! is_valid_ip "${CURRENT_VPS_IP}"; then
+            echo "⚠️  VPS_IP format is invalid: '${CURRENT_VPS_IP}'"
+            echo "⚠️  Expected: IP address (e.g., 192.168.1.1) or hostname (e.g., vps.example.com)"
+            NEED_CONTABO_API=true
+          fi
+          
+          if [ "$NEED_CONTABO_API" = "true" ]; then
+            echo "Attempting to get VPS IP from Contabo API..."
             
             # Check if Contabo API credentials are available
             if [ -z "${CONTABO_CLIENT_ID}" ] || [ -z "${CONTABO_CLIENT_SECRET}" ] || \
                [ -z "${CONTABO_API_USERNAME}" ] || [ -z "${CONTABO_API_PASSWORD}" ]; then
               echo "❌ Contabo API credentials not available"
-              echo "⚠️  Please set SSH_HOST secret or configure Contabo API credentials"
+              echo "⚠️  Please set SSH_HOST secret with a valid IP address"
+              echo "⚠️  Or configure Contabo API credentials (CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET, etc.)"
               echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
               echo "::endgroup::"
               exit 0
@@ -104,12 +136,13 @@ jobs:
               # Extract just the IP address (handles colored output and messages)
               CLEAN_IP=$(echo "$VPS_IP_FROM_API" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
               
-              if [ -n "$CLEAN_IP" ] && [ "$CLEAN_IP" != "null" ]; then
-                echo "✅ Got VPS IP from Contabo API: ${CLEAN_IP}"
+              if [ -n "$CLEAN_IP" ] && [ "$CLEAN_IP" != "null" ] && is_valid_ip "$CLEAN_IP"; then
+                echo "✅ Got valid VPS IP from Contabo API: ${CLEAN_IP}"
                 echo "VPS_IP=${CLEAN_IP}" >> $GITHUB_ENV
                 echo "vps_ip_from_api=${CLEAN_IP}" >> $GITHUB_OUTPUT
               else
                 echo "⚠️  Could not extract valid IP from Contabo API response"
+                echo "Extracted value: '${CLEAN_IP}'"
                 echo "Full response: $VPS_IP_FROM_API"
                 echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
               fi
@@ -119,7 +152,7 @@ jobs:
               echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
             fi
           else
-            echo "✅ VPS_IP is already set: ${CURRENT_VPS_IP}"
+            echo "✅ VPS_IP appears to be valid: ${CURRENT_VPS_IP}"
             echo "Skipping Contabo API lookup"
             echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
           fi
