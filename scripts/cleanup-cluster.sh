@@ -78,10 +78,10 @@ SYSTEM_NAMESPACES=(
 
 # Application namespaces to explicitly clean (in addition to auto-detection)
 APP_NAMESPACES=(
+    "argocd"
+    "infra"
     "erp"
     "truload"
-    "infra"
-    "argocd"
     "monitoring"
     "cafe"
     "treasury"
