@@ -341,14 +341,41 @@ jobs:
           echo "Testing SSH connection to ${VPS_USER}@${VPS_IP}..."
           echo "SSH command: ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -v ${VPS_USER}@${VPS_IP} 'echo SSH connection successful'"
           
-          # Capture both stdout and stderr
-          SSH_OUTPUT=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o LogLevel=ERROR ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
+          # Run SSH with verbose output (capture stderr separately for better debugging)
+          SSH_OUTPUT=$(ssh -i ~/.ssh/vps_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=10 \
+            -o LogLevel=VERBOSE \
+            ${VPS_USER}@${VPS_IP} \
+            "echo 'SSH connection successful'" 2>&1)
           SSH_EXIT_CODE=$?
           
           if [ $SSH_EXIT_CODE -ne 0 ]; then
             echo "❌ SSH connection failed (exit code: ${SSH_EXIT_CODE})"
-            echo "SSH error output:"
-            echo "${SSH_OUTPUT}"
+            echo ""
+            echo "SSH verbose output (last 30 lines):"
+            echo "${SSH_OUTPUT}" | tail -30
+            echo ""
+            
+            # Check for specific error types
+            if echo "${SSH_OUTPUT}" | grep -qi "could not resolve hostname"; then
+              echo "🔍 Error Type: DNS Resolution Failed"
+              echo "   The hostname/IP '${VPS_IP}' cannot be resolved"
+              echo "   This suggests the IP address is invalid or doesn't exist"
+            elif echo "${SSH_OUTPUT}" | grep -qi "connection refused"; then
+              echo "🔍 Error Type: Connection Refused"
+              echo "   The VPS is reachable but SSH service is not running or firewall is blocking"
+            elif echo "${SSH_OUTPUT}" | grep -qi "connection timed out\|operation timed out"; then
+              echo "🔍 Error Type: Connection Timeout"
+              echo "   Cannot reach the VPS - it might be down or firewall is blocking port 22"
+            elif echo "${SSH_OUTPUT}" | grep -qi "permission denied"; then
+              echo "🔍 Error Type: Permission Denied"
+              echo "   SSH key authentication failed - key might not be authorized on VPS"
+            elif echo "${SSH_OUTPUT}" | grep -qi "host key verification failed"; then
+              echo "🔍 Error Type: Host Key Verification Failed"
+              echo "   SSH host key mismatch - this is usually safe to ignore with StrictHostKeyChecking=no"
+            fi
+            
             echo ""
             echo "Attempting Contabo API fallback..."
             
