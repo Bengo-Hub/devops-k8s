@@ -55,6 +55,8 @@ echo "[SUCCESS] Completed. Tag: $GIT_COMMIT_ID"
 
 2) **Create `kubeSecrets/devENV.yaml`** Secret manifest with your app's environment variables:
 
+Each app should provide `kubeSecrets/devENV.yaml` in its repo with a namespaced Secret manifest containing all required environment variables for that environment.
+
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -73,6 +75,29 @@ stringData:
   DEBUG: "False"
   ALLOWED_HOSTS: "myapp.domain.com"
 ```
+
+**Required Environment Variables:**
+
+Common (per service; adjust to your stack):
+- `DATABASE_URL`: e.g., `postgresql://user:pass@host:5432/db`
+- `REDIS_URL`: e.g., `redis://:pass@host:6379/0`
+- `CELERY_BROKER_URL`: typically same as REDIS_URL
+- `CELERY_RESULT_BACKEND`: typically same as REDIS_URL
+- `JWT_SECRET`: random 32-64 chars
+- `DJANGO_SECRET_KEY` (Django apps): random 50 chars
+- `DEBUG`: "False"
+- `ALLOWED_HOSTS`: e.g., `api.domain.tld,localhost,127.0.0.1`
+- `NEXT_PUBLIC_API_URL` (for UI): e.g., `https://api.domain.tld`
+
+Optional (based on DB type):
+- PostgreSQL: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- MySQL: `MYSQL_URL` or `MYSQL_*` variants
+- MongoDB: `MONGO_URL`
+
+**Defaults and Auto-generation:**
+- If `KUBE_CONFIG` is missing, cluster operations (kubectl, secret apply) are skipped.
+- If `JWT_SECRET` is missing in the target Kubernetes Secret (`env_secret_name`), the workflow will generate a 64-hex random value and create/patch the secret with `JWT_SECRET`.
+- Database passwords (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MONGO_PASSWORD`, `MYSQL_PASSWORD`) are auto-generated when `setup_databases: true` and the corresponding secrets are not provided.
 
 3) **Add `.github/workflows/deploy.yml`** that calls the reusable workflow:
 
@@ -206,6 +231,24 @@ Ensure these are set at organization level:
 - `SSH_PRIVATE_KEY` (for VPS access)
 - Optional: `POSTGRES_PASSWORD`, `REDIS_PASSWORD` (auto-generated if omitted)
 - Optional: `CONTABO_CLIENT_ID`, `CONTABO_CLIENT_SECRET`, `CONTABO_API_USERNAME`, `CONTABO_API_PASSWORD`
+
+### Image Registry Configuration
+
+**Registry Setup:**
+- Use a private registry (e.g., `registry.masterspace.co.ke`) or Docker Hub (`docker.io/codevertex`)
+- Authenticate with `REGISTRY_USERNAME`/`REGISTRY_PASSWORD` in GitHub Secrets
+- Images are tagged with short SHA; `latest` is not used for deploys
+- Trivy generates vulnerability reports; integrate with registry scanning when available
+
+**Registry Authentication:**
+The workflow automatically authenticates with the registry using GitHub secrets:
+- `REGISTRY_USERNAME`: Your registry username (e.g., `codevertex`)
+- `REGISTRY_PASSWORD`: Your registry token/password
+
+**Image Tagging:**
+- Images are tagged with short commit SHA (8 characters)
+- Example: `docker.io/codevertex/my-app:a1b2c3d4`
+- Never use `latest` tag for production deployments
 
 Next Steps After Onboarding
 ---------------------------

@@ -619,7 +619,7 @@ kubectl apply -f apps/root-app.yaml
 
 **Infrastructure:**
 - [Database Setup](./database-setup.md) - Database configuration details
-- [Argo CD Setup](./argocd.md) - Argo CD configuration
+- [Argo CD Setup](./pipelines.md) - Argo CD configuration (see Argo CD Installation section)
 - [Monitoring Setup](./monitoring.md) - Monitoring stack details
 
 ---

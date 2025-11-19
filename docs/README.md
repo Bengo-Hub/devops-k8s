@@ -17,22 +17,21 @@ Documentation Index
    - **github-secrets.md** 🔐 - Complete GitHub secrets configuration guide
 
 **Additional Resources**
-- Hosting environments and providers: hosting.md
+- Hosting environments: See provisioning.md
 - Onboarding a repository: onboarding.md
 
 **Deployment**
 - Pipelines and workflows: pipelines.md
-- Argo CD setup and GitOps: argocd.md
+- Argo CD setup and GitOps: See pipelines.md
 - GitHub secrets required: github-secrets.md
-- Environments and secrets: env-vars.md
+- Environments and secrets: See onboarding.md
 - **comprehensive-access-setup.md** 🔐 - Access setup (SSH, GitHub PAT, Contabo API)
 - **SSH keys setup:** See comprehensive-access-setup.md 🔑
 
 **Infrastructure**
 - **Database setup (PostgreSQL + Redis):** database-setup.md
-- Certificates and domains: certificates.md
-- API gateway and ingress: domains-gateway.md
-- Image registry and SBOM: image-registry.md
+- Certificates, domains, and ingress: domains-gateway.md
+- Image registry: See onboarding.md
 
 **Operations**
 - **operations runbook:** OPERATIONS-RUNBOOK.md 📋
@@ -41,7 +40,7 @@ Documentation Index
 - **VPS access testing:** See comprehensive-access-setup.md ✅
 - Monitoring and alerts (Prometheus, Grafana): monitoring.md
 - Scaling (HPA, VPA): scaling.md
-- Security best practices: security.md
+- Security best practices: See OPERATIONS-RUNBOOK.md
 - **etcd optimization:** ETCD-OPTIMIZATION.md 🔧
 - **reprovisioning guide:** REPROVISIONING-GUIDE.md 🔄
 
