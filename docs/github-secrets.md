@@ -151,4 +151,253 @@ After configuring secrets:
 
 **See:** `docs/contabo-setup-kubeadm.md` for complete Kubernetes cluster setup guide
 
+---
+
+## Secrets Management: Environment Variables vs Kubernetes Secrets
+
+### 🎯 Critical Concept: Two Distinct Phases
+
+**Phase 1: Infrastructure Provisioning (devops-k8s)**
+- **When:** Setting up the cluster infrastructure (databases, monitoring, etc.)
+- **Who:** DevOps team or initial setup
+- **Where:** `devops-k8s/scripts/install-databases.sh`
+- **Process:** Environment Variables → CREATE Kubernetes Secrets
+
+```bash
+# Environment variables are used to SET passwords during installation
+export POSTGRES_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
+export REDIS_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
+
+# These create Kubernetes secrets:
+# - postgresql secret (with postgres-password key)
+# - redis secret (with redis-password key)
+
+./scripts/install-databases.sh
+```
+
+**Phase 2: Application Deployment (bengobox-erp-api/ui)**
+- **When:** Every code push / CI/CD deployment
+- **Who:** Automated via GitHub Actions
+- **Where:** `BengoERP/bengobox-erp-api/build.sh`
+- **Process:** Kubernetes Secrets → READ for Application Config
+
+```bash
+# Application retrieves passwords from existing K8s secrets
+# (These are the SOURCE OF TRUTH matching the actual databases)
+
+./scripts/setup_env_secrets.sh
+# ↓
+# Reads: kubectl get secret postgresql -n erp
+# Reads: kubectl get secret redis -n erp
+# ↓
+# Creates: erp-api-env secret with correct passwords
+```
+
+### 🔑 Password Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 1: Infrastructure Provisioning (ONE TIME)                │
+└─────────────────────────────────────────────────────────────────┘
+
+GitHub Secrets              devops-k8s                Kubernetes
+     │                           │                         │
+     │ POSTGRES_PASSWORD         │                         │
+     ├──────────────────────────►│ install-databases.sh    │
+     │ REDIS_PASSWORD             │         │              │
+     │                            │         ▼              │
+     │                            │    helm install         │
+     │                            │    postgresql           │
+     │                            │    --set password=...   │
+     │                            │         │              │
+     │                            │         ├──────────────►│
+     │                            │         │              │ Creates:
+     │                            │         │              │ - postgresql secret
+     │                            │         │              │ - redis secret
+     │                            │    [PASSWORDS NOW      │
+     │                            │     STORED IN K8S]     │
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 2: Application Deployment (EVERY PUSH)                   │
+└─────────────────────────────────────────────────────────────────┘
+
+GitHub Actions              bengobox-erp-api          Kubernetes
+     │                           │                         │
+     │ (No password needed)      │                         │
+     ├──────────────────────────►│ build.sh                │
+     │ KUBE_CONFIG               │         │              │
+     │                            │         ▼              │
+     │                            │ setup_env_secrets.sh   │
+     │                            │         │              │
+     │                            │  kubectl get secret    │
+     │                            │  postgresql -n erp     │
+     │                            │         │              │
+     │                            │         ◄──────────────┤
+     │                            │         │              │ Returns:
+     │                            │    [GOT PASSWORD]      │ postgres-password
+     │                            │         │              │
+     │                            │         ▼              │
+     │                            │ Create erp-api-env     │
+     │                            │ with retrieved         │
+     │                            │ passwords              │
+     │                            │         ├──────────────►│
+     │                            │                         │ Creates:
+     │                            │                         │ - erp-api-env secret
+     │                            │                         │   (with DB passwords)
+```
+
+### 📋 Why This Matters
+
+**❌ Wrong Approach (What We Fixed):**
+```bash
+# CI/CD tries to use GitHub secret POSTGRES_PASSWORD
+# But this might not match the actual database password!
+# Result: Password authentication failed
+```
+
+**✅ Correct Approach (Current):**
+```bash
+# CI/CD retrieves password from postgresql Kubernetes secret
+# This is GUARANTEED to match the actual database
+# Result: Authentication succeeds
+```
+
+### 🔧 Implementation Details
+
+**Infrastructure Scripts (devops-k8s):**
+- **File:** `scripts/install-databases.sh`
+- **Purpose:** Allow ops team to set passwords OR let Helm generate them
+- Environment variables are used to CREATE databases
+
+**Application Scripts (bengobox-erp-api):**
+- **File:** `scripts/setup_env_secrets.sh`
+- **Purpose:** Ensure app uses correct password matching actual database
+- ALWAYS retrieve from Kubernetes (source of truth)
+
+### 🔍 Debugging Password Issues
+
+**Check What Password is Stored:**
+```bash
+# Get PostgreSQL password from Kubernetes
+kubectl get secret postgresql -n erp \
+  -o jsonpath='{.data.postgres-password}' | base64 -d
+
+# Get Redis password
+kubectl get secret redis -n erp \
+  -o jsonpath='{.data.redis-password}' | base64 -d
+```
+
+**Check What App is Using:**
+```bash
+# Get password from app secret
+kubectl get secret erp-api-env -n erp \
+  -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
+
+# These MUST match!
+```
+
+### 🛠️ Troubleshooting
+
+**Issue: "password authentication failed"**
+
+**Diagnosis:**
+```bash
+# Compare passwords
+PG_SECRET=$(kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d)
+APP_SECRET=$(kubectl get secret erp-api-env -n erp -o jsonpath='{.data.DB_PASSWORD}' | base64 -d)
+
+if [[ "$PG_SECRET" == "$APP_SECRET" ]]; then
+  echo "✓ Passwords match"
+else
+  echo "✗ PASSWORD MISMATCH!"
+  echo "Database has: $PG_SECRET"
+  echo "App is using: $APP_SECRET"
+fi
+```
+
+**Fix:**
+```bash
+# Re-run setup_env_secrets.sh to sync passwords
+cd BengoERP/bengobox-erp-api
+export NAMESPACE=erp
+export PG_DATABASE=bengo_erp
+export ENV_SECRET_NAME=erp-api-env
+./scripts/setup_env_secrets.sh
+```
+
+### 📊 Secret Lifecycle
+
+**1. Initial Setup (devops-k8s):**
+```bash
+# Run once during cluster provisioning
+export POSTGRES_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
+export REDIS_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
+./scripts/install-databases.sh
+
+# Creates:
+# - postgresql secret (source of truth)
+# - redis secret (source of truth)
+```
+
+**2. Application Deployment (build.sh):**
+```bash
+# Runs on every git push
+# NO password env vars needed
+./build.sh
+
+# Process:
+# 1. Reads postgresql/redis secrets
+# 2. Creates erp-api-env secret with those passwords
+# 3. Migrations use erp-api-env (which has correct passwords)
+```
+
+**3. Password Rotation (when needed):**
+```bash
+# Step 1: Update database password
+kubectl patch secret postgresql -n erp \
+  -p '{"stringData":{"postgres-password":"NewPassword123!"}}'
+
+# Step 2: Update database itself
+kubectl exec -it postgresql-0 -n erp -- \
+  psql -U postgres -c "ALTER USER postgres PASSWORD 'NewPassword123!';"
+
+# Step 3: Redeploy app (will auto-sync new password)
+git push  # Triggers build.sh → setup_env_secrets.sh → retrieves new password
+```
+
+### ✅ Best Practices
+
+**DO:**
+- ✅ Use GitHub secrets for infrastructure provisioning passwords
+- ✅ Let applications retrieve passwords from Kubernetes
+- ✅ Keep database secrets as the source of truth
+- ✅ Test password retrieval before deployments
+
+**DON'T:**
+- ❌ Put database passwords in application GitHub secrets
+- ❌ Hardcode passwords in code or manifests
+- ❌ Use env var passwords for existing databases
+- ❌ Assume GitHub secret matches K8s secret
+
+### 🔐 Security Notes
+
+**Why Kubernetes Secrets are Source of Truth:**
+1. **Single Source** - Database password exists in ONE place
+2. **Consistency** - App password MUST match database password
+3. **Rotation** - Changing K8s secret automatically updates apps
+4. **Audit Trail** - K8s secret changes are logged
+
+**When to Use GitHub Secrets:**
+- ✅ Initial database provisioning
+- ✅ Registry credentials
+- ✅ Git access tokens
+- ✅ API keys for external services
+- ✅ KUBE_CONFIG for cluster access
+
+**When to Use Kubernetes Secrets:**
+- ✅ Database passwords (after provisioning)
+- ✅ Service-to-service credentials
+- ✅ Application runtime config
+- ✅ Dynamic values that change
+
 
