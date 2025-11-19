@@ -110,8 +110,15 @@ Manual Access Setup → Automated Cluster Setup → Automated Provisioning
 
 **If you missed the kubeconfig output:**
 - SSH to VPS: `ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP`
-- Extract kubeconfig: `cat /etc/kubernetes/admin.conf | base64 -w 0`
+- Extract kubeconfig: `cat /etc/kubernetes/admin.conf | base64 -w 0` (Linux) or `cat /etc/kubernetes/admin.conf | base64 | tr -d '\n'` (Mac)
+- **⚠️ IMPORTANT:** Copy the ENTIRE output as a single line (no spaces/newlines)
 - See `docs/comprehensive-access-setup.md` section 4 for detailed instructions
+
+**Troubleshooting base64 errors:**
+- If you see "base64: invalid input" error in workflows, the secret likely contains newlines or spaces
+- Re-extract kubeconfig using `base64 -w 0` (Linux) or `base64 | tr -d '\n'` (Mac)
+- Ensure the entire base64 string is copied as a single continuous line
+- See `docs/github-secrets.md` for detailed troubleshooting
 
 **Documentation:** See `docs/contabo-setup-kubeadm.md`
 
