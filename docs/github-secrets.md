@@ -93,46 +93,16 @@ After configuring Kubernetes cluster (see `docs/CLUSTER-SETUP-WORKFLOW.md` and `
 
 ### 1. Get Kubeconfig
 
-**⚠️ CRITICAL: Base64 Encoding Requirements**
-
-The kubeconfig MUST be encoded as a **single continuous line** with no spaces or newlines. This is essential for the workflow to decode it correctly.
-
 **On your VPS:**
 
 ```bash
-# Option A: Use the kubeconfig from cluster setup (recommended)
-# The setup-cluster.sh script outputs base64-encoded kubeconfig automatically
-# Just copy the output from the script
-
-# Option B: Extract manually if you missed the script output
-# SSH into VPS
-ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
-
-# Update kubeconfig with public IP (if not already updated)
+# Update kubeconfig with public IP
 VPS_IP="YOUR_VPS_IP"
-sed -i "s|server: https://.*:6443|server: https://${VPS_IP}:6443|" /etc/kubernetes/admin.conf
+sed -i "s|server: https://.*:6443|server: https://${VPS_IP}:6443|" $HOME/.kube/config
 
-# Get base64-encoded kubeconfig (Linux - single line, no breaks)
-cat /etc/kubernetes/admin.conf | base64 -w 0
-
-# Mac (base64 doesn't support -w flag):
-cat /etc/kubernetes/admin.conf | base64 | tr -d '\n'
-
-# Windows PowerShell (if accessing VPS via PowerShell):
-$content = Get-Content /etc/kubernetes/admin.conf -Raw
-[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($content))
+# Get base64-encoded kubeconfig
+cat $HOME/.kube/config | base64 -w 0 2>/dev/null || cat $HOME/.kube/config | base64
 ```
-
-**⚠️ IMPORTANT: When copying to GitHub secrets:**
-- ✅ Copy the **ENTIRE** base64 output (can be 2000+ characters)
-- ✅ Must be a **single line** (no line breaks)
-- ✅ **No spaces** or whitespace
-- ✅ Paste directly into GitHub secret field
-
-**Common Errors:**
-- ❌ `base64: invalid input` → Secret contains newlines/spaces (re-extract with `-w 0`)
-- ❌ `Kubeconfig file is empty` → Secret was truncated (copy entire output)
-- ❌ `Failed to connect` → Server URL incorrect (update kubeconfig server URL first)
 
 ### 2. Configure GitHub Secrets
 
@@ -142,8 +112,7 @@ Go to GitHub → Settings → Secrets and variables → Actions (Organization or
 
 1. **KUBE_CONFIG** (Required)
    - Value: The base64-encoded kubeconfig from above
-   - **Copy the ENTIRE base64 output** (single line, no spaces/newlines)
-   - Length should be substantial (typically 2000+ characters)
+   - Copy the entire base64 output
 
 **Optional Secrets (with defaults):**
 
