@@ -5,16 +5,21 @@ Documentation Index
 
 1. **Access Setup (Manual - One-Time)**
    - **comprehensive-access-setup.md** 🔐 - Complete guide for SSH keys, GitHub PAT/token, Contabo API
-   - **comprehensive-access-setup.md** 🔐 - Complete guide (includes SSH keys and testing)
+   - **Prerequisites:** Fresh VPS with Ubuntu 24.04 LTS
 
 2. **Cluster Setup (Automated - One-Time)**
    - **CLUSTER-SETUP-WORKFLOW.md** ⚙️ - Complete workflow guide (Manual Access → Automated Cluster → Automated Provisioning)
    - **contabo-setup-kubeadm.md** 📘 - Detailed Kubernetes cluster setup guide (Ubuntu 24.04, kubeadm)
    - **ETCD-OPTIMIZATION.md** 🔧 - Prevent etcd space issues (auto-compaction configuration)
+   - **⚠️ IMPORTANT:** Cluster setup generates kubeconfig automatically
 
-3. **Provisioning (Automated - Repeatable)**
+3. **Kubeconfig Setup (After Cluster Setup)**
+   - **github-secrets.md** 🔐 - Extract and store kubeconfig in GitHub secrets
+   - **⚠️ IMPORTANT:** Kubeconfig is generated DURING cluster setup, extract it AFTER cluster setup completes
+
+4. **Provisioning (Automated - Repeatable)**
    - **provisioning.md** 🚀 - Automated infrastructure provisioning workflow
-   - **github-secrets.md** 🔐 - Complete GitHub secrets configuration guide
+   - **Prerequisites:** Cluster setup complete, kubeconfig stored in GitHub secrets
 
 **Additional Resources**
 - Hosting environments: See provisioning.md

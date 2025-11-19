@@ -96,13 +96,22 @@ Manual Access Setup → Automated Cluster Setup → Automated Provisioning
    - Sets quota and retention
 
 5. ✅ **Kubeconfig Generation**
-   - Updates kubeconfig with public IP
-   - Outputs base64-encoded kubeconfig
+   - Updates kubeconfig with public IP (if `VPS_IP` environment variable is set)
+   - Outputs base64-encoded kubeconfig for GitHub secrets
+   - **Kubeconfig file created at:** `/etc/kubernetes/admin.conf` on the VPS
 
-**After script completes:**
+**⚠️ IMPORTANT: Kubeconfig Setup (After Script Completes)**
 
-1. Copy the base64 kubeconfig output
-2. Add it as GitHub organization secret: `KUBE_CONFIG`
+**The script will display the base64-encoded kubeconfig at the end. Follow these steps:**
+
+1. **Copy the base64 kubeconfig output** (displayed by the script)
+2. **Add it as GitHub organization secret:** `KUBE_CONFIG`
+3. **Verify kubeconfig works** (see testing section below)
+
+**If you missed the kubeconfig output:**
+- SSH to VPS: `ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP`
+- Extract kubeconfig: `cat /etc/kubernetes/admin.conf | base64 -w 0`
+- See `docs/comprehensive-access-setup.md` section 4 for detailed instructions
 
 **Documentation:** See `docs/contabo-setup-kubeadm.md`
 
@@ -227,10 +236,13 @@ After each phase, verify:
 - [ ] Contabo API works: Can get access token
 
 ### Phase 2: Cluster Setup ✅
-- [ ] Cluster initialized: `kubectl get nodes`
+- [ ] Cluster initialized: `kubectl get nodes` (run on VPS)
 - [ ] Node is Ready: `kubectl get nodes` shows Ready status
 - [ ] Calico running: `kubectl get pods -n calico-system`
-- [ ] Kubeconfig generated: Base64 output available
+- [ ] Kubeconfig file exists: `cat /etc/kubernetes/admin.conf` (on VPS)
+- [ ] Kubeconfig copied: Base64 output captured from script
+- [ ] Kubeconfig stored: Added to GitHub organization secret `KUBE_CONFIG`
+- [ ] Kubeconfig verified: `kubectl get nodes` works with external kubeconfig
 
 ### Phase 3: Provisioning ✅
 - [ ] Storage provisioner: `kubectl get storageclass`
