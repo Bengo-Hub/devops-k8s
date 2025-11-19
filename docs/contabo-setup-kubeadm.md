@@ -539,7 +539,7 @@ See `docs/github-secrets.md` for complete secret configuration guide. Required:
 
 ### 2. Run Automated Provisioning Workflow
 
-1. Go to: `https://github.com/YOUR_ORG/devops-k8s/actions`
+1. Go to: `https://github.com/Bengo-Hub/devops-k8s/actions`
 2. Select: **"Provision Cluster Infrastructure"**
 3. Click: **"Run workflow"** → **"Run workflow"**
 
