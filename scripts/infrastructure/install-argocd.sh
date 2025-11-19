@@ -4,80 +4,38 @@ set -euo pipefail
 # Production-ready Argo CD Installation
 # Auto-configures ingress with TLS for production access
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
 ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.masterspace.co.ke}
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
 
-echo -e "${GREEN}Installing Argo CD (Production)...${NC}"
-echo -e "${BLUE}Domain: ${ARGOCD_DOMAIN}${NC}"
+log_section "Installing Argo CD (Production)"
+log_info "Domain: ${ARGOCD_DOMAIN}"
 
 # Pre-flight checks
-if ! command -v kubectl &> /dev/null; then
-  echo -e "${RED}kubectl command not found. Aborting.${NC}"
-  exit 1
-fi
-
-if ! kubectl cluster-info >/dev/null 2>&1; then
-  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
-
-# Check for Helm (install if missing)
-if ! command -v helm &> /dev/null; then
-  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
-  if command -v snap &> /dev/null; then
-    sudo snap install helm --classic
-  else
-    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  fi
-  echo -e "${GREEN}✓ Helm installed${NC}"
-else
-  echo -e "${GREEN}✓ Helm already installed${NC}"
-fi
-
-# Check if cert-manager is installed (required for production ingress)
-if ! kubectl get namespace cert-manager >/dev/null 2>&1; then
-  echo -e "${YELLOW}cert-manager not found. Installing cert-manager first...${NC}"
-  "${SCRIPT_DIR}/install-cert-manager.sh"
-else
-  echo -e "${GREEN}✓ cert-manager already installed${NC}"
-fi
+check_kubectl
+ensure_helm
+ensure_cert_manager "${SCRIPT_DIR}"
 
 # Create namespace
-if kubectl get namespace argocd >/dev/null 2>&1; then
-  echo -e "${GREEN}✓ Namespace 'argocd' already exists${NC}"
-else
-  echo -e "${YELLOW}Creating namespace 'argocd'...${NC}"
-  kubectl create namespace argocd
-  echo -e "${GREEN}✓ Namespace 'argocd' created${NC}"
-fi
+ensure_namespace "argocd"
 
 # Install or upgrade Argo CD
 if kubectl -n argocd get deploy argocd-server >/dev/null 2>&1; then
-  echo -e "${YELLOW}Argo CD already installed. Upgrading if needed...${NC}"
+  log_info "Argo CD already installed. Upgrading if needed..."
   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 else
-  echo -e "${YELLOW}Installing Argo CD...${NC}"
+  log_info "Installing Argo CD..."
   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 fi
 
 # Wait for pods to be ready
-echo -e "${YELLOW}Waiting for Argo CD pods to be ready (may take 2-3 minutes)...${NC}"
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s || echo -e "${YELLOW}Some pods still starting, continuing...${NC}"
+wait_for_pods "argocd" "app.kubernetes.io/name=argocd-server" 300
 
 # Deploy production ingress with TLS
-echo -e "${YELLOW}Configuring production ingress with TLS...${NC}"
+log_info "Configuring production ingress with TLS..."
 cat > /tmp/argocd-ingress-prod.yaml <<EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
