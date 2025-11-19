@@ -30,7 +30,7 @@ ETCD_POD=$(kubectl get pods -n kube-system -l component=etcd -o jsonpath='{.item
 
 if [ -z "$ETCD_POD" ]; then
     echo -e "${YELLOW}⚠️  Could not find etcd pod in kube-system namespace${NC}"
-    echo -e "${YELLOW}This may be a k3s cluster or etcd is running differently${NC}"
+    echo -e "${YELLOW}etcd may be running differently or cluster may not be fully initialized${NC}"
     exit 0
 fi
 

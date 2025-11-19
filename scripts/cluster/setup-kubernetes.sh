@@ -11,9 +11,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Configuration
+# Configuration (updated for Ubuntu 24.04 LTS)
 CLUSTER_NAME=${CLUSTER_NAME:-mss-prod}
-KUBERNETES_VERSION=${KUBERNETES_VERSION:-1.28}
+KUBERNETES_VERSION=${KUBERNETES_VERSION:-1.30}
 POD_NETWORK_CIDR=${POD_NETWORK_CIDR:-192.168.0.0/16}
 
 echo -e "${GREEN}========================================${NC}"
@@ -95,13 +95,13 @@ echo -e "${GREEN}✓ Master node taint removed${NC}"
 echo ""
 
 echo -e "${BLUE}Step 7: Installing Calico CNI...${NC}"
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml
 
 # Wait for operator to be ready
 echo -e "${YELLOW}Waiting for Tigera operator to be ready...${NC}"
 kubectl wait --for=condition=available --timeout=120s deployment/tigera-operator -n tigera-operator || true
 
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/custom-resources.yaml
 
 # Wait for Calico pods
 echo -e "${YELLOW}Waiting for Calico pods to be ready...${NC}"

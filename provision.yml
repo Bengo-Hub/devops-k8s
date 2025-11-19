@@ -8,8 +8,8 @@
   gather_facts: yes
 
   vars:
-    # Tool versions
-    kubectl_version: "v1.28.0"
+    # Tool versions (updated for Ubuntu 24.04 LTS)
+    kubectl_version: "v1.30.0"
     helm_version: "v3.15.0"
     argocd_version: "v2.13.0"  # Updated to latest stable version
     trivy_version: "0.45.0"

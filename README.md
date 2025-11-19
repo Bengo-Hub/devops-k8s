@@ -5,7 +5,7 @@ This repository contains reusable DevOps assets for deploying applications to a 
 
 🚀 **Quick Start**: See [SETUP.md](SETUP.md) for fast-track deployment guide.
 
-⚠️ **IMPORTANT**: Manual VPS setup is required before running automated provisioning. See [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md) for kubeadm setup or [docs/contabo-setup.md](docs/contabo-setup.md) for k3s setup.
+⚠️ **IMPORTANT**: Manual VPS setup is required before running automated provisioning. See [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md) for complete Kubernetes cluster setup guide.
 
 ✅ **Production Checklist**: See [PRODUCTION-CHECKLIST.md](PRODUCTION-CHECKLIST.md) for deployment status and manual steps.
 
@@ -15,9 +15,7 @@ Quick Links
 -----------
 - **Getting Started**
   - docs overview: [docs/README.md](docs/README.md)
-  - **K8s choice (kubeadm vs k3s):** [docs/k8s-comparison.md](docs/k8s-comparison.md) ⭐
   - **Manual VPS Setup (REQUIRED FIRST):** [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md) ⭐
-  - Contabo VPS with k3s (reference): [docs/contabo-setup.md](docs/contabo-setup.md)
   - hosting environments and providers: [docs/hosting.md](docs/hosting.md)
   - onboarding a repo: [docs/onboarding.md](docs/onboarding.md)
   - **Automated Provisioning:** [docs/provisioning.md](docs/provisioning.md) - Infrastructure provisioning workflow
