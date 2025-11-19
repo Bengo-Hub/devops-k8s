@@ -126,14 +126,14 @@ Relationship to CI/CD Workflows
 **Per-Service Database Creation:**
 - Each service's build script automatically creates its database using `create-service-database.sh`
 - Databases are created on first deployment, not during provisioning
-- See `docs/per-service-database-setup.md` for details
+- See `docs/database-setup.md` for per-service database setup details
 
 **Idempotency:**
 - All installation scripts are idempotent (can be run multiple times safely)
 - Scripts check for existing installations before installing
 - Upgrades/reinstalls only occur if explicitly requested or in CI/CD mode
 
-**See:** `docs/secrets-management.md` for password flow details
+**See:** `docs/github-secrets.md` for password flow and secrets management details
 - Provisioning ensures the VPS has the tooling for manual operations and emergency fixes.
 - Automated deployments (build.sh) handle: image build, push, Helm values updates, ArgoCD sync, DB setup, migrations, and health checks.
 

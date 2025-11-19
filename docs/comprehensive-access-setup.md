@@ -2,18 +2,16 @@
 
 ## Overview
 
-This guide provides step-by-step instructions for setting up all required access permissions and authentication methods needed for the BengoERP deployment pipeline to work successfully.
+This guide provides step-by-step instructions for setting up all required access permissions and authentication methods needed for the BengoERP deployment pipeline to work successfully. It includes SSH key setup, GitHub authentication, Contabo API configuration, Kubernetes access, and comprehensive testing procedures.
 
 ## Related Documentation
 
 **Next Steps (After Access Setup):**
 - **[Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete automated cluster setup guide
 - **[Kubernetes Setup Guide](./contabo-setup-kubeadm.md)** 📘 - Detailed Kubernetes cluster setup
+- **[GitHub Secrets Guide](./github-secrets.md)** 🔐 - Complete secrets documentation
 
-**Related Guides:**
-- [SSH Keys Setup Guide](./ssh-keys-setup.md) - Detailed SSH key configuration and troubleshooting
-- [GitHub Secrets Guide](./github-secrets.md) - Complete secrets documentation
-- [VPS Access Testing Guide](./vps-access-testing-guide.md) - Testing and verification procedures
+---
 
 ## 1. GitHub Access Setup
 
@@ -50,14 +48,38 @@ For the ERP UI repository (`bengobox-erp-ui`), add these repository secrets:
 - `GIT_USER` - Your git username (`Titus Owuor`)
 - `GIT_EMAIL` - Your git email (`titusowuor30@gmail.com`)
 
-## 1. GitHub Access Setup
+---
 
-### 2.1 Generate SSH Key Pair
+## 2. SSH Keys Setup
 
-**Important:** All SSH keys in this project use the default passphrase `"codevertex"` and are designed to work without requiring user input during automated deployments.
+### 2.1 SSH Key Types and Purposes
+
+The deployment pipeline uses three types of SSH keys:
+
+**1. VPS Access Key (SSH_PRIVATE_KEY)**
+- **Purpose:** Used for accessing your Contabo VPS for deployment operations
+- **Usage:** SSH deployment to VPS, remote command execution, Kubernetes cluster access
+- **Stored as:** `SSH_PRIVATE_KEY` (organization secret)
+
+**2. Docker Build SSH Key (DOCKER_SSH_KEY)**
+- **Purpose:** Used during Docker builds to access private GitHub repositories
+- **Usage:** Docker builds with `--ssh` flag, enables `git clone` during container build
+- **Stored as:** `DOCKER_SSH_KEY` (organization secret)
+- **Fallback:** Uses `SSH_PRIVATE_KEY` if `DOCKER_SSH_KEY` is not available
+
+**3. Git Operations SSH Key**
+- **Purpose:** Used for automated git operations (git pull, git push, git commit)
+- **Usage:** Updating Helm values files, committing deployment artifacts
+- **Uses:** Either `DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY` (workflow handles fallback)
+
+**Note:** The same SSH key can be used for all three purposes for simplicity.
+
+### 2.2 Generate SSH Key Pair
+
+**Important:** All SSH keys in this project use the passphrase `"codevertex"` for consistency in automated deployments.
 
 ```bash
-# On your local machine
+# Generate SSH key pair for both VPS access and Docker builds
 ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
 ```
 
@@ -65,9 +87,9 @@ This creates:
 - `~/.ssh/contabo_deploy_key` (private key)
 - `~/.ssh/contabo_deploy_key.pub` (public key)
 
-**Note:** The passphrase "codevertex" is used consistently across all SSH keys in this project for automated deployment scenarios.
+**Why Ed25519?** Ed25519 keys are more secure and faster than RSA keys, and are recommended for modern deployments.
 
-### 2.2 Add Public Key to Contabo VPS
+### 2.3 Add Public Key to Contabo VPS
 
 #### Option A: Via Contabo Control Panel (Recommended)
 
@@ -100,48 +122,93 @@ sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_
 systemctl restart sshd
 ```
 
-### 2.3 Test SSH Connection
+### 2.4 Add Public Key to GitHub (for Docker builds)
+
+If you need to access private repositories during Docker builds:
+
+1. **Copy the public key:**
+   ```bash
+   cat ~/.ssh/contabo_deploy_key.pub
+   ```
+
+2. **Add to GitHub repository:**
+   - Go to your private repository → Settings → Deploy keys
+   - Click "Add deploy key"
+   - Paste the public key content
+   - Check "Allow write access" if the workflow needs to push changes
+
+### 2.5 Store Private Keys in GitHub Secrets
+
+**Important:** Store all secrets at the **organization level** for consistency across repositories.
+
+#### Base64 Encode Private Keys
 
 ```bash
-ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
-```
+# For SSH_PRIVATE_KEY (VPS access)
+cat ~/.ssh/contabo_deploy_key | base64 -w 0
 
-### 2.4 Store Private Key in GitHub Secrets
-
-**Important:** All secrets must be stored at the **organization level**, not repository level, to ensure they are available across all repositories in the organization.
-
-```bash
-# Base64 encode the private key for GitHub secret
+# For DOCKER_SSH_KEY (Docker builds) - same key
 cat ~/.ssh/contabo_deploy_key | base64 -w 0
 ```
 
-**Organization-level secrets to configure in GitHub:**
+#### Add Organization Secrets
 
-Add these **organization-level** secrets in your GitHub organization settings:
+Go to GitHub organization → Settings → Secrets and variables → Actions
 
-| Secret Name | Description | Source |
-|-------------|-------------|---------|
-| `DOCKER_SSH_KEY` | Base64-encoded SSH private key for Docker builds | Generated above |
-| `KUBE_CONFIG` | Base64-encoded kubeconfig for Kubernetes access | From VPS kubeconfig |
-| `REGISTRY_USERNAME` | Docker Hub username | `codevertex` |
-| `SSH_PRIVATE_KEY` | Base64-encoded SSH private key for VPS access | Generated above |
-| `GIT_USER` | Git username | `Titus Owuor` |
-| `GIT_EMAIL` | Git email | `titusowuor30@gmail.com` |
-| `GITHUB_TOKEN` | GitHub personal access token for repo access | Generated earlier |
+Add these secrets:
 
-**Note:** Organization-level secrets are accessed using `${{ secrets.SECRET_NAME }}` in GitHub Actions workflows, just like repository secrets.
+| Secret Name | Description | Value |
+|-------------|-------------|-------|
+| `SSH_PRIVATE_KEY` | SSH private key for VPS access | Base64-encoded private key |
+| `DOCKER_SSH_KEY` | SSH private key for Docker builds | Base64-encoded private key (same as above) |
 
-## 2. SSH Keys Setup
+### 2.6 How SSH Keys Work in Workflows
 
-For detailed SSH key setup and troubleshooting, see: [SSH Keys Setup Guide](./ssh-keys-setup.md)
+#### Docker Build Process
 
-**Quick Setup Summary:**
+When a workflow runs with `DOCKER_SSH_KEY` configured:
 
-1. Generate SSH key pair (uses passphrase `codevertex`)
-2. Add public key to Contabo VPS
-3. Store private key as `DOCKER_SSH_KEY` and `SSH_PRIVATE_KEY` in GitHub secrets
+1. **SSH Agent Setup:** The workflow configures an SSH agent with your private key
+2. **Git Operations:** Docker can clone private repositories during build
+3. **Key Security:** Keys are loaded into memory only during the build process
 
-The same SSH key can be used for both Docker builds and VPS access for simplicity.
+**Workflow SSH Setup Process:**
+```yaml
+# Example from reusable-build-deploy.yml
+- name: Configure SSH for build secrets (optional)
+  env:
+    DOCKER_SSH_KEY_B64: ${{ secrets.DOCKER_SSH_KEY }}
+  run: |
+    if [ -n "${DOCKER_SSH_KEY_B64:-}" ]; then
+      echo "Loading DOCKER_SSH_KEY"
+      echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
+      chmod 0600 $HOME/.ssh/id_rsa
+      ssh-keyscan github.com >> $HOME/.ssh/known_hosts
+      eval "$(ssh-agent)"
+      ssh-add $HOME/.ssh/id_rsa
+      export SSH_AUTH_SOCK=$(ssh-agent -s)
+      cat > ~/.ssh/config << 'EOF'
+      Host github.com
+          HostName github.com
+          User git
+          IdentityFile ~/.ssh/id_rsa
+          IdentitiesOnly yes
+          StrictHostKeyChecking no
+      EOF
+      chmod 600 ~/.ssh/config
+      git config --global core.sshCommand "ssh -o IdentitiesOnly=yes"
+    fi
+```
+
+#### Git Operations in Workflows
+
+Git operations use SSH keys for git pull/push operations. The workflow ensures:
+1. SSH keys are loaded from GitHub secrets (`DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY`)
+2. SSH config file is created with correct settings
+3. Git operations use SSH by default when keys are available
+4. Fallback to tokens when SSH keys aren't configured
+
+---
 
 ## 3. Contabo API Setup
 
@@ -167,6 +234,7 @@ Add these organization secrets:
 - `CONTABO_CLIENT_SECRET` - OAuth2 client secret
 - `CONTABO_API_USERNAME` - Your Contabo username
 - `CONTABO_API_PASSWORD` - Your Contabo password
+- `CONTABO_INSTANCE_ID` - Your VPS instance ID (optional, defaults to `14285715`)
 
 ### 3.3 Test API Access
 
@@ -181,7 +249,9 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
   https://api.contabo.com/v1/compute/instances
 ```
 
-## 3. Contabo API Setup
+---
+
+## 4. Kubernetes Access Setup
 
 ### 4.1 Get Kubeconfig from Contabo VPS
 
@@ -224,36 +294,66 @@ cat kubeconfig.yaml | base64
    cat kubeconfig.yaml | base64 -w 0
    ```
 
-### 4.4 Test Kubernetes Access
+### 4.4 Store Kubeconfig in GitHub Secrets
+
+Add as organization secret:
+
+- `KUBE_CONFIG` - Base64-encoded kubeconfig for Kubernetes access
+
+---
+
+## 5. Testing and Verification
+
+### 5.1 SSH Access Testing
+
+#### Test Basic SSH Connection
 
 ```bash
-# Set kubeconfig environment variable
-export KUBE_CONFIG="$(cat kubeconfig.yaml | base64 -w 0)"
-
-# Test connection (this should work if properly configured)
-echo "$KUBE_CONFIG" | base64 -d > /tmp/test-kubeconfig
-export KUBECONFIG=/tmp/test-kubeconfig
-kubectl get nodes
-```
-
-## 4. Kubernetes Access Setup
-
-### 5.1 Test VPS Access
-
-```bash
-# Test SSH connection
+# Test SSH connection using the private key
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 
-# Check if Docker is installed and running
-docker --version
-docker run hello-world
-
-# Check if Kubernetes is installed and running
-kubectl get nodes
-kubectl get pods -A
+# Expected output: Successful login to VPS
+# If this fails, check:
+# 1. VPS IP address is correct
+# 2. SSH key is properly added to VPS authorized_keys
+# 3. SSH service is running on VPS
+# 4. Port 22 is open in VPS firewall
 ```
 
-### 5.2 Test GitHub Token Access
+#### Test SSH with Verbose Output
+
+```bash
+# Get detailed connection information
+ssh -v -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
+
+# Look for:
+# - Successful key exchange
+# - Server authentication
+# - Permission denied vs connection refused errors
+```
+
+#### Test SSH Commands Execution
+
+```bash
+# Test command execution over SSH
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "whoami && pwd && ls -la"
+
+# Expected: Shows root user, /root directory, and file listing
+```
+
+#### Verify Required Services
+
+```bash
+# Check if essential services are running
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "
+systemctl status kubelet --no-pager -l
+kubectl get nodes
+"
+```
+
+### 5.2 GitHub Authentication Testing
+
+#### Test GitHub Token Access
 
 ```bash
 # Test token has access to devops-k8s repository
@@ -261,22 +361,167 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
   https://api.github.com/repos/Bengo-Hub/devops-k8s
 
 # Should return repository information if token has access
+# If fails: Check token has 'repo' scope and access to repository
+
+# Note: GitHub tokens and all other secrets should be stored at the organization level
+# in GitHub organization settings, not repository settings.
 ```
 
-### 5.3 Test Contabo API Access
+#### Test Repository Clone
 
 ```bash
-# Test API token generation
-curl -X POST https://auth.contabo.com/oauth2/token \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d "grant_type=password&username=$CONTABO_API_USERNAME&password=$CONTABO_API_PASSWORD&client_id=$CONTABO_CLIENT_ID&client_secret=$CONTABO_CLIENT_SECRET&scope=openid"
+# Test cloning the devops repository
+git clone https://x-access-token:YOUR_GITHUB_TOKEN@github.com/Bengo-Hub/devops-k8s.git /tmp/test-devops
 
-# Test instance access
-curl -H "Authorization: Bearer ACCESS_TOKEN" \
-  https://api.contabo.com/v1/compute/instances
+# Expected: Successful clone
+# If fails: Check token permissions and repository access
 ```
 
-### 5.4 Test Complete Pipeline
+#### Test SSH-based Git Access
+
+```bash
+# Set up SSH key for git
+mkdir -p ~/.ssh
+echo "YOUR_GIT_SSH_PRIVATE_KEY" | base64 -d > ~/.ssh/git_key
+chmod 600 ~/.ssh/git_key
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+# Test git clone with SSH
+GIT_SSH_COMMAND="ssh -i ~/.ssh/git_key -o StrictHostKeyChecking=no" \
+  git clone git@github.com:Bengo-Hub/devops-k8s.git /tmp/test-devops-ssh
+
+# Expected: Successful clone
+```
+
+### 5.3 Kubernetes Access Testing
+
+#### Test Kubeconfig Validation
+
+```bash
+# Decode and validate kubeconfig
+echo "YOUR_BASE64_KUBECONFIG" | base64 -d > /tmp/test-kubeconfig
+export KUBECONFIG=/tmp/test-kubeconfig
+
+# Test kubeconfig validity
+kubectl config view
+kubectl config get-contexts
+kubectl config current-context
+```
+
+#### Test Cluster Connectivity
+
+```bash
+# Test connection to cluster
+kubectl cluster-info
+kubectl get nodes
+kubectl get namespaces
+
+# Expected: Shows cluster information and node status
+# If fails: Check kubeconfig server URL points to correct VPS IP
+```
+
+#### Test Namespace and Resource Access
+
+```bash
+# Test namespace access
+kubectl get pods -n erp
+kubectl get secrets -n erp
+kubectl get ingress -n erp
+
+# Expected: Lists existing resources or empty results (not errors)
+```
+
+#### Test ArgoCD Access
+
+```bash
+# Check ArgoCD applications
+kubectl get applications -n argocd
+kubectl get application erp-ui -n argocd -o yaml
+
+# Expected: Shows ArgoCD application status
+```
+
+### 5.4 Contabo API Testing
+
+#### Test API Token Generation
+
+```bash
+# Get OAuth token
+curl -X POST https://auth.contabo.com/oauth2/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d "grant_type=password&username=YOUR_CONTABO_USERNAME&password=YOUR_CONTABO_PASSWORD&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&scope=openid"
+
+# Expected: Returns access_token, expires_in, token_type
+# Save the access_token for next steps
+```
+
+#### Test Instance Access
+
+```bash
+# List instances (replace ACCESS_TOKEN)
+curl -H "Authorization: Bearer ACCESS_TOKEN" \
+  https://api.contabo.com/v1/compute/instances
+
+# Expected: Returns list of VPS instances with details
+```
+
+#### Test Instance Status
+
+```bash
+# Get specific instance details
+curl -H "Authorization: Bearer ACCESS_TOKEN" \
+  https://api.contabo.com/v1/compute/instances/INSTANCE_ID
+
+# Expected: Returns detailed instance information including status
+```
+
+### 5.5 Complete Pipeline Testing
+
+#### Test Docker Operations
+
+```bash
+# Test Docker connectivity
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "
+docker --version
+docker run hello-world
+docker login -u codevertex -p YOUR_DOCKER_TOKEN
+"
+```
+
+#### Test Registry Access
+
+```bash
+# Test image pull from registry
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "
+docker pull codevertex/erp-ui:latest
+docker images | grep erp-ui
+"
+```
+
+#### Test Kubernetes Secret Application
+
+```bash
+# Test applying secrets (if KUBE_CONFIG is set)
+export KUBE_CONFIG="YOUR_BASE64_KUBECONFIG"
+echo "$KUBE_CONFIG" | base64 -d > /tmp/test-kubeconfig
+
+# Apply test secret
+kubectl --kubeconfig=/tmp/test-kubeconfig apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+  namespace: erp
+type: Opaque
+data:
+  test-key: dGVzdC12YWx1ZQ==
+EOF
+
+# Verify secret was created
+kubectl --kubeconfig=/tmp/test-kubeconfig get secret test-secret -n erp
+```
+
+#### Test Complete Pipeline
 
 1. **Trigger a deployment** in the ERP UI repository
 2. **Monitor the GitHub Actions logs** for any authentication errors
@@ -287,7 +532,9 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
    - ArgoCD application is refreshed
    - Pods are created in the cluster
 
-## 5. Testing and Verification
+---
+
+## 6. Troubleshooting
 
 ### 6.1 Git Operations Issues
 
@@ -320,30 +567,77 @@ ssh-add -l
 **Problem:** `ssh: connect to host YOUR_VPS_IP port 22: Connection refused`
 
 **Solutions:**
-- Verify the VPS IP address is correct
-- Check if the VPS is running and accessible
-- Ensure port 22 is open in the VPS firewall
-- Verify the SSH key was added correctly to the VPS
+```bash
+# Check if VPS is reachable
+ping YOUR_VPS_IP
 
-### 6.3 Kubernetes Access Issues
+# Check if SSH service is running on VPS
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status ssh"
 
-**Problem:** `Unable to connect to the server: dial tcp: lookup kubernetes.default.svc`
+# Check firewall settings
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "ufw status"
+
+# Check SSH configuration
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "ss -tuln | grep :22"
+```
+
+### 6.3 GitHub Token Issues
+
+**Problem:** `git@github.com: Permission denied (publickey)` or `401 Unauthorized`
 
 **Solutions:**
-- Ensure the kubeconfig server URL points to the correct VPS IP
-- Verify the Kubernetes API server is running on the VPS
-- Check that port 6443 is accessible from your location
+```bash
+# Test token validity
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.github.com/user
 
-### 6.4 Contabo API Issues
+# Check token scopes
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.github.com/repos/Bengo-Hub/devops-k8s
 
-**Problem:** `401 Unauthorized` when calling Contabo API
+# Verify repository access
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.github.com/repos/Bengo-Hub/devops-k8s/contents/apps/erp-ui
+```
+
+### 6.4 Kubernetes Access Issues
+
+**Problem:** `Unable to connect to the server` or `dial tcp: lookup kubernetes.default.svc`
 
 **Solutions:**
-- Verify API credentials are correct
-- Ensure OAuth2 client has proper permissions
-- Check that the API user has access to the instance
+```bash
+# Check kubeconfig server URL
+kubectl config view | grep server
 
-## 6. Troubleshooting
+# Test direct API server access
+curl -k https://YOUR_VPS_IP:6443/healthz
+
+# Check if API server is running
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status kubelet"
+
+# Check kubelet status
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status kubelet"
+```
+
+### 6.5 Contabo API Issues
+
+**Problem:** `401 Unauthorized` or `403 Forbidden`
+
+**Solutions:**
+```bash
+# Test token generation with verbose output
+curl -v -X POST https://auth.contabo.com/oauth2/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d "grant_type=password&username=YOUR_USERNAME&password=YOUR_PASSWORD&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&scope=openid"
+
+# Check API credentials in Contabo control panel
+# Verify OAuth2 client has correct permissions
+# Ensure API user has access to the instance
+```
+
+---
+
+## 7. Security Best Practices
 
 1. **Rotate tokens regularly** - Set expiration dates and rotate tokens periodically
 2. **Use least privilege** - Only grant necessary permissions to tokens
@@ -352,41 +646,11 @@ ssh-add -l
 5. **Disable password auth** - Use only SSH key authentication on VPS
 6. **Keep software updated** - Regularly update all systems and dependencies
 7. **Standard SSH passphrase** - All project SSH keys use passphrase "codevertex" for consistency
+8. **Use Ed25519 keys** - Stronger than RSA, recommended for modern deployments
+9. **Rotate SSH keys regularly** - Change VPS SSH keys every 90 days
+10. **Monitor access logs** - Check SSH and Kubernetes audit logs regularly
 
-## 7. Security Best Practices
-
-### 8.1 Update Dependencies
-```bash
-# Update system packages on VPS
-apt-get update && apt-get upgrade -y
-
-# Update Kubernetes cluster (follow official kubeadm upgrade process)
-# See: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
-```
-
-### 8.2 Monitor Resource Usage
-```bash
-# Check VPS resources
-htop
-df -h
-free -h
-
-# Check Kubernetes resources
-kubectl top nodes
-kubectl top pods -A
-```
-
-### 8.3 Backup Important Data
-```bash
-# Backup Kubernetes resources
-kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
-
-# Backup etcd
-# See: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
-
-# Backup Docker data (if needed)
-docker system df
-```
+---
 
 ## 8. Next Steps After Access Setup
 
@@ -421,7 +685,44 @@ This will automatically:
 
 ---
 
-## 9. Maintenance
+## 9. Automated Testing Script
+
+Create a comprehensive testing script for regular validation:
+
+```bash
+#!/bin/bash
+# VPS Access Test Script
+
+set -e
+
+# Configuration
+VPS_IP="YOUR_VPS_IP"
+SSH_KEY="~/.ssh/contabo_deploy_key"
+GITHUB_TOKEN="YOUR_GITHUB_TOKEN"
+KUBE_CONFIG="YOUR_BASE64_KUBECONFIG"
+
+echo "=== VPS Access Test ==="
+echo "1. Testing SSH access..."
+ssh -i "$SSH_KEY" root@"$VPS_IP" "echo 'SSH OK'"
+
+echo "2. Testing Kubernetes..."
+ssh -i "$SSH_KEY" root@"$VPS_IP" "kubectl get nodes"
+
+echo "3. Testing GitHub access..."
+curl -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/repos/Bengo-Hub/devops-k8s > /dev/null && echo "GitHub OK"
+
+echo "4. Testing Kubernetes external access..."
+echo "$KUBE_CONFIG" | base64 -d > /tmp/test-kubeconfig
+export KUBECONFIG=/tmp/test-kubeconfig
+kubectl get nodes > /dev/null && echo "K8s External Access OK"
+
+echo "=== All tests passed! ==="
+```
+
+---
+
+## 10. Support
 
 For issues or questions:
 - **Email:** codevertexitsolutions@gmail.com

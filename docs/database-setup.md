@@ -3,7 +3,7 @@ Database Setup Guide
 
 This guide covers setting up shared database infrastructure for all services in the cluster. PostgreSQL and Redis are deployed as shared infrastructure in the `infra` namespace, with each service having its own unique database on the PostgreSQL instance.
 
-> **📖 For Per-Service Database Setup**: See [Per-Service Database Setup Guide](./per-service-database-setup.md) for details on how per-service databases are created and managed using a common admin user.
+> **📖 Per-Service Database Setup**: This guide includes complete per-service database setup details. Each service has its own unique database on the shared PostgreSQL instance, managed using a common admin user.
 
 Database Architecture
 --------------------
@@ -627,4 +627,259 @@ kubectl exec -n my-service deployment/my-service-app -- \
 **For Development/Testing:** Either option works, external might be faster to set up initially.
 
 The devops-k8s repo provides Helm value files and automation to make Option 1 straightforward.
+
+---
+
+## Per-Service Database Setup
+
+### Architecture Overview
+
+Each service has its own unique database on the shared PostgreSQL instance, while using a common admin user for database management:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Shared Infrastructure                │
+│                      (infra namespace)                   │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │         PostgreSQL (Shared Service)              │  │
+│  │  postgresql.infra.svc.cluster.local:5432          │  │
+│  ├──────────────────────────────────────────────────┤  │
+│  │  Admin User: admin_user (common for all services)│  │
+│  │  - Can create databases                          │  │
+│  │  - Can manage users                               │  │
+│  │  - Password: POSTGRES_ADMIN_PASSWORD or          │  │
+│  │              POSTGRES_PASSWORD (from secrets)     │  │
+│  ├──────────────────────────────────────────────────┤  │
+│  │  Service Databases:                              │  │
+│  │  - cafe (cafe_user)                              │  │
+│  │  - erp (erp_user)                                │  │
+│  │  - treasury (treasury_user)                      │  │
+│  │  - notifications (notifications_user)             │  │
+│  └──────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │         Redis (Shared Service)                   │  │
+│  │  redis-master.infra.svc.cluster.local:6379       │  │
+│  │  - Common password: REDIS_PASSWORD               │  │
+│  │  - Services use different DB numbers (0,1,2...)  │  │
+│  └──────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │         RabbitMQ (Shared Service)                │  │
+│  │  rabbitmq.infra.svc.cluster.local:5672          │  │
+│  │  - Common credentials                            │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Key Concepts
+
+**1. Common Admin User**
+- **Username**: `admin_user` (configurable via `POSTGRES_ADMIN_USER`)
+- **Purpose**: Create and manage databases for all services
+- **Privileges**: SUPERUSER, CREATEDB
+- **Password Source**: 
+  - `POSTGRES_ADMIN_PASSWORD` environment variable (GitHub secret)
+  - Falls back to `POSTGRES_PASSWORD` if not set
+  - Stored in Kubernetes secret: `postgresql` in `infra` namespace
+
+**2. Per-Service Databases**
+Each service has:
+- **Unique database name**: e.g., `cafe`, `erp`, `treasury`
+- **Service-specific user**: e.g., `cafe_user`, `erp_user`
+- **Isolated data**: Each service's data is completely isolated
+
+**3. Password Management**
+- **Admin User Password**: Managed via GitHub secrets (`POSTGRES_ADMIN_PASSWORD` or `POSTGRES_PASSWORD`)
+- **Service User Passwords**: Managed per-service via their own secrets
+- **Redis Password**: Common password for all services (`REDIS_PASSWORD`)
+
+### Service Database Configuration Reference
+
+| Service | Database Name | Database User | Namespace | Build Script |
+|---------|--------------|---------------|-----------|--------------|
+| cafe-backend | `cafe` | `cafe_user` | `cafe` | `Cafe/cafe-backend/build.sh` |
+| erp-api | `bengo_erp` | `erp_user` | `erp` | `erp/erp-api/build.sh` |
+| treasury-app | `treasury` | `treasury_user` | `treasury` | `treasury-app/build.sh` |
+| notifications-app | `notifications` | `notifications_user` | `notifications` | `notifications-app/build.sh` |
+
+**Redis Configuration:**
+All services use the shared Redis instance in the `infra` namespace. Services can use different Redis database numbers (0, 1, 2...) for isolation:
+
+| Service | Redis DB Number | Redis Address |
+|---------|----------------|---------------|
+| cafe-backend | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
+| erp-api | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
+| treasury-app | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
+| notifications-app | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
+
+**RabbitMQ Configuration:**
+RabbitMQ is shared infrastructure in the `infra` namespace. Services can use different vhosts for isolation:
+
+| Service | RabbitMQ VHost | RabbitMQ Address |
+|---------|---------------|------------------|
+| All services | `/` (default) | `rabbitmq.infra.svc.cluster.local:5672` |
+
+### Setup Process
+
+**Step 1: Install Shared PostgreSQL (One-Time)**
+
+The PostgreSQL installation creates the common `admin_user`:
+
+```bash
+# From devops-k8s repository
+POSTGRES_PASSWORD="your-secure-password" \
+POSTGRES_ADMIN_PASSWORD="your-admin-password" \
+./scripts/install-databases.sh
+```
+
+**Step 2: Create Per-Service Database**
+
+Each service creates its own database during deployment:
+
+```bash
+# Option 1: Using the database creation script
+SERVICE_DB_NAME=cafe \
+APP_NAME=cafe-backend \
+POSTGRES_ADMIN_PASSWORD="your-admin-password" \
+./devops-k8s/scripts/create-service-database.sh
+
+# Option 2: Via build script (automatic)
+# The build script calls create-service-database.sh automatically
+```
+
+**Step 3: Configure Service Secrets**
+
+Each service stores its database credentials in its own namespace:
+
+```bash
+# Example: cafe-backend
+kubectl -n cafe create secret generic cafe-backend-env \
+  --from-literal=CAFE_POSTGRES_URL="postgresql://cafe_user:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe" \
+  --from-literal=CAFE_REDIS_ADDR="redis-master.infra.svc.cluster.local:6379"
+```
+
+### Integration with Build Scripts
+
+Build scripts automatically create databases if `SETUP_DATABASES=true`:
+
+```bash
+# In your service's build.sh
+SETUP_DATABASES=true
+DB_TYPES=postgres,redis
+
+# The build script will:
+# 1. Check if PostgreSQL is ready
+# 2. Call create-service-database.sh to create the service database
+# 3. Create/update service secrets with connection strings
+```
+
+### Database Creation Script
+
+**Usage:**
+
+```bash
+# Basic usage (infers database name from APP_NAME or NAMESPACE)
+APP_NAME=cafe-backend ./devops-k8s/scripts/create-service-database.sh
+
+# Explicit database name
+SERVICE_DB_NAME=cafe SERVICE_DB_USER=cafe_user ./devops-k8s/scripts/create-service-database.sh
+
+# With custom admin password
+POSTGRES_ADMIN_PASSWORD="custom-password" \
+SERVICE_DB_NAME=cafe \
+./devops-k8s/scripts/create-service-database.sh
+```
+
+**What It Does:**
+1. **Waits for PostgreSQL**: Ensures PostgreSQL is ready before proceeding
+2. **Retrieves Admin Password**: Gets password from env var or Kubernetes secret
+3. **Creates Database**: Creates the service database if it doesn't exist
+4. **Creates User**: Creates the service-specific user if it doesn't exist
+5. **Grants Privileges**: Grants all necessary privileges to the service user
+
+**Idempotent Operation:** The script is safe to run multiple times.
+
+### Connection Strings
+
+**PostgreSQL:**
+```bash
+# Using service-specific user
+postgresql://cafe_user:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
+
+# Using admin user (for management tasks)
+postgresql://admin_user:ADMIN_PASSWORD@postgresql.infra.svc.cluster.local:5432/postgres
+```
+
+**Redis:**
+```bash
+# All services use the same Redis instance with different DB numbers
+redis://:REDIS_PASSWORD@redis-master.infra.svc.cluster.local:6379/0  # cafe uses DB 0
+redis://:REDIS_PASSWORD@redis-master.infra.svc.cluster.local:6379/1  # erp uses DB 1
+```
+
+### Adding a New Service
+
+When adding a new service that uses PostgreSQL:
+
+1. **Define database configuration** in the service's `build.sh`:
+   ```bash
+   SERVICE_DB_NAME=${SERVICE_DB_NAME:-your_service_name}
+   SERVICE_DB_USER=${SERVICE_DB_USER:-your_service_user}
+   ```
+
+2. **Add database creation logic** in the service's `build.sh`:
+   ```bash
+   if [[ "$SETUP_DATABASES" == "true" && -n "${KUBE_CONFIG:-}" ]]; then
+     # Wait for PostgreSQL to be ready in infra namespace
+     if kubectl -n infra get statefulset postgresql >/dev/null 2>&1; then
+       kubectl -n infra rollout status statefulset/postgresql --timeout=180s || true
+       
+       # Create service database using devops-k8s script
+       if [[ -d "$DEVOPS_DIR" && -f "$DEVOPS_DIR/scripts/create-service-database.sh" ]]; then
+         SERVICE_DB_NAME="$SERVICE_DB_NAME" \
+         APP_NAME="$APP_NAME" \
+         NAMESPACE="$NAMESPACE" \
+         bash "$DEVOPS_DIR/scripts/create-service-database.sh" || warn "Database creation failed or already exists"
+       fi
+     fi
+   fi
+   ```
+
+3. **Update connection strings** to use `infra` namespace:
+   ```bash
+   postgresql://${SERVICE_DB_USER}:PASSWORD@postgresql.infra.svc.cluster.local:5432/${SERVICE_DB_NAME}
+   redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0
+   ```
+
+### Troubleshooting Per-Service Databases
+
+**Database Creation Fails:**
+```bash
+# Check PostgreSQL is ready
+kubectl -n infra get statefulset postgresql
+
+# Check admin password is available
+kubectl -n infra get secret postgresql -o jsonpath='{.data.admin-user-password}' | base64 -d
+
+# Manually create database
+kubectl -n infra exec -it postgresql-0 -- \
+  env PGPASSWORD="admin-password" \
+  psql -U admin_user -d postgres -c "CREATE DATABASE cafe;"
+```
+
+**Service Can't Connect:**
+1. Verify database exists: `kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -l | grep cafe`
+2. Verify user exists: `kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -d postgres -c "\du" | grep cafe_user`
+3. Check service secret: `kubectl -n cafe get secret cafe-backend-env -o yaml`
+
+### Best Practices
+
+1. **Use Admin User Only for Management**: Services should use their own service-specific users, not the admin user
+2. **Store Passwords in Secrets**: Never hardcode passwords; use GitHub secrets and Kubernetes secrets
+3. **Idempotent Operations**: Database creation scripts should be safe to run multiple times
+4. **Isolate Service Data**: Each service should only access its own database
+5. **Monitor Database Usage**: Track database sizes and connections per service
 
