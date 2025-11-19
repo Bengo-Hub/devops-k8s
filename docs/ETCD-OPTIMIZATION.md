@@ -208,7 +208,11 @@ kubectl logs -n kube-system etcd-$(hostname)
 
 ## Related Documentation
 
-- [Provisioning Guide](./provisioning.md)
-- [Kubeadm Setup](./contabo-setup-kubeadm.md)
-- [Operations Runbook](./OPERATIONS-RUNBOOK.md)
+**Setup Workflow:**
+- **[Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete workflow guide
+- **[Kubernetes Setup](./contabo-setup-kubeadm.md)** 📘 - Detailed cluster setup (includes etcd configuration)
+
+**Operations:**
+- [Provisioning Guide](./provisioning.md) - Infrastructure provisioning
+- [Operations Runbook](./OPERATIONS-RUNBOOK.md) - Operations guide
 

@@ -1,10 +1,14 @@
 Provisioning Deployment Tools (Ansible)
 ======================================
 
+**⚠️ Prerequisites:** Complete [Access Setup](comprehensive-access-setup.md) and [Cluster Setup](CLUSTER-SETUP-WORKFLOW.md) first.
+
 Overview
 --------
 
 Use the provided Ansible playbook `provision.yml` to provision a Contabo (or any Ubuntu 24.04 LTS) VPS with all tools required by the BengoERP CI/CD and operations workflows.
+
+**This provisioning step runs AFTER cluster setup is complete** and installs infrastructure components (databases, ingress, monitoring, etc.).
 
 What This Installs
 ------------------
@@ -72,7 +76,10 @@ Relationship to CI/CD Workflows
 -------------------------------
 
 - The GitHub Actions workflows for ERP API/UI assume a working K8s cluster and access via `KUBE_CONFIG`.
-- **IMPORTANT:** Before running the provisioning workflow, you must complete manual VPS setup. See `docs/contabo-setup-kubeadm.md` for complete Kubernetes cluster setup guide.
+- **IMPORTANT:** Before running the provisioning workflow, you must complete:
+  1. **[Access Setup](comprehensive-access-setup.md)** - Manual access configuration
+  2. **[Cluster Setup](CLUSTER-SETUP-WORKFLOW.md)** - Automated cluster setup
+  3. **Provisioning** (this step) - Automated infrastructure installation
 - The provisioning workflow (`.github/workflows/provision.yml`) runs in this order:
 
 **Automated Provisioning Order (requires pre-configured cluster):**
@@ -129,6 +136,19 @@ Relationship to CI/CD Workflows
 **See:** `docs/secrets-management.md` for password flow details
 - Provisioning ensures the VPS has the tooling for manual operations and emergency fixes.
 - Automated deployments (build.sh) handle: image build, push, Helm values updates, ArgoCD sync, DB setup, migrations, and health checks.
+
+---
+
+## Related Documentation
+
+**Setup Workflow:**
+- **[Cluster Setup Workflow](CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete workflow guide
+- **[Access Setup](comprehensive-access-setup.md)** 🔐 - Manual access configuration
+- **[Kubernetes Setup](contabo-setup-kubeadm.md)** 📘 - Detailed cluster setup
+
+**Reference:**
+- **[GitHub Secrets](github-secrets.md)** 🔐 - Secrets configuration
+- **[Quick Start](../SETUP.md)** - Fast-track setup guide
 
 Troubleshooting
 ---------------
