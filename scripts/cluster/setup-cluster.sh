@@ -175,15 +175,40 @@ echo -e "${BLUE}  STEP 5: Verification & Kubeconfig${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
-if kubectl get nodes >/dev/null 2>&1; then
+# Ensure kubeconfig is available
+if [ -f "/etc/kubernetes/admin.conf" ]; then
+    echo -e "${BLUE}Copying admin kubeconfig to user location...${NC}"
+    mkdir -p "$HOME/.kube"
+    cp /etc/kubernetes/admin.conf "$HOME/.kube/config"
+    chmod 600 "$HOME/.kube/config"
+    echo -e "${GREEN}✓ Kubeconfig copied to $HOME/.kube/config${NC}"
+elif [ -f "$HOME/.kube/config" ]; then
+    echo -e "${GREEN}✓ Kubeconfig already exists at $HOME/.kube/config${NC}"
+else
+    echo -e "${RED}❌ Kubeconfig not found at /etc/kubernetes/admin.conf or $HOME/.kube/config${NC}"
+    echo -e "${YELLOW}⚠️  Cluster may not be fully initialized. Please check:${NC}"
+    echo -e "${YELLOW}   1. Run: kubectl get nodes${NC}"
+    echo -e "${YELLOW}   2. Check: systemctl status kubelet${NC}"
+    echo -e "${YELLOW}   3. Check: kubectl get pods -n kube-system${NC}"
+    echo ""
+    exit 1
+fi
+
+# Set KUBECONFIG environment variable
+export KUBECONFIG="$HOME/.kube/config"
+
+# Verify cluster connectivity
+if kubectl cluster-info >/dev/null 2>&1; then
     echo -e "${BLUE}Verifying cluster status...${NC}"
     kubectl get nodes
     echo ""
     
     # Wait for node to be Ready
     echo -e "${BLUE}Waiting for node to be Ready...${NC}"
+    READY_COUNT=0
     for i in {1..60}; do
-        if kubectl get nodes --no-headers 2>/dev/null | grep -q "Ready"; then
+        READY_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || echo "0")
+        if [ "$READY_COUNT" -gt 0 ]; then
             echo -e "${GREEN}✓ Node is Ready${NC}"
             break
         fi
@@ -194,6 +219,13 @@ if kubectl get nodes >/dev/null 2>&1; then
     echo ""
     kubectl get nodes
     echo ""
+    
+    if [ "$READY_COUNT" -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  Warning: Node is not Ready yet. This is normal if cluster was just initialized.${NC}"
+        echo -e "${YELLOW}   The node should become Ready within a few minutes.${NC}"
+        echo -e "${YELLOW}   You can still copy the kubeconfig below and proceed with setup.${NC}"
+        echo ""
+    fi
     
     # Update kubeconfig with public IP if provided
     if [ -n "$VPS_IP" ]; then
@@ -213,16 +245,38 @@ if kubectl get nodes >/dev/null 2>&1; then
     echo -e "${YELLOW}IMPORTANT: Copy your kubeconfig to GitHub secrets${NC}"
     echo ""
     echo -e "${BLUE}Base64-encoded kubeconfig (for GitHub secret KUBE_CONFIG):${NC}"
+    echo -e "${BLUE}⚠️  Copy the ENTIRE output below (it's all on one line)${NC}"
     echo -e "${GREEN}========================================${NC}"
     if [ -f "$HOME/.kube/config" ]; then
-        cat "$HOME/.kube/config" | base64 -w 0 2>/dev/null || cat "$HOME/.kube/config" | base64
+        # Use base64 -w 0 to ensure no line breaks (Linux)
+        # Fallback to base64 without -w for macOS compatibility
+        BASE64_OUTPUT=$(cat "$HOME/.kube/config" | base64 -w 0 2>/dev/null || cat "$HOME/.kube/config" | base64 | tr -d '\n')
+        echo "$BASE64_OUTPUT"
+        echo ""
+        echo -e "${BLUE}Kubeconfig length: ${#BASE64_OUTPUT} characters${NC}"
     else
         echo -e "${RED}Kubeconfig not found at $HOME/.kube/config${NC}"
     fi
     echo -e "${GREEN}========================================${NC}"
     echo ""
 else
-    echo -e "${YELLOW}⚠️  Could not verify cluster. Please check manually.${NC}"
+    echo -e "${YELLOW}⚠️  Could not verify cluster connectivity.${NC}"
+    echo -e "${YELLOW}   This may be normal if the cluster was just initialized.${NC}"
+    echo ""
+    echo -e "${BLUE}Troubleshooting:${NC}"
+    echo -e "${BLUE}  1. Check cluster status: kubectl get nodes${NC}"
+    echo -e "${BLUE}  2. Check kubelet: systemctl status kubelet${NC}"
+    echo -e "${BLUE}  3. Check pods: kubectl get pods -n kube-system${NC}"
+    echo ""
+    
+    # Still try to output kubeconfig if it exists
+    if [ -f "$HOME/.kube/config" ]; then
+        echo -e "${BLUE}Kubeconfig found. You can still copy it below:${NC}"
+        echo -e "${GREEN}========================================${NC}"
+        BASE64_OUTPUT=$(cat "$HOME/.kube/config" | base64 -w 0 2>/dev/null || cat "$HOME/.kube/config" | base64 | tr -d '\n')
+        echo "$BASE64_OUTPUT"
+        echo -e "${GREEN}========================================${NC}"
+    fi
 fi
 
 echo ""
