@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Service health check and troubleshooting script
+# Service health check and troubleshooting scripts
 
 # Colors
 RED='\033[0;31m'
