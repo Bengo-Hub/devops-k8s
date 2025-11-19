@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Initial VPS Setup Script
-# Prepares Ubuntu 22.04 VPS for Kubernetes cluster installation
+# Prepares Ubuntu 24.04 LTS VPS for Kubernetes cluster installation
 # Run this FIRST before setting up Kubernetes
 
 # Colors
@@ -25,13 +25,13 @@ fi
 
 # Detect OS
 if [ ! -f /etc/os-release ]; then
-    echo -e "${RED}Cannot detect OS. This script requires Ubuntu 22.04${NC}"
+    echo -e "${RED}Cannot detect OS. This script requires Ubuntu 24.04 LTS${NC}"
     exit 1
 fi
 
 . /etc/os-release
-if [ "$ID" != "ubuntu" ] || [ "$VERSION_ID" != "22.04" ]; then
-    echo -e "${YELLOW}⚠️  Warning: This script is designed for Ubuntu 22.04${NC}"
+if [ "$ID" != "ubuntu" ] || [ "$VERSION_ID" != "24.04" ]; then
+    echo -e "${YELLOW}⚠️  Warning: This script is designed for Ubuntu 24.04 LTS${NC}"
     echo -e "${YELLOW}   Detected: $ID $VERSION_ID${NC}"
     read -p "Continue anyway? (y/N): " confirm
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
@@ -135,7 +135,11 @@ echo -e "${GREEN}  VPS SETUP COMPLETE${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo -e "${BLUE}Next steps:${NC}"
-echo -e "${BLUE}  1. Run: ./scripts/cluster/setup-containerd.sh${NC}"
-echo -e "${BLUE}  2. Run: ./scripts/cluster/setup-kubernetes.sh${NC}"
+echo -e "${BLUE}  Option 1: Run individual scripts${NC}"
+echo -e "${BLUE}    1. Run: ./scripts/cluster/setup-containerd.sh${NC}"
+echo -e "${BLUE}    2. Run: ./scripts/cluster/setup-kubernetes.sh${NC}"
+echo ""
+echo -e "${BLUE}  Option 2: Run orchestrated setup (recommended)${NC}"
+echo -e "${BLUE}    Run: ./scripts/cluster/setup-cluster.sh${NC}"
 echo ""
 

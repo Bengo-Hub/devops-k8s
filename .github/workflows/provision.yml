@@ -117,7 +117,7 @@ jobs:
             echo ""
             echo "📋 MANUAL SETUP REQUIRED:"
             echo "This workflow requires a Kubernetes cluster to be set up manually first."
-            echo "Please follow the manual setup guide: docs/VPS-MANUAL-SETUP.md"
+            echo "Please follow the manual setup guide: docs/contabo-setup-kubeadm.md"
             echo ""
             echo "After completing manual setup:"
             echo "1. Get your kubeconfig from the VPS: cat ~/.kube/config | base64 -w 0"

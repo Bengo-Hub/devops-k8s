@@ -4,12 +4,12 @@ Provisioning Deployment Tools (Ansible)
 Overview
 --------
 
-Use the provided Ansible playbook `provision.yml` to provision a Contabo (or any Ubuntu 22.04) VPS with all tools required by the BengoERP CI/CD and operations workflows.
+Use the provided Ansible playbook `provision.yml` to provision a Contabo (or any Ubuntu 24.04 LTS) VPS with all tools required by the BengoERP CI/CD and operations workflows.
 
 What This Installs
 ------------------
 
-- kubectl v1.28.x (client)
+- kubectl v1.30.x (client, Ubuntu 24.04 compatible)
 - helm v3.15.x
 - argocd CLI v2.13.x
 - trivy 0.45.x (security scanning)
@@ -60,7 +60,7 @@ Tool Version Pins
 Version variables are defined at the top of `provision.yml`:
 
 ```yaml
-kubectl_version: "v1.28.0"
+kubectl_version: "v1.30.0"
 helm_version: "v3.15.0"
 argocd_version: "v2.13.0"
 trivy_version: "0.45.0"
@@ -72,7 +72,7 @@ Relationship to CI/CD Workflows
 -------------------------------
 
 - The GitHub Actions workflows for ERP API/UI assume a working K8s cluster and access via `KUBE_CONFIG`.
-- **IMPORTANT:** Before running the provisioning workflow, you must complete manual VPS setup. See `docs/contabo-setup-kubeadm.md` for kubeadm setup or `docs/contabo-setup.md` for k3s setup.
+- **IMPORTANT:** Before running the provisioning workflow, you must complete manual VPS setup. See `docs/contabo-setup-kubeadm.md` for complete Kubernetes cluster setup guide.
 - The provisioning workflow (`.github/workflows/provision.yml`) runs in this order:
 
 **Automated Provisioning Order (requires pre-configured cluster):**

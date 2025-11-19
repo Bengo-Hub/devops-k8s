@@ -187,11 +187,8 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 
 2. **Copy the kubeconfig:**
    ```bash
-   # For kubeadm (default location)
+   # Get kubeconfig from default location
    cat /etc/kubernetes/admin.conf
-
-   # For k3s (alternative location)
-   cat /etc/rancher/k3s/k3s.yaml
    ```
 
 3. **Save the kubeconfig content** to a local file (e.g., `kubeconfig.yaml`)
@@ -358,10 +355,8 @@ ssh-add -l
 # Update system packages on VPS
 apt-get update && apt-get upgrade -y
 
-# Update k3s (if using k3s)
-curl -sfL https://get.k3s.io | sh -
-
-# Or update kubeadm cluster (follow official upgrade process)
+# Update Kubernetes cluster (follow official kubeadm upgrade process)
+# See: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
 ```
 
 ### 8.2 Monitor Resource Usage
@@ -381,17 +376,47 @@ kubectl top pods -A
 # Backup Kubernetes resources
 kubectl get all --all-namespaces -o yaml > k8s-backup.yaml
 
-# Backup etcd (kubeadm)
+# Backup etcd
 # See: https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/
-
-# Or for k3s:
-cp /var/lib/rancher/k3s/server/db/state.db /backup/k3s-state.db
 
 # Backup Docker data (if needed)
 docker system df
 ```
 
-## 8. Maintenance
+## 8. Next Steps After Access Setup
+
+Once all access is configured (SSH keys, GitHub PAT/token, Contabo API):
+
+### Automated Cluster Setup
+
+Run the orchestrated cluster setup script:
+
+```bash
+# On your VPS (via SSH)
+cd /path/to/devops-k8s
+chmod +x scripts/cluster/*.sh
+./scripts/cluster/setup-cluster.sh
+```
+
+This will automatically:
+- Set up initial VPS configuration
+- Install containerd
+- Install Kubernetes cluster
+- Configure Calico CNI
+- Set up etcd auto-compaction
+- Generate kubeconfig for GitHub secrets
+
+### After Cluster Setup
+
+1. Copy the base64 kubeconfig output from the script
+2. Add it as GitHub organization secret: `KUBE_CONFIG`
+3. Run the provisioning workflow to install infrastructure
+
+**See:** `docs/contabo-setup-kubeadm.md` for complete cluster setup guide
+
+---
+
+## 9. Maintenance
 
 For issues or questions:
 - **Email:** codevertexitsolutions@gmail.com

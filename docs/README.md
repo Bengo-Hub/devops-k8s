@@ -2,9 +2,7 @@ Documentation Index
 -------------------
 
 **Getting Started**
-- **Kubernetes Options:** k8s-comparison.md (k3s vs kubeadm - read this first!)
-- **Manual VPS Setup (REQUIRED FIRST):** contabo-setup-kubeadm.md - Complete kubeadm setup guide for fresh VPS
-- Contabo VPS setup with k3s (reference): contabo-setup.md
+- **Manual VPS Setup (REQUIRED FIRST):** contabo-setup-kubeadm.md - Complete Kubernetes cluster setup guide for fresh VPS
 - Hosting environments and providers: hosting.md
 - Onboarding a repository: onboarding.md
 - **Automated Provisioning:** provisioning.md - Automated infrastructure provisioning workflow
