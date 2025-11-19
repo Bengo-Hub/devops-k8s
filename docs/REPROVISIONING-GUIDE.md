@@ -291,5 +291,5 @@ kubectl delete pvc <pvc-name> -n <namespace> --force --grace-period=0
 - [Provisioning Guide](./provisioning.md)
 - [Database Setup](./database-setup.md)
 - [Monitoring Setup](./monitoring.md)
-- [ArgoCD Setup](./argocd.md)
+- [ArgoCD Setup](./pipelines.md) - See Argo CD Installation section
 
