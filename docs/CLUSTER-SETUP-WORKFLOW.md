@@ -282,8 +282,7 @@ After each phase, verify:
 - **Quick Start:** `SETUP.md` - Fast-track setup guide
 - **GitHub Secrets:** `docs/github-secrets.md` - Complete secrets configuration
 - **etcd Optimization:** `docs/ETCD-OPTIMIZATION.md` - Prevent etcd space issues
-- **SSH Keys:** `docs/ssh-keys-setup.md` - SSH key setup details
-- **VPS Testing:** `docs/vps-access-testing-guide.md` - Access verification
+- **SSH Keys & Testing:** `docs/comprehensive-access-setup.md` - Complete access setup and testing guide
 
 ---
 
