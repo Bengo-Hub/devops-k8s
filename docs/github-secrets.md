@@ -81,7 +81,14 @@ Per-repo overrides are supported by defining the same secrets at the repository 
 
 ## Complete Setup Guide
 
-After configuring Kubernetes cluster (see `docs/contabo-setup-kubeadm.md`), follow these steps:
+**⚠️ IMPORTANT: Setup Order**
+1. Complete **Access Setup** (see `docs/comprehensive-access-setup.md`)
+2. Complete **Cluster Setup** (see `docs/CLUSTER-SETUP-WORKFLOW.md`) - This generates kubeconfig
+3. **Extract Kubeconfig** (THIS SECTION - happens AFTER cluster setup)
+4. Store kubeconfig in GitHub secrets
+5. Run **Provisioning** (see `docs/provisioning.md`)
+
+After configuring Kubernetes cluster (see `docs/CLUSTER-SETUP-WORKFLOW.md` and `docs/contabo-setup-kubeadm.md`), follow these steps:
 
 ### 1. Get Kubeconfig
 

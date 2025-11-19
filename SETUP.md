@@ -55,8 +55,11 @@ This script automatically:
 - ✅ Generates kubeconfig for GitHub secrets
 
 **After cluster setup:**
-- Copy the base64 kubeconfig output
-- Add it as GitHub organization secret: `KUBE_CONFIG`
+- **Copy the base64 kubeconfig output** (displayed by the script at the end)
+- **Add it as GitHub organization secret:** `KUBE_CONFIG`
+- **Verify kubeconfig works:** See testing section in `docs/comprehensive-access-setup.md`
+
+**⚠️ IMPORTANT:** If you see "No such file or directory" when trying to access `/etc/kubernetes/admin.conf`, the cluster hasn't been set up yet. Run `setup-cluster.sh` first.
 
 **📚 Complete guide:** `docs/contabo-setup-kubeadm.md`
 

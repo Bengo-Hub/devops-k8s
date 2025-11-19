@@ -6,9 +6,10 @@ This repository contains reusable DevOps assets for deploying applications to a 
 🚀 **Quick Start**: See [SETUP.md](SETUP.md) for fast-track deployment guide.
 
 ⚠️ **IMPORTANT**: Follow the setup workflow in order:
-1. **Manual Access Setup** → [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) 🔐
-2. **Automated Cluster Setup** → [docs/CLUSTER-SETUP-WORKFLOW.md](docs/CLUSTER-SETUP-WORKFLOW.md) ⚙️
-3. **Automated Provisioning** → [docs/provisioning.md](docs/provisioning.md) 🚀
+1. **Manual Access Setup** → [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) 🔐 - SSH keys, GitHub PAT, Contabo API
+2. **Automated Cluster Setup** → [docs/CLUSTER-SETUP-WORKFLOW.md](docs/CLUSTER-SETUP-WORKFLOW.md) ⚙️ - Kubernetes cluster setup (generates kubeconfig)
+3. **Kubeconfig Setup** → [docs/github-secrets.md](docs/github-secrets.md) 🔐 - Extract and store kubeconfig (happens AFTER cluster setup)
+4. **Automated Provisioning** → [docs/provisioning.md](docs/provisioning.md) 🚀 - Infrastructure provisioning
 
 ✅ **Production Checklist**: See [PRODUCTION-CHECKLIST.md](PRODUCTION-CHECKLIST.md) for deployment status and manual steps.
 
