@@ -113,8 +113,71 @@ Go to GitHub → Settings → Secrets and variables → Actions (Organization or
    - **Priority:** If set, this takes precedence over Contabo API lookup
 
 3. **SSH_PRIVATE_KEY** (Optional)
-   - Value: Your SSH private key content (entire key including BEGIN/END lines)
-   - Only needed if manual SSH access required
+   - **Value:** Base64-encoded SSH private key content (entire key including BEGIN/END lines)
+   - **Purpose:** SSH access to VPS for deployment operations
+   - **How to generate and set up:**
+     
+     **Step 1: Generate SSH Key Pair**
+     ```bash
+     # Linux/Mac
+     ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
+     ```
+     ```powershell
+     # Windows PowerShell
+     ssh-keygen -t ed25519 -C "devops@codevertex" -f $env:USERPROFILE\.ssh\contabo_deploy_key -N "codevertex"
+     ```
+     
+     **Step 2: Add Public Key to Contabo VPS**
+     - Copy public key: `cat ~/.ssh/contabo_deploy_key.pub` (Linux/Mac) or `Get-Content $env:USERPROFILE\.ssh\contabo_deploy_key.pub` (Windows)
+     - Add to Contabo Control Panel → Access → SSH Keys
+     - **Important:** Use the PUBLIC key (`.pub` file), not the private key
+     
+     **Step 3: Base64 Encode Private Key**
+     ```bash
+     # Linux/Mac
+     cat ~/.ssh/contabo_deploy_key | base64 -w 0
+     ```
+     ```powershell
+     # Windows PowerShell
+     $key = Get-Content $env:USERPROFILE\.ssh\contabo_deploy_key -Raw
+     [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($key))
+     ```
+     
+     **Step 4: Add to GitHub Secrets**
+     - Copy the base64 output
+     - Add as organization secret: `SSH_PRIVATE_KEY`
+   
+   - **Important:** 
+     - ✅ Use **private key** for GitHub secrets (base64-encoded)
+     - ✅ Use **public key** for Contabo VPS
+     - ❌ Never commit private keys to repositories
+
+4. **DOCKER_SSH_KEY** (Optional)
+   - **Value:** Base64-encoded SSH private key content (same key as SSH_PRIVATE_KEY recommended)
+   - **Purpose:** Docker builds accessing private GitHub repositories and Git operations
+   - **How to set up:**
+     
+     **Option A: Use Same Key as SSH_PRIVATE_KEY (Recommended)**
+     - Use the same base64-encoded private key from `SSH_PRIVATE_KEY`
+     - Add public key to GitHub repository as Deploy Key:
+       - Repository → Settings → Deploy keys → Add deploy key
+       - Paste public key content (from `.pub` file)
+       - ✅ Check "Allow write access" (required for git push)
+     
+     **Option B: Generate Separate Key**
+     ```bash
+     # Linux/Mac
+     ssh-keygen -t ed25519 -C "devops-docker@codevertex" -f ~/.ssh/docker_build_key -N "codevertex"
+     cat ~/.ssh/docker_build_key | base64 -w 0
+     ```
+     ```powershell
+     # Windows PowerShell
+     ssh-keygen -t ed25519 -C "devops-docker@codevertex" -f $env:USERPROFILE\.ssh\docker_build_key -N "codevertex"
+     $key = Get-Content $env:USERPROFILE\.ssh\docker_build_key -Raw
+     [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($key))
+     ```
+   
+   - **Fallback:** If `DOCKER_SSH_KEY` is not set, workflows will use `SSH_PRIVATE_KEY`
 
 **Contabo API Secrets (Optional - Priority 2):**
 
