@@ -512,13 +512,34 @@ Base64-encoded kubeconfig (for GitHub secret KUBE_CONFIG):
 
 ### 4.3 Base64 Encode Kubeconfig
 
+**⚠️ IMPORTANT: Must be a single line with no spaces or newlines**
+
 ```bash
-# Base64 encode for GitHub secret
+# Linux: Base64 encode WITHOUT line breaks (use -w 0)
 base64 -w 0 kubeconfig.yaml
 
-# Or without line wrapping
-cat kubeconfig.yaml | base64
+# Or pipe directly
+cat kubeconfig.yaml | base64 -w 0
+
+# Mac: base64 doesn't support -w flag, use tr to remove newlines
+cat kubeconfig.yaml | base64 | tr -d '\n'
+
+# Windows PowerShell: Single line base64 encoding
+$content = Get-Content kubeconfig.yaml -Raw
+[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($content))
 ```
+
+**Critical Requirements:**
+- ✅ Must be a **single continuous line** (no line breaks)
+- ✅ **No spaces** or whitespace in the base64 string
+- ✅ Copy the **entire output** (don't truncate)
+- ✅ Paste directly into GitHub secret (no extra formatting)
+
+**Common Mistakes:**
+- ❌ Copying multi-line base64 (will cause "invalid input" error)
+- ❌ Adding spaces or line breaks manually
+- ❌ Truncating the base64 string
+- ❌ Not using `-w 0` flag on Linux (causes line breaks)
 
 ### 4.4 Store Kubeconfig in GitHub Secrets
 
