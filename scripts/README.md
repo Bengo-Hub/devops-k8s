@@ -22,7 +22,7 @@ Scripts for setting up, cleaning, and managing the Kubernetes cluster itself.
 - **`setup-vps.sh`** - Initial VPS setup (system packages, kernel modules, firewall)
 - **`setup-containerd.sh`** - Container runtime installation (containerd)
 - **`setup-kubernetes.sh`** - Kubernetes cluster initialization (kubeadm)
-- **`cleanup-cluster.sh`** - Complete cluster cleanup (namespaces, runtimes, data)
+- **`cluster/cleanup-cluster.sh`** - Complete cluster cleanup (namespaces, runtimes, data)
 - **`reprovision-cluster.sh`** - Full reprovisioning (cleanup + reinstall)
 - **`fix-etcd-space.sh`** - Fix etcd database space issues
 
@@ -100,7 +100,7 @@ cd /path/to/devops-k8s/scripts/cluster
 cd /path/to/devops-k8s/scripts/cluster
 export ENABLE_CLEANUP=true
 export FORCE_CLEANUP=true
-./cleanup-cluster.sh
+./cluster/cleanup-cluster.sh
 ```
 
 ## Script Dependencies
