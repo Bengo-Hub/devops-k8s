@@ -133,6 +133,7 @@ jobs:
           echo "::endgroup::"
           
           echo "::group::Decoding and configuring kubeconfig"
+          mkdir -p ~/.kube
           
           # Clean the base64 string (remove whitespace, newlines, etc.)
           CLEAN_B64=$(echo "$KUBE_CONFIG_B64" | tr -d '[:space:]')
@@ -141,50 +142,28 @@ jobs:
           if ! echo "$CLEAN_B64" | base64 -d >/dev/null 2>&1; then
             echo "❌ Invalid base64 format in KUBE_CONFIG secret"
             echo ""
-            echo "📋 TROUBLESHOOTING:"
-            echo "The KUBE_CONFIG secret must be a valid base64-encoded string."
+            echo "Troubleshooting:"
+            echo "1. Make sure you copied the ENTIRE base64 output from setup-cluster.sh"
+            echo "2. The kubeconfig should be base64-encoded WITHOUT line breaks"
+            echo "3. To regenerate on VPS: cat /etc/kubernetes/admin.conf | base64 -w 0"
+            echo "4. Or: cat ~/.kube/config | base64 -w 0"
             echo ""
-            echo "To fix this:"
-            echo "1. SSH into your VPS: ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP"
-            echo "2. Get the kubeconfig: cat /etc/kubernetes/admin.conf"
-            echo "3. Base64 encode WITHOUT newlines: cat /etc/kubernetes/admin.conf | base64 -w 0"
-            echo "   (On Mac: cat /etc/kubernetes/admin.conf | base64 | tr -d '\n')"
-            echo "4. Copy the ENTIRE output (single line, no spaces)"
-            echo "5. Update GitHub secret KUBE_CONFIG with the cleaned base64 string"
-            echo ""
-            echo "⚠️  Common issues:"
-            echo "- Secret contains newlines or spaces (must be single line)"
-            echo "- Secret is not base64-encoded (must encode the raw kubeconfig)"
-            echo "- Secret is truncated (copy entire base64 output)"
-            echo ""
-            echo "skip_provision=true" >> $GITHUB_ENV
-            echo "kubeconfig_ready=false" >> $GITHUB_OUTPUT
-            echo "::endgroup::"
+            echo "Current secret length: ${#CLEAN_B64} characters"
+            echo "First 50 chars: ${CLEAN_B64:0:50}..."
             exit 1
           fi
           
           # Decode and write kubeconfig
-          mkdir -p ~/.kube
           echo "$CLEAN_B64" | base64 -d > ~/.kube/config
           
-          # Verify kubeconfig file was created and is valid YAML
+          # Verify kubeconfig file was created and has content
           if [ ! -s ~/.kube/config ]; then
             echo "❌ Kubeconfig file is empty after decoding"
-            echo "skip_provision=true" >> $GITHUB_ENV
-            echo "kubeconfig_ready=false" >> $GITHUB_OUTPUT
-            echo "::endgroup::"
             exit 1
           fi
           
-          # Check if it's valid YAML (kubeconfig should start with 'apiVersion')
-          if ! grep -q "^apiVersion:" ~/.kube/config 2>/dev/null; then
-            echo "⚠️  Warning: Kubeconfig may be invalid (missing apiVersion)"
-            echo "First few lines of decoded content:"
-            head -5 ~/.kube/config || true
-          fi
-          
           chmod 600 ~/.kube/config
-          echo "✅ Kubeconfig written to ~/.kube/config"
+          echo "✅ Kubeconfig written to ~/.kube/config ($(wc -c < ~/.kube/config) bytes)"
           echo "::endgroup::"
           
           echo "::group::Testing cluster connectivity"

@@ -512,34 +512,26 @@ Base64-encoded kubeconfig (for GitHub secret KUBE_CONFIG):
 
 ### 4.3 Base64 Encode Kubeconfig
 
-**⚠️ IMPORTANT: Must be a single line with no spaces or newlines**
+**⚠️ IMPORTANT:** The base64 output must be on a SINGLE LINE with NO line breaks or whitespace.
 
 ```bash
-# Linux: Base64 encode WITHOUT line breaks (use -w 0)
+# Base64 encode for GitHub secret (Linux - recommended)
 base64 -w 0 kubeconfig.yaml
 
-# Or pipe directly
-cat kubeconfig.yaml | base64 -w 0
-
-# Mac: base64 doesn't support -w flag, use tr to remove newlines
+# Alternative (Linux/Mac compatible)
 cat kubeconfig.yaml | base64 | tr -d '\n'
 
-# Windows PowerShell: Single line base64 encoding
-$content = Get-Content kubeconfig.yaml -Raw
-[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($content))
+# Or using the admin.conf directly (if on VPS)
+cat /etc/kubernetes/admin.conf | base64 -w 0
+
+# Verify the output is a single line (no line breaks)
+# The output should be one long string without spaces or newlines
 ```
 
-**Critical Requirements:**
-- ✅ Must be a **single continuous line** (no line breaks)
-- ✅ **No spaces** or whitespace in the base64 string
-- ✅ Copy the **entire output** (don't truncate)
-- ✅ Paste directly into GitHub secret (no extra formatting)
-
-**Common Mistakes:**
-- ❌ Copying multi-line base64 (will cause "invalid input" error)
-- ❌ Adding spaces or line breaks manually
-- ❌ Truncating the base64 string
-- ❌ Not using `-w 0` flag on Linux (causes line breaks)
+**Common Issues:**
+- ❌ **Line breaks in secret**: GitHub secrets may add line breaks when pasting. Make sure to paste as a single line.
+- ❌ **Extra whitespace**: Remove any spaces or tabs before/after the base64 string.
+- ✅ **Correct format**: One continuous string of characters (no spaces, no line breaks).
 
 ### 4.4 Store Kubeconfig in GitHub Secrets
 
