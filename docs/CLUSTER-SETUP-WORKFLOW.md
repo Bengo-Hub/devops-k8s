@@ -273,11 +273,17 @@ After each phase, verify:
 
 ## Related Documentation
 
-- **Access Setup:** `docs/comprehensive-access-setup.md`
-- **Cluster Setup:** `docs/contabo-setup-kubeadm.md`
-- **Provisioning:** `docs/provisioning.md`
-- **Quick Start:** `SETUP.md`
-- **GitHub Secrets:** `docs/github-secrets.md`
+**Setup Workflow (Follow in Order):**
+1. **Access Setup:** `docs/comprehensive-access-setup.md` - Manual access configuration
+2. **Cluster Setup:** `docs/contabo-setup-kubeadm.md` - Detailed Kubernetes setup guide
+3. **Provisioning:** `docs/provisioning.md` - Automated infrastructure provisioning
+
+**Quick Reference:**
+- **Quick Start:** `SETUP.md` - Fast-track setup guide
+- **GitHub Secrets:** `docs/github-secrets.md` - Complete secrets configuration
+- **etcd Optimization:** `docs/ETCD-OPTIMIZATION.md` - Prevent etcd space issues
+- **SSH Keys:** `docs/ssh-keys-setup.md` - SSH key setup details
+- **VPS Testing:** `docs/vps-access-testing-guide.md` - Access verification
 
 ---
 

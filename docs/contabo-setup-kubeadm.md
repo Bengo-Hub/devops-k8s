@@ -607,10 +607,17 @@ kubectl apply -f apps/root-app.yaml
 
 ## Related Documentation
 
+**Setup Workflow (Follow in Order):**
+1. **Access Setup:** [Comprehensive Access Setup](./comprehensive-access-setup.md) - Manual access configuration (SSH, GitHub PAT)
+2. **Cluster Setup:** [Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md) - Complete workflow guide
+3. **Provisioning:** [Provisioning Guide](./provisioning.md) - Automated infrastructure provisioning
+
+**Quick Reference:**
 - [Quick Setup Guide](../SETUP.md) - Fast-track deployment guide
-- [Provisioning Guide](./provisioning.md) - Automated provisioning workflow
 - [GitHub Secrets](./github-secrets.md) - Complete secret configuration
 - [etcd Optimization](./ETCD-OPTIMIZATION.md) - Prevent etcd space issues
+
+**Infrastructure:**
 - [Database Setup](./database-setup.md) - Database configuration details
 - [Argo CD Setup](./argocd.md) - Argo CD configuration
 - [Monitoring Setup](./monitoring.md) - Monitoring stack details
@@ -809,9 +816,12 @@ journalctl -u kubelet -f
 ## Next Steps
 
 After cluster setup:
-1. Configure GitHub secrets (see `docs/github-secrets.md`)
-2. Run automated provisioning workflow (see `docs/provisioning.md`)
-3. Install Argo CD: `scripts/infrastructure/install-argocd.sh`
-4. Install monitoring: `scripts/monitoring/install-monitoring.sh`
-5. Deploy ERP apps: `kubectl apply -f apps/erp-api/app.yaml`
+1. Copy the base64 kubeconfig output from the setup script
+2. Add it as GitHub organization secret: `KUBE_CONFIG`
+3. Run automated provisioning workflow (see `docs/provisioning.md`)
+4. Deploy ERP apps: `kubectl apply -f apps/erp-api/app.yaml`
+
+**Complete Workflow:**
+- **[Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete workflow guide
+- **[Provisioning Guide](./provisioning.md)** 🚀 - Infrastructure provisioning
 
