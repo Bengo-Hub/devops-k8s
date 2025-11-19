@@ -79,7 +79,7 @@ The deployment pipeline uses SSH keys for three different purposes. **You can us
 
 ### 2.2 Generate SSH Key Pair
 
-**Important:** All SSH keys in this project use the passphrase `"codevertex"` for consistency in automated deployments.
+**Important:** All SSH keys in this project use the passphrase `"codevertex"` for consistency in automated deployments. The passphrase is automatically handled in CI/CD workflows using `SSH_ASKPASS` - see section 2.6 for complete details on how passphrases work in automated deployments.
 
 #### Option A: Single SSH Key for All Purposes (Recommended)
 
