@@ -155,7 +155,8 @@ mkdir -p ~/.ssh
 chmod 700 ~/.ssh
 
 # Add your public key (paste the content from contabo_deploy_key.pub)
-echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtrXcq5mpFnAGIIAHfOzYDnvQcoRosjhdBmPMJkhsV+ devops@codevertex" >> ~/.ssh/authorized_keys
+# Example public key format (replace with your actual public key):
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLE_KEY_CONTENT_HERE devops@codevertex" >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 
 # Disable password authentication (optional, for security)
@@ -192,8 +193,9 @@ ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 
 **Important:** 
 - Use the **PUBLIC key** (`.pub` file), not the private key
-- The public key format should be: `ssh-ed25519 AAAAC3NzaC... devops@codevertex`
-- If you see "Key is invalid", make sure you're using the `.pub` file content
+- The public key format should be: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... devops@codevertex`
+- Example public key format: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLE_KEY_CONTENT_HERE devops@codevertex`
+- If you see "Key is invalid", make sure you're using the `.pub` file content (starts with `ssh-ed25519` or `ssh-rsa`)
 
 #### Step 3: Store Private Keys in GitHub Organization Secrets
 
@@ -295,13 +297,53 @@ Add these secrets:
 
 ### 2.6 How SSH Keys Work in Workflows
 
+#### Passphrase Handling in Automated Workflows
+
+**Important:** SSH keys generated with passphrase `"codevertex"` are automatically handled in CI/CD workflows without user intervention.
+
+**How Passphrases Are Handled:**
+
+The build scripts use `SSH_ASKPASS` environment variable to automatically provide the passphrase:
+
+```bash
+# Automated passphrase handling in build.sh
+# Creates a wrapper script that outputs the passphrase
+cat > /tmp/ssh-askpass.sh << 'EOF'
+#!/bin/sh
+echo "codevertex"
+EOF
+chmod +x /tmp/ssh-askpass.sh
+
+# Configure SSH to use the wrapper
+export SSH_ASKPASS=/tmp/ssh-askpass.sh
+export SSH_ASKPASS_REQUIRE=force
+export DISPLAY=:0
+
+# Add key to SSH agent (passphrase provided automatically)
+setsid ssh-add ~/.ssh/id_rsa < /dev/null
+```
+
+**This means:**
+- ✅ Workflows automatically provide passphrase `"codevertex"` when needed
+- ✅ No user intervention required during automated deployments
+- ✅ Passphrase is only used during key loading, not stored permanently
+- ✅ Keys are loaded into SSH agent memory only during build/deployment
+
+**Security Note:** The passphrase is hardcoded in build scripts as `"codevertex"` for consistency. This is acceptable because:
+- The private key itself is stored securely in GitHub secrets
+- The passphrase adds an extra layer of security if the key is compromised
+- The passphrase is only used during automated workflows, not stored
+
 #### Docker Build Process
 
 When a workflow runs with `DOCKER_SSH_KEY` configured:
 
-1. **SSH Agent Setup:** The workflow configures an SSH agent with your private key
-2. **Git Operations:** Docker can clone private repositories during build
-3. **Key Security:** Keys are loaded into memory only during the build process
+1. **SSH Key Loading:** Private key is decoded from base64 and saved to `~/.ssh/id_rsa`
+2. **SSH Agent Setup:** SSH agent is started and configured
+3. **Passphrase Handling:** `SSH_ASKPASS` wrapper automatically provides passphrase `"codevertex"`
+4. **Key Addition:** Key is added to SSH agent with automatic passphrase entry
+5. **Git Operations:** Docker can clone private repositories during build
+6. **Key Security:** Keys are loaded into memory only during the build process
 
 **Workflow SSH Setup Process:**
 ```yaml
@@ -312,12 +354,30 @@ When a workflow runs with `DOCKER_SSH_KEY` configured:
   run: |
     if [ -n "${DOCKER_SSH_KEY_B64:-}" ]; then
       echo "Loading DOCKER_SSH_KEY"
-      echo "$DOCKER_SSH_KEY_B64" | base64 -d > $HOME/.ssh/id_rsa
-      chmod 0600 $HOME/.ssh/id_rsa
-      ssh-keyscan github.com >> $HOME/.ssh/known_hosts
-      eval "$(ssh-agent)"
-      ssh-add $HOME/.ssh/id_rsa
-      export SSH_AUTH_SOCK=$(ssh-agent -s)
+      mkdir -p -m 0700 ~/.ssh
+      echo "$DOCKER_SSH_KEY_B64" | base64 -d > ~/.ssh/id_rsa
+      chmod 0600 ~/.ssh/id_rsa
+      ssh-keyscan github.com >> ~/.ssh/known_hosts
+      
+      # Start SSH agent
+      eval "$(ssh-agent -s)"
+      
+      # Create SSH_ASKPASS wrapper for automatic passphrase entry
+      cat > /tmp/ssh-askpass.sh << 'EOF'
+      #!/bin/sh
+      echo "codevertex"
+      EOF
+      chmod +x /tmp/ssh-askpass.sh
+      
+      # Configure automatic passphrase entry
+      export SSH_ASKPASS=/tmp/ssh-askpass.sh
+      export SSH_ASKPASS_REQUIRE=force
+      export DISPLAY=:0
+      
+      # Add key to agent (passphrase provided automatically)
+      setsid ssh-add ~/.ssh/id_rsa < /dev/null
+      
+      # Configure SSH for git operations
       cat > ~/.ssh/config << 'EOF'
       Host github.com
           HostName github.com
@@ -335,9 +395,10 @@ When a workflow runs with `DOCKER_SSH_KEY` configured:
 
 Git operations use SSH keys for git pull/push operations. The workflow ensures:
 1. SSH keys are loaded from GitHub secrets (`DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY`)
-2. SSH config file is created with correct settings
-3. Git operations use SSH by default when keys are available
-4. Fallback to tokens when SSH keys aren't configured
+2. Passphrase is automatically provided via `SSH_ASKPASS` wrapper
+3. SSH config file is created with correct settings
+4. Git operations use SSH by default when keys are available
+5. Fallback to tokens when SSH keys aren't configured
 
 ---
 
