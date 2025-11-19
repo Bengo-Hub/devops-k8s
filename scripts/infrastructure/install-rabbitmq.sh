@@ -5,44 +5,32 @@
 
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Configuration
 NAMESPACE=${RABBITMQ_NAMESPACE:-infra}
 RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq}
 RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-user}
 
-echo -e "${BLUE}================================================================${NC}"
-echo -e "${GREEN}Installing RabbitMQ (Shared Infrastructure)${NC}"
-echo -e "${BLUE}================================================================${NC}"
-echo -e "  Namespace: ${NAMESPACE}"
-echo -e "  Username: ${RABBITMQ_USERNAME}"
-echo -e "  Purpose: Shared message broker for all services"
+log_section "Installing RabbitMQ (Shared Infrastructure)"
+log_info "Namespace: ${NAMESPACE}"
+log_info "Username: ${RABBITMQ_USERNAME}"
+log_info "Purpose: Shared message broker for all services"
 
-# Ensure kubectl is configured
-if ! kubectl cluster-info &>/dev/null; then
-  echo -e "${RED}✗ kubectl not configured or cluster unreachable${NC}"
-  exit 1
-fi
-echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
+# Pre-flight checks
+check_kubectl
+ensure_helm
 
 # Create namespace if it doesn't exist
-if ! kubectl get ns "${NAMESPACE}" >/dev/null 2>&1; then
-  kubectl create ns "${NAMESPACE}"
-  echo -e "${GREEN}✓ Namespace '${NAMESPACE}' created${NC}"
-else
-  echo -e "${BLUE}ℹ Namespace '${NAMESPACE}' already exists${NC}"
-fi
+ensure_namespace "${NAMESPACE}"
 
 # Ensure Helm repos
-echo -e "${YELLOW}Adding Bitnami Helm repository...${NC}"
-helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
-helm repo update >/dev/null 2>&1 || true
+add_helm_repo "bitnami" "https://charts.bitnami.com/bitnami"
 
 # Install or upgrade RabbitMQ
-echo -e "${YELLOW}Installing/upgrading RabbitMQ...${NC}"
-echo -e "${BLUE}This may take 3-5 minutes...${NC}"
+log_info "Installing/upgrading RabbitMQ..."
+log_info "This may take 3-5 minutes..."
 
 # Build Helm arguments - prioritize environment variables
 RABBITMQ_HELM_ARGS=()
@@ -68,11 +56,7 @@ RABBITMQ_HELM_ARGS+=(--set persistence.size="10Gi")
 # Metrics
 RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
-# Source common functions for cleanup logic
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "${SCRIPT_DIR}/../tools/common.sh" ]; then
-  source "${SCRIPT_DIR}/../tools/common.sh"
-fi
+# Common functions already sourced above
 
 set +e
 if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
@@ -85,13 +69,13 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
     CURRENT_RABBITMQ_PASS=$(kubectl -n "${NAMESPACE}" get secret rabbitmq -o jsonpath='{.data.rabbitmq-password}' 2>/dev/null | base64 -d || true)
     
     if [[ "$CURRENT_RABBITMQ_PASS" == "$RABBITMQ_PASSWORD" ]]; then
-      echo -e "${GREEN}✓ RabbitMQ password unchanged - skipping upgrade${NC}"
-      echo -e "${BLUE}Current secret password matches provided RABBITMQ_PASSWORD${NC}"
+      log_success "RabbitMQ password unchanged - skipping upgrade"
+      log_info "Current secret password matches provided RABBITMQ_PASSWORD"
       HELM_RABBITMQ_EXIT=0
     else
-      echo -e "${YELLOW}Password mismatch detected - updating RabbitMQ to sync password${NC}"
-      echo -e "${BLUE}Current password length: ${#CURRENT_RABBITMQ_PASS} chars${NC}"
-      echo -e "${BLUE}New password length: ${#RABBITMQ_PASSWORD} chars${NC}"
+      log_warning "Password mismatch detected - updating RabbitMQ to sync password"
+      log_info "Current password length: ${#CURRENT_RABBITMQ_PASS} chars"
+      log_info "New password length: ${#RABBITMQ_PASSWORD} chars"
       helm upgrade rabbitmq bitnami/rabbitmq \
         -n "${NAMESPACE}" \
         --reset-values \
