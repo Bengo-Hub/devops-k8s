@@ -216,6 +216,69 @@ start_vps_if_stopped() {
     return 1
 }
 
+# Function to ensure VPS is running (start if stopped, wait until ready)
+ensure_vps_running() {
+    local INSTANCE_ID="${CONTABO_INSTANCE_ID:-}"
+    local ACCESS_TOKEN="${1:-}"
+    
+    if [ -z "$ACCESS_TOKEN" ]; then
+        ACCESS_TOKEN=$(get_contabo_token)
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    fi
+    
+    # Check and start if needed
+    if ! check_vps_status "$ACCESS_TOKEN"; then
+        start_vps_if_stopped "$ACCESS_TOKEN"
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    fi
+    
+    # Additional wait to ensure VPS is fully ready
+    echo -e "${BLUE}Ensuring VPS is fully ready...${NC}"
+    sleep 10
+    
+    return 0
+}
+
+# Function to get VPS instance details
+get_vps_details() {
+    local INSTANCE_ID="${CONTABO_INSTANCE_ID:-14285715}"
+    local ACCESS_TOKEN="${1:-}"
+    
+    if [ -z "$ACCESS_TOKEN" ]; then
+        ACCESS_TOKEN=$(get_contabo_token)
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    fi
+    
+    if [ -z "$INSTANCE_ID" ]; then
+        echo -e "${RED}❌ CONTABO_INSTANCE_ID not set${NC}"
+        return 1
+    fi
+    
+    local RESPONSE=$(curl -s -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+        "${CONTABO_API_URL}/${INSTANCE_ID}" || echo "")
+    
+    if [ -z "$RESPONSE" ]; then
+        echo -e "${RED}❌ Failed to fetch instance details${NC}"
+        return 1
+    fi
+    
+    # Check for error
+    if echo "$RESPONSE" | grep -q "error"; then
+        echo -e "${RED}❌ Contabo API error:${NC}"
+        echo "$RESPONSE" | jq -r '.error_description // .error' 2>/dev/null || echo "$RESPONSE"
+        return 1
+    fi
+    
+    echo "$RESPONSE"
+    return 0
+}
+
 # Main function - get VPS IP with Contabo API fallback
 main() {
     local ACTION="${1:-get_ip}"
@@ -233,8 +296,14 @@ main() {
         start)
             start_vps_if_stopped
             ;;
+        ensure_running)
+            ensure_vps_running
+            ;;
+        get_details)
+            get_vps_details
+            ;;
         *)
-            echo "Usage: $0 {get_ip|get_token|check_status|start}"
+            echo "Usage: $0 {get_ip|get_token|check_status|start|ensure_running|get_details}"
             exit 1
             ;;
     esac

@@ -1,10 +1,10 @@
-nameOverride: cafe-backend
-fullnameOverride: cafe-backend
+nameOverride: pos-service
+fullnameOverride: pos-service
 
 replicaCount: 2
 
 image:
-  repository: docker.io/codevertex/cafe-backend
+  repository: docker.io/codevertex/pos-service
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -21,54 +21,49 @@ healthCheck:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 5
+    initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 20
-    periodSeconds: 15
+    initialDelaySeconds: 30
+    periodSeconds: 20
 
 strategy:
   type: RollingUpdate
-  rollingUpdate:
-    maxSurge: 1
-    maxUnavailable: 0
 
 env:
-  - name: CAFE_APP_ENV
+  - name: POS_APP_ENV
     value: production
-  - name: CAFE_POSTGRES_URL
+  - name: POS_HTTP_PORT
+    value: "4000"
+  - name: POS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: cafe-backend-secrets
+        name: pos-service-secrets
         key: postgresUrl
-  - name: CAFE_REDIS_ADDR
+  - name: POS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: CAFE_NATS_URL
+  - name: POS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: CAFE_OTLP_ENDPOINT
+  - name: POS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: CAFE_EVENTS_STREAM
-    value: cafe
-  - name: CAFE_HTTP_PORT
-    value: "4000"
 
 resources:
   limits:
     cpu: 1000m
-    memory: 1Gi
+    memory: 1.5Gi
   requests:
-    cpu: 250m
-    memory: 256Mi
+    cpu: 300m
+    memory: 512Mi
 
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 10
   targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 70
 
 monitoring:
   enabled: true
@@ -88,12 +83,17 @@ serviceMonitor:
 ingress:
   enabled: true
   ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: cafeapi.codevrtexitsolutions.com
+    - host: pos.codevrtexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - cafeapi.codevrtexitsolutions.com
-      secretName: cafe-backend-tls
+        - pos.codevrtexitsolutions.com
+      secretName: pos-service-tls
+

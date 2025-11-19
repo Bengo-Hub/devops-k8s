@@ -3,220 +3,115 @@ Quick Setup Guide
 
 This guide provides a fast-track setup for the entire DevOps infrastructure.
 
+**⚠️ IMPORTANT:** This guide has been updated. Manual VPS setup is now required before running automated provisioning.
+
 Prerequisites
 -------------
-- Contabo VPS with SSH access
-- kubectl installed locally
-- Helm 3 installed locally
+- Fresh Contabo VPS (or any Ubuntu 22.04 VPS)
+- Root or sudo access
+- SSH access to the VPS
 - GitHub organization secrets configured
 
-Step 0: Provision Deployment Tools (Ansible)
---------------------------------------------
-
-Optionally provision all required deployment tools (kubectl, helm, argocd, trivy, yq, kubeconform, k9s, stern, VPA) on your VPS using the included Ansible playbook `provision.yml`.
-
-```bash
-# From your local machine with Ansible installed
-ansible-playbook -i "YOUR_VPS_IP," -u root -k provision.yml
-
-# After completion, verify tools on the VPS
-ssh root@YOUR_VPS_IP "kubectl version --client && helm version && argocd version && trivy --version && yq --version"
-```
-
-See `docs/provisioning.md` for details and version pins.
-
-Step 1: Choose Kubernetes Distribution
---------------------------------------
-
-**Read First:** `docs/k8s-comparison.md` to decide between kubeadm and k3s.
-
-**Quick Recommendation:**
-- **4-8GB VPS:** Use kubeadm (recommended for most users)
-- **16GB+ VPS or multi-node:** Use kubeadm (recommended for your 48GB VPS)
-
-Step 2: Initial VPS Setup
--------------------------
-
-### Option A: kubeadm (Recommended for Contabo VPS)
-
-Follow `docs/contabo-setup-kubeadm.md` for complete setup including:
-- SSH key configuration
-- containerd installation
-- Full Kubernetes with kubeadm
-- Calico or Flannel CNI
-- NGINX Ingress Controller
-
-**Pros:** Full upstream K8s, better for production, more community support
-**Best for:** Production deployments, enterprise use
-
-### Option B: k3s (For smaller VPS or resource-constrained environments)
-
-Follow `docs/contabo-setup.md` for complete setup including:
-- SSH key configuration
-- Docker installation
-- k3s (lightweight Kubernetes) installation
-- NGINX Ingress Controller
-- Basic firewall setup
-
-**Pros:** Lower resource usage, faster setup, simpler operations
-**Best for:** Single-node VPS deployments
-
-Quick command reference (kubeadm):
-```bash
-# SSH into VPS
-ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
-
-# Follow full guide in docs/contabo-setup-kubeadm.md
-# Requires containerd, kubeadm, kubelet, kubectl installation
-```
-
-Quick command reference (k3s):
-```bash
-# SSH into VPS
-ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
-
-# Install k3s
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
-```
-
-Step 3: Install Databases (PostgreSQL & Redis)
------------------------------------------------
-
-The ERP system requires PostgreSQL and Redis. The provisioning workflow installs these automatically.
-
-### Automated Installation (Included in provision.yml workflow) ⭐
-
-The `.github/workflows/provision.yml` automatically installs databases with:
-- Environment variables from GitHub secrets (if set)
-- Auto-generated secure passwords (if secrets not provided)
-- Idempotent operation (skips if already healthy)
-
-**GitHub Secrets (Optional but Recommended):**
-```yaml
-POSTGRES_PASSWORD: "YourSecurePassword"  # Sets initial PostgreSQL password
-REDIS_PASSWORD: "YourSecurePassword"     # Sets initial Redis password
-PG_DATABASE: "bengo_erp"                 # Database name (default: bengo_erp)
-DB_NAMESPACE: "erp"                      # Namespace (default: erp)
-```
-
-### Manual Installation (If needed)
-
-```bash
-# Set passwords (optional - will auto-generate if not set)
-export POSTGRES_PASSWORD="Vertex2020!"
-export REDIS_PASSWORD="Vertex2020!"
-export PG_DATABASE="bengo_erp"
-export NAMESPACE="erp"
-
-# Install databases (idempotent - skips if healthy)
-./scripts/install-databases.sh
-
-# Retrieve credentials
-kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d
-kubectl get secret redis -n erp -o jsonpath='{.data.redis-password}' | base64 -d
-```
-
-**Note:** Application deployments automatically retrieve these passwords from Kubernetes secrets. No manual configuration needed!
-
-**See:** `docs/secrets-management.md` for credential flow details
-
-Step 4: Install Core Infrastructure
------------------------------------
-
-### NGINX Ingress Controller (Required for external access)
-```bash
-# Configure ingress to use hostNetwork for VPS
-./scripts/configure-ingress-controller.sh
-```
-
-**This configures the ingress controller to bind directly to your VPS IP (77.237.232.66) on ports 80 and 443.**
-
-### cert-manager (TLS Certificates)
-```bash
-# From your local machine with kubectl configured
-./scripts/install-cert-manager.sh
-
-# Or manually:
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
-kubectl apply -f manifests/cert-manager-clusterissuer.yaml
-```
-
-### Argo CD (GitOps)
-```bash
-./scripts/install-argocd.sh
-
-# Apply Argo CD ingress (optional, for web access)
-kubectl apply -f manifests/argocd-ingress.yaml
-
-# Get admin password
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-```
-
-### Monitoring Stack (Prometheus + Grafana)
-```bash
-./scripts/install-monitoring.sh
-
-# Apply ERP-specific alerts
-kubectl apply -f manifests/monitoring/erp-alerts.yaml
-
-# Configure Alertmanager (update email password first)
-kubectl apply -f manifests/monitoring/alertmanager-config.yaml
-```
-
-Step 5: Configure Argo CD Repository
+Step 1: Manual VPS Setup (REQUIRED)
 ------------------------------------
 
-```bash
-# Generate SSH deploy key
-ssh-keygen -t ed25519 -C "argocd@codevertex" -f ~/.ssh/argocd_deploy_key -N ""
+**Complete the manual VPS setup first.** This includes:
+- Initial server configuration
+- Container runtime (containerd) installation
+- Kubernetes cluster initialization (kubeadm)
+- CNI installation (Calico)
+- etcd auto-compaction configuration
+- Getting and storing kubeconfig
 
-# Add public key to GitHub repo:
-# github.com/codevertex/devops-k8s > Settings > Deploy keys
-cat ~/.ssh/argocd_deploy_key.pub
+**📚 Follow the complete guide:** `docs/contabo-setup-kubeadm.md`
 
-# Add repo to Argo CD
-argocd repo add git@github.com:codevertex/devops-k8s.git \
-  --ssh-private-key-path ~/.ssh/argocd_deploy_key
-```
+This step cannot be automated and must be done manually on the VPS.
 
-Step 6: Deploy Applications
+**Quick Reference:**
+- For kubeadm setup: `docs/contabo-setup-kubeadm.md`
+- For k3s setup: `docs/contabo-setup.md`
+- For k8s comparison: `docs/k8s-comparison.md`
+
+Step 2: Configure GitHub Secrets
+---------------------------------
+
+After completing manual setup, configure GitHub secrets:
+
+**Required Secrets:**
+- `KUBE_CONFIG` - Base64-encoded kubeconfig from manual setup
+- `SSH_PRIVATE_KEY` - SSH private key for VPS access (if needed)
+
+**Optional Secrets (with defaults):**
+- `SSH_HOST` - VPS IP address (Priority 1 - takes precedence over Contabo API)
+- `POSTGRES_PASSWORD` - PostgreSQL password (auto-generated if not set)
+- `POSTGRES_ADMIN_PASSWORD` - PostgreSQL admin user password
+- `REDIS_PASSWORD` - Redis password (auto-generated if not set)
+- `RABBITMQ_PASSWORD` - RabbitMQ password (default: `rabbitmq`)
+- `ARGOCD_DOMAIN` - ArgoCD domain (default: `argocd.masterspace.co.ke`)
+- `GRAFANA_DOMAIN` - Grafana domain (default: `grafana.masterspace.co.ke`)
+- `DB_NAMESPACE` - Database namespace (default: `infra`)
+
+**Contabo API Secrets (Optional - enables automated VPS management):**
+- `CONTABO_CLIENT_ID` - Contabo OAuth2 client ID
+- `CONTABO_CLIENT_SECRET` - Contabo OAuth2 client secret
+- `CONTABO_API_USERNAME` - Contabo account username
+- `CONTABO_API_PASSWORD` - Contabo account password
+- `CONTABO_INSTANCE_ID` - Contabo VPS instance ID (default: `14285715`)
+
+**See:** `docs/github-secrets.md` for complete list
+
+Step 3: Run Automated Provisioning Workflow
+--------------------------------------------
+
+Once manual setup is complete and secrets are configured:
+
+1. Go to: `https://github.com/YOUR_ORG/devops-k8s/actions`
+2. Select: **"Provision Cluster Infrastructure"**
+3. Click: **"Run workflow"** → **"Run workflow"**
+
+The workflow will automatically:
+- **Get VPS IP** via Contabo API (if configured) or use `SSH_HOST` secret
+- **Check etcd space** to prevent "database space exceeded" errors
+- Install storage provisioner
+- Install PostgreSQL & Redis (shared infrastructure)
+- Install RabbitMQ (shared infrastructure)
+- Configure NGINX Ingress Controller
+- Install cert-manager
+- Install Argo CD
+- Install monitoring stack (Prometheus + Grafana)
+- Install Vertical Pod Autoscaler (VPA)
+
+**Note:** All installation scripts are idempotent (safe to run multiple times).
+
+**Note:** Git SSH access setup requires manual GitHub deploy key configuration (see workflow output).
+
+Step 4: Configure DNS (Optional but Recommended)
+-------------------------------------------------
+
+Point your domains to your VPS IP:
+- `argocd.masterspace.co.ke` → YOUR_VPS_IP
+- `grafana.masterspace.co.ke` → YOUR_VPS_IP
+- `erpapi.masterspace.co.ke` → YOUR_VPS_IP
+- `erp.masterspace.co.ke` → YOUR_VPS_IP
+
+cert-manager will automatically provision TLS certificates.
+
+Step 5: Deploy Applications
 ---------------------------
 
-### Deploy ERP API
-```bash
-kubectl apply -f apps/erp-api/app.yaml
+Applications are automatically deployed via Argo CD if `apps/*/app.yaml` files exist.
 
-# Check status
-argocd app get erp-api
-kubectl get pods -n erp
+To verify:
+```bash
+kubectl get applications -n argocd
 ```
 
-### Deploy ERP UI
-```bash
-kubectl apply -f apps/erp-ui/app.yaml
-
-# Check status
-argocd app get erp-ui
-kubectl get pods -n erp
-```
-
-### Or use App of Apps pattern
+To deploy manually:
 ```bash
 kubectl apply -f apps/root-app.yaml
 ```
 
-Step 7: Configure DNS
----------------------
-
-Point these domains to your VPS IP:
-- `erpapi.masterspace.co.ke` → VPS_IP
-- `erp.masterspace.co.ke` → VPS_IP
-- `argocd.masterspace.co.ke` → VPS_IP (optional)
-- `grafana.masterspace.co.ke` → VPS_IP (optional)
-
-cert-manager will automatically provision TLS certificates.
-
-Step 8: Verify Deployment
+Step 6: Verify Deployment
 -------------------------
 
 ```bash
@@ -235,49 +130,6 @@ curl https://erpapi.masterspace.co.ke/api/v1/core/health/
 # Test ERP UI health
 curl https://erp.masterspace.co.ke/health
 ```
-
-Step 9: Configure Monitoring
-----------------------------
-
-### Access Grafana
-```bash
-# Get password
-kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d
-
-# Port forward (or use ingress)
-kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
-
-# Visit http://localhost:3000
-# Username: admin
-```
-
-### Import Dashboards
-1. Login to Grafana
-2. Go to Dashboards > Import
-3. Import these IDs:
-   - 315 (Kubernetes cluster monitoring)
-   - 6417 (Kubernetes cluster overview)
-   - 1860 (Node Exporter Full)
-
-### Configure Alertmanager Email
-Edit `manifests/monitoring/alertmanager-config.yaml` and update:
-- `auth_password` with Gmail app password
-- Apply: `kubectl apply -f manifests/monitoring/alertmanager-config.yaml`
-
-Step 10: GitHub Actions Setup
-----------------------------
-
-Ensure these organization secrets are set:
-- `CONTABO_CLIENT_ID`
-- `CONTABO_CLIENT_SECRET`
-- `CONTABO_API_USERNAME`
-- `CONTABO_API_PASSWORD`
-- `SSH_PRIVATE_KEY`
-- `KUBE_CONFIG`
-- `REGISTRY_USERNAME` (codevertex)
-- `REGISTRY_PASSWORD` (Docker Hub token)
-
-See `docs/github-secrets.md` for details.
 
 Troubleshooting
 ---------------
@@ -312,6 +164,7 @@ Next Steps
 ----------
 
 - Review `docs/` for detailed documentation
+- Configure etcd auto-compaction (see `docs/ETCD-OPTIMIZATION.md`)
 - Configure backup strategy
 - Set up CI/CD pipelines for your apps
 - Configure horizontal pod autoscaling
@@ -324,4 +177,3 @@ Support
 - Issues: GitHub Issues
 - Contact: codevertexitsolutions@gmail.com
 - Website: https://www.codevertexitsolutions.com
-

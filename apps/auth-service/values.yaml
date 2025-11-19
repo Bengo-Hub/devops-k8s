@@ -30,12 +30,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: sso.codevertexitsolutions.com
+    - host: sso.codevrtexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - sso.codevertexitsolutions.com
-      secretName: sso-codevertexitsolutions-tls
+        - sso.codevrtexitsolutions.com
+      secretName: sso-codevrtexitsolutions-tls
 
