@@ -6,10 +6,16 @@ This guide provides step-by-step instructions for setting up all required access
 
 ## Related Documentation
 
+**⚠️ IMPORTANT: Setup Order**
+1. **Access Setup (THIS DOCUMENT)** - Manual SSH keys, GitHub PAT, Contabo API
+2. **Cluster Setup** - Automated Kubernetes cluster setup (generates kubeconfig)
+3. **Kubeconfig Setup** - Extract and store kubeconfig in GitHub secrets (happens AFTER cluster setup)
+4. **Provisioning** - Automated infrastructure provisioning
+
 **Next Steps (After Access Setup):**
-- **[Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete automated cluster setup guide
+- **[Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete automated cluster setup guide (generates kubeconfig)
 - **[Kubernetes Setup Guide](./contabo-setup-kubeadm.md)** 📘 - Detailed Kubernetes cluster setup
-- **[GitHub Secrets Guide](./github-secrets.md)** 🔐 - Complete secrets documentation
+- **[GitHub Secrets Guide](./github-secrets.md)** 🔐 - Complete secrets documentation (includes kubeconfig setup)
 
 ---
 
@@ -443,34 +449,57 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" \
 
 ---
 
-## 4. Kubernetes Access Setup
+## 4. Kubernetes Kubeconfig Setup (AFTER Cluster Setup)
 
-### 4.1 Get Kubeconfig from Contabo VPS
+**⚠️ IMPORTANT:** Kubeconfig is generated **DURING** cluster setup, not before. You must complete cluster setup first.
+
+**Prerequisites:**
+- ✅ Kubernetes cluster must be initialized (see [Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md))
+- ✅ Cluster setup script (`setup-cluster.sh`) must have completed successfully
+- ✅ Kubeconfig file exists at `/etc/kubernetes/admin.conf` on the VPS
+
+**If you see "No such file or directory" error:**
+- The Kubernetes cluster has not been set up yet
+- Follow [Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md) first
+- The `setup-cluster.sh` script will generate the kubeconfig automatically
+
+### 4.1 Get Kubeconfig After Cluster Setup
+
+**The cluster setup script (`setup-cluster.sh`) automatically:**
+1. ✅ Generates kubeconfig during cluster initialization
+2. ✅ Updates kubeconfig with public VPS IP (if `VPS_IP` environment variable is set)
+3. ✅ Outputs base64-encoded kubeconfig for GitHub secrets
+
+**After running `setup-cluster.sh`, you should see:**
+```
+Base64-encoded kubeconfig (for GitHub secret KUBE_CONFIG):
+[base64 encoded kubeconfig content]
+```
+
+**If you need to manually extract kubeconfig:**
 
 1. **SSH into your VPS:**
    ```bash
    ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
    ```
 
-2. **Copy the kubeconfig:**
+2. **Verify cluster is initialized:**
    ```bash
-   # Get kubeconfig from default location
+   kubectl get nodes
+   # Should show your node(s) in Ready status
+   ```
+
+3. **Copy the kubeconfig:**
+   ```bash
+   # Get kubeconfig from default location (only exists AFTER cluster setup)
    cat /etc/kubernetes/admin.conf
    ```
 
-3. **Save the kubeconfig content** to a local file (e.g., `kubeconfig.yaml`)
+4. **Save the kubeconfig content** to a local file (e.g., `kubeconfig.yaml`)
 
-### 4.2 Base64 Encode Kubeconfig
+### 4.2 Update Kubeconfig Server URL (if needed)
 
-```bash
-# Base64 encode for GitHub secret
-base64 -w 0 kubeconfig.yaml
-
-# Or without line wrapping
-cat kubeconfig.yaml | base64
-```
-
-### 4.3 Update Kubeconfig Server URL
+**Note:** The `setup-cluster.sh` script automatically updates the server URL if `VPS_IP` is set. If you're extracting manually:
 
 **Important:** The kubeconfig contains a local server URL that needs to be updated for external access:
 
@@ -481,16 +510,23 @@ cat kubeconfig.yaml | base64
    sed -i 's/https:\/\/127.0.0.1:6443/https:\/\/YOUR_VPS_IP:6443/g' kubeconfig.yaml
    ```
 
-3. **Re-encode and update GitHub secret:**
-   ```bash
-   cat kubeconfig.yaml | base64 -w 0
-   ```
+### 4.3 Base64 Encode Kubeconfig
+
+```bash
+# Base64 encode for GitHub secret
+base64 -w 0 kubeconfig.yaml
+
+# Or without line wrapping
+cat kubeconfig.yaml | base64
+```
 
 ### 4.4 Store Kubeconfig in GitHub Secrets
 
 Add as organization secret:
 
 - `KUBE_CONFIG` - Base64-encoded kubeconfig for Kubernetes access
+
+**See:** [GitHub Secrets Guide](./github-secrets.md) for complete kubeconfig setup instructions
 
 ---
 
@@ -587,6 +623,8 @@ GIT_SSH_COMMAND="ssh -i ~/.ssh/git_key -o StrictHostKeyChecking=no" \
 
 ### 5.3 Kubernetes Access Testing
 
+**⚠️ Prerequisites:** Kubernetes cluster must be set up and kubeconfig must be configured (see section 4 above).
+
 #### Test Kubeconfig Validation
 
 ```bash
@@ -600,6 +638,8 @@ kubectl config get-contexts
 kubectl config current-context
 ```
 
+**Note:** If kubeconfig doesn't exist yet, complete cluster setup first (see [Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)).
+
 #### Test Cluster Connectivity
 
 ```bash
@@ -609,7 +649,10 @@ kubectl get nodes
 kubectl get namespaces
 
 # Expected: Shows cluster information and node status
-# If fails: Check kubeconfig server URL points to correct VPS IP
+# If fails: 
+# 1. Check cluster is initialized: SSH to VPS and run `kubectl get nodes`
+# 2. Check kubeconfig server URL points to correct VPS IP
+# 3. Verify cluster setup completed successfully
 ```
 
 #### Test Namespace and Resource Access
@@ -865,15 +908,25 @@ This will automatically:
 - Install Kubernetes cluster
 - Configure Calico CNI
 - Set up etcd auto-compaction
-- Generate kubeconfig for GitHub secrets
+- **Generate kubeconfig** (outputs base64-encoded kubeconfig for GitHub secrets)
 
-### After Cluster Setup
+### After Cluster Setup (Kubeconfig Setup)
 
-1. Copy the base64 kubeconfig output from the script
-2. Add it as GitHub organization secret: `KUBE_CONFIG`
-3. Run the provisioning workflow to install infrastructure
+**⚠️ IMPORTANT:** Kubeconfig is generated DURING cluster setup. After `setup-cluster.sh` completes:
 
-**See:** `docs/contabo-setup-kubeadm.md` for complete cluster setup guide
+1. **Copy the base64 kubeconfig output** from the script (it will be displayed at the end)
+2. **Add it as GitHub organization secret:** `KUBE_CONFIG`
+3. **Verify kubeconfig works:** See section 5.3 "Kubernetes Access Testing" above
+4. **Run the provisioning workflow** to install infrastructure
+
+**If kubeconfig wasn't captured:**
+- SSH to VPS: `ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP`
+- Extract kubeconfig: `cat /etc/kubernetes/admin.conf | base64 -w 0`
+- See section 4 above for detailed kubeconfig extraction
+
+**See:** 
+- `docs/CLUSTER-SETUP-WORKFLOW.md` - Complete workflow guide
+- `docs/contabo-setup-kubeadm.md` - Detailed Kubernetes setup guide
 
 ---
 
