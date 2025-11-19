@@ -254,7 +254,7 @@ Next Steps After Onboarding
 ---------------------------
 
 1. Push to main/master branch to trigger first deployment
-2. Monitor workflow: https://github.com/Bengo-Hub/my-app/actions
+2. Monitor workflow: https://github.com/Bengo-Hub/YOUR_APP_REPO/actions
 3. Check Argo CD: https://argocd.masterspace.co.ke
 4. Verify deployment: `kubectl get pods -n my-namespace`
 5. Check application logs: `kubectl logs -n my-namespace deployment/my-app`

@@ -57,7 +57,7 @@ Manual Access Setup → Automated Cluster Setup → Automated Provisioning
 2. **Clone/Upload devops-k8s repository:**
    ```bash
    cd /opt
-   git clone https://github.com/YOUR_ORG/devops-k8s.git
+   git clone https://github.com/Bengo-Hub/devops-k8s.git
    cd devops-k8s
    ```
 
@@ -131,7 +131,7 @@ Manual Access Setup → Automated Cluster Setup → Automated Provisioning
 **Process:**
 
 1. **Run GitHub Actions workflow:**
-   - Go to: `https://github.com/YOUR_ORG/devops-k8s/actions`
+   - Go to: `https://github.com/Bengo-Hub/devops-k8s/actions`
    - Select: **"Provision Cluster Infrastructure"**
    - Click: **"Run workflow"** → **"Run workflow"**
 

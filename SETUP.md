@@ -38,7 +38,7 @@ ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
 
 # Clone or upload devops-k8s repository
 cd /opt
-git clone https://github.com/YOUR_ORG/devops-k8s.git
+git clone https://github.com/Bengo-Hub/devops-k8s.git
 cd devops-k8s
 
 # Run orchestrated cluster setup
@@ -96,7 +96,7 @@ Step 4: Run Automated Provisioning Workflow
 
 Once manual setup is complete and secrets are configured:
 
-1. Go to: `https://github.com/YOUR_ORG/devops-k8s/actions`
+1. Go to: `https://github.com/Bengo-Hub/devops-k8s/actions`
 2. Select: **"Provision Cluster Infrastructure"**
 3. Click: **"Run workflow"** → **"Run workflow"**
 
