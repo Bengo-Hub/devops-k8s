@@ -54,56 +54,97 @@ For the ERP UI repository (`bengobox-erp-ui`), add these repository secrets:
 
 ### 2.1 SSH Key Types and Purposes
 
-The deployment pipeline uses three types of SSH keys:
+The deployment pipeline uses SSH keys for three different purposes. **You can use the same SSH key pair for all three purposes** (recommended for simplicity), or generate separate keys for each purpose.
 
 **1. VPS Access Key (SSH_PRIVATE_KEY)**
 - **Purpose:** Used for accessing your Contabo VPS for deployment operations
 - **Usage:** SSH deployment to VPS, remote command execution, Kubernetes cluster access
-- **Stored as:** `SSH_PRIVATE_KEY` (organization secret)
+- **Stored as:** `SSH_PRIVATE_KEY` (organization secret) - Base64-encoded private key
+- **Public Key Location:** Added to Contabo VPS `~/.ssh/authorized_keys` file
 
 **2. Docker Build SSH Key (DOCKER_SSH_KEY)**
 - **Purpose:** Used during Docker builds to access private GitHub repositories
 - **Usage:** Docker builds with `--ssh` flag, enables `git clone` during container build
-- **Stored as:** `DOCKER_SSH_KEY` (organization secret)
+- **Stored as:** `DOCKER_SSH_KEY` (organization secret) - Base64-encoded private key
+- **Public Key Location:** Added to GitHub repository as a Deploy Key (Settings → Deploy keys)
 - **Fallback:** Uses `SSH_PRIVATE_KEY` if `DOCKER_SSH_KEY` is not available
 
 **3. Git Operations SSH Key**
 - **Purpose:** Used for automated git operations (git pull, git push, git commit)
 - **Usage:** Updating Helm values files, committing deployment artifacts
-- **Uses:** Either `DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY` (workflow handles fallback)
+- **Stored as:** Uses `DOCKER_SSH_KEY` or `SSH_PRIVATE_KEY` (workflow handles fallback)
+- **Public Key Location:** Added to GitHub repository as a Deploy Key with write access
 
-**Note:** The same SSH key can be used for all three purposes for simplicity.
+**Important:** For simplicity, you can use **one SSH key pair** for all three purposes. The workflow will use the same key for VPS access, Docker builds, and Git operations.
 
 ### 2.2 Generate SSH Key Pair
 
 **Important:** All SSH keys in this project use the passphrase `"codevertex"` for consistency in automated deployments.
 
+#### Option A: Single SSH Key for All Purposes (Recommended)
+
+Generate one SSH key pair that will be used for all three purposes:
+
 ```bash
-# Generate SSH key pair for both VPS access and Docker builds
+# Generate SSH key pair (creates both private and public key)
 ssh-keygen -t ed25519 -C "devops@codevertex" -f ~/.ssh/contabo_deploy_key -N "codevertex"
 ```
 
 This creates:
-- `~/.ssh/contabo_deploy_key` (private key)
-- `~/.ssh/contabo_deploy_key.pub` (public key)
+- `~/.ssh/contabo_deploy_key` (private key) - **Keep this secret!**
+- `~/.ssh/contabo_deploy_key.pub` (public key) - **Share this**
 
 **Why Ed25519?** Ed25519 keys are more secure and faster than RSA keys, and are recommended for modern deployments.
 
-### 2.3 Add Public Key to Contabo VPS
+#### Option B: Separate SSH Keys for Each Purpose
 
-#### Option A: Via Contabo Control Panel (Recommended)
+If you prefer separate keys for security isolation:
+
+```bash
+# 1. VPS Access Key
+ssh-keygen -t ed25519 -C "devops-vps@codevertex" -f ~/.ssh/vps_access_key -N "codevertex"
+
+# 2. Docker Build Key
+ssh-keygen -t ed25519 -C "devops-docker@codevertex" -f ~/.ssh/docker_build_key -N "codevertex"
+
+# 3. Git Operations Key (or reuse Docker Build Key)
+ssh-keygen -t ed25519 -C "devops-git@codevertex" -f ~/.ssh/git_ops_key -N "codevertex"
+```
+
+**Note:** Using separate keys provides better security isolation but requires managing multiple keys. For most use cases, Option A (single key) is sufficient.
+
+### 2.3 Step-by-Step SSH Key Setup
+
+Follow these steps to set up your SSH keys. If using a single key (Option A), repeat the same key for all three steps.
+
+#### Step 1: Add Public Key to Contabo VPS (for SSH_PRIVATE_KEY)
+
+**Purpose:** Enable SSH access to your VPS server
+
+**Option A: Via Contabo Control Panel (Recommended)**
 
 1. **Login to Contabo:**
    - Go to https://my.contabo.com
    - Select your VPS instance
 
 2. **Add SSH Key:**
-   - Go to "Access" tab
+   - Go to "Access" tab → "SSH Keys" section
    - Click "Add SSH Key"
-   - Paste the contents of `~/.ssh/contabo_deploy_key.pub`
-   - Save
+   - **Copy your PUBLIC key content:**
+     ```powershell
+     # On Windows PowerShell
+     Get-Content .\.ssh\contabo_deploy_key.pub
+     ```
+     ```bash
+     # On Linux/Mac
+     cat ~/.ssh/contabo_deploy_key.pub
+     ```
+   - Paste **ONLY the public key** (starts with `ssh-ed25519` or `ssh-rsa`)
+   - **DO NOT paste the private key** (starts with `-----BEGIN OPENSSH PRIVATE KEY-----`)
+   - Give it a name: `devops-vps-access`
+   - Click "Save" or "Add"
 
-#### Option B: Manual Setup (After First Login)
+**Option B: Manual Setup (After First Login)**
 
 ```bash
 # SSH into server with password (first time only)
@@ -113,8 +154,8 @@ ssh root@YOUR_VPS_IP
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
 
-# Add your public key
-echo "YOUR_PUBLIC_KEY_CONTENT" >> ~/.ssh/authorized_keys
+# Add your public key (paste the content from contabo_deploy_key.pub)
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFtrXcq5mpFnAGIIAHfOzYDnvQcoRosjhdBmPMJkhsV+ devops@codevertex" >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 
 # Disable password authentication (optional, for security)
@@ -122,34 +163,98 @@ sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_
 systemctl restart sshd
 ```
 
-### 2.4 Add Public Key to GitHub (for Docker builds)
+**Verify:** Test SSH connection:
+```bash
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
+```
 
-If you need to access private repositories during Docker builds:
+#### Step 2: Add Public Key to GitHub as Deploy Key (for DOCKER_SSH_KEY)
 
-1. **Copy the public key:**
+**Purpose:** Enable Docker builds to access private GitHub repositories
+
+1. **Copy your PUBLIC key:**
+   ```powershell
+   # On Windows PowerShell
+   Get-Content .\.ssh\contabo_deploy_key.pub
+   ```
    ```bash
+   # On Linux/Mac
    cat ~/.ssh/contabo_deploy_key.pub
    ```
 
 2. **Add to GitHub repository:**
-   - Go to your private repository → Settings → Deploy keys
-   - Click "Add deploy key"
-   - Paste the public key content
-   - Check "Allow write access" if the workflow needs to push changes
+   - Go to your repository (e.g., `Bengo-Hub/devops-k8s`)
+   - Navigate to: **Settings** → **Deploy keys** → **Add deploy key**
+   - **Title:** `Docker Build Access`
+   - **Key:** Paste the **public key** content (starts with `ssh-ed25519`)
+   - ✅ **Check "Allow write access"** (required for git push operations)
+   - Click **"Add key"**
 
-### 2.5 Store Private Keys in GitHub Secrets
+**Important:** 
+- Use the **PUBLIC key** (`.pub` file), not the private key
+- The public key format should be: `ssh-ed25519 AAAAC3NzaC... devops@codevertex`
+- If you see "Key is invalid", make sure you're using the `.pub` file content
+
+#### Step 3: Store Private Keys in GitHub Organization Secrets
+
+**Purpose:** Store private keys securely for use in GitHub Actions workflows
 
 **Important:** Store all secrets at the **organization level** for consistency across repositories.
 
-#### Base64 Encode Private Keys
+**For Windows PowerShell:**
+
+```powershell
+# 1. Base64 encode the private key for SSH_PRIVATE_KEY
+$privateKey = Get-Content .\.ssh\contabo_deploy_key -Raw
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($privateKey)
+$base64 = [Convert]::ToBase64String($bytes)
+$base64
+
+# 2. Copy the output and add to GitHub Organization Secrets:
+#    - Go to: GitHub Organization → Settings → Secrets and variables → Actions
+#    - Click "New organization secret"
+#    - Name: SSH_PRIVATE_KEY
+#    - Value: Paste the base64 output
+#    - Click "Add secret"
+
+# 3. For DOCKER_SSH_KEY (use the same key if using Option A)
+#    - Repeat the same base64 encoding
+#    - Create secret: DOCKER_SSH_KEY
+#    - Value: Same base64 output as SSH_PRIVATE_KEY
+```
+
+**For Linux/Mac:**
 
 ```bash
-# For SSH_PRIVATE_KEY (VPS access)
+# 1. Base64 encode the private key for SSH_PRIVATE_KEY
 cat ~/.ssh/contabo_deploy_key | base64 -w 0
 
-# For DOCKER_SSH_KEY (Docker builds) - same key
-cat ~/.ssh/contabo_deploy_key | base64 -w 0
+# 2. Copy the output and add to GitHub Organization Secrets:
+#    - Go to: GitHub Organization → Settings → Secrets and variables → Actions
+#    - Click "New organization secret"
+#    - Name: SSH_PRIVATE_KEY
+#    - Value: Paste the base64 output
+#    - Click "Add secret"
+
+# 3. For DOCKER_SSH_KEY (use the same key if using Option A)
+#    - Repeat the same base64 encoding
+#    - Create secret: DOCKER_SSH_KEY
+#    - Value: Same base64 output as SSH_PRIVATE_KEY
 ```
+
+**GitHub Secrets to Create:**
+
+| Secret Name | Value | Purpose |
+|------------|-------|---------|
+| `SSH_PRIVATE_KEY` | Base64-encoded private key | VPS SSH access |
+| `DOCKER_SSH_KEY` | Base64-encoded private key (same as above) | Docker builds and Git operations |
+
+**Important Notes:**
+- ✅ Use the **PRIVATE key** (starts with `-----BEGIN OPENSSH PRIVATE KEY-----`) for GitHub secrets
+- ✅ Base64 encode the **entire private key** including BEGIN/END lines
+- ✅ Store at **organization level** (not repository level)
+- ❌ **Never** commit private keys to git repositories
+- ❌ **Never** share private keys publicly
 
 #### Add Organization Secrets
 
@@ -161,6 +266,32 @@ Add these secrets:
 |-------------|-------------|-------|
 | `SSH_PRIVATE_KEY` | SSH private key for VPS access | Base64-encoded private key |
 | `DOCKER_SSH_KEY` | SSH private key for Docker builds | Base64-encoded private key (same as above) |
+
+### 2.5 Complete SSH Key Setup Checklist
+
+**Quick Setup Checklist:**
+
+- [ ] **Step 1:** Generate SSH key pair (`contabo_deploy_key` and `contabo_deploy_key.pub`)
+- [ ] **Step 2:** Add **public key** to Contabo VPS (via Control Panel or `authorized_keys`)
+- [ ] **Step 3:** Add **public key** to GitHub repository as Deploy Key (with write access)
+- [ ] **Step 4:** Base64 encode **private key** and add to GitHub secrets:
+  - [ ] `SSH_PRIVATE_KEY` (for VPS access)
+  - [ ] `DOCKER_SSH_KEY` (for Docker builds and Git operations)
+- [ ] **Step 5:** Test SSH connection: `ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP`
+
+**Common Errors and Solutions:**
+
+**Error: "Key is invalid. You must supply a key in OpenSSH public key format"**
+- **Cause:** You're trying to add a private key where a public key is expected
+- **Solution:** Use the `.pub` file content (starts with `ssh-ed25519`), not the private key file
+
+**Error: "Permission denied (publickey)"**
+- **Cause:** Public key not added to VPS `authorized_keys` file
+- **Solution:** Verify public key is in `~/.ssh/authorized_keys` on VPS
+
+**Error: "git@github.com: Permission denied (publickey)"**
+- **Cause:** Public key not added as GitHub Deploy Key or write access not enabled
+- **Solution:** Add public key to repository Deploy Keys with "Allow write access" checked
 
 ### 2.6 How SSH Keys Work in Workflows
 
