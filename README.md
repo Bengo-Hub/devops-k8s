@@ -22,22 +22,21 @@ Quick Links
   - **2. Cluster Setup (Automated):** [docs/CLUSTER-SETUP-WORKFLOW.md](docs/CLUSTER-SETUP-WORKFLOW.md) ⚙️ - Complete setup workflow guide
   - **3. Cluster Details:** [docs/contabo-setup-kubeadm.md](docs/contabo-setup-kubeadm.md) 📘 - Detailed Kubernetes setup
   - **4. Provisioning (Automated):** [docs/provisioning.md](docs/provisioning.md) 🚀 - Infrastructure provisioning workflow
-  - hosting environments and providers: [docs/hosting.md](docs/hosting.md)
+  - hosting environments: See [docs/provisioning.md](docs/provisioning.md)
   - onboarding a repo: [docs/onboarding.md](docs/onboarding.md)
 
 - **Deployment**
   - pipelines and workflows: [docs/pipelines.md](docs/pipelines.md)
-  - Argo CD setup and GitOps: [docs/argocd.md](docs/argocd.md)
+  - Argo CD setup and GitOps: See [docs/pipelines.md](docs/pipelines.md)
   - GitHub secrets required: [docs/github-secrets.md](docs/github-secrets.md)
-  - environments and secrets: [docs/env-vars.md](docs/env-vars.md)
+  - environments and secrets: See [docs/onboarding.md](docs/onboarding.md)
   - **comprehensive access setup:** [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) 🔐
   - **SSH keys setup:** See [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) 🔑
 
 - **Infrastructure**
   - **database setup (PostgreSQL + Redis):** [docs/database-setup.md](docs/database-setup.md)
-  - certificates and domains: [docs/certificates.md](docs/certificates.md)
-  - API gateway and ingress: [docs/domains-gateway.md](docs/domains-gateway.md)
-  - image registry and SBOM: [docs/image-registry.md](docs/image-registry.md)
+  - certificates, domains, and ingress: [docs/domains-gateway.md](docs/domains-gateway.md)
+  - image registry: See [docs/onboarding.md](docs/onboarding.md)
 
 - **Operations**
   - **operations runbook:** [docs/OPERATIONS-RUNBOOK.md](docs/OPERATIONS-RUNBOOK.md) 📋
@@ -46,7 +45,7 @@ Quick Links
   - **etcd optimization:** [docs/ETCD-OPTIMIZATION.md](docs/ETCD-OPTIMIZATION.md) - Prevent etcd space issues 🔧
   - monitoring and alerts (Prometheus, Grafana): [docs/monitoring.md](docs/monitoring.md)
   - scaling (HPA, VPA): [docs/scaling.md](docs/scaling.md)
-  - security best practices: [docs/security.md](docs/security.md)
+  - security best practices: See [docs/OPERATIONS-RUNBOOK.md](docs/OPERATIONS-RUNBOOK.md)
   - **VPS access testing:** See [docs/comprehensive-access-setup.md](docs/comprehensive-access-setup.md) ✅
 
 

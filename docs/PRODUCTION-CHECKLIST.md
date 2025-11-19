@@ -308,12 +308,12 @@ All documentation available in `docs/`:
 - [SETUP.md](SETUP.md) - Quick start guide
 - [docs/README.md](docs/README.md) - Full documentation index
 - [docs/pipelines.md](docs/pipelines.md) - CI/CD workflows
-- [docs/argocd.md](docs/argocd.md) - GitOps setup
+- [docs/pipelines.md](docs/pipelines.md) - GitOps setup (see Argo CD Installation section)
 - [docs/monitoring.md](docs/monitoring.md) - Prometheus + Grafana
 - [docs/database-setup.md](docs/database-setup.md) - PostgreSQL + Redis
 - [docs/scaling.md](docs/scaling.md) - HPA + VPA
-- [docs/hosting.md](docs/hosting.md) - Contabo VPS setup
-- [docs/security.md](docs/security.md) - Security best practices
+- [docs/provisioning.md](docs/provisioning.md) - Hosting environments (see Hosting Environments section)
+- [docs/OPERATIONS-RUNBOOK.md](docs/OPERATIONS-RUNBOOK.md) - Security best practices (see Security Procedures section)
 
 ---
 

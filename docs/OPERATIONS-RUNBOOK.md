@@ -581,6 +581,39 @@ kubectl exec deployment/argocd-repo-server -n argocd -- git ls-remote https://gi
 
 ## Security Procedures
 
+### Security Best Practices
+
+**Pipeline Security:**
+- Trivy FS and Image scans run on each pipeline
+- Use private image registries; set `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`
+- Store sensitive values only in Kubernetes Secrets; never commit plaintext
+- Use GitHub Environments with protection rules for production
+- Restrict Argo CD repo access to read-only deploy key
+- Rotate `KUBE_CONFIG` tokens periodically
+
+**Secret Management:**
+- Store all secrets at organization level for consistency
+- Use Kubernetes Secrets as source of truth for database passwords
+- Never hardcode passwords in code or manifests
+- Rotate secrets regularly (every 90 days recommended)
+- Use strong, randomly generated passwords
+
+**Access Control:**
+- Use SSH key authentication only (disable password auth)
+- Restrict Argo CD repository access to read-only deploy keys
+- Use RBAC for Kubernetes cluster access
+- Monitor access logs regularly
+- Rotate SSH keys and tokens periodically
+
+**Container Security:**
+- Scan all container images with Trivy before deployment
+- Use minimal base images
+- Keep container images updated
+- Run containers as non-root users when possible
+- Use security contexts in Kubernetes manifests
+
+### Security Procedures
+
 ### Access Management
 
 #### SSH Key Rotation
