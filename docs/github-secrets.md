@@ -66,6 +66,19 @@ Per-repo overrides are supported by defining the same secrets at the repository 
 
 ---
 
+## Related Documentation
+
+**Setup Workflow (Follow in Order):**
+1. **[Access Setup](comprehensive-access-setup.md)** 🔐 - Manual access configuration (SSH, GitHub PAT)
+2. **[Cluster Setup Workflow](CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete automated cluster setup
+3. **[Provisioning](provisioning.md)** 🚀 - Infrastructure provisioning
+
+**Reference:**
+- **[Quick Start](../SETUP.md)** - Fast-track setup guide
+- **[Kubernetes Setup](contabo-setup-kubeadm.md)** 📘 - Detailed cluster setup
+
+---
+
 ## Complete Setup Guide
 
 After configuring Kubernetes cluster (see `docs/contabo-setup-kubeadm.md`), follow these steps:

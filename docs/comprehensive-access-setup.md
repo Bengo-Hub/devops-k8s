@@ -6,6 +6,11 @@ This guide provides step-by-step instructions for setting up all required access
 
 ## Related Documentation
 
+**Next Steps (After Access Setup):**
+- **[Cluster Setup Workflow](./CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete automated cluster setup guide
+- **[Kubernetes Setup Guide](./contabo-setup-kubeadm.md)** 📘 - Detailed Kubernetes cluster setup
+
+**Related Guides:**
 - [SSH Keys Setup Guide](./ssh-keys-setup.md) - Detailed SSH key configuration and troubleshooting
 - [GitHub Secrets Guide](./github-secrets.md) - Complete secrets documentation
 - [VPS Access Testing Guide](./vps-access-testing-guide.md) - Testing and verification procedures

@@ -3,7 +3,12 @@ Quick Setup Guide
 
 This guide provides a fast-track setup for the entire DevOps infrastructure.
 
-**⚠️ IMPORTANT:** This guide has been updated. Manual VPS setup is now required before running automated provisioning.
+**⚠️ IMPORTANT:** Follow the setup workflow in order:
+1. **Manual Access Setup** (one-time)
+2. **Automated Cluster Setup** (one-time)
+3. **Automated Provisioning** (repeatable)
+
+**📚 For complete workflow guide:** See [docs/CLUSTER-SETUP-WORKFLOW.md](docs/CLUSTER-SETUP-WORKFLOW.md)
 
 Prerequisites
 -------------
@@ -192,6 +197,20 @@ Next Steps
 - Set up CI/CD pipelines for your apps
 - Configure horizontal pod autoscaling
 - Set up log aggregation with Loki
+
+## Related Documentation
+
+**Complete Workflow Guide:**
+- **[Cluster Setup Workflow](docs/CLUSTER-SETUP-WORKFLOW.md)** ⚙️ - Complete workflow from access setup to provisioning
+
+**Setup Guides:**
+- **[Access Setup](docs/comprehensive-access-setup.md)** 🔐 - Manual access configuration
+- **[Kubernetes Setup](docs/contabo-setup-kubeadm.md)** 📘 - Detailed cluster setup
+- **[Provisioning](docs/provisioning.md)** 🚀 - Infrastructure provisioning
+
+**Reference:**
+- **[Documentation Index](docs/README.md)** 📖 - Complete documentation index
+- **[GitHub Secrets](docs/github-secrets.md)** 🔐 - Secrets configuration
 
 Support
 -------
