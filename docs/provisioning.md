@@ -72,18 +72,32 @@ Relationship to CI/CD Workflows
 -------------------------------
 
 - The GitHub Actions workflows for ERP API/UI assume a working K8s cluster and access via `KUBE_CONFIG`.
+- **IMPORTANT:** Before running the provisioning workflow, you must complete manual VPS setup. See `docs/contabo-setup-kubeadm.md` for kubeadm setup or `docs/contabo-setup.md` for k3s setup.
 - The provisioning workflow (`.github/workflows/provision.yml`) runs in this order:
 
-**Provisioning Order:**
-1. Storage Provisioner (local-path or default)
-2. **Shared Databases (PostgreSQL & Redis in infra namespace)** ⭐
-3. **RabbitMQ (Shared Infrastructure in infra namespace)** ⭐
-4. NGINX Ingress Controller
-5. cert-manager (TLS certificates)
-6. Argo CD (GitOps)
-7. Monitoring Stack (Prometheus/Grafana in infra namespace)
-8. Vertical Pod Autoscaler (VPA)
-9. Git SSH Access Setup
+**Automated Provisioning Order (requires pre-configured cluster):**
+1. **VPS Management (Contabo API)** - Automatically gets VPS IP and ensures VPS is running
+2. **etcd Space Check** - Prevents "database space exceeded" errors
+3. Storage Provisioner (local-path or default)
+4. **Shared Databases (PostgreSQL & Redis in infra namespace)** ⭐
+5. **RabbitMQ (Shared Infrastructure in infra namespace)** ⭐
+6. NGINX Ingress Controller
+7. cert-manager (TLS certificates)
+8. Argo CD (GitOps)
+9. Monitoring Stack (Prometheus/Grafana in infra namespace)
+10. Vertical Pod Autoscaler (VPA)
+11. Git SSH Access Setup (requires manual GitHub deploy key configuration)
+
+**VPS Management via Contabo API:**
+- The workflow automatically retrieves VPS IP from Contabo API (if credentials configured)
+- Ensures VPS is running before provisioning
+- Falls back to `SSH_HOST` secret if Contabo API not available
+- See `docs/github-secrets.md` for Contabo API secret configuration
+
+**etcd Optimization:**
+- Automatic etcd space checks before provisioning
+- Preventive maintenance to avoid "database space exceeded" errors
+- See `docs/ETCD-OPTIMIZATION.md` for detailed etcd configuration guide
 
 **Shared Infrastructure Installation Details:**
 - **PostgreSQL & Redis**: Uses `scripts/install-databases.sh`
@@ -106,6 +120,11 @@ Relationship to CI/CD Workflows
 - Each service's build script automatically creates its database using `create-service-database.sh`
 - Databases are created on first deployment, not during provisioning
 - See `docs/per-service-database-setup.md` for details
+
+**Idempotency:**
+- All installation scripts are idempotent (can be run multiple times safely)
+- Scripts check for existing installations before installing
+- Upgrades/reinstalls only occur if explicitly requested or in CI/CD mode
 
 **See:** `docs/secrets-management.md` for password flow details
 - Provisioning ensures the VPS has the tooling for manual operations and emergency fixes.

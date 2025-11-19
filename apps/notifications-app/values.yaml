@@ -19,13 +19,13 @@ healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /healthz
+      path: /api/v1/healthz
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
-      path: /healthz
+      path: /api/v1/healthz
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
@@ -106,11 +106,11 @@ ingress:
   enabled: true
   ingressClassName: nginx
   hosts:
-    - host: notifications.codevertexitsolutions.com
+    - host: notifications.codevrtexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - notifications.codevertexitsolutions.com
+        - notifications.codevrtexitsolutions.com
       secretName: notifications-app-tls

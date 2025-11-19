@@ -1,19 +1,14 @@
-name: Provision Cluster Services (Complete Setup)
+name: Provision Cluster Infrastructure
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
     inputs:
-      setup_cluster:
-        description: 'Set up Kubernetes cluster from scratch (requires VPS access). Set to false to skip.'
-        required: false
-        default: true
-        type: boolean
       enable_cleanup:
         description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Set to false to disable.'
         required: false
-        default: true
+        default: false
         type: boolean
 
 jobs:
@@ -22,29 +17,17 @@ jobs:
     permissions:
       contents: read
     env:
-      skip_provision: 'false'
       # Configurable domains and IPs via GitHub secrets (with defaults)
-      # Priority: SSH_HOST > VPS_IP > Contabo API fallback
-      VPS_IP: ${{ secrets.SSH_HOST || secrets.VPS_IP || '' }}
-      VPS_USER: ${{ secrets.SSH_USER || secrets.VPS_USER || 'root' }}
-      # Contabo API credentials (for fallback)
-      CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
-      CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
-      CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
-      CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
-      CONTABO_INSTANCE_ID: ${{ secrets.CONTABO_INSTANCE_ID || '' }}
+      # Priority: GitHub secrets first, fallback to defaults
       ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.masterspace.co.ke' }}
       GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
-      # Cleanup ENABLED by default (can be disabled via workflow input)
+      # Cleanup disabled by default (opt-in only)
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.enable_cleanup == 'false' && 'false' || 'true')
-        || 'true' }}
-      SETUP_CLUSTER: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.setup_cluster == 'false' && 'false' || 'true')
-        || 'true' }}
+        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
+        || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,519 +42,90 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y postgresql-client postgresql-client-common jq curl
 
-      - name: Get VPS IP from Contabo API (if needed)
-        id: get_vps_ip
-        if: ${{ env.SETUP_CLUSTER == 'true' }}
+      - name: Get VPS IP and ensure running (via Contabo API)
+        id: contabo_vps
         env:
-          CONTABO_CLIENT_ID: ${{ env.CONTABO_CLIENT_ID }}
-          CONTABO_CLIENT_SECRET: ${{ env.CONTABO_CLIENT_SECRET }}
-          CONTABO_API_USERNAME: ${{ env.CONTABO_API_USERNAME }}
-          CONTABO_API_PASSWORD: ${{ env.CONTABO_API_PASSWORD }}
-          CONTABO_INSTANCE_ID: ${{ env.CONTABO_INSTANCE_ID }}
-          CURRENT_VPS_IP: ${{ env.VPS_IP }}
+          CONTABO_CLIENT_ID: ${{ secrets.CONTABO_CLIENT_ID }}
+          CONTABO_CLIENT_SECRET: ${{ secrets.CONTABO_CLIENT_SECRET }}
+          CONTABO_API_USERNAME: ${{ secrets.CONTABO_API_USERNAME }}
+          CONTABO_API_PASSWORD: ${{ secrets.CONTABO_API_PASSWORD }}
+          CONTABO_INSTANCE_ID: ${{ secrets.CONTABO_INSTANCE_ID || '14285715' }}
+          SSH_HOST: ${{ secrets.SSH_HOST || '' }}
         run: |
-          echo "::group::Getting VPS IP from Contabo API"
-          echo "Current VPS_IP value: '${CURRENT_VPS_IP}'"
+          echo "::group::Contabo API - VPS Management"
           
-          # Function to validate IP address format
-          is_valid_ip() {
-            local ip="$1"
-            # Check if it's a valid IPv4 address
-            if echo "$ip" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-              # Validate each octet is 0-255
-              IFS='.' read -r -a octets <<< "$ip"
-              for octet in "${octets[@]}"; do
-                if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
-                  return 1
-                fi
-              done
-              return 0
-            fi
-            # Check if it's a valid hostname (contains at least one dot and valid chars)
-            if echo "$ip" | grep -qE '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
-              return 0
-            fi
-            return 1
-          }
-          
-          # Check if VPS_IP is empty, invalid, or a placeholder
-          NEED_CONTABO_API=false
-          
-          if [ -z "${CURRENT_VPS_IP}" ]; then
-            echo "⚠️  VPS_IP is empty"
-            NEED_CONTABO_API=true
-          elif echo "${CURRENT_VPS_IP}" | grep -qiE "your.*vps.*ip|placeholder|example|YOUR_VPS_IP|your_vps_ip"; then
-            echo "⚠️  VPS_IP appears to be a placeholder: '${CURRENT_VPS_IP}'"
-            NEED_CONTABO_API=true
-          elif ! is_valid_ip "${CURRENT_VPS_IP}"; then
-            echo "⚠️  VPS_IP format is invalid: '${CURRENT_VPS_IP}'"
-            echo "⚠️  Expected: IP address (e.g., 192.168.1.1) or hostname (e.g., vps.example.com)"
-            NEED_CONTABO_API=true
-          fi
-          
-          if [ "$NEED_CONTABO_API" = "true" ]; then
-            echo "Attempting to get VPS IP from Contabo API..."
-            
-            # Check if Contabo API credentials are available
-            if [ -z "${CONTABO_CLIENT_ID}" ] || [ -z "${CONTABO_CLIENT_SECRET}" ] || \
-               [ -z "${CONTABO_API_USERNAME}" ] || [ -z "${CONTABO_API_PASSWORD}" ]; then
-              echo "❌ Contabo API credentials not available"
-              echo "⚠️  Please set SSH_HOST secret with a valid IP address"
-              echo "⚠️  Or configure Contabo API credentials (CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET, etc.)"
-              echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
-              echo "::endgroup::"
-              exit 0
-            fi
-            
-            # Source the Contabo API helper script
-            source ./scripts/tools/contabo-api.sh
-            
-            # Get VPS IP from Contabo API
-            echo "Calling Contabo API to get VPS IP..."
-            # Capture stderr for display, stdout for IP
-            VPS_IP_FROM_API=$(get_vps_ip_from_contabo 2>&1)
-            API_EXIT_CODE=$?
-            
-            if [ $API_EXIT_CODE -eq 0 ] && [ -n "$VPS_IP_FROM_API" ]; then
-              # Extract just the IP address (handles colored output and messages)
-              CLEAN_IP=$(echo "$VPS_IP_FROM_API" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
-              
-              if [ -n "$CLEAN_IP" ] && [ "$CLEAN_IP" != "null" ] && is_valid_ip "$CLEAN_IP"; then
-                echo "✅ Got valid VPS IP from Contabo API: ${CLEAN_IP}"
-                echo "VPS_IP=${CLEAN_IP}" >> $GITHUB_ENV
-                echo "vps_ip_from_api=${CLEAN_IP}" >> $GITHUB_OUTPUT
-              else
-                echo "⚠️  Could not extract valid IP from Contabo API response"
-                echo "Extracted value: '${CLEAN_IP}'"
-                echo "Full response: $VPS_IP_FROM_API"
-                echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
-              fi
-            else
-              echo "⚠️  Failed to get VPS IP from Contabo API (exit code: $API_EXIT_CODE)"
-              echo "Error output: $VPS_IP_FROM_API"
-              echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "✅ VPS_IP appears to be valid: ${CURRENT_VPS_IP}"
-            echo "Skipping Contabo API lookup"
-            echo "vps_ip_from_api=" >> $GITHUB_OUTPUT
-          fi
-          echo "::endgroup::"
-
-      - name: Setup SSH for VPS access
-        id: setup_ssh
-        if: ${{ env.SETUP_CLUSTER == 'true' }}
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          VPS_IP: ${{ steps.get_vps_ip.outputs.vps_ip_from_api || env.VPS_IP }}
-          CONTABO_CLIENT_ID: ${{ env.CONTABO_CLIENT_ID }}
-          CONTABO_CLIENT_SECRET: ${{ env.CONTABO_CLIENT_SECRET }}
-          CONTABO_API_USERNAME: ${{ env.CONTABO_API_USERNAME }}
-          CONTABO_API_PASSWORD: ${{ env.CONTABO_API_PASSWORD }}
-          CONTABO_INSTANCE_ID: ${{ env.CONTABO_INSTANCE_ID }}
-        run: |
-          echo "::group::Setting up SSH for VPS access"
-          echo "SETUP_CLUSTER=${SETUP_CLUSTER}"
-          echo "Event: ${GITHUB_EVENT_NAME}"
-          echo "VPS_IP=${VPS_IP}"
-          echo "VPS_USER=${VPS_USER}"
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          # Check for required secrets
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "❌ SSH_PRIVATE_KEY secret not provided."
-            echo "⚠️  Please set SSH_PRIVATE_KEY in GitHub secrets (Organization or Repository level)"
-            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-            echo "ssh_success=false" >> $GITHUB_OUTPUT
+          # Priority: SSH_HOST secret > Contabo API
+          if [ -n "${SSH_HOST}" ] && [ "${SSH_HOST}" != "YOUR_VPS_IP" ]; then
+            echo "✅ Using VPS IP from SSH_HOST secret: ${SSH_HOST}"
+            echo "vps_ip=${SSH_HOST}" >> $GITHUB_OUTPUT
+            echo "vps_source=github_secret" >> $GITHUB_OUTPUT
             echo "::endgroup::"
             exit 0
           fi
           
-          # Validate VPS_IP - check if it's empty, invalid, or a placeholder
-          if [ -z "$VPS_IP" ] || \
-             [ "$VPS_IP" = "YOUR_VPS_IP" ] || \
-             [ "$VPS_IP" = "your_vps_ip" ] || \
-             echo "$VPS_IP" | grep -qiE "your.*vps.*ip|placeholder|example"; then
-            echo "❌ VPS IP/Host not configured or invalid."
-            echo "⚠️  Current value: '${VPS_IP}'"
-            echo "⚠️  Please set SSH_HOST secret in GitHub secrets"
+          # Check if Contabo API credentials are available
+          if [ -z "${CONTABO_CLIENT_ID}" ] || [ -z "${CONTABO_CLIENT_SECRET}" ] || \
+             [ -z "${CONTABO_API_USERNAME}" ] || [ -z "${CONTABO_API_PASSWORD}" ]; then
+            echo "⚠️  Contabo API credentials not available"
+            echo "⚠️  Please set SSH_HOST secret with VPS IP address"
             echo "⚠️  Or configure Contabo API credentials (CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET, etc.)"
-            echo ""
-            echo "The Contabo API step should have provided an IP. Checking if it ran..."
-            if [ -z "${steps.get_vps_ip.outputs.vps_ip_from_api}" ]; then
-              echo "❌ Contabo API step did not provide an IP address"
-              echo "⚠️  This might indicate:"
-              echo "   1. Contabo API credentials are missing or incorrect"
-              echo "   2. Contabo API call failed"
-              echo "   3. VPS instance ID is incorrect"
-            fi
-            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-            echo "ssh_success=false" >> $GITHUB_OUTPUT
+            echo "vps_ip=" >> $GITHUB_OUTPUT
+            echo "vps_source=none" >> $GITHUB_OUTPUT
             echo "::endgroup::"
             exit 0
           fi
           
-          # Validate IP format (basic check)
-          if ! echo "$VPS_IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
-            echo "⚠️  VPS_IP format appears invalid: '${VPS_IP}'"
-            echo "⚠️  Expected: IP address (e.g., 192.168.1.1) or hostname (e.g., vps.example.com)"
-            echo "⚠️  Continuing anyway, but SSH connection may fail..."
-          fi
+          # Source Contabo API helper
+          source ./scripts/tools/contabo-api.sh
           
-          # Clean and validate SSH private key
-          echo "Processing SSH private key..."
-          # Remove any leading/trailing whitespace and normalize line endings
-          CLEANED_KEY=$(echo "$SSH_PRIVATE_KEY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -d '\r')
-          
-          # Check if key is base64 encoded (common mistake)
-          if echo "$CLEANED_KEY" | grep -q "^[A-Za-z0-9+/=]*$" && ! echo "$CLEANED_KEY" | grep -q "BEGIN.*PRIVATE KEY"; then
-            echo "⚠️  Key appears to be base64 encoded. Attempting to decode..."
-            CLEANED_KEY=$(echo "$CLEANED_KEY" | base64 -d 2>/dev/null || echo "$CLEANED_KEY")
-          fi
-          
-          # Check if key has proper format (starts with -----BEGIN and ends with -----END)
-          if ! echo "$CLEANED_KEY" | grep -q "BEGIN.*PRIVATE KEY"; then
-            echo "❌ Invalid SSH private key format."
-            echo "⚠️  Key must start with '-----BEGIN ... PRIVATE KEY-----'"
-            echo "⚠️  Please check your SSH_PRIVATE_KEY secret"
-            echo "⚠️  Common issues:"
-            echo "   - Key is base64 encoded (we tried to decode, but failed)"
-            echo "   - Key has extra whitespace or newlines"
-            echo "   - Wrong key format (needs RSA, ED25519, or ECDSA private key)"
-            echo "   - Key might be a public key instead of private key"
-            echo ""
-            echo "📋 How to fix:"
-            echo "   1. Get your private key file (usually ~/.ssh/id_rsa or ~/.ssh/id_ed25519)"
-            echo "   2. Copy the ENTIRE key including BEGIN and END lines"
-            echo "   3. Paste it into GitHub secret SSH_PRIVATE_KEY"
-            echo "   4. Ensure no extra spaces or characters"
-            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-            echo "ssh_success=false" >> $GITHUB_OUTPUT
-            echo "::endgroup::"
-            exit 0
-          fi
-          
-          # Write cleaned key to file with proper formatting
-          echo "$CLEANED_KEY" > ~/.ssh/vps_key
-          chmod 600 ~/.ssh/vps_key
-          
-          # Verify key file was created correctly
-          if [ ! -f ~/.ssh/vps_key ] || [ ! -s ~/.ssh/vps_key ]; then
-            echo "❌ Failed to write SSH key file"
-            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-            echo "ssh_success=false" >> $GITHUB_OUTPUT
-            echo "::endgroup::"
-            exit 0
-          fi
-          
-          # Test key format using ssh-keygen (non-destructive check)
-          echo "Validating SSH key format..."
-          KEY_VALIDATION=$(ssh-keygen -l -f ~/.ssh/vps_key 2>&1)
+          # Get access token
+          ACCESS_TOKEN=$(get_contabo_token)
           if [ $? -ne 0 ]; then
-            echo "❌ SSH key format validation failed"
-            echo "Error details: ${KEY_VALIDATION}"
-            echo ""
-            echo "⚠️  The SSH_PRIVATE_KEY secret appears to be invalid or corrupted"
-            echo "⚠️  Please verify:"
-            echo "   1. Key is a valid private key (not public key)"
-            echo "   2. Key includes BEGIN and END markers"
-            echo "   3. Key has no extra characters or encoding issues"
-            echo "   4. If copied from a file, ensure all lines are included"
-            echo "   5. Key file permissions are correct (should be 600)"
-            echo ""
-            echo "📋 To regenerate a new key pair:"
-            echo "   ssh-keygen -t ed25519 -C 'github-actions@bengoerp' -f ~/.ssh/vps_key"
-            echo "   Then copy ~/.ssh/vps_key content to GitHub secret"
-            echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-            echo "ssh_success=false" >> $GITHUB_OUTPUT
+            echo "❌ Failed to get Contabo API token"
+            echo "vps_ip=" >> $GITHUB_OUTPUT
+            echo "vps_source=none" >> $GITHUB_OUTPUT
             echo "::endgroup::"
             exit 0
           fi
           
-          KEY_TYPE=$(echo "$KEY_VALIDATION" | awk '{print $4}' || echo "unknown")
-          KEY_FINGERPRINT=$(echo "$KEY_VALIDATION" | awk '{print $2}' || echo "unknown")
-          KEY_BITS=$(echo "$KEY_VALIDATION" | awk '{print $1}' || echo "unknown")
-          echo "✅ SSH key validated: ${KEY_TYPE} ${KEY_BITS} bits (${KEY_FINGERPRINT})"
+          # Ensure VPS is running
+          echo "Ensuring VPS is running..."
+          ensure_vps_running "$ACCESS_TOKEN"
           
-          # Debug: Show IP info without exposing the actual IP
-          IP_LENGTH=${#VPS_IP}
-          IP_FIRST_CHAR=${VPS_IP:0:1}
-          IP_LAST_CHAR=${VPS_IP: -1}
-          echo "VPS_IP info: length=${IP_LENGTH}, starts with '${IP_FIRST_CHAR}', ends with '${IP_LAST_CHAR}'"
-          
-          # Validate IP format before attempting SSH
-          if ! echo "$VPS_IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
-            echo "❌ VPS_IP format is invalid: '${VPS_IP}'"
-            echo "⚠️  Expected format: IP address (e.g., 192.168.1.1) or hostname (e.g., vps.example.com)"
-            echo "⚠️  Attempting Contabo API fallback..."
-            
-            # Try Contabo API fallback
-            if [ -n "${CONTABO_CLIENT_ID:-}" ] && [ -n "${CONTABO_CLIENT_SECRET:-}" ] && \
-               [ -n "${CONTABO_API_USERNAME:-}" ] && [ -n "${CONTABO_API_PASSWORD:-}" ]; then
-              echo "Using Contabo API to get correct VPS IP..."
-              source ./scripts/tools/contabo-api.sh
-              
-              NEW_VPS_IP=$(get_vps_ip_from_contabo 2>&1 | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
-              if [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" != "null" ]; then
-                echo "✅ Got VPS IP from Contabo API: ${NEW_VPS_IP}"
-                VPS_IP="$NEW_VPS_IP"
-                echo "VPS_IP=${NEW_VPS_IP}" >> $GITHUB_ENV
-              else
-                echo "❌ Could not get VPS IP from Contabo API"
-                echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-                echo "ssh_success=false" >> $GITHUB_OUTPUT
-                echo "::endgroup::"
-                exit 0
-              fi
-            else
-              echo "❌ Contabo API credentials not available"
-              echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-              echo "ssh_success=false" >> $GITHUB_OUTPUT
-              echo "::endgroup::"
-              exit 0
-            fi
+          # Get VPS IP
+          VPS_IP=$(get_vps_ip_from_contabo "$ACCESS_TOKEN")
+          if [ $? -eq 0 ] && [ -n "$VPS_IP" ]; then
+            echo "✅ Got VPS IP from Contabo API: ${VPS_IP}"
+            echo "vps_ip=${VPS_IP}" >> $GITHUB_OUTPUT
+            echo "vps_source=contabo_api" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Failed to get VPS IP from Contabo API"
+            echo "vps_ip=" >> $GITHUB_OUTPUT
+            echo "vps_source=none" >> $GITHUB_OUTPUT
           fi
           
-          # Add VPS to known hosts
-          echo "Adding ${VPS_IP} to known hosts..."
-          ssh-keyscan -H ${VPS_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
-          
-          # Test SSH connection with verbose output for debugging
-          echo "Testing SSH connection to ${VPS_USER}@${VPS_IP}..."
-          echo "SSH command: ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -v ${VPS_USER}@${VPS_IP} 'echo SSH connection successful'"
-          
-          # Run SSH with verbose output (capture stderr separately for better debugging)
-          SSH_OUTPUT=$(ssh -i ~/.ssh/vps_key \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=10 \
-            -o LogLevel=VERBOSE \
-            ${VPS_USER}@${VPS_IP} \
-            "echo 'SSH connection successful'" 2>&1)
-          SSH_EXIT_CODE=$?
-          
-          if [ $SSH_EXIT_CODE -ne 0 ]; then
-            echo "❌ SSH connection failed (exit code: ${SSH_EXIT_CODE})"
-            echo ""
-            echo "SSH verbose output (last 30 lines):"
-            echo "${SSH_OUTPUT}" | tail -30
-            echo ""
-            
-            # Check for specific error types
-            if echo "${SSH_OUTPUT}" | grep -qi "could not resolve hostname"; then
-              echo "🔍 Error Type: DNS Resolution Failed"
-              echo "   The hostname/IP '${VPS_IP}' cannot be resolved"
-              echo "   This suggests the IP address is invalid or doesn't exist"
-            elif echo "${SSH_OUTPUT}" | grep -qi "connection refused"; then
-              echo "🔍 Error Type: Connection Refused"
-              echo "   The VPS is reachable but SSH service is not running or firewall is blocking"
-            elif echo "${SSH_OUTPUT}" | grep -qi "connection timed out\|operation timed out"; then
-              echo "🔍 Error Type: Connection Timeout"
-              echo "   Cannot reach the VPS - it might be down or firewall is blocking port 22"
-            elif echo "${SSH_OUTPUT}" | grep -qi "permission denied"; then
-              echo "🔍 Error Type: Permission Denied"
-              echo "   SSH key authentication failed - key might not be authorized on VPS"
-            elif echo "${SSH_OUTPUT}" | grep -qi "host key verification failed"; then
-              echo "🔍 Error Type: Host Key Verification Failed"
-              echo "   SSH host key mismatch - this is usually safe to ignore with StrictHostKeyChecking=no"
-            fi
-            
-            echo ""
-            echo "Attempting Contabo API fallback..."
-            
-            # Try Contabo API fallback if credentials are available
-            if [ -n "${CONTABO_CLIENT_ID:-}" ] && [ -n "${CONTABO_CLIENT_SECRET:-}" ] && \
-               [ -n "${CONTABO_API_USERNAME:-}" ] && [ -n "${CONTABO_API_PASSWORD:-}" ]; then
-              
-              echo "Using Contabo API to check VPS status and get IP..."
-              source ./scripts/tools/contabo-api.sh
-              
-              # Try to start VPS if stopped
-              if [ -n "${CONTABO_INSTANCE_ID:-}" ]; then
-                echo "Checking VPS status and starting if needed..."
-                start_vps_if_stopped 2>&1 || echo "⚠️  Could not start VPS via API"
-              fi
-              
-              # Try to get updated IP from Contabo API
-              echo "Getting updated IP from Contabo API..."
-              NEW_VPS_IP_RAW=$(get_vps_ip_from_contabo 2>&1)
-              NEW_VPS_IP=$(echo "$NEW_VPS_IP_RAW" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
-              
-              if [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" != "null" ] && [ "$NEW_VPS_IP" != "$VPS_IP" ]; then
-                echo "✅ Got updated VPS IP from Contabo API: ${NEW_VPS_IP}"
-                VPS_IP="$NEW_VPS_IP"
-                echo "VPS_IP=${NEW_VPS_IP}" >> $GITHUB_ENV
-                
-                # Add new IP to known hosts
-                ssh-keyscan -H ${VPS_IP} >> ~/.ssh/known_hosts 2>/dev/null || true
-                
-                # Retry SSH connection with new IP
-                echo "Retrying SSH connection with updated IP..."
-                SSH_OUTPUT=$(ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o LogLevel=ERROR ${VPS_USER}@${VPS_IP} "echo 'SSH connection successful'" 2>&1)
-                SSH_EXIT_CODE=$?
-              elif [ -n "$NEW_VPS_IP" ] && [ "$NEW_VPS_IP" = "$VPS_IP" ]; then
-                echo "⚠️  Contabo API returned same IP: ${NEW_VPS_IP}"
-                echo "IP is correct, but SSH connection still failing"
-              else
-                echo "⚠️  Could not get updated IP from Contabo API"
-                echo "API response: $NEW_VPS_IP_RAW"
-              fi
-            fi
-            
-            # Final check after fallback attempts
-            if [ $SSH_EXIT_CODE -ne 0 ]; then
-              echo "❌ SSH connection failed after all attempts (exit code: ${SSH_EXIT_CODE})"
-              echo "Final SSH error output:"
-              echo "${SSH_OUTPUT}"
-              echo ""
-              echo "Troubleshooting steps:"
-              echo "1. Verify SSH_HOST secret is set correctly (should be IP address or hostname)"
-              echo "2. Verify SSH_PRIVATE_KEY secret matches the public key on VPS"
-              echo "3. Check VPS firewall allows SSH (port 22)"
-              echo "4. Verify VPS is running (check Contabo dashboard)"
-              echo "5. Verify VPS_IP is correct: Check Contabo API or SSH_HOST secret"
-              echo "6. Try manual SSH: ssh -i ~/.ssh/vps_key ${VPS_USER}@${VPS_IP}"
-              echo ""
-              echo "Common SSH exit codes:"
-              echo "  - 255: Connection failed (host unreachable, wrong IP, firewall blocking)"
-              echo "  - 1: Authentication failed (wrong key or user)"
-              echo ""
-              echo "SETUP_CLUSTER=false" >> $GITHUB_ENV
-              echo "ssh_success=false" >> $GITHUB_OUTPUT
-              echo "::endgroup::"
-              exit 0
-            fi
-          fi
-          
-          echo "✅ SSH connection established to ${VPS_USER}@${VPS_IP}"
-          echo "SETUP_CLUSTER=true" >> $GITHUB_ENV
-          echo "ssh_success=true" >> $GITHUB_OUTPUT
-          echo "::endgroup::"
-
-      - name: Setup VPS (Initial Server Configuration)
-        if: ${{ env.SETUP_CLUSTER == 'true' || (steps.setup_ssh.outcome == 'success' && steps.setup_ssh.outputs.ssh_success == 'true') }}
-        env:
-          CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
-        run: |
-          echo "::group::VPS Initial Setup"
-          echo "Setting up VPS: ${VPS_IP}"
-          
-          # Copy all necessary scripts to VPS
-          echo "Copying scripts to VPS..."
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} "mkdir -p /tmp/k8s-setup/cluster /tmp/k8s-setup/infrastructure /tmp/k8s-setup/tools" || true
-          
-          # Copy cluster setup scripts
-          scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=no \
-            scripts/cluster/setup-vps.sh \
-            scripts/cluster/setup-containerd.sh \
-            scripts/cluster/setup-kubernetes.sh \
-            ${VPS_USER}@${VPS_IP}:/tmp/k8s-setup/cluster/ || true
-          
-          # Copy common.sh (needed by some scripts)
-          scp -i ~/.ssh/vps_key -o StrictHostKeyChecking=no \
-            scripts/tools/common.sh \
-            ${VPS_USER}@${VPS_IP}:/tmp/k8s-setup/tools/ || true
-          
-          # Run VPS setup
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << EOF
-            set -e
-            cd /tmp/k8s-setup/cluster
-            
-            # Make scripts executable
-            chmod +x *.sh || true
-            
-            # Run VPS setup
-            if [ -f setup-vps.sh ]; then
-              CLUSTER_NAME=${CLUSTER_NAME} bash setup-vps.sh
-            else
-              echo "⚠️  setup-vps.sh not found, skipping VPS setup"
-            fi
-          EOF
-          
-          echo "✅ VPS setup complete"
-          echo "::endgroup::"
-
-      - name: Setup Container Runtime (containerd)
-        if: ${{ env.SETUP_CLUSTER == 'true' || (steps.setup_ssh.outcome == 'success' && steps.setup_ssh.outputs.ssh_success == 'true') }}
-        run: |
-          echo "::group::Container Runtime Setup"
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << 'EOF'
-            set -e
-            cd /tmp/k8s-setup/cluster
-            
-            if [ -f setup-containerd.sh ]; then
-              bash setup-containerd.sh
-            else
-              echo "⚠️  setup-containerd.sh not found"
-            fi
-          EOF
-          echo "✅ Container runtime setup complete"
-          echo "::endgroup::"
-
-      - name: Setup Kubernetes Cluster
-        if: ${{ env.SETUP_CLUSTER == 'true' || (steps.setup_ssh.outcome == 'success' && steps.setup_ssh.outputs.ssh_success == 'true') }}
-        env:
-          CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
-          VPS_IP: ${{ env.VPS_IP }}
-        run: |
-          echo "::group::Kubernetes Cluster Setup"
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} << EOF
-            set -e
-            cd /tmp/k8s-setup/cluster
-            
-            if [ -f setup-kubernetes.sh ]; then
-              CLUSTER_NAME=${CLUSTER_NAME} VPS_IP=${VPS_IP} bash setup-kubernetes.sh
-            else
-              echo "⚠️  setup-kubernetes.sh not found"
-            fi
-          EOF
-          
-          # Wait for cluster to be ready
-          echo "Waiting for cluster to stabilize..."
-          sleep 30
-          
-          # Retrieve kubeconfig
-          echo "::group::Retrieving kubeconfig"
-          ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} \
-            "cat /root/.kube/config" > /tmp/kubeconfig || \
-            ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no ${VPS_USER}@${VPS_IP} \
-            "cat /home/ubuntu/.kube/config" > /tmp/kubeconfig || true
-          
-          if [ -f /tmp/kubeconfig ]; then
-            # Update server address if needed
-            sed -i "s|server: https://.*:6443|server: https://${VPS_IP}:6443|" /tmp/kubeconfig
-            
-            # Display base64 kubeconfig
-            echo ""
-            echo "🔑 BASE64-ENCODED KUBECONFIG (Copy this to GitHub secret KUBE_CONFIG):"
-            echo "=========================================="
-            cat /tmp/kubeconfig | base64 -w 0
-            echo ""
-            echo "=========================================="
-            echo ""
-            echo "📋 NEXT STEPS:"
-            echo "1. Copy the base64 kubeconfig above"
-            echo "2. Go to: https://github.com/Bengo-Hub/devops-k8s/settings/secrets/actions"
-            echo "3. Add secret: KUBE_CONFIG (paste the base64 value)"
-            echo "4. Re-run this workflow to continue with infrastructure provisioning"
-            echo ""
-          fi
-          echo "::endgroup::"
           echo "::endgroup::"
 
       - name: Configure kubeconfig
+        id: kubeconfig_setup
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
         run: |
           echo "::group::Checking KUBE_CONFIG"
           if [ -z "$KUBE_CONFIG_B64" ]; then
             echo "❌ KUBE_CONFIG secret not provided."
-            if [ "$SETUP_CLUSTER" = "true" ]; then
-              echo "⚠️  Cluster was just set up. Please copy the kubeconfig from above and add it as KUBE_CONFIG secret."
-            else
-              echo "Please set KUBE_CONFIG at org/repo level with base64-encoded kubeconfig."
-            fi
+            echo ""
+            echo "📋 MANUAL SETUP REQUIRED:"
+            echo "This workflow requires a Kubernetes cluster to be set up manually first."
+            echo "Please follow the manual setup guide: docs/VPS-MANUAL-SETUP.md"
+            echo ""
+            echo "After completing manual setup:"
+            echo "1. Get your kubeconfig from the VPS: cat ~/.kube/config | base64 -w 0"
+            echo "2. Add it as GitHub secret: KUBE_CONFIG"
+            echo "3. Re-run this workflow to provision infrastructure"
+            echo ""
             echo "skip_provision=true" >> $GITHUB_ENV
+            echo "kubeconfig_ready=false" >> $GITHUB_OUTPUT
             echo "::endgroup::"
             exit 0
           fi
@@ -586,58 +140,105 @@ jobs:
           echo "::endgroup::"
           
           echo "::group::Testing cluster connectivity"
-          if kubectl cluster-info; then
+          if kubectl cluster-info >/dev/null 2>&1; then
             echo "✅ Successfully connected to Kubernetes cluster"
             kubectl get nodes || true
-            echo "skip_provision=false" >> $GITHUB_ENV
+            
+            # Check if cluster is ready for provisioning
+            READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || echo "0")
+            if [ "$READY_NODES" -gt 0 ]; then
+              echo "✅ Cluster is ready (${READY_NODES} node(s) Ready)"
+              echo "skip_provision=false" >> $GITHUB_ENV
+              echo "kubeconfig_ready=true" >> $GITHUB_OUTPUT
+            else
+              echo "⚠️  No Ready nodes found. Cluster may not be fully initialized."
+              echo "skip_provision=false" >> $GITHUB_ENV
+              echo "kubeconfig_ready=true" >> $GITHUB_OUTPUT
+            fi
           else
             echo "❌ Failed to connect to cluster. Check your KUBE_CONFIG."
             echo "skip_provision=true" >> $GITHUB_ENV
+            echo "kubeconfig_ready=false" >> $GITHUB_OUTPUT
             exit 1
           fi
           echo "::endgroup::"
 
       - name: Ensure scripts executable
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
           chmod +x scripts/**/*.sh || true
           chmod +x scripts/*/*.sh || true
 
-      - name: Check cluster health
-        if: env.skip_provision != 'true'
+      - name: Check cluster health and readiness
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
           echo "::group::Cluster Health Check"
           echo "Checking cluster status..."
+          
+          # Check nodes
           kubectl get nodes || true
+          READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || echo "0")
+          TOTAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l || echo "0")
+          
+          if [ "$READY_NODES" -eq 0 ] && [ "$TOTAL_NODES" -gt 0 ]; then
+            echo "⚠️  Warning: Cluster has nodes but none are Ready"
+            echo "This may indicate CNI or other initialization issues"
+          elif [ "$READY_NODES" -gt 0 ]; then
+            echo "✅ Cluster is healthy (${READY_NODES}/${TOTAL_NODES} nodes Ready)"
+          fi
           
           # Check for Pending pods
           PENDING_COUNT=$(kubectl get pods -A --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l || echo "0")
           if [ "$PENDING_COUNT" -gt 0 ]; then
             echo "⚠️  Warning: Found $PENDING_COUNT Pending pods"
             echo "Running diagnostics..."
-            ./scripts/diagnostics/diagnose-pending-pods.sh || true
+            if [ -f ./scripts/diagnostics/diagnose-pending-pods.sh ]; then
+              chmod +x ./scripts/diagnostics/diagnose-pending-pods.sh
+              ./scripts/diagnostics/diagnose-pending-pods.sh || true
+            fi
           else
             echo "✅ No Pending pods found"
           fi
-          echo "::endgroup::"
-
-      - name: Check and fix etcd space (if needed)
-        if: env.skip_provision != 'true'
-        run: |
-          echo "::group::Checking etcd Space"
-          # Check if etcd space fix script exists and run it
-          # The script will check etcd status and fix if needed
-          if [ -f ./scripts/cluster/fix-etcd-space.sh ]; then
-            echo "Running etcd space check and fix..."
-            ./scripts/cluster/fix-etcd-space.sh || echo "⚠️  etcd check completed (may need manual intervention if issues persist)"
-          else
-            echo "⚠️  etcd fix script not found - skipping etcd space check"
-            echo "If you encounter 'database space exceeded' errors, run fix-etcd-space.sh manually on the cluster node"
+          
+          # Check for CrashLoopBackOff pods
+          CRASHING_COUNT=$(kubectl get pods -A --field-selector=status.phase=Failed --no-headers 2>/dev/null | wc -l || echo "0")
+          if [ "$CRASHING_COUNT" -gt 0 ]; then
+            echo "⚠️  Warning: Found $CRASHING_COUNT Failed pods"
+            kubectl get pods -A --field-selector=status.phase=Failed 2>/dev/null | head -5 || true
           fi
+          
           echo "::endgroup::"
 
-      - name: Cleanup cluster (ENABLED by default)
-        if: ${{ env.skip_provision != 'true' && env.ENABLE_CLEANUP == 'true' }}
+      - name: Check and optimize etcd space (prevent space issues)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        run: |
+          echo "::group::Checking and Optimizing etcd Space"
+          
+          # Check etcd space before provisioning (prevent space exceeded errors)
+          if [ -f ./scripts/cluster/check-etcd-space.sh ]; then
+            echo "Checking etcd space status..."
+            chmod +x ./scripts/cluster/check-etcd-space.sh
+            ./scripts/cluster/check-etcd-space.sh || echo "⚠️  etcd check completed"
+          else
+            echo "⚠️  etcd check script not found - skipping space check"
+          fi
+          
+          # Run fix script if space issues detected (idempotent - only fixes if needed)
+          if [ -f ./scripts/cluster/fix-etcd-space.sh ]; then
+            echo "Running preventive etcd maintenance (if needed)..."
+            chmod +x ./scripts/cluster/fix-etcd-space.sh
+            ./scripts/cluster/fix-etcd-space.sh || echo "⚠️  etcd maintenance completed"
+          else
+            echo "⚠️  etcd fix script not found - skipping preventive maintenance"
+            echo "⚠️  If you encounter 'database space exceeded' errors, configure auto-compaction"
+            echo "⚠️  See: docs/ETCD-OPTIMIZATION.md"
+          fi
+          
+          echo "✅ etcd space check complete"
+          echo "::endgroup::"
+
+      - name: Cleanup cluster (opt-in only)
+        if: ${{ steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true' }}
         env:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
           FORCE_CLEANUP: 'true'
@@ -654,7 +255,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Install storage provisioner (idempotent)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 10
         run: |
           echo "::group::Installing Storage Provisioner"
@@ -664,12 +265,13 @@ jobs:
           echo "::endgroup::"
 
       - name: Install databases (PostgreSQL & Redis - Shared Infrastructure)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 20
         env:
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          # Priority: GitHub secrets first, fallback to auto-generated
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || '' }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD || '' }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
           DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
@@ -687,9 +289,10 @@ jobs:
           echo "::endgroup::"
       
       - name: Install RabbitMQ (Shared Infrastructure)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
         env:
+          # Priority: GitHub secrets first, fallback to default
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
           RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
@@ -704,7 +307,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Configure ingress controller (idempotent)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 10
         run: |
           echo "::group::Configuring NGINX Ingress Controller"
@@ -714,7 +317,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Install cert-manager (idempotent)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 10
         run: |
           echo "::group::Installing cert-manager"
@@ -724,7 +327,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Install Argo CD (idempotent)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
         env:
           ARGOCD_DOMAIN: ${{ env.ARGOCD_DOMAIN }}
@@ -736,7 +339,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Bootstrap Argo CD applications (app-of-apps)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
           echo "::group::Bootstrapping Argo CD applications"
           # Apply the root Application that manages apps under apps/
@@ -761,7 +364,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Install Monitoring (idempotent)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 20
         env:
           GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
@@ -776,7 +379,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Install Vertical Pod Autoscaler (VPA)
-        if: env.skip_provision != 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 10
         run: |
           echo "::group::Installing Vertical Pod Autoscaler"
@@ -786,11 +389,12 @@ jobs:
           echo "::endgroup::"
 
       - name: Setup Git Access (SSH Keys & Configuration)
-        if: env.skip_provision != 'true'
-        env:
-          VPS_IP: ${{ env.VPS_IP }}
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
           echo "::group::Setting up Git SSH Access"
+          echo "⚠️  Note: Git SSH access setup is optional and requires manual GitHub deploy key configuration"
+          echo "This step generates a key pair, but you must manually add the public key to GitHub"
+          echo ""
           
           # Create SSH directory if it doesn't exist
           mkdir -p ~/.ssh
@@ -822,12 +426,12 @@ jobs:
           
           # Display public key for deploy key setup
           echo ""
-          echo "🔑 PUBLIC KEY FOR GITHUB DEPLOY KEY:"
-          echo "====================================="
+          echo "🔑 PUBLIC KEY FOR GITHUB DEPLOY KEY (MANUAL SETUP REQUIRED):"
+          echo "============================================================="
           cat ~/.ssh/git_deploy_key.pub
-          echo "====================================="
+          echo "============================================================="
           echo ""
-          echo "📋 NEXT STEPS:"
+          echo "📋 MANUAL STEPS:"
           echo "1. Copy the public key above"
           echo "2. Go to: https://github.com/Bengo-Hub/devops-k8s/settings/keys"
           echo "3. Add deploy key with 'Allow write access' enabled"
@@ -837,14 +441,14 @@ jobs:
           echo "::endgroup::"
       
       - name: Summary
-        if: ${{ env.skip_provision != 'true' }}
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         env:
-          VPS_IP: ${{ env.VPS_IP }}
           ARGOCD_DOMAIN: ${{ env.ARGOCD_DOMAIN }}
           GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
           DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
         run: |
-          echo "::group::Cluster Provisioning Complete"
+          echo "::group::Cluster Infrastructure Provisioning Complete"
+          echo ""
           echo "✅ Storage provisioner installed"
           echo "✅ Shared Databases installed (PostgreSQL & Redis in ${DB_NAMESPACE} namespace)"
           echo "  - PostgreSQL admin_user created for managing per-service databases"
@@ -855,7 +459,6 @@ jobs:
           echo "✅ Argo CD installed (https://${ARGOCD_DOMAIN})"
           echo "✅ Monitoring Stack installed (https://${GRAFANA_DOMAIN}) in ${DB_NAMESPACE} namespace"
           echo "✅ Vertical Pod Autoscaler (VPA) installed"
-          echo "✅ Git SSH access configured"
           echo ""
           echo "Shared Infrastructure Credentials (${DB_NAMESPACE} namespace):"
           echo "- PostgreSQL admin_user: kubectl get secret postgresql -n ${DB_NAMESPACE} -o jsonpath='{.data.admin-user-password}' | base64 -d"
@@ -868,17 +471,21 @@ jobs:
           echo "- Database names: cafe, bengo_erp, treasury, notifications"
           echo "- Databases are created automatically during service deployment"
           echo ""
-          echo "Configuration (via GitHub Secrets):"
-          echo "- VPS_IP: ${VPS_IP}"
-          echo "- ARGOCD_DOMAIN: ${ARGOCD_DOMAIN}"
-          echo "- GRAFANA_DOMAIN: ${GRAFANA_DOMAIN}"
-          echo "- DB_NAMESPACE: ${DB_NAMESPACE}"
+          echo "Configuration (via GitHub Secrets - priority order):"
+          echo "- ARGOCD_DOMAIN: ${ARGOCD_DOMAIN} (from secrets.ARGOCD_DOMAIN or default)"
+          echo "- GRAFANA_DOMAIN: ${GRAFANA_DOMAIN} (from secrets.GRAFANA_DOMAIN or default)"
+          echo "- DB_NAMESPACE: ${DB_NAMESPACE} (from secrets.DB_NAMESPACE or default)"
           echo ""
           echo "Next steps:"
-          echo "1. Set up GitHub deploy key (see workflow output above)"
-          echo "2. Point DNS to your VPS IP (${VPS_IP})"
+          echo "1. Set up GitHub deploy key (see Git SSH Access step above - manual setup required)"
+          echo "2. Point DNS to your VPS IP"
           echo "3. Configure Argo CD repository access"
           echo "4. Deploy applications via Argo CD (they will auto-create databases)"
           echo "5. Verify databases: kubectl -n ${DB_NAMESPACE} exec -it postgresql-0 -- psql -U admin_user -d postgres -c '\l'"
           echo "6. Verify VPA: kubectl get vpa --all-namespaces"
+          echo ""
+          echo "📚 Documentation:"
+          echo "- Manual VPS setup: docs/VPS-MANUAL-SETUP.md"
+          echo "- GitHub secrets: docs/github-secrets.md"
+          echo "- Provisioning guide: docs/provisioning.md"
           echo "::endgroup::"
