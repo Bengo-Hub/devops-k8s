@@ -4,78 +4,28 @@ set -euo pipefail
 # Production-ready Monitoring Stack Installation
 # Installs Prometheus, Grafana, Alertmanager with production defaults
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
 GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-infra}
 
-echo -e "${GREEN}Installing Prometheus + Grafana monitoring stack (Production)...${NC}"
-echo -e "${BLUE}Grafana Domain: ${GRAFANA_DOMAIN}${NC}"
+log_section "Installing Prometheus + Grafana monitoring stack (Production)"
+log_info "Grafana Domain: ${GRAFANA_DOMAIN}"
 
 # Pre-flight checks
-if ! command -v kubectl &> /dev/null; then
-  echo -e "${RED}kubectl command not found. Aborting.${NC}"
-  exit 1
-fi
-
-if ! kubectl cluster-info >/dev/null 2>&1; then
-  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
-
-# Check for storage class (required for Prometheus/Grafana PVCs)
-if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
-  echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
-  "${SCRIPT_DIR}/install-storage-provisioner.sh"
-else
-  echo -e "${GREEN}✓ Default storage class available${NC}"
-fi
-
-# Check for Helm (install if missing)
-if ! command -v helm &> /dev/null; then
-  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
-  if command -v snap &> /dev/null; then
-    sudo snap install helm --classic
-  else
-    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  fi
-  echo -e "${GREEN}✓ Helm installed${NC}"
-else
-  echo -e "${GREEN}✓ Helm already installed${NC}"
-fi
-
-# Check if cert-manager is installed (required for Grafana ingress TLS)
-if ! kubectl get namespace cert-manager >/dev/null 2>&1; then
-  echo -e "${YELLOW}cert-manager not found. Installing cert-manager first...${NC}"
-  "${SCRIPT_DIR}/install-cert-manager.sh"
-else
-  echo -e "${GREEN}✓ cert-manager already installed${NC}"
-fi
+check_kubectl
+ensure_storage_class "${SCRIPT_DIR}"
+ensure_helm
+ensure_cert_manager "${SCRIPT_DIR}"
 
 # Add Helm repository
-echo -e "${YELLOW}Adding Helm repositories...${NC}"
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
-helm repo update
+add_helm_repo "prometheus-community" "https://prometheus-community.github.io/helm-charts"
 
 # Create infra namespace (monitoring is deployed here as shared infrastructure)
-MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-infra}
-if kubectl get namespace "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
-  echo -e "${GREEN}✓ Namespace '${MONITORING_NAMESPACE}' already exists${NC}"
-else
-  echo -e "${YELLOW}Creating namespace '${MONITORING_NAMESPACE}'...${NC}"
-  kubectl create namespace "${MONITORING_NAMESPACE}"
-  echo -e "${GREEN}✓ Namespace '${MONITORING_NAMESPACE}' created${NC}"
-fi
+ensure_namespace "${MONITORING_NAMESPACE}"
 
 # Update prometheus-values.yaml with dynamic domain
 TEMP_VALUES=/tmp/prometheus-values-prod.yaml
@@ -83,20 +33,14 @@ cp "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" "${TEMP_VALUES}"
 sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
   sed -i '' "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
 
-# Source common functions for cleanup logic
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "${SCRIPT_DIR}/../tools/common.sh" ]; then
-  source "${SCRIPT_DIR}/../tools/common.sh"
-fi
-
 # Install or upgrade kube-prometheus-stack (idempotent)
-echo -e "${YELLOW}Installing/upgrading kube-prometheus-stack...${NC}"
-echo -e "${BLUE}This may take 10-15 minutes. Logs will be streamed below...${NC}"
+log_info "Installing/upgrading kube-prometheus-stack..."
+log_info "This may take 10-15 minutes. Logs will be streamed below..."
 
 # Note: Monitoring uses helm upgrade --install which is idempotent
 # Only cleanup orphaned resources if cleanup mode is active
 if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
-  echo -e "${BLUE}Cleanup mode active - checking for orphaned monitoring resources...${NC}"
+  log_info "Cleanup mode active - checking for orphaned monitoring resources..."
   
   # Clean up any orphaned ingresses first (prevents webhook validation errors)
   echo -e "${YELLOW}Cleaning up orphaned monitoring ingresses...${NC}"

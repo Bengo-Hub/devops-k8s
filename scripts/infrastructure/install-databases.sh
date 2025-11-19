@@ -4,91 +4,29 @@ set -euo pipefail
 # Production-ready Database Installation
 # Installs PostgreSQL and Redis with production configurations
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Configuration
 NAMESPACE=${DB_NAMESPACE:-infra}
 PG_DATABASE=${PG_DATABASE:-postgres}
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
 
-echo -e "${GREEN}Installing Shared Infrastructure Databases (Production)...${NC}"
-echo -e "${BLUE}Namespace: ${NAMESPACE}${NC}"
-echo -e "${BLUE}PostgreSQL Database: ${PG_DATABASE} (services create their own databases)${NC}"
+log_section "Installing Shared Infrastructure Databases (Production)"
+log_info "Namespace: ${NAMESPACE}"
+log_info "PostgreSQL Database: ${PG_DATABASE} (services create their own databases)"
 
 # Pre-flight checks
-if ! command -v kubectl &> /dev/null; then
-  echo -e "${RED}kubectl command not found. Aborting.${NC}"
-  exit 1
-fi
-
-if ! kubectl cluster-info >/dev/null 2>&1; then
-  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
-
-# Check cluster resources
-echo -e "${YELLOW}Checking cluster resources...${NC}"
-NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
-READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || echo "0")
-echo -e "${BLUE}Nodes: ${READY_NODES}/${NODE_COUNT} ready${NC}"
-
-if [ "$READY_NODES" -eq 0 ]; then
-  echo -e "${RED}⚠️  No ready nodes found!${NC}"
-  kubectl get nodes || true
-  echo -e "${YELLOW}Cluster may not be able to schedule pods. Continuing anyway...${NC}"
-fi
-
-# Check for Pending pods
-PENDING_PODS=$(kubectl get pods -A --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
-if [ "$PENDING_PODS" -gt 0 ]; then
-  echo -e "${YELLOW}⚠️  Found ${PENDING_PODS} Pending pods in cluster${NC}"
-  echo -e "${YELLOW}This may indicate resource constraints or storage issues${NC}"
-  kubectl get pods -A --field-selector=status.phase=Pending 2>/dev/null | head -10 || true
-fi
-
-# Check for storage class (required for PVCs)
-if ! kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
-  echo -e "${YELLOW}No default storage class found. Installing local-path provisioner...${NC}"
-  "${SCRIPT_DIR}/install-storage-provisioner.sh"
-else
-  echo -e "${GREEN}✓ Default storage class available${NC}"
-fi
-
-# Check for Helm (install if missing)
-if ! command -v helm &> /dev/null; then
-  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
-  if command -v snap &> /dev/null; then
-    sudo snap install helm --classic
-  else
-    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  fi
-  echo -e "${GREEN}✓ Helm installed${NC}"
-else
-  echo -e "${GREEN}✓ Helm already installed${NC}"
-fi
+check_kubectl
+check_cluster_health
+ensure_storage_class "${SCRIPT_DIR}"
+ensure_helm
 
 # Add Bitnami repository
-echo -e "${YELLOW}Adding Bitnami Helm repository...${NC}"
-helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
-helm repo update
+add_helm_repo "bitnami" "https://charts.bitnami.com/bitnami"
 
 # Create namespace
-if kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
-  echo -e "${GREEN}✓ Namespace '${NAMESPACE}' already exists${NC}"
-else
-  echo -e "${YELLOW}Creating namespace '${NAMESPACE}'...${NC}"
-  kubectl create namespace "${NAMESPACE}"
-  echo -e "${GREEN}✓ Namespace '${NAMESPACE}' created${NC}"
-fi
+ensure_namespace "${NAMESPACE}"
 
 # Create temporary PostgreSQL values file with proper FIPS configuration
 TEMP_PG_VALUES=/tmp/postgresql-values-prod.yaml

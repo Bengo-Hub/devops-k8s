@@ -105,12 +105,53 @@ export FORCE_CLEANUP=true
 
 ## Script Dependencies
 
-Most infrastructure scripts depend on `tools/common.sh`:
+All infrastructure scripts should use `tools/common.sh` for centralized functions:
 
 ```bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../tools/common.sh"
 ```
+
+### Common Functions Available
+
+**Logging:**
+- `log_info "message"` - Info messages (blue)
+- `log_success "message"` - Success messages (green)
+- `log_warning "message"` - Warning messages (yellow)
+- `log_error "message"` - Error messages (red)
+- `log_step "message"` - Step messages (purple)
+- `log_section "title"` - Section headers (cyan)
+
+**Pre-flight Checks:**
+- `check_kubectl` - Verify kubectl is installed and cluster is accessible
+- `ensure_helm` - Install Helm if missing
+- `ensure_jq` - Install jq if missing
+- `ensure_storage_class` - Install storage provisioner if no default storage class
+- `ensure_cert_manager` - Install cert-manager if missing
+
+**Helm Management:**
+- `add_helm_repo <name> <url>` - Add Helm repository
+- `helm_install_or_upgrade <release> <chart> <namespace> [args...]` - Install/upgrade with cleanup mode support
+
+**Namespace Management:**
+- `ensure_namespace <namespace>` - Create namespace if it doesn't exist
+
+**Wait Functions:**
+- `wait_for_resource <type> <name> <namespace> [timeout]` - Wait for resource to be ready
+- `wait_for_pods <namespace> <selector> [timeout]` - Wait for pods with label selector
+- `wait_for_statefulset <name> <namespace> [timeout]` - Wait for StatefulSet
+
+**Cleanup Mode:**
+- `is_cleanup_mode` - Check if cleanup mode is active
+- `should_delete_and_recreate <type> <name> <namespace>` - Check if resource should be recreated
+- `safe_delete_resource <type> <name> <namespace>` - Delete resource only in cleanup mode
+- `helm_release_action <release> <namespace>` - Get Helm action (install/upgrade/reinstall)
+
+**Utilities:**
+- `check_cluster_health` - Check cluster readiness and pending pods
+- `generate_password [length]` - Generate random password
+- `base64_encode <string>` - Base64 encode
+- `base64_decode <string>` - Base64 decode
 
 ## GitHub Actions Workflow
 
