@@ -88,11 +88,11 @@ ingress:
   enabled: true
   ingressClassName: nginx
   hosts:
-    - host: treasury.codevertexitsolutions.com
+    - host: accounts.codevrtexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - treasury.codevertexitsolutions.com
+        - accounts.codevrtexitsolutions.com
       secretName: treasury-app-tls

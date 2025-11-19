@@ -3,11 +3,12 @@ Documentation Index
 
 **Getting Started**
 - **Kubernetes Options:** k8s-comparison.md (k3s vs kubeadm - read this first!)
-- Contabo VPS setup with kubeadm (recommended): contabo-setup-kubeadm.md
-- Contabo VPS setup with k3s (alternative): contabo-setup.md
+- **Manual VPS Setup (REQUIRED FIRST):** contabo-setup-kubeadm.md - Complete kubeadm setup guide for fresh VPS
+- Contabo VPS setup with k3s (reference): contabo-setup.md
 - Hosting environments and providers: hosting.md
 - Onboarding a repository: onboarding.md
-- **Provisioning Tools via Ansible:** provisioning.md
+- **Automated Provisioning:** provisioning.md - Automated infrastructure provisioning workflow
+- **etcd Optimization:** ETCD-OPTIMIZATION.md - Prevent etcd space issues
 
 **Deployment**
 - Pipelines and workflows: pipelines.md

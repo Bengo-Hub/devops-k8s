@@ -205,32 +205,57 @@ kubectl get nodes
 kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 ```
 
-### Get kubeconfig for remote access
+### Configure kubectl on VPS
 
 ```bash
-# On VPS, get kubeconfig
-cat /etc/kubernetes/admin.conf
+# Configure kubectl for root user
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
 
-# On local machine, save to file
-# Replace server: https://INTERNAL_IP with your VPS public IP
+# Also configure for ubuntu user if it exists
+if id "ubuntu" &>/dev/null; then
+    mkdir -p /home/ubuntu/.kube
+    cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+    chown -R ubuntu:ubuntu /home/ubuntu/.kube
+fi
+```
+
+### Get kubeconfig for Remote Access
+
+**On VPS:**
+
+```bash
+# Update kubeconfig with public IP (replace YOUR_VPS_IP with actual IP)
+VPS_IP="YOUR_VPS_IP"
+sed -i "s|server: https://.*:6443|server: https://${VPS_IP}:6443|" $HOME/.kube/config
+
+# Get base64-encoded kubeconfig for GitHub secret
+cat $HOME/.kube/config | base64 -w 0 2>/dev/null || cat $HOME/.kube/config | base64
+```
+
+**Copy the entire base64 output** - you'll need it for GitHub secrets.
+
+**On local machine (optional):**
+
+```bash
+# Save kubeconfig to local file
 vim ~/.kube/contabo-kubeadm-config
+# Paste the kubeconfig content (with updated server IP)
 
-# Update server address
-sed -i 's|server: https://.*:6443|server: https://YOUR_VPS_IP:6443|' ~/.kube/contabo-kubeadm-config
-
-# Test
+# Test connection
 export KUBECONFIG=~/.kube/contabo-kubeadm-config
 kubectl get nodes
 ```
 
 ### Store Kubeconfig in GitHub Secret
 
-```bash
-# Base64 encode kubeconfig (with updated server IP)
-cat ~/.kube/contabo-kubeadm-config | base64 -w 0
-```
+1. Go to GitHub → Settings → Secrets and variables → Actions
+2. Add new secret: `KUBE_CONFIG`
+3. Paste the base64-encoded kubeconfig from above
+4. Save
 
-Store as GitHub org secret: `KUBE_CONFIG`
+**See:** `docs/github-secrets.md` for complete secret configuration guide
 
 ---
 
@@ -238,19 +263,69 @@ Store as GitHub org secret: `KUBE_CONFIG`
 ---------------------------
 
 ```bash
-# Install Calico operator
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
+# Check if Calico is already installed
+if kubectl get pods -n calico-system >/dev/null 2>&1; then
+    echo "✓ Calico CNI already installed"
+    kubectl get pods -n calico-system
+else
+    # Install Calico operator
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
 
-# Install Calico custom resources
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
+    # Wait for operator to be ready
+    kubectl wait --for=condition=available --timeout=120s deployment/tigera-operator -n tigera-operator || true
 
-# Wait for Calico pods
-watch kubectl get pods -n calico-system
+    # Install Calico custom resources
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
+
+    # Wait for Calico pods to be ready
+    echo "Waiting for Calico pods to be ready..."
+    sleep 30
+    for i in {1..30}; do
+        if kubectl get pods -n calico-system | grep -q Running; then
+            break
+        fi
+        echo "  Waiting for Calico... (${i}/30)"
+        sleep 5
+    done
+fi
 
 # Verify node is Ready
 kubectl get nodes
 # Should show: k8s-master   Ready    control-plane   5m   v1.28.x
 ```
+
+### Configure etcd Auto-Compaction (Prevent Space Issues)
+
+**IMPORTANT:** Configure automatic compaction to prevent `etcdserver: mvcc: database space exceeded` errors:
+
+```bash
+# Backup original etcd manifest
+cp /etc/kubernetes/manifests/etcd.yaml /etc/kubernetes/manifests/etcd.yaml.backup
+
+# Edit etcd manifest to add auto-compaction flags
+vim /etc/kubernetes/manifests/etcd.yaml
+```
+
+Add these flags to the etcd container command section:
+
+```yaml
+spec:
+  containers:
+  - command:
+    - etcd
+    - --auto-compaction-mode=revision
+    - --auto-compaction-retention=1000  # Keep last 1000 revisions
+    - --quota-backend-bytes=8589934592  # 8GB quota (adjust based on disk size)
+```
+
+**Note:** kubelet will automatically reload the manifest. The etcd pod will restart with the new configuration.
+
+**Verify etcd pod restarts:**
+```bash
+kubectl get pods -n kube-system -l component=etcd --watch
+```
+
+**See:** `docs/ETCD-OPTIMIZATION.md` for detailed etcd optimization guide and troubleshooting
 
 ### Alternative: Flannel CNI (lighter)
 
@@ -329,15 +404,182 @@ kubectl get clusterissuer
 10. Verification
 ----------------
 
-```bash
-# Check all system pods
-kubectl get pods -A
+### Verify Kubernetes Cluster
 
-# Check nodes
-kubectl get nodes -o wide
+```bash
+# Check nodes (should show Ready status)
+kubectl get nodes
+# Should show: k8s-master   Ready    control-plane   <time>   v1.28.x
+
+# Check all system pods (should all be Running)
+kubectl get pods -A
 
 # Check component status
 kubectl get cs
+```
+
+### Test Remote Access
+
+From your local machine (with kubeconfig configured):
+
+```bash
+# Set kubeconfig
+export KUBECONFIG=~/.kube/contabo-kubeadm-config
+
+# Test connection
+kubectl get nodes
+kubectl get pods -A
+```
+
+### Troubleshooting
+
+**Issue: Node Not Ready**
+
+```bash
+# Check kubelet status
+systemctl status kubelet
+
+# Check kubelet logs
+journalctl -u kubelet -f
+
+# Check Calico pods
+kubectl get pods -n calico-system
+kubectl logs -n calico-system -l k8s-app=calico-node
+```
+
+**Issue: Cannot Connect to Cluster Remotely**
+
+1. Verify firewall allows port 6443:
+   ```bash
+   ufw status
+   ```
+
+2. Verify kubeconfig server address matches VPS IP:
+   ```bash
+   kubectl config view | grep server
+   ```
+
+3. Test connectivity:
+   ```bash
+   curl -k https://YOUR_VPS_IP:6443
+   ```
+
+**Issue: etcd Database Space Exceeded**
+
+If you encounter `etcdserver: mvcc: database space exceeded`:
+
+```bash
+# Run etcd space fix script (if available)
+./scripts/cluster/fix-etcd-space.sh
+
+# Or manually compact etcd
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  compact $(date +%s)
+```
+
+**Prevention:** Configure automatic compaction during cluster setup (see Step 7 above). See `docs/ETCD-OPTIMIZATION.md` for detailed instructions.
+
+---
+
+## Next Steps
+
+After completing cluster setup and configuring GitHub secrets:
+
+### 1. Configure GitHub Secrets
+
+See `docs/github-secrets.md` for complete secret configuration guide. Required:
+- `KUBE_CONFIG` - Base64-encoded kubeconfig
+- Optional: Contabo API secrets for automated VPS management
+
+### 2. Run Automated Provisioning Workflow
+
+1. Go to: `https://github.com/YOUR_ORG/devops-k8s/actions`
+2. Select: **"Provision Cluster Infrastructure"**
+3. Click: **"Run workflow"** → **"Run workflow"**
+
+The workflow will automatically install:
+- Storage provisioner
+- PostgreSQL & Redis (shared infrastructure)
+- RabbitMQ (shared infrastructure)
+- NGINX Ingress Controller
+- cert-manager
+- Argo CD
+- Monitoring stack (Prometheus + Grafana)
+- Vertical Pod Autoscaler (VPA)
+
+**See:** `docs/provisioning.md` for detailed provisioning workflow documentation
+
+### 3. Configure DNS (Optional but Recommended)
+
+Point your domains to your VPS IP:
+- `argocd.masterspace.co.ke` → YOUR_VPS_IP
+- `grafana.masterspace.co.ke` → YOUR_VPS_IP
+- `erpapi.masterspace.co.ke` → YOUR_VPS_IP
+- `erp.masterspace.co.ke` → YOUR_VPS_IP
+
+cert-manager will automatically provision TLS certificates.
+
+### 4. Verify Infrastructure
+
+```bash
+# Check infrastructure pods
+kubectl get pods -n infra
+kubectl get pods -n argocd
+
+# Check ingresses
+kubectl get ingress -A
+
+# Check certificates
+kubectl get certificate -A
+```
+
+### 5. Access Services
+
+**Argo CD:**
+- URL: `https://argocd.masterspace.co.ke`
+- Get admin password: `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d`
+
+**Grafana:**
+- URL: `https://grafana.masterspace.co.ke`
+- Get admin password: `kubectl get secret -n infra prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d`
+
+### 6. Deploy Applications
+
+Applications are automatically deployed via Argo CD if `apps/*/app.yaml` files exist.
+
+To verify:
+```bash
+kubectl get applications -n argocd
+```
+
+To deploy manually:
+```bash
+kubectl apply -f apps/root-app.yaml
+```
+
+---
+
+## Related Documentation
+
+- [Quick Setup Guide](../SETUP.md) - Fast-track deployment guide
+- [Provisioning Guide](./provisioning.md) - Automated provisioning workflow
+- [GitHub Secrets](./github-secrets.md) - Complete secret configuration
+- [etcd Optimization](./ETCD-OPTIMIZATION.md) - Prevent etcd space issues
+- [Database Setup](./database-setup.md) - Database configuration details
+- [Argo CD Setup](./argocd.md) - Argo CD configuration
+- [Monitoring Setup](./monitoring.md) - Monitoring stack details
+
+---
+
+## Support
+
+- Documentation: `docs/README.md`
+- Issues: GitHub Issues
+- Contact: codevertexitsolutions@gmail.com
+- Website: https://www.codevertexitsolutions.com
 
 # Deploy test app
 cat <<EOF | kubectl apply -f -

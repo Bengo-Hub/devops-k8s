@@ -89,11 +89,11 @@ ingress:
   enabled: true
   ingressClassName: nginx
   hosts:
-    - host: cafeapi.codevertexitsolutions.com
+    - host: cafeapi.codevrtexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - cafeapi.codevertexitsolutions.com
+        - cafeapi.codevrtexitsolutions.com
       secretName: cafe-backend-tls
