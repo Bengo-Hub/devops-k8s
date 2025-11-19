@@ -53,7 +53,7 @@ if [ "$ENABLE_CLEANUP" = "true" ]; then
     
     export ENABLE_CLEANUP=true
     export FORCE_CLEANUP=true
-    "${SCRIPT_DIR}/cleanup-cluster.sh"
+    "${SCRIPT_DIR}/cluster/cleanup-cluster.sh"
     
     echo ""
     echo -e "${GREEN}✓ Cleanup complete${NC}"

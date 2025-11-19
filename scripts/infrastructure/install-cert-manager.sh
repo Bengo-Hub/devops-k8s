@@ -4,63 +4,34 @@ set -euo pipefail
 # Production-ready cert-manager Installation
 # Configures Let's Encrypt for automatic TLS certificates
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
 LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-info@codevertexitsolutions.com}
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
 
-echo -e "${GREEN}Installing cert-manager (Production)...${NC}"
-echo -e "${BLUE}Let's Encrypt Email: ${LETSENCRYPT_EMAIL}${NC}"
+log_section "Installing cert-manager (Production)"
+log_info "Let's Encrypt Email: ${LETSENCRYPT_EMAIL}"
 
 # Pre-flight checks
-if ! command -v kubectl &> /dev/null; then
-  echo -e "${RED}kubectl command not found. Aborting.${NC}"
-  exit 1
-fi
+check_kubectl
+ensure_helm
 
-if ! kubectl cluster-info >/dev/null 2>&1; then
-  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
-
-# Check for Helm (install if missing)
-if ! command -v helm &> /dev/null; then
-  echo -e "${YELLOW}Helm not found. Installing via snap...${NC}"
-  if command -v snap &> /dev/null; then
-    sudo snap install helm --classic
-  else
-    echo -e "${YELLOW}snap not available. Installing Helm via script...${NC}"
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  fi
-  echo -e "${GREEN}✓ Helm installed${NC}"
-else
-  echo -e "${GREEN}✓ Helm already installed${NC}"
-fi
+# Create namespace if needed
+ensure_namespace "cert-manager"
 
 # Install or upgrade cert-manager
-if kubectl get namespace cert-manager >/dev/null 2>&1; then
-  echo -e "${YELLOW}cert-manager already installed. Upgrading if needed...${NC}"
+if kubectl get namespace cert-manager >/dev/null 2>&1 && kubectl get deployment cert-manager -n cert-manager >/dev/null 2>&1; then
+  log_info "cert-manager already installed. Upgrading if needed..."
   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
 else
-  echo -e "${YELLOW}Installing cert-manager...${NC}"
+  log_info "Installing cert-manager..."
   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
 fi
 
 # Wait for pods
-echo -e "${YELLOW}Waiting for cert-manager pods to be ready...${NC}"
-kubectl wait --for=condition=ready pod \
-  -l app.kubernetes.io/instance=cert-manager \
-  -n cert-manager \
-  --timeout=120s || echo -e "${YELLOW}Some pods still starting, continuing...${NC}"
+wait_for_pods "cert-manager" "app.kubernetes.io/instance=cert-manager" 120
 
 # Create ClusterIssuers with dynamic email
 echo -e "${YELLOW}Creating Let's Encrypt ClusterIssuers...${NC}"
