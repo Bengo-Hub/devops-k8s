@@ -7,35 +7,58 @@ This guide provides a fast-track setup for the entire DevOps infrastructure.
 
 Prerequisites
 -------------
-- Fresh Contabo VPS (or any Ubuntu 22.04 VPS)
+- Fresh Contabo VPS (or any Ubuntu 24.04 LTS VPS)
 - Root or sudo access
 - SSH access to the VPS
 - GitHub organization secrets configured
 
-Step 1: Manual VPS Setup (REQUIRED)
-------------------------------------
+Step 1: Manual Access Setup (REQUIRED FIRST)
+--------------------------------------------
 
-**Complete the manual VPS setup first.** This includes:
-- Initial server configuration
-- Container runtime (containerd) installation
-- Kubernetes cluster initialization (kubeadm)
-- CNI installation (Calico)
-- etcd auto-compaction configuration
-- Getting and storing kubeconfig
+**Complete manual access setup first.** This includes:
+- SSH key generation and VPS access configuration
+- GitHub PAT/token creation and storage
+- SSH keys added to GitHub secrets
 
-**📚 Follow the complete guide:** `docs/contabo-setup-kubeadm.md`
+**📚 Follow:** `docs/comprehensive-access-setup.md` for complete access setup guide
 
-This step cannot be automated and must be done manually on the VPS.
+Step 2: Automated Cluster Setup
+--------------------------------
 
-**Quick Reference:**
-- For kubeadm setup: `docs/contabo-setup-kubeadm.md`
-- For k3s setup: `docs/contabo-setup.md`
-- For k8s comparison: `docs/k8s-comparison.md`
+**After manual access is configured, run the automated cluster setup:**
 
-Step 2: Configure GitHub Secrets
+```bash
+# SSH into your VPS
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP
+
+# Clone or upload devops-k8s repository
+cd /opt
+git clone https://github.com/YOUR_ORG/devops-k8s.git
+cd devops-k8s
+
+# Run orchestrated cluster setup
+chmod +x scripts/cluster/*.sh
+./scripts/cluster/setup-cluster.sh
+```
+
+This script automatically:
+- ✅ Sets up initial VPS configuration
+- ✅ Installs and configures containerd
+- ✅ Installs Kubernetes and initializes cluster
+- ✅ Configures Calico CNI
+- ✅ Sets up etcd auto-compaction
+- ✅ Generates kubeconfig for GitHub secrets
+
+**After cluster setup:**
+- Copy the base64 kubeconfig output
+- Add it as GitHub organization secret: `KUBE_CONFIG`
+
+**📚 Complete guide:** `docs/contabo-setup-kubeadm.md`
+
+Step 3: Configure GitHub Secrets
 ---------------------------------
 
-After completing manual setup, configure GitHub secrets:
+After completing cluster setup, ensure all GitHub secrets are configured:
 
 **Required Secrets:**
 - `KUBE_CONFIG` - Base64-encoded kubeconfig from manual setup
@@ -60,7 +83,7 @@ After completing manual setup, configure GitHub secrets:
 
 **See:** `docs/github-secrets.md` for complete list
 
-Step 3: Run Automated Provisioning Workflow
+Step 4: Run Automated Provisioning Workflow
 --------------------------------------------
 
 Once manual setup is complete and secrets are configured:
@@ -85,8 +108,8 @@ The workflow will automatically:
 
 **Note:** Git SSH access setup requires manual GitHub deploy key configuration (see workflow output).
 
-Step 4: Configure DNS (Optional but Recommended)
--------------------------------------------------
+Step 5: Configure DNS (Optional but Recommended)
+--------------------------------------------------
 
 Point your domains to your VPS IP:
 - `argocd.masterspace.co.ke` → YOUR_VPS_IP
@@ -96,8 +119,8 @@ Point your domains to your VPS IP:
 
 cert-manager will automatically provision TLS certificates.
 
-Step 5: Deploy Applications
----------------------------
+Step 6: Deploy Applications
+----------------------------
 
 Applications are automatically deployed via Argo CD if `apps/*/app.yaml` files exist.
 
@@ -111,8 +134,8 @@ To deploy manually:
 kubectl apply -f apps/root-app.yaml
 ```
 
-Step 6: Verify Deployment
--------------------------
+Step 7: Verify Deployment
+--------------------------
 
 ```bash
 # Check all pods

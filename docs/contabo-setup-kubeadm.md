@@ -1,16 +1,49 @@
 Contabo VPS Setup with Full Kubernetes (kubeadm)
 ================================================
 
-This guide walks through setting up a Contabo VPS with full Kubernetes using kubeadm instead of k3s.
+This guide walks through setting up a Contabo VPS with Kubernetes using kubeadm.
 
-**Note:** For all Contabo VPS tiers (4GB+ RAM), kubeadm is recommended. See `k8s-comparison.md` for guidance.
+**Note:** This is the recommended setup for all Contabo VPS tiers (4GB+ RAM).
 
 Prerequisites
 -------------
 - Contabo VPS with 4GB+ RAM (8GB+ recommended)
-- Ubuntu 22.04 LTS
+- Ubuntu 24.04 LTS (Noble Numbat)
 - Root or sudo access
 - Contabo client ID and secret (for API automation)
+
+## Quick Start (Automated Setup)
+
+**After manual access setup (SSH keys, GitHub PAT/token configured):**
+
+Run the orchestrated setup script that automates all cluster setup steps:
+
+```bash
+# On your VPS (via SSH)
+cd /path/to/devops-k8s
+chmod +x scripts/cluster/*.sh
+./scripts/cluster/setup-cluster.sh
+```
+
+This script will automatically:
+1. ✅ Set up initial VPS configuration
+2. ✅ Install and configure containerd
+3. ✅ Install Kubernetes and initialize cluster
+4. ✅ Configure Calico CNI
+5. ✅ Set up etcd auto-compaction
+6. ✅ Generate kubeconfig for GitHub secrets
+
+**Manual Steps Required First:**
+- SSH access to VPS configured (see [Comprehensive Access Setup](./comprehensive-access-setup.md))
+- GitHub PAT/token created and stored in GitHub secrets
+- SSH keys added to GitHub secrets (`SSH_PRIVATE_KEY`, `DOCKER_SSH_KEY`)
+
+**After running setup-cluster.sh:**
+- Copy the generated base64 kubeconfig
+- Add it as GitHub organization secret: `KUBE_CONFIG`
+- Run the provisioning workflow to install infrastructure
+
+---
 
 Table of Contents
 -----------------
@@ -20,17 +53,19 @@ Table of Contents
 4. Container Runtime (containerd)
 5. Kubernetes Installation (kubeadm)
 6. Cluster Initialization
-7. Pod Network (Calico CNI)
-8. NGINX Ingress Controller
-9. cert-manager
-10. Verification
+7. Pod Network (Calico CNI) & etcd Configuration
+8. Kubeconfig Setup for Remote Access
+9. NGINX Ingress Controller
+10. cert-manager
+11. Verification & Troubleshooting
+12. Next Steps
 
 ---
 
 1. Contabo API Setup
 --------------------
 
-(Same as k3s guide - see `contabo-setup.md` section 1)
+See section 1 below for Contabo API setup instructions.
 
 Store these as GitHub org secrets:
 - `CONTABO_CLIENT_ID`
@@ -43,7 +78,7 @@ Store these as GitHub org secrets:
 2. SSH Key Configuration
 ------------------------
 
-(Same as k3s guide - see `contabo-setup.md` section 2)
+See section 2 below for SSH key configuration instructions.
 
 ```bash
 # On your local machine
@@ -157,10 +192,11 @@ systemctl status containerd
 ------------------------------------
 
 ```bash
-# Add Kubernetes repository
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+# Add Kubernetes repository (using latest stable v1.30 for Ubuntu 24.04)
+KUBERNETES_VERSION="1.30"
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
 
 # Install Kubernetes components
 apt-get update
@@ -178,16 +214,23 @@ kubelet --version
 kubectl version --client
 ```
 
+**Note:** Ubuntu 24.04 LTS supports Kubernetes 1.30+. The above uses v1.30 which is compatible with Ubuntu 24.04's kernel (6.8) and toolchain.
+
 ---
 
 6. Cluster Initialization
 -------------------------
 
 ```bash
-# Initialize cluster
+# Initialize cluster (Ubuntu 24.04 compatible)
+CLUSTER_NAME="mss-prod"
+POD_NETWORK_CIDR="192.168.0.0/16"
+APISERVER_ADVERTISE_ADDRESS=$(hostname -I | awk '{print $1}')
+
 kubeadm init \
-  --pod-network-cidr=192.168.0.0/16 \
-  --apiserver-advertise-address=$(hostname -I | awk '{print $1}')
+  --pod-network-cidr="${POD_NETWORK_CIDR}" \
+  --apiserver-advertise-address="${APISERVER_ADVERTISE_ADDRESS}" \
+  --kubernetes-version="v1.30.0"
 
 # The output will show a join command for worker nodes (save this!)
 # For single-node setup, we'll taint the master to allow pods
@@ -268,14 +311,14 @@ if kubectl get pods -n calico-system >/dev/null 2>&1; then
     echo "✓ Calico CNI already installed"
     kubectl get pods -n calico-system
 else
-    # Install Calico operator
-    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
+    # Install Calico operator (latest version compatible with Kubernetes 1.30)
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml
 
     # Wait for operator to be ready
     kubectl wait --for=condition=available --timeout=120s deployment/tigera-operator -n tigera-operator || true
 
     # Install Calico custom resources
-    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/custom-resources.yaml
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/custom-resources.yaml
 
     # Wait for Calico pods to be ready
     echo "Waiting for Calico pods to be ready..."
@@ -291,7 +334,7 @@ fi
 
 # Verify node is Ready
 kubectl get nodes
-# Should show: k8s-master   Ready    control-plane   5m   v1.28.x
+# Should show: k8s-master   Ready    control-plane   5m   v1.30.x
 ```
 
 ### Configure etcd Auto-Compaction (Prevent Space Issues)
@@ -409,7 +452,7 @@ kubectl get clusterissuer
 ```bash
 # Check nodes (should show Ready status)
 kubectl get nodes
-# Should show: k8s-master   Ready    control-plane   <time>   v1.28.x
+# Should show: k8s-master   Ready    control-plane   <time>   v1.30.x
 
 # Check all system pods (should all be Running)
 kubectl get pods -A
@@ -656,20 +699,20 @@ Cluster Maintenance
 # Check available versions
 apt-cache madison kubeadm
 
-# Upgrade kubeadm
+# Upgrade kubeadm (Ubuntu 24.04 compatible)
 apt-mark unhold kubeadm
-apt-get update && apt-get install -y kubeadm=1.28.x-00
+apt-get update && apt-get install -y kubeadm=1.30.x-00
 apt-mark hold kubeadm
 
 # Plan upgrade
 kubeadm upgrade plan
 
 # Apply upgrade
-kubeadm upgrade apply v1.28.x
+kubeadm upgrade apply v1.30.x
 
 # Upgrade kubelet and kubectl
 apt-mark unhold kubelet kubectl
-apt-get update && apt-get install -y kubelet=1.28.x-00 kubectl=1.28.x-00
+apt-get update && apt-get install -y kubelet=1.30.x-00 kubectl=1.30.x-00
 apt-mark hold kubelet kubectl
 
 # Restart kubelet
@@ -763,30 +806,12 @@ journalctl -u kubelet -f
 
 ---
 
-Comparison with k3s
--------------------
-
-See `docs/k8s-comparison.md` for detailed comparison and recommendation.
-
-**kubeadm advantages:**
-- Full upstream Kubernetes
-- Better for multi-node
-- More control over components
-
-**kubeadm disadvantages:**
-- Higher resource usage (~2GB overhead)
-- More complex setup and maintenance
-- Longer installation time
-
----
-
-Next Steps
-----------
+## Next Steps
 
 After cluster setup:
-1. Install Argo CD: `scripts/install-argocd.sh`
-2. Install monitoring: `scripts/install-monitoring.sh`
-3. Deploy ERP apps: `kubectl apply -f apps/erp-api/app.yaml`
-
-All other guides (Argo CD, monitoring, etc.) work the same with kubeadm as with k3s.
+1. Configure GitHub secrets (see `docs/github-secrets.md`)
+2. Run automated provisioning workflow (see `docs/provisioning.md`)
+3. Install Argo CD: `scripts/infrastructure/install-argocd.sh`
+4. Install monitoring: `scripts/monitoring/install-monitoring.sh`
+5. Deploy ERP apps: `kubectl apply -f apps/erp-api/app.yaml`
 

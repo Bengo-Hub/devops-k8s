@@ -6,7 +6,7 @@ This guide provides step-by-step instructions for testing and verifying all acce
 
 ## Prerequisites
 
-- Contabo VPS instance with Ubuntu/Debian-based system
+- Contabo VPS instance with Ubuntu 24.04 LTS
 - SSH key pair for VPS access (already discussed in Contabo setup)
 - GitHub personal access token with repository permissions
 - Kubernetes cluster running on the VPS
@@ -55,7 +55,7 @@ ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "whoami && pwd && ls -la"
 # Check if essential services are running
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "
 systemctl status docker --no-pager -l
-systemctl status k3s --no-pager -l  # or kubelet if using kubeadm
+systemctl status kubelet --no-pager -l
 kubectl get nodes
 "
 ```
@@ -296,8 +296,8 @@ curl -k https://YOUR_VPS_IP:6443/healthz
 # Check if API server is running
 ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status kubelet"
 
-# Or for k3s:
-ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status k3s"
+# Check kubelet status
+ssh -i ~/.ssh/contabo_deploy_key root@YOUR_VPS_IP "systemctl status kubelet"
 ```
 
 ### 6.4 Contabo API Issues
