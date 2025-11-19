@@ -100,9 +100,15 @@ After configuring Kubernetes cluster (see `docs/CLUSTER-SETUP-WORKFLOW.md` and `
 VPS_IP="YOUR_VPS_IP"
 sed -i "s|server: https://.*:6443|server: https://${VPS_IP}:6443|" $HOME/.kube/config
 
-# Get base64-encoded kubeconfig
-cat $HOME/.kube/config | base64 -w 0 2>/dev/null || cat $HOME/.kube/config | base64
+# Get base64-encoded kubeconfig (MUST be single line, no breaks)
+cat $HOME/.kube/config | base64 -w 0 2>/dev/null || cat $HOME/.kube/config | base64 | tr -d '\n'
 ```
+
+**⚠️ IMPORTANT:** 
+- Copy the **ENTIRE** base64 output (it's all on one line)
+- Make sure there are **NO line breaks** or spaces in the secret
+- The output should be one continuous string of characters
+- If GitHub adds line breaks when pasting, remove them manually
 
 ### 2. Configure GitHub Secrets
 
