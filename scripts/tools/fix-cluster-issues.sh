@@ -72,8 +72,8 @@ if [ -n "$MISSING_REGISTRY_SECRETS" ]; then
   log_info "To create registry-credentials secret, run:"
   echo "  kubectl create secret docker-registry registry-credentials \\"
   echo "    --docker-server=docker.io \\"
-  echo "    --docker-username=<your-dockerhub-username> \\"
-  echo "    --docker-password=<your-dockerhub-token> \\"
+  echo "    --docker-username=$REGISTRY_USERNAME \\"
+  echo "    --docker-password=$REGISTRY_PASSWORD \\"
   echo "    -n <namespace>"
 fi
 
