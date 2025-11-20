@@ -37,10 +37,47 @@ jobs:
         with:
           install_trivy: 'false'
 
-      - name: Install PostgreSQL client (psql) and jq
+      - name: Install PostgreSQL client (psql) [idempotent]
         run: |
+          echo "::group::Installing PostgreSQL client"
+          # Check if packages are already installed
+          MISSING_PKGS=()
+          
+          # Check for PostgreSQL client (psql command)
+          if ! command -v psql &> /dev/null; then
+            MISSING_PKGS+=("postgresql-client" "postgresql-client-common")
+          else
+            echo "✓ PostgreSQL client (psql) already installed"
+            psql --version
+          fi
+          
+          # Note: jq and curl are already installed by install-devops-tools action
+          # Only install if missing (defensive check)
+          if ! command -v jq &> /dev/null; then
+            MISSING_PKGS+=("jq")
+          fi
+          
+          if ! command -v curl &> /dev/null; then
+            MISSING_PKGS+=("curl")
+          fi
+          
+          # Only run apt-get if packages are missing
+          if [ ${#MISSING_PKGS[@]} -eq 0 ]; then
+            echo "✓ All required packages already installed"
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          echo "Installing missing packages: ${MISSING_PKGS[*]}"
           sudo apt-get update -y
-          sudo apt-get install -y postgresql-client postgresql-client-common jq curl
+          sudo apt-get install -y "${MISSING_PKGS[@]}"
+          
+          # Verify installation
+          if command -v psql &> /dev/null; then
+            echo "✓ PostgreSQL client installed successfully"
+            psql --version
+          fi
+          echo "::endgroup::"
 
       - name: Get VPS IP and ensure running (via Contabo API)
         id: contabo_vps

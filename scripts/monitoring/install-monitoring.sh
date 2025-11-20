@@ -5,7 +5,8 @@ set -euo pipefail
 # Installs Prometheus, Grafana, Alertmanager with production defaults
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+# MANIFESTS_DIR is at repo root, not under scripts
+MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
@@ -29,6 +30,19 @@ ensure_namespace "${MONITORING_NAMESPACE}"
 
 # Update prometheus-values.yaml with dynamic domain
 TEMP_VALUES=/tmp/prometheus-values-prod.yaml
+
+# Check if manifest file exists before copying
+if [ ! -f "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" ]; then
+  log_error "Manifest file not found: ${MANIFESTS_DIR}/monitoring/prometheus-values.yaml"
+  log_info "MANIFESTS_DIR resolved to: ${MANIFESTS_DIR}"
+  log_info "SCRIPT_DIR: ${SCRIPT_DIR}"
+  log_info "Current working directory: $(pwd)"
+  log_info "Checking if file exists at alternative locations..."
+  ls -la "${MANIFESTS_DIR}/monitoring/" 2>/dev/null || true
+  ls -la "$(dirname "$SCRIPT_DIR")/../manifests/monitoring/" 2>/dev/null || true
+  exit 1
+fi
+
 cp "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" "${TEMP_VALUES}"
 sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
   sed -i '' "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
