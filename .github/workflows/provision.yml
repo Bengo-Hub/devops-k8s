@@ -236,39 +236,29 @@ jobs:
           fi
           echo "::endgroup::"
 
+      - name: Ensure scripts executable
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        run: |
+          chmod +x scripts/**/*.sh || true
+          chmod +x scripts/*/*.sh || true
+
       - name: Cleanup cluster (enabled by default)
         if: ${{ steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true' }}
         env:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
-          FORCE_CLEANUP: ${{ env.FORCE_REPROVISION || 'true' }}
+          FORCE_CLEANUP: 'true'
         run: |
           echo "::group::Cluster Cleanup & Reprovisioning"
           echo "ENABLE_CLEANUP=${ENABLE_CLEANUP}"
-          echo "FORCE_REPROVISION=${FORCE_REPROVISION}"
-          if [[ "${FORCE_REPROVISION}" == "true" ]]; then
-            echo "🔄 FORCE_REPROVISION is ENABLED - Full cleanup and reinstall"
-          else
-            echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
-          fi
+          echo "FORCE_CLEANUP=${FORCE_CLEANUP}"
+          echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
           echo "⚠️  Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
           echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
           export ENABLE_CLEANUP=true
-          export FORCE_CLEANUP=${FORCE_REPROVISION:-true}
+          export FORCE_CLEANUP=true
           ./scripts/cluster/cleanup-cluster.sh
           echo "✅ Cleanup complete"
           echo "::endgroup::"
-
-      - name: Ensure scripts executable
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP != 'true'
-        run: |
-          chmod +x scripts/**/*.sh || true
-          chmod +x scripts/*/*.sh || true
-
-      - name: Ensure scripts executable (after cleanup)
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true'
-        run: |
-          chmod +x scripts/**/*.sh || true
-          chmod +x scripts/*/*.sh || true
 
       - name: Create registry-credentials secrets in all namespaces
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
