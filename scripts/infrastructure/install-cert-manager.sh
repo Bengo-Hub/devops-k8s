@@ -5,7 +5,8 @@ set -euo pipefail
 # Configures Let's Encrypt for automatic TLS certificates
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/manifests"
+# MANIFESTS_DIR is at repo root, not under scripts
+MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
