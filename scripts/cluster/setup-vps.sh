@@ -78,7 +78,7 @@ fi
 
 # Disable swap if currently active
 if swapon --show | grep -q .; then
-    swapoff -a
+swapoff -a
     echo -e "${GREEN}✓ Swap disabled (was active)${NC}"
 else
     echo -e "${GREEN}✓ Swap already disabled${NC}"
@@ -98,7 +98,7 @@ EOF
         echo -e "${GREEN}✓ Kernel modules config updated${NC}"
     fi
 else
-    cat <<EOF | tee /etc/modules-load.d/k8s.conf
+cat <<EOF | tee /etc/modules-load.d/k8s.conf
 overlay
 br_netfilter
 EOF
@@ -107,14 +107,14 @@ fi
 
 # Load modules if not already loaded
 if ! lsmod | grep -q "^overlay"; then
-    modprobe overlay
+modprobe overlay
     echo -e "${GREEN}✓ overlay module loaded${NC}"
 else
     echo -e "${GREEN}✓ overlay module already loaded${NC}"
 fi
 
 if ! lsmod | grep -q "^br_netfilter"; then
-    modprobe br_netfilter
+modprobe br_netfilter
     echo -e "${GREEN}✓ br_netfilter module loaded${NC}"
 else
     echo -e "${GREEN}✓ br_netfilter module already loaded${NC}"
@@ -135,13 +135,13 @@ else
 fi
 
 if [ "$NEEDS_UPDATE" = true ]; then
-    cat <<EOF | tee /etc/sysctl.d/k8s.conf
+cat <<EOF | tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 EOF
-    sysctl --system
-    echo -e "${GREEN}✓ Sysctl parameters configured${NC}"
+sysctl --system
+echo -e "${GREEN}✓ Sysctl parameters configured${NC}"
 else
     echo -e "${GREEN}✓ Sysctl parameters already configured${NC}"
     sysctl --system >/dev/null 2>&1 || true
@@ -153,8 +153,8 @@ CURRENT_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null || echo ""
 if [ "$CURRENT_TZ" = "UTC" ]; then
     echo -e "${GREEN}✓ Timezone already set to UTC${NC}"
 else
-    timedatectl set-timezone UTC
-    echo -e "${GREEN}✓ Timezone set to UTC${NC}"
+timedatectl set-timezone UTC
+echo -e "${GREEN}✓ Timezone set to UTC${NC}"
 fi
 echo ""
 
@@ -211,20 +211,20 @@ if command -v ufw &> /dev/null; then
         fi
     else
         echo -e "${BLUE}Configuring firewall...${NC}"
-        ufw --force disable 2>/dev/null || true
-        ufw default deny incoming
-        ufw default allow outgoing
-        ufw allow 22/tcp       # SSH
-        ufw allow 80/tcp       # HTTP
-        ufw allow 443/tcp      # HTTPS
-        ufw allow 6443/tcp     # Kubernetes API
-        ufw allow 2379:2380/tcp # etcd
-        ufw allow 10250/tcp    # Kubelet
-        ufw allow 10251/tcp    # kube-scheduler
-        ufw allow 10252/tcp    # kube-controller
-        ufw allow 10255/tcp    # Read-only Kubelet
-        ufw --force enable
-        echo -e "${GREEN}✓ Firewall configured${NC}"
+    ufw --force disable 2>/dev/null || true
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp       # SSH
+    ufw allow 80/tcp       # HTTP
+    ufw allow 443/tcp      # HTTPS
+    ufw allow 6443/tcp     # Kubernetes API
+    ufw allow 2379:2380/tcp # etcd
+    ufw allow 10250/tcp    # Kubelet
+    ufw allow 10251/tcp    # kube-scheduler
+    ufw allow 10252/tcp    # kube-controller
+    ufw allow 10255/tcp    # Read-only Kubelet
+    ufw --force enable
+    echo -e "${GREEN}✓ Firewall configured${NC}"
     fi
 else
     echo -e "${YELLOW}⚠️  UFW not found, skipping firewall configuration${NC}"
@@ -235,9 +235,9 @@ echo -e "${BLUE}Step 8: Creating deployment tools directory...${NC}"
 if [ -d "/opt/deployment-tools" ]; then
     echo -e "${GREEN}✓ Deployment tools directory already exists${NC}"
 else
-    mkdir -p /opt/deployment-tools
-    chmod 755 /opt/deployment-tools
-    echo -e "${GREEN}✓ Deployment tools directory created${NC}"
+mkdir -p /opt/deployment-tools
+chmod 755 /opt/deployment-tools
+echo -e "${GREEN}✓ Deployment tools directory created${NC}"
 fi
 echo ""
 

@@ -96,7 +96,7 @@ primary:
 metrics:
   enabled: true
   serviceMonitor:
-    enabled: false  # Will be enabled conditionally if Prometheus Operator CRDs exist
+    enabled: false  # Disabled by default - will be enabled if Prometheus Operator CRDs exist
     namespace: infra
   resources:
     requests:
@@ -118,6 +118,16 @@ if [[ "$PG_DATABASE" != "postgres" ]]; then
     sed -i '' "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
 fi
 
+# Check if Prometheus Operator CRDs exist (for ServiceMonitor)
+PROMETHEUS_OPERATOR_CRDS_EXIST=false
+if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    PROMETHEUS_OPERATOR_CRDS_EXIST=true
+    log_info "Prometheus Operator CRDs detected - ServiceMonitor will be enabled"
+else
+    log_info "Prometheus Operator CRDs not found - ServiceMonitor disabled (will be enabled after monitoring stack installation)"
+    log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
+fi
+
 # Install or upgrade PostgreSQL (idempotent)
 echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
@@ -131,6 +141,15 @@ PG_HELM_ARGS=()
 # Chart version 16.7.27 handles FIPS gracefully, but we set it explicitly
 PG_HELM_ARGS+=(--set global.defaultFips=false)
 PG_HELM_ARGS+=(--set fips.openssl=false)
+
+# Enable ServiceMonitor only if Prometheus Operator CRDs exist
+if [ "$PROMETHEUS_OPERATOR_CRDS_EXIST" = true ]; then
+    PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true)
+    log_info "ServiceMonitor enabled for PostgreSQL metrics"
+else
+    PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
+    log_info "ServiceMonitor disabled (Prometheus Operator not installed yet)"
+fi
 
 # Always use values file for complete configuration (includes FIPS settings as backup)
 PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")

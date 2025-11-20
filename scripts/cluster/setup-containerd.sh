@@ -37,7 +37,7 @@ if command -v containerd &> /dev/null && systemctl is-active --quiet containerd;
     echo ""
     echo -e "${BLUE}Next step: Run ./scripts/cluster/setup-kubernetes.sh${NC}"
     echo ""
-    exit 0
+        exit 0
 fi
 
 echo -e "${BLUE}Step 1: Adding Docker repository (for containerd)...${NC}"
@@ -45,15 +45,15 @@ echo -e "${BLUE}Step 1: Adding Docker repository (for containerd)...${NC}"
 if [ -f /etc/apt/sources.list.d/docker.list ]; then
     echo -e "${GREEN}✓ Docker repository already configured${NC}"
 else
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-    
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-      $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    echo -e "${GREEN}✓ Docker repository added${NC}"
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+echo -e "${GREEN}✓ Docker repository added${NC}"
 fi
 echo ""
 
@@ -77,15 +77,15 @@ elif ! grep -q 'sandbox_image = "registry.k8s.io/pause:3.9"' /etc/containerd/con
 fi
 
 if [ "$NEEDS_CONFIG" = true ]; then
-    containerd config default | tee /etc/containerd/config.toml
-    
-    # Enable SystemdCgroup (required for Kubernetes)
-    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-    
-    # Configure sandbox image (pause container)
-    sed -i 's|sandbox_image = ".*"|sandbox_image = "registry.k8s.io/pause:3.9"|' /etc/containerd/config.toml
-    
-    echo -e "${GREEN}✓ containerd configured${NC}"
+containerd config default | tee /etc/containerd/config.toml
+
+# Enable SystemdCgroup (required for Kubernetes)
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+
+# Configure sandbox image (pause container)
+sed -i 's|sandbox_image = ".*"|sandbox_image = "registry.k8s.io/pause:3.9"|' /etc/containerd/config.toml
+
+echo -e "${GREEN}✓ containerd configured${NC}"
     
     # Restart containerd if it's running to apply new config
     if systemctl is-active --quiet containerd; then
@@ -129,9 +129,9 @@ if command -v crictl &> /dev/null; then
         echo -e "${GREEN}✓ crictl updated${NC}"
     fi
 else
-    wget -q "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz"
-    tar zxvf "crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" -C /usr/local/bin
-    rm -f "crictl-${CRICTL_VERSION}-linux-amd64.tar.gz"
+wget -q "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz"
+tar zxvf "crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" -C /usr/local/bin
+rm -f "crictl-${CRICTL_VERSION}-linux-amd64.tar.gz"
     echo -e "${GREEN}✓ crictl installed${NC}"
 fi
 
