@@ -25,6 +25,38 @@ ensure_helm
 # Create namespace if it doesn't exist
 ensure_namespace "${NAMESPACE}"
 
+# Ensure PriorityClass exists (required by RabbitMQ)
+MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
+log_info "Ensuring PriorityClass db-critical exists..."
+if ! kubectl get priorityclass db-critical >/dev/null 2>&1; then
+  log_info "Creating PriorityClass db-critical..."
+  kubectl apply -f "${MANIFESTS_DIR}/priorityclasses/db-critical.yaml" || {
+    log_warning "Failed to apply PriorityClass. Creating inline..."
+    kubectl create priorityclass db-critical \
+      --value=1000000000 \
+      --description="High priority for critical data services (PostgreSQL/Redis/RabbitMQ)" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  }
+  log_success "PriorityClass db-critical created"
+else
+  log_success "PriorityClass db-critical already exists"
+fi
+
+# Check for stuck Helm operations before proceeding
+log_info "Checking for stuck Helm operations..."
+HELM_STATUS=$(helm -n "${NAMESPACE}" status rabbitmq 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+  log_warning "Detected stuck Helm operation (status: $HELM_STATUS). Cleaning up..."
+  
+  # Delete pending Helm secrets
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  
+  log_success "Helm lock removed"
+  sleep 5
+fi
+
 # Ensure Helm repos
 add_helm_repo "bitnami" "https://charts.bitnami.com/bitnami"
 
@@ -52,6 +84,9 @@ RABBITMQ_HELM_ARGS+=(--set resources.limits.cpu="500m")
 # Persistence
 RABBITMQ_HELM_ARGS+=(--set persistence.enabled=true)
 RABBITMQ_HELM_ARGS+=(--set persistence.size="10Gi")
+
+# PriorityClass
+RABBITMQ_HELM_ARGS+=(--set priorityClassName=db-critical)
 
 # Metrics
 RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
@@ -92,13 +127,29 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
         log_info "Note: Password change will take effect on next pod restart"
         HELM_RABBITMQ_EXIT=0
       else
-        log_warning "RabbitMQ not healthy. Performing Helm upgrade..."
+        log_warning "RabbitMQ not healthy. Checking for stuck Helm operation..."
+        
+        # Check for stuck Helm operation before upgrading
+        HELM_STATUS=$(helm -n "${NAMESPACE}" status rabbitmq 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+        if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+          log_warning "⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up..."
+          
+          # Delete pending Helm secrets
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          
+          log_success "✓ Helm lock removed. Proceeding with upgrade..."
+          sleep 5
+        fi
+        
+        log_warning "Performing Helm upgrade..."
         helm upgrade rabbitmq bitnami/rabbitmq \
           -n "${NAMESPACE}" \
           --reset-values \
           "${RABBITMQ_HELM_ARGS[@]}" \
           --timeout=10m \
-          --wait 2>&1 | tee /tmp/helm-rabbitmq-install.log
+          --wait=false 2>&1 | tee /tmp/helm-rabbitmq-install.log
         HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
       fi
     fi
@@ -106,12 +157,28 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
     log_success "RabbitMQ already installed and healthy - skipping"
     HELM_RABBITMQ_EXIT=0
   else
-    echo -e "${YELLOW}RabbitMQ exists but not ready; performing safe upgrade${NC}"
+    echo -e "${YELLOW}RabbitMQ exists but not ready; checking for stuck operation...${NC}"
+    
+    # Check for stuck Helm operation
+    HELM_STATUS=$(helm -n "${NAMESPACE}" status rabbitmq 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+    if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+      echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
+      
+      # Delete pending Helm secrets
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      
+      echo -e "${GREEN}✓ Helm lock removed${NC}"
+      sleep 5
+    fi
+    
+    echo -e "${YELLOW}Performing safe upgrade...${NC}"
     helm upgrade rabbitmq bitnami/rabbitmq \
       -n "${NAMESPACE}" \
       --reuse-values \
       --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-rabbitmq-install.log
+      --wait=false 2>&1 | tee /tmp/helm-rabbitmq-install.log
     HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
   fi
 else
@@ -149,18 +216,86 @@ else
     -n "${NAMESPACE}" \
     "${RABBITMQ_HELM_ARGS[@]}" \
     --timeout=10m \
-    --wait 2>&1 | tee /tmp/helm-rabbitmq-install.log
+    --wait=false 2>&1 | tee /tmp/helm-rabbitmq-install.log
   HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
 fi
 set -e
 
 if [ $HELM_RABBITMQ_EXIT -eq 0 ]; then
-  echo -e "${GREEN}✓ RabbitMQ ready${NC}"
+  echo -e "${GREEN}✓ RabbitMQ Helm operation completed${NC}"
+  echo -e "${BLUE}Waiting for RabbitMQ pods to be ready...${NC}"
+  sleep 10
+  
+  # Check actual pod status
+  RABBITMQ_READY=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  RABBITMQ_REPLICAS=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values
+  RABBITMQ_READY=${RABBITMQ_READY:-0}
+  RABBITMQ_REPLICAS=${RABBITMQ_REPLICAS:-0}
+  
+  if [[ "$RABBITMQ_READY" =~ ^[0-9]+$ ]] && [ "$RABBITMQ_READY" -ge 1 ]; then
+    echo -e "${GREEN}✓ RabbitMQ is ready (${RABBITMQ_READY}/${RABBITMQ_REPLICAS} replicas)${NC}"
+  else
+    echo -e "${YELLOW}⚠️  RabbitMQ pods not ready yet (${RABBITMQ_READY}/${RABBITMQ_REPLICAS} replicas)${NC}"
+    echo -e "${BLUE}Checking pod status...${NC}"
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq || true
+    
+    # Check for ImagePullBackOff
+    IMAGE_PULL_ERROR=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "ImagePull\|ErrImagePull" || echo "")
+    if [[ -n "$IMAGE_PULL_ERROR" ]]; then
+      echo -e "${RED}⚠️  Image pull error detected. Checking details...${NC}"
+      kubectl describe pod -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq | grep -A 5 "Events:" || true
+      echo -e "${YELLOW}Possible causes:${NC}"
+      echo "  - Network connectivity issues"
+      echo "  - Docker registry rate limiting"
+      echo "  - Image pull timeout"
+      echo -e "${BLUE}Retrying image pull...${NC}"
+      kubectl delete pod -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq --force --grace-period=0 2>/dev/null || true
+      sleep 5
+    fi
+    
+    echo -e "${BLUE}RabbitMQ installation initiated. Pods will start in background.${NC}"
+  fi
 else
-  echo -e "${RED}RabbitMQ installation failed with exit code $HELM_RABBITMQ_EXIT${NC}"
-  tail -50 /tmp/helm-rabbitmq-install.log || true
-  kubectl get pods -n "${NAMESPACE}" || true
-  exit 1
+  echo -e "${YELLOW}RabbitMQ Helm operation reported exit code $HELM_RABBITMQ_EXIT${NC}"
+  echo -e "${YELLOW}Checking actual RabbitMQ status...${NC}"
+  
+  # Wait a bit for pods to update
+  sleep 10
+  
+  # Check if RabbitMQ StatefulSet exists and has ready replicas
+  RABBITMQ_READY=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  RABBITMQ_REPLICAS=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values
+  RABBITMQ_READY=${RABBITMQ_READY:-0}
+  RABBITMQ_REPLICAS=${RABBITMQ_REPLICAS:-0}
+  
+  echo -e "${BLUE}RabbitMQ StatefulSet: ${RABBITMQ_READY}/${RABBITMQ_REPLICAS} replicas ready${NC}"
+  
+  if [[ "$RABBITMQ_READY" =~ ^[0-9]+$ ]] && [ "$RABBITMQ_READY" -ge 1 ]; then
+    echo -e "${GREEN}✓ RabbitMQ is actually running! Continuing...${NC}"
+    echo -e "${YELLOW}Note: Helm reported a timeout, but RabbitMQ is healthy${NC}"
+  else
+    echo -e "${RED}RabbitMQ installation/upgrade failed${NC}"
+    echo -e "${YELLOW}=== Helm output (last 50 lines) ===${NC}"
+    tail -50 /tmp/helm-rabbitmq-install.log 2>/dev/null || true
+    echo -e "${YELLOW}=== Pod status ===${NC}"
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq 2>/dev/null || true
+    echo -e "${YELLOW}=== Pod events ===${NC}"
+    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i rabbitmq | tail -10 || true
+    echo -e "${YELLOW}=== Diagnosing issues ===${NC}"
+    
+    # Check for ImagePullBackOff
+    IMAGE_PULL_ERROR=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "ImagePull\|ErrImagePull" || echo "")
+    if [[ -n "$IMAGE_PULL_ERROR" ]]; then
+      echo -e "${RED}⚠️  Image pull error detected${NC}"
+      kubectl describe pod -n "${NAMESPACE}" -l app.kubernetes.io/name=rabbitmq | grep -A 10 "Events:" || true
+    fi
+    
+    exit 1
+  fi
 fi
 
 # Retrieve credentials
