@@ -216,6 +216,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Password updated in secret. PostgreSQL will use it on next restart.${NC}"
         echo -e "${YELLOW}Note: Password change will take effect on next pod restart${NC}"
         HELM_PG_EXIT=0
+        POSTGRES_DEPLOYED=true
       else
         echo -e "${YELLOW}PostgreSQL not healthy. Performing Helm upgrade...${NC}"
         helm upgrade postgresql bitnami/postgresql \
@@ -231,6 +232,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   elif [[ "$IS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ PostgreSQL already installed and healthy - skipping${NC}"
     HELM_PG_EXIT=0
+    POSTGRES_DEPLOYED=true
   else
     echo -e "${YELLOW}PostgreSQL exists but not ready; performing safe upgrade${NC}"
     helm upgrade postgresql bitnami/postgresql \
@@ -240,8 +242,13 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       --timeout=10m \
       --wait 2>&1 | tee /tmp/helm-postgresql-install.log
     HELM_PG_EXIT=${PIPESTATUS[0]}
+    POSTGRES_DEPLOYED=true
   fi
-POSTGRES_DEPLOYED=false
+  
+  # Only set to false if we haven't already marked it as deployed
+  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
+    POSTGRES_DEPLOYED=false
+  fi
 
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
@@ -401,14 +408,31 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
       echo -e "${YELLOW}Password mismatch detected - updating Redis to sync password${NC}"
       echo -e "${BLUE}Current password length: ${#CURRENT_REDIS_PASS} chars${NC}"
       echo -e "${BLUE}New password length: ${#REDIS_PASSWORD} chars${NC}"
-      helm upgrade redis bitnami/redis \
-        -n "${NAMESPACE}" \
-        --reset-values \
-        -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-        "${REDIS_HELM_ARGS[@]}" \
-        --timeout=10m \
-        --wait 2>&1 | tee /tmp/helm-redis-install.log
-      HELM_REDIS_EXIT=${PIPESTATUS[0]}
+      
+      # Check if Redis is currently healthy - if yes, update secret directly without Helm upgrade
+      if [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
+        echo -e "${GREEN}Redis is healthy. Updating password via secret...${NC}"
+        
+        # Update the secret directly (Redis will use it on next restart)
+        kubectl create secret generic redis \
+          --from-literal=redis-password="$REDIS_PASSWORD" \
+          -n "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        echo -e "${GREEN}✓ Password updated in secret. Redis will use it on next restart.${NC}"
+        echo -e "${YELLOW}Note: Password change will take effect on next pod restart${NC}"
+        HELM_REDIS_EXIT=0
+      else
+        echo -e "${YELLOW}Redis not healthy. Performing Helm upgrade...${NC}"
+        helm upgrade redis bitnami/redis \
+          -n "${NAMESPACE}" \
+          --reset-values \
+          -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+          "${REDIS_HELM_ARGS[@]}" \
+          --timeout=10m \
+          --wait 2>&1 | tee /tmp/helm-redis-install.log
+        HELM_REDIS_EXIT=${PIPESTATUS[0]}
+      fi
     fi
   elif [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ Redis already installed and healthy - skipping${NC}"
