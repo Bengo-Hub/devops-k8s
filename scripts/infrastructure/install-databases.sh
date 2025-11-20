@@ -170,7 +170,7 @@ fix_stuck_helm_operation() {
 
 # Check for stuck Helm operations before proceeding
 log_info "Checking for stuck Helm operations..."
-fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
+fix_stuck_helm_operation "postgresql" "${NAMESPACE}" || true
 
 # Install or upgrade PostgreSQL (idempotent)
 log_section "Installing/upgrading PostgreSQL"
@@ -432,7 +432,7 @@ fi
 
 # Check for stuck Helm operations before proceeding with Redis
 log_info "Checking for stuck Redis Helm operations..."
-fix_stuck_helm_operation "redis" "${NAMESPACE}"
+fix_stuck_helm_operation "redis" "${NAMESPACE}" || true
 
 # Function to fix orphaned Redis resources
 fix_orphaned_redis_resources() {
