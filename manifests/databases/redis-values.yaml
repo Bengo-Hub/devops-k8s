@@ -75,7 +75,7 @@ metrics:
   enabled: true
   serviceMonitor:
     enabled: true
-    namespace: monitoring
+    namespace: infra  # Monitoring stack is installed in infra namespace
   resources:
     requests:
       memory: "64Mi"
