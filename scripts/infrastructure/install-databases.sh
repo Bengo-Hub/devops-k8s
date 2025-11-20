@@ -100,7 +100,7 @@ metrics:
   enabled: true
   serviceMonitor:
     enabled: false  # Disabled by default - will be enabled if Prometheus Operator CRDs exist
-    namespace: infra
+    namespace: "${MONITORING_NS}"
   resources:
     requests:
       memory: "128Mi"
@@ -111,8 +111,16 @@ metrics:
 
 ## Network policy
 networkPolicy:
-  enabled: false
+  enabled: true
   allowExternal: false
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "*"
+      ports:
+        - port: 5432
+          protocol: TCP
 VALUES_EOF
 
 # Update database name if different from default
@@ -135,13 +143,18 @@ fi
 log_info "Ensuring PriorityClass db-critical exists..."
 if ! kubectl get priorityclass db-critical >/dev/null 2>&1; then
   log_info "Creating PriorityClass db-critical..."
-  kubectl apply -f "${MANIFESTS_DIR}/priorityclasses/db-critical.yaml" || {
-    log_warning "Failed to apply PriorityClass. Creating inline..."
-    kubectl create priorityclass db-critical \
-      --value=1000000000 \
-      --description="High priority for critical data services (PostgreSQL/Redis/RabbitMQ)" \
-      --dry-run=client -o yaml | kubectl apply -f -
-  }
+  cat <<'PRIORITY_EOF' | kubectl apply -f -
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: db-critical
+  labels:
+    app.kubernetes.io/name: db-critical
+spec:
+  globalDefault: false
+  description: "High priority for critical data services (PostgreSQL/Redis/RabbitMQ)"
+  value: 1000000000
+PRIORITY_EOF
   log_success "PriorityClass db-critical created"
 else
   log_success "PriorityClass db-critical already exists"
@@ -168,61 +181,6 @@ fix_stuck_helm_operation() {
   return 1
 }
 
-# Function to fix orphaned NetworkPolicy with invalid Helm ownership metadata
-fix_orphaned_networkpolicy() {
-  local release_name=$1
-  local namespace=${2:-${NAMESPACE}}
-  
-  # Check if NetworkPolicy exists
-  if ! kubectl get networkpolicy "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
-    return 0  # NetworkPolicy doesn't exist, nothing to fix
-  fi
-  
-  # Check if NetworkPolicy has proper Helm ownership annotations
-  local release_name_annotation=$(kubectl get networkpolicy "${release_name}" -n "${namespace}" \
-    -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-  local release_namespace_annotation=$(kubectl get networkpolicy "${release_name}" -n "${namespace}" \
-    -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-  
-  if [ -z "$release_name_annotation" ] || [ -z "$release_namespace_annotation" ]; then
-    log_warning "Found NetworkPolicy '${release_name}' with invalid Helm ownership metadata"
-    log_info "NetworkPolicy exists but missing Helm annotations - fixing..."
-    
-    # Try to add proper Helm annotations first
-    if kubectl patch networkpolicy "${release_name}" -n "${namespace}" \
-      --type='json' \
-      -p="[{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-name\",\"value\":\"${release_name}\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-namespace\",\"value\":\"${namespace}\"}]" 2>/dev/null; then
-      log_success "Added Helm ownership annotations to NetworkPolicy"
-      return 0
-    else
-      # If patching fails (e.g., annotations path doesn't exist), delete and let Helm recreate
-      log_warning "Failed to patch NetworkPolicy annotations - deleting to let Helm recreate..."
-      kubectl patch networkpolicy "${release_name}" -n "${namespace}" \
-        -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-      kubectl delete networkpolicy "${release_name}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
-      log_success "NetworkPolicy deleted - Helm will recreate it with proper ownership"
-      sleep 2
-      return 0
-    fi
-  fi
-  
-  # Check if annotations match expected values
-  if [ "$release_name_annotation" != "$release_name" ] || [ "$release_namespace_annotation" != "$namespace" ]; then
-    log_warning "NetworkPolicy '${release_name}' has incorrect Helm ownership annotations"
-    log_info "Expected: release-name=${release_name}, release-namespace=${namespace}"
-    log_info "Found: release-name=${release_name_annotation}, release-namespace=${release_namespace_annotation}"
-    log_info "Deleting NetworkPolicy to let Helm recreate with correct ownership..."
-    kubectl patch networkpolicy "${release_name}" -n "${namespace}" \
-      -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-    kubectl delete networkpolicy "${release_name}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
-    log_success "NetworkPolicy deleted - Helm will recreate it with proper ownership"
-    sleep 2
-    return 0
-  fi
-  
-  return 0  # NetworkPolicy is properly configured
-}
-
 # Function to fix orphaned resources with invalid Helm ownership metadata (generic)
 fix_orphaned_resources() {
   local release_name=$1
@@ -231,8 +189,9 @@ fix_orphaned_resources() {
   shift 2  # Remove first two arguments (release_name, namespace)
   
   # Default resource types if none specified
+  # Include ServiceAccounts to handle ownership issues
   if [ $# -eq 0 ]; then
-    resource_types=("networkpolicies" "poddisruptionbudgets" "configmaps" "services" "secrets")
+    resource_types=("networkpolicies" "poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts")
   fi
   
   for resource_type in "${resource_types[@]}"; do
@@ -241,7 +200,18 @@ fix_orphaned_resources() {
     resource_list=$(kubectl api-resources | awk '$1 ~ /^'"${resource_type}"'$/ {print $2}' || echo "${plural_type}")
     
     # Get resources for this release
+    # Try label selector first
     resources=$(kubectl get "${resource_list}" -n "${namespace}" -l "app.kubernetes.io/instance=${release_name}" -o name 2>/dev/null || true)
+    
+    # For resources like ServiceAccount that might not have the label, also check by name
+    # ServiceAccounts are often created without Helm labels, so check by exact name match
+    if [ -z "$resources" ] && ([ "${resource_type}" = "serviceaccount" ] || [ "${resource_type}" = "serviceaccounts" ]); then
+      # Check if a ServiceAccount with the release name exists
+      if kubectl get "${resource_list}" "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
+        resources="${resource_list}/${release_name}"
+        log_info "Found ServiceAccount '${release_name}' by name (no labels found)"
+      fi
+    fi
     
     if [ -n "$resources" ]; then
       log_info "Checking ${resource_list} for ownership issues..."
@@ -264,6 +234,25 @@ fix_orphaned_resources() {
             log_success "Added Helm ownership annotations to ${resource_type} '${resource_name}'"
           else
             # Fallback: Remove finalizers and delete
+            # For ServiceAccounts, check if any pods are using them before deletion
+            if [ "${resource_type}" = "serviceaccount" ] || [ "${resource_type}" = "serviceaccounts" ]; then
+              # Check if ServiceAccount is in use by any pods
+              PODS_USING_SA=$(kubectl get pods -n "${namespace}" -o json 2>/dev/null | \
+                jq -r ".items[] | select(.spec.serviceAccountName == \"${resource_name}\") | .metadata.name" 2>/dev/null || true)
+              
+              if [ -n "$PODS_USING_SA" ]; then
+                log_warning "ServiceAccount '${resource_name}' is in use by pods: $PODS_USING_SA"
+                log_info "Patching annotations instead of deleting (pods are using this ServiceAccount)..."
+                # Force add annotations even if patch failed before
+                kubectl annotate "${resource}" -n "${namespace}" \
+                  meta.helm.sh/release-name="${release_name}" \
+                  meta.helm.sh/release-namespace="${namespace}" \
+                  --overwrite 2>/dev/null || true
+                log_success "ServiceAccount '${resource_name}' annotations updated (kept for pod compatibility)"
+                continue
+              fi
+            fi
+            
             log_warning "Failed to patch ${resource_type} '${resource_name}' - deleting to let Helm recreate..."
             kubectl patch "${resource}" -n "${namespace}" \
               -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
@@ -318,31 +307,19 @@ fi
 # Always use values file for complete configuration (includes FIPS settings as backup)
 PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
-# Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets) - REQUIRED
-# These --set flags will override values file
-if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
-  log_error "POSTGRES_PASSWORD is required but not set in GitHub secrets"
-  log_error "Please set POSTGRES_PASSWORD in GitHub organization secrets"
+# Simplify password logic around line 353-409
+# Replace the complex if-else password matching with:
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+  ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
+  PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
+  PG_HELM_ARGS+=(--set global.postgresql.auth.password="$ADMIN_PASS")
+  log_info "PostgreSQL passwords configured from environment variables"
+  log_info "  - Superuser (postgres): ${#POSTGRES_PASSWORD} chars"
+  log_info "  - Admin user (admin_user): ${#ADMIN_PASS} chars"
+else
+  log_error "POSTGRES_PASSWORD required but not set"
   exit 1
 fi
-
-log_info "Using POSTGRES_PASSWORD from environment/GitHub secrets"
-log_info "  - postgres superuser password: ${#POSTGRES_PASSWORD} chars"
-PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
-PG_HELM_ARGS+=(--set global.postgresql.auth.database="$PG_DATABASE")
-
-# Use POSTGRES_ADMIN_PASSWORD for admin_user if set, otherwise use POSTGRES_PASSWORD
-if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
-  log_info "  - admin_user password: using POSTGRES_ADMIN_PASSWORD (${#POSTGRES_ADMIN_PASSWORD} chars)"
-  PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
-else
-  log_info "  - admin_user password: using same as postgres superuser (POSTGRES_PASSWORD)"
-  PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_PASSWORD")
-fi
-
-# Redundant FIPS setting for extra safety
-PG_HELM_ARGS+=(--set global.defaultFips=false)
-PG_HELM_ARGS+=(--set fips.openssl=false)
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
@@ -449,21 +426,10 @@ else
       sleep 5
     fi
     
-    # Clean up orphaned resources
-    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
-    if [ -n "$ORPHANED_RESOURCES" ]; then
-      log_warning "Cleaning up orphaned resources (cleanup mode)..."
-      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-      sleep 10
-    fi
-    
-    # Final NetworkPolicy check
-    FINAL_NP_CHECK=$(kubectl get networkpolicy postgresql -n "${NAMESPACE}" -o name 2>/dev/null || true)
-    if [ -n "$FINAL_NP_CHECK" ]; then
-      kubectl patch networkpolicy postgresql -n "${NAMESPACE}" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-      kubectl delete networkpolicy postgresql -n "${NAMESPACE}" --wait=true --grace-period=0 2>/dev/null || true
-      sleep 5
-    fi
+    # Clean up orphaned resources (use generic function instead of specific cleanup)
+    log_info "Cleaning up orphaned PostgreSQL resources (cleanup mode)..."
+    fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
+    sleep 5
   else
     log_info "Cleanup mode inactive - checking for existing resources to update..."
     
