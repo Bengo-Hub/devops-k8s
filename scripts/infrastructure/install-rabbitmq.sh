@@ -102,6 +102,9 @@ RABBITMQ_HELM_ARGS+=(--set priorityClassName=db-critical)
 # Metrics
 RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
+# Use stable Bitnami 'latest' tag to avoid NotFound errors on rotated versioned tags
+RABBITMQ_HELM_ARGS+=(--set image.tag=latest)
+
 # Common functions already sourced above
 
 # Function to fix orphaned RabbitMQ resources (ownership / annotations)
