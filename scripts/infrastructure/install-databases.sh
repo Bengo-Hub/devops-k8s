@@ -189,9 +189,9 @@ fix_orphaned_resources() {
   shift 2  # Remove first two arguments (release_name, namespace)
   
   # Default resource types if none specified
-  # Include ServiceAccounts to handle ownership issues
   if [ $# -eq 0 ]; then
-    resource_types=("networkpolicies" "poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts")
+    # Include secrets and serviceaccounts explicitly to handle ownership issues
+    resource_types=("poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts" "networkpolicies")
   fi
   
   for resource_type in "${resource_types[@]}"; do
@@ -199,17 +199,14 @@ fix_orphaned_resources() {
     plural_type="${resource_type}s"
     resource_list=$(kubectl api-resources | awk '$1 ~ /^'"${resource_type}"'$/ {print $2}' || echo "${plural_type}")
     
-    # Get resources for this release
-    # Try label selector first
+    # Get resources for this release by label
     resources=$(kubectl get "${resource_list}" -n "${namespace}" -l "app.kubernetes.io/instance=${release_name}" -o name 2>/dev/null || true)
     
-    # For resources like ServiceAccount that might not have the label, also check by name
-    # ServiceAccounts are often created without Helm labels, so check by exact name match
-    if [ -z "$resources" ] && ([ "${resource_type}" = "serviceaccount" ] || [ "${resource_type}" = "serviceaccounts" ]); then
-      # Check if a ServiceAccount with the release name exists
-      if kubectl get "${resource_list}" "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
-        resources="${resource_list}/${release_name}"
-        log_info "Found ServiceAccount '${release_name}' by name (no labels found)"
+    # Fallback: for secrets, also check by exact name if no labelled resources are found
+    if [ -z "$resources" ] && { [ "${resource_type}" = "secrets" ] || [ "${resource_type}" = "secret" ]; }; then
+      if kubectl get secret "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
+        resources="secret/${release_name}"
+        log_info "Found secret '${release_name}' by name (no Helm labels present) - checking ownership..."
       fi
     fi
     
@@ -234,25 +231,6 @@ fix_orphaned_resources() {
             log_success "Added Helm ownership annotations to ${resource_type} '${resource_name}'"
           else
             # Fallback: Remove finalizers and delete
-            # For ServiceAccounts, check if any pods are using them before deletion
-            if [ "${resource_type}" = "serviceaccount" ] || [ "${resource_type}" = "serviceaccounts" ]; then
-              # Check if ServiceAccount is in use by any pods
-              PODS_USING_SA=$(kubectl get pods -n "${namespace}" -o json 2>/dev/null | \
-                jq -r ".items[] | select(.spec.serviceAccountName == \"${resource_name}\") | .metadata.name" 2>/dev/null || true)
-              
-              if [ -n "$PODS_USING_SA" ]; then
-                log_warning "ServiceAccount '${resource_name}' is in use by pods: $PODS_USING_SA"
-                log_info "Patching annotations instead of deleting (pods are using this ServiceAccount)..."
-                # Force add annotations even if patch failed before
-                kubectl annotate "${resource}" -n "${namespace}" \
-                  meta.helm.sh/release-name="${release_name}" \
-                  meta.helm.sh/release-namespace="${namespace}" \
-                  --overwrite 2>/dev/null || true
-                log_success "ServiceAccount '${resource_name}' annotations updated (kept for pod compatibility)"
-                continue
-              fi
-            fi
-            
             log_warning "Failed to patch ${resource_type} '${resource_name}' - deleting to let Helm recreate..."
             kubectl patch "${resource}" -n "${namespace}" \
               -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
@@ -426,10 +404,13 @@ else
       sleep 5
     fi
     
-    # Clean up orphaned resources (use generic function instead of specific cleanup)
-    log_info "Cleaning up orphaned PostgreSQL resources (cleanup mode)..."
-    fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-    sleep 5
+    # Clean up orphaned resources
+    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+    if [ -n "$ORPHANED_RESOURCES" ]; then
+      log_warning "Cleaning up orphaned resources (cleanup mode)..."
+      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+      sleep 10
+    fi
   else
     log_info "Cleanup mode inactive - checking for existing resources to update..."
     
