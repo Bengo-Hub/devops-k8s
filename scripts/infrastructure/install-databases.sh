@@ -297,12 +297,16 @@ PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
 FORCE_DB_INSTALL=${FORCE_DB_INSTALL:-${FORCE_INSTALL:-false}}
 
-# Simplify password logic: environment is the source of truth
+# Simplify password logic: POSTGRES_PASSWORD (GitHub secret) is the single source of truth
 if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-  ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
+  # Use the same password for:
+  #   - postgres superuser
+  #   - admin_user (admin DB user)
+  #   - all secret fields (postgres-password, password, admin-user-password)
+  ADMIN_PASS="$POSTGRES_PASSWORD"
   PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
   PG_HELM_ARGS+=(--set global.postgresql.auth.password="$ADMIN_PASS")
-  log_info "PostgreSQL passwords configured from environment variables"
+  log_info "PostgreSQL passwords configured from POSTGRES_PASSWORD (GitHub secret)"
   log_info "  - Superuser (postgres): ${#POSTGRES_PASSWORD} chars"
   log_info "  - Admin user (admin_user): ${#ADMIN_PASS} chars"
 else
@@ -341,7 +345,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       
       # Check if PostgreSQL is currently running - if yes, sync DATABASE passwords + secret without Helm upgrade
       if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
-        log_info "PostgreSQL is healthy. Syncing superuser/admin passwords with GitHub secret..."
+        log_info "PostgreSQL is healthy. Syncing superuser/admin passwords with POSTGRES_PASSWORD..."
         
         # Try to update actual database passwords first using the CURRENT_PG_PASS
         PG_POD=$(kubectl -n "${NAMESPACE}" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
@@ -353,7 +357,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
             >/dev/null 2>&1 || log_warning "Failed to update postgres superuser password in database (will rely on secret/Helm sync)"
 
           # Update admin_user password (used for per‑service DB management)
-          ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
+          ADMIN_PASS="$POSTGRES_PASSWORD"
           kubectl -n "${NAMESPACE}" exec "$PG_POD" -- \
             env PGPASSWORD="$CURRENT_PG_PASS" \
             psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER admin_user WITH PASSWORD '${ADMIN_PASS}';" \
@@ -362,8 +366,8 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
           log_warning "Could not determine PostgreSQL pod name or current password; skipping in‑database password sync"
         fi
         
-        # Update the secret directly - use POSTGRES_ADMIN_PASSWORD if set, otherwise POSTGRES_PASSWORD
-        ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
+        # Update the secret directly - keep ALL secret fields in sync with POSTGRES_PASSWORD
+        ADMIN_PASS="$POSTGRES_PASSWORD"
         kubectl create secret generic postgresql \
           --from-literal=postgres-password="$POSTGRES_PASSWORD" \
           --from-literal=password="$ADMIN_PASS" \
@@ -699,14 +703,21 @@ else
   REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
 fi
 
-# Priority 1: Use REDIS_PASSWORD from environment (GitHub secrets) - REQUIRED
+# Shared password policy:
+# - POSTGRES_PASSWORD (GitHub secret) is the canonical infra password
+# - Redis reuses the same password unless explicitly overridden (and we strongly recommend keeping them identical)
 if [[ -z "${REDIS_PASSWORD:-}" ]]; then
-  log_error "REDIS_PASSWORD is required but not set in GitHub secrets"
-  log_error "Please set REDIS_PASSWORD in GitHub organization secrets"
-  exit 1
+  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    REDIS_PASSWORD="$POSTGRES_PASSWORD"
+    log_info "REDIS_PASSWORD not set - reusing POSTGRES_PASSWORD for Redis (shared infra password)"
+  else
+    log_error "REDIS_PASSWORD is required but not set, and POSTGRES_PASSWORD is also empty"
+    log_error "Please set POSTGRES_PASSWORD (preferred) or REDIS_PASSWORD in GitHub organization secrets"
+    exit 1
+  fi
 fi
 
-log_info "Using REDIS_PASSWORD from environment/GitHub secrets"
+log_info "Using Redis password from environment (shared infra password)"
 log_info "  - Redis password: ${#REDIS_PASSWORD} chars"
 REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
 
