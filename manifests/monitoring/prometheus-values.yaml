@@ -44,9 +44,10 @@ grafana:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod
       nginx.ingress.kubernetes.io/rewrite-target: /
-      # Allow HTTP for ACME challenge path (required for cert-manager HTTP-01 validation)
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
-      # Ensure ACME challenge path is accessible via HTTP
+      # Enable HTTP to HTTPS redirect
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      # Allow ACME challenge path to work with HTTP (for cert-manager validation)
       nginx.ingress.kubernetes.io/configuration-snippet: |
         if ($uri ~ "^/.well-known/acme-challenge/") {
           return 200;
