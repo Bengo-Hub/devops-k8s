@@ -636,6 +636,26 @@ fix_orphaned_redis_resources() {
     sleep 3
   fi
 
+  # Fallback: ensure well-known legacy headless service 'redis-headless' is fixed even if jq selector misses it
+  if kubectl -n "${NAMESPACE}" get service redis-headless >/dev/null 2>&1; then
+    SVC_ANN_RELEASE=$(kubectl -n "${NAMESPACE}" get service redis-headless -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+    SVC_ANN_NS=$(kubectl -n "${NAMESPACE}" get service redis-headless -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+    if [ -z "$SVC_ANN_RELEASE" ] || [ -z "$SVC_ANN_NS" ] || [ "$SVC_ANN_RELEASE" != "redis" ] || [ "$SVC_ANN_NS" != "${NAMESPACE}" ]; then
+      log_warning "Service 'redis-headless' has invalid or missing Helm ownership metadata - repairing..."
+      if kubectl -n "${NAMESPACE}" annotate service redis-headless \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated service redis-headless with Helm ownership"
+      else
+        log_warning "Failed to annotate service redis-headless, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete service redis-headless --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned service redis-headless"
+      fi
+      sleep 2
+    fi
+  fi
+
   # Check for orphaned configmaps
   ORPHANED_REDIS_CONFIGMAPS=$(kubectl -n "${NAMESPACE}" get configmap -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
     jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
