@@ -197,7 +197,7 @@ if [ -n "$VPA_HAS_TLS_MOUNT" ]; then
     kubectl get deployment vpa-admission-controller -n kube-system -o json | \
       jq 'del(.spec.template.spec.containers[0].volumeMounts) | 
           del(.spec.template.spec.volumes) | 
-          .spec.template.spec.containers[0].args = (.spec.template.spec.containers[0].args | map(select(. != "--reload-cert")))' | \
+          .spec.template.spec.containers[0].args = ["--v=4", "--stderrthreshold=info"]' | \
       kubectl apply -f - 2>/dev/null || true
     log_info "Restarting VPA admission controller without TLS requirement..."
     kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
@@ -210,7 +210,7 @@ if [ -n "$VPA_HAS_TLS_MOUNT" ]; then
       kubectl get deployment vpa-admission-controller -n kube-system -o json | \
         jq 'del(.spec.template.spec.containers[0].volumeMounts) | 
             del(.spec.template.spec.volumes) | 
-            .spec.template.spec.containers[0].args = (.spec.template.spec.containers[0].args | map(select(. != "--reload-cert")))' | \
+            .spec.template.spec.containers[0].args = ["--v=4", "--stderrthreshold=info"]' | \
         kubectl apply -f - 2>/dev/null || true
       kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
       sleep 5
