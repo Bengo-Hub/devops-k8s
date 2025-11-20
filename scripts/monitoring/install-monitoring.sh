@@ -228,6 +228,10 @@ helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   -n "${MONITORING_NAMESPACE}" \
   -f "${TEMP_VALUES}" \
   ${HELM_EXTRA_OPTS} \
+  --set-string grafana.adminPassword=changeme \
+  --set-string grafana.ingress.enabled=true \
+  --set-string grafana.ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/ssl-redirect=true \
+  --set-string grafana.ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/force-ssl-redirect=true \
   --timeout=15m \
   --wait 2>&1 | tee /tmp/helm-monitoring-install.log
 HELM_EXIT_CODE=${PIPESTATUS[0]}
@@ -251,7 +255,9 @@ if [ $HELM_EXIT_CODE -eq 0 ]; then
         -n "${MONITORING_NAMESPACE}" \
         -f "${TEMP_VALUES}" \
         ${HELM_EXTRA_OPTS} \
-        --set grafana.ingress.enabled=true \
+        --set-string grafana.ingress.enabled=true \
+        --set-string grafana.ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/ssl-redirect=true \
+        --set-string grafana.ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/force-ssl-redirect=true \
         --timeout=5m \
         --wait=false 2>&1 | tee /tmp/helm-monitoring-fix-ingress.log
       sleep 10
