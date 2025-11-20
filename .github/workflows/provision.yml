@@ -265,7 +265,7 @@ jobs:
         env:
           REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || secrets.DOCKER_USERNAME || secrets.DOCKERHUB_USERNAME || 'codevertex' }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || secrets.DOCKER_PASSWORD || secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PASSWORD }}
-          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL || secrets.DOCKER_EMAIL || 'info@codevertexitsolutions.com' }}
+          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL || secrets.DOCKER_EMAIL || 'codevertexitsolutions@gmail.com' }}
           REGISTRY_SERVER: docker.io
         run: |
           echo "::group::Creating registry-credentials secrets"
