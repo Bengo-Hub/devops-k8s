@@ -156,7 +156,7 @@ fix_orphaned_resources() {
   
   # Default resource types if none specified
   if [ $# -eq 0 ]; then
-    resource_types=("networkpolicies" "poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts")
+    resource_types=("networkpolicies" "poddisruptionbudgets" "configmaps" "services" "secrets")
   fi
   
   for resource_type in "${resource_types[@]}"; do
