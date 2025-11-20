@@ -239,8 +239,10 @@ jobs:
       - name: Ensure scripts executable
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
-          chmod +x scripts/**/*.sh || true
-          chmod +x scripts/*/*.sh || true
+          echo "::group::Making scripts executable"
+          find scripts -type f -name "*.sh" -exec chmod +x {} \;
+          echo "✅ All scripts are now executable"
+          echo "::endgroup::"
 
       - name: Cleanup cluster (opt-in only)
         if: ${{ steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true' }}
@@ -413,9 +415,16 @@ jobs:
           
           # Check for CrashLoopBackOff pods
           CRASHING_COUNT=$(kubectl get pods -A --field-selector=status.phase=Failed --no-headers 2>/dev/null | wc -l || echo "0")
-          if [ "$CRASHING_COUNT" -gt 0 ]; then
-            echo "⚠️  Warning: Found $CRASHING_COUNT Failed pods"
+          CRASHLOOP_COUNT=$(kubectl get pods -A -o json 2>/dev/null | jq -r '.items[] | select(.status.containerStatuses[]?.state.waiting?.reason == "CrashLoopBackOff") | .metadata.name' 2>/dev/null | wc -l || echo "0")
+          if [ "$CRASHING_COUNT" -gt 0 ] || [ "$CRASHLOOP_COUNT" -gt 0 ]; then
+            echo "⚠️  Warning: Found $CRASHING_COUNT Failed pods and $CRASHLOOP_COUNT CrashLoopBackOff pods"
             kubectl get pods -A --field-selector=status.phase=Failed 2>/dev/null | head -5 || true
+            echo ""
+            echo "Running diagnostics for crashing pods..."
+            if [ -f ./scripts/tools/fix-cluster-issues.sh ]; then
+              chmod +x ./scripts/tools/fix-cluster-issues.sh
+              ./scripts/tools/fix-cluster-issues.sh || true
+            fi
           fi
           
           echo "::endgroup::"
@@ -481,7 +490,7 @@ jobs:
 
       - name: Install Monitoring (idempotent)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
-        timeout-minutes: 20
+        timeout-minutes: 25
         env:
           GRAFANA_DOMAIN: ${{ env.GRAFANA_DOMAIN }}
           MONITORING_NAMESPACE: ${{ env.MONITORING_NAMESPACE }}
@@ -492,7 +501,32 @@ jobs:
           echo "This installs Prometheus Operator CRDs (ServiceMonitor, etc.) required by databases"
           echo "This step uses helm upgrade --install (idempotent) and will skip if already installed"
           echo "Note: This may take 10-15 minutes for first installation"
-          ./scripts/monitoring/install-monitoring.sh
+          
+          # Run monitoring installation script
+          chmod +x ./scripts/monitoring/install-monitoring.sh
+          ./scripts/monitoring/install-monitoring.sh || {
+            echo "⚠️  Monitoring installation encountered issues"
+            echo "Checking for common problems..."
+            
+            # Check for stuck Helm operations
+            if helm status prometheus -n "${MONITORING_NAMESPACE}" 2>/dev/null | grep -q "STATUS: pending"; then
+              echo "⚠️  Detected stuck Helm operation. Attempting fix..."
+              if [ -f ./scripts/monitoring/fix-stuck-helm-monitoring.sh ]; then
+                chmod +x ./scripts/monitoring/fix-stuck-helm-monitoring.sh
+                ./scripts/monitoring/fix-stuck-helm-monitoring.sh || true
+              fi
+            fi
+            
+            # Run cluster diagnostics
+            if [ -f ./scripts/tools/fix-cluster-issues.sh ]; then
+              chmod +x ./scripts/tools/fix-cluster-issues.sh
+              ./scripts/tools/fix-cluster-issues.sh || true
+            fi
+            
+            echo "⚠️  Please review logs above and retry if needed"
+            exit 1
+          }
+          
           echo "✅ Monitoring stack check/install complete"
           echo "✅ Prometheus Operator CRDs now available for ServiceMonitor resources"
           echo "::endgroup::"
