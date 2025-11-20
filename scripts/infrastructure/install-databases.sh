@@ -300,6 +300,10 @@ else
   exit 1
 fi
 
+# Use stable Bitnami 'latest' tags to avoid NotFound errors on rotated versioned tags
+PG_HELM_ARGS+=(--set image.tag=latest)
+PG_HELM_ARGS+=(--set metrics.image.tag=latest)
+
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
   # Check if PostgreSQL is healthy
@@ -675,6 +679,10 @@ REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
 
 # Always fix orphaned Redis resources before any Helm operation (install or upgrade)
 fix_orphaned_redis_resources
+
+# Use stable Bitnami 'latest' tags to avoid NotFound errors on rotated versioned tags
+REDIS_HELM_ARGS+=(--set image.tag=latest)
+REDIS_HELM_ARGS+=(--set metrics.image.tag=latest)
 
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
