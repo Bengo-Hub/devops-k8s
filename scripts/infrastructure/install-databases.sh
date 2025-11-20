@@ -528,14 +528,26 @@ echo -e "${BLUE}This may take 3-5 minutes...${NC}"
 # Build Helm arguments - prioritize environment variables
 REDIS_HELM_ARGS=()
 
+# Always use values file as base
+REDIS_HELM_ARGS+=(-f "${MANIFESTS_DIR}/databases/redis-values.yaml")
+
+# Check if ServiceMonitor CRD exists (Prometheus Operator)
+if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+  # Get monitoring namespace (default to infra)
+  MONITORING_NS=${MONITORING_NAMESPACE:-infra}
+  echo -e "${GREEN}[INFO] ServiceMonitor enabled for Redis metrics (namespace: ${MONITORING_NS})${NC}"
+  REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true --set metrics.serviceMonitor.namespace="${MONITORING_NS}")
+else
+  echo -e "${YELLOW}[INFO] ServiceMonitor CRD not found - disabling Redis metrics ServiceMonitor${NC}"
+  REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
+fi
+
 # Priority 1: Use REDIS_PASSWORD from environment (GitHub secrets)
 if [[ -n "${REDIS_PASSWORD:-}" ]]; then
   echo -e "${GREEN}Using REDIS_PASSWORD from environment/GitHub secrets (priority)${NC}"
   REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
-# Priority 2: Use values file (for fresh installs without env var)
 else
   echo -e "${YELLOW}No REDIS_PASSWORD in environment; using values file or auto-generated${NC}"
-  REDIS_HELM_ARGS+=(-f "${MANIFESTS_DIR}/databases/redis-values.yaml")
 fi
 
 set +e
