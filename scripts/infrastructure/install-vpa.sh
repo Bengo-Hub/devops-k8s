@@ -4,33 +4,19 @@ set -euo pipefail
 # Vertical Pod Autoscaler Installation Script
 # Installs VPA components for automatic pod resource optimization
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# MANIFESTS_DIR is at repo root, not under scripts
+MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests/vpa"
+source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default configuration
 VPA_VERSION=${VPA_VERSION:-1.2.0}
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFESTS_DIR="$(dirname "$SCRIPT_DIR")/vpa-manifests"
 
-echo -e "${GREEN}Installing Vertical Pod Autoscaler (VPA) v${VPA_VERSION}...${NC}"
-echo -e "${BLUE}Note: Use VPA_VERSION env var to override (e.g., VPA_VERSION=1.1.0)${NC}"
+log_section "Installing Vertical Pod Autoscaler (VPA) v${VPA_VERSION}"
+log_info "Note: Use VPA_VERSION env var to override (e.g., VPA_VERSION=1.1.0)"
 
 # Pre-flight checks
-if ! command -v kubectl &> /dev/null; then
-  echo -e "${RED}kubectl command not found. Aborting.${NC}"
-  exit 1
-fi
-
-if ! kubectl cluster-info >/dev/null 2>&1; then
-  echo -e "${RED}Cannot connect to cluster. Ensure KUBECONFIG is set. Aborting.${NC}"
-  exit 1
-fi
-
-echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
+check_kubectl
 
 # Check if VPA is already installed and healthy
 if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
@@ -40,20 +26,20 @@ if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
   VPA_UPDATER_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-updater --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
   
   if [ "$VPA_ADMISSION_RUNNING" -ge 1 ] && [ "$VPA_RECOMMENDER_RUNNING" -ge 1 ] && [ "$VPA_UPDATER_RUNNING" -ge 1 ]; then
-    echo -e "${GREEN}✓ VPA already installed and healthy - skipping${NC}"
-    echo -e "${BLUE}VPA components running: Admission=${VPA_ADMISSION_RUNNING}, Recommender=${VPA_RECOMMENDER_RUNNING}, Updater=${VPA_UPDATER_RUNNING}${NC}"
-    echo -e "${BLUE}To force reinstallation, set FORCE_INSTALL=true${NC}"
+    log_success "VPA already installed and healthy - skipping"
+    log_info "VPA components running: Admission=${VPA_ADMISSION_RUNNING}, Recommender=${VPA_RECOMMENDER_RUNNING}, Updater=${VPA_UPDATER_RUNNING}"
+    log_info "To force reinstallation, set FORCE_INSTALL=true"
     exit 0
   fi
   
   CURRENT_VERSION=$(kubectl get deployment -n kube-system vpa-recommender -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -oP '(?<=:v)\d+\.\d+\.\d+' || echo "unknown")
-  echo -e "${YELLOW}VPA CRD exists but components not healthy. Current version: ${CURRENT_VERSION}${NC}"
+  log_warning "VPA CRD exists but components not healthy. Current version: ${CURRENT_VERSION}"
   
   # Check if running in CI/CD (non-interactive)
   if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
     if [[ "${FORCE_INSTALL:-}" != "true" ]]; then
-      echo -e "${BLUE}Running in CI/CD and FORCE_INSTALL not set; skipping VPA upgrade${NC}"
-      echo -e "${YELLOW}VPA exists but not healthy. Set FORCE_INSTALL=true to reinstall${NC}"
+      log_info "Running in CI/CD and FORCE_INSTALL not set; skipping VPA upgrade"
+      log_warning "VPA exists but not healthy. Set FORCE_INSTALL=true to reinstall"
       exit 0
     fi
   fi
@@ -62,7 +48,7 @@ if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
   read -p "Do you want to upgrade/reinstall VPA? (y/N): " -n 1 -r
   echo
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${GREEN}VPA installation skipped.${NC}"
+    log_success "VPA installation skipped."
     exit 0
   fi
 fi
@@ -74,13 +60,13 @@ mkdir -p "${MANIFESTS_DIR}"
 VPA_MANIFEST="${MANIFESTS_DIR}/vpa-v${VPA_VERSION}.yaml"
 
 if [ ! -f "$VPA_MANIFEST" ]; then
-  echo -e "${YELLOW}Downloading VPA v${VPA_VERSION} manifests...${NC}"
+  log_info "Downloading VPA v${VPA_VERSION} manifests..."
   
   # VPA manifests are in the autoscaler repo, not as releases
   # Download individual components and combine
   TEMP_DIR=$(mktemp -d)
   
-  echo -e "${BLUE}Downloading VPA components from GitHub...${NC}"
+  log_info "Downloading VPA components from GitHub..."
   
   # Base URL for VPA components
   VPA_BASE_URL="https://raw.githubusercontent.com/kubernetes/autoscaler/vertical-pod-autoscaler-${VPA_VERSION}/vertical-pod-autoscaler/deploy"
@@ -96,9 +82,9 @@ if [ ! -f "$VPA_MANIFEST" ]; then
   
   for component in "${COMPONENTS[@]}"; do
     if curl -fsSL "${VPA_BASE_URL}/${component}" -o "${TEMP_DIR}/${component}"; then
-      echo -e "${GREEN}  ✓ Downloaded ${component}${NC}"
+      log_success "Downloaded ${component}"
     else
-      echo -e "${YELLOW}  ⚠ Could not download ${component}, trying without version suffix...${NC}"
+      log_warning "Could not download ${component}, trying without version suffix..."
       # Some versions use slightly different file names
       component_alt=$(echo "$component" | sed 's/-gen//g')
       curl -fsSL "${VPA_BASE_URL}/${component_alt}" -o "${TEMP_DIR}/${component}" 2>/dev/null || true
@@ -107,15 +93,15 @@ if [ ! -f "$VPA_MANIFEST" ]; then
   
   # Combine all components into single manifest
   cat "${TEMP_DIR}"/*.yaml > "$VPA_MANIFEST" 2>/dev/null || {
-    echo -e "${RED}Failed to combine VPA manifests${NC}"
-    echo -e "${YELLOW}Trying direct installation from repo...${NC}"
+    log_error "Failed to combine VPA manifests"
+    log_warning "Trying direct installation from repo..."
     
     # Fallback: Clone repo and use install script
     git clone --depth 1 --branch vertical-pod-autoscaler-${VPA_VERSION} \
       https://github.com/kubernetes/autoscaler.git "${TEMP_DIR}/autoscaler" 2>/dev/null || {
-      echo -e "${RED}Failed to clone autoscaler repo${NC}"
-      echo -e "${YELLOW}Available versions: https://github.com/kubernetes/autoscaler/tags${NC}"
-      echo -e "${BLUE}Try: VPA_VERSION=1.2.0 ./scripts/install-vpa.sh${NC}"
+      log_error "Failed to clone autoscaler repo"
+      log_info "Available versions: https://github.com/kubernetes/autoscaler/tags"
+      log_info "Try: VPA_VERSION=1.2.0 ./scripts/infrastructure/install-vpa.sh"
       rm -rf "${TEMP_DIR}"
       exit 1
     }
@@ -126,74 +112,70 @@ if [ ! -f "$VPA_MANIFEST" ]; then
     cd - >/dev/null
     rm -rf "${TEMP_DIR}"
     
-    echo -e "${GREEN}✓ VPA installed via official script${NC}"
+    log_success "VPA installed via official script"
     exit 0
   }
   
   rm -rf "${TEMP_DIR}"
-  echo -e "${GREEN}✓ VPA manifests prepared${NC}"
+  log_success "VPA manifests prepared"
 else
-  echo -e "${GREEN}✓ VPA manifests already exist: ${VPA_MANIFEST}${NC}"
+  log_success "VPA manifests already exist: ${VPA_MANIFEST}"
 fi
 
 # Apply VPA manifests
-echo -e "${YELLOW}Installing VPA components...${NC}"
+log_info "Installing VPA components..."
 
 if kubectl apply -f "$VPA_MANIFEST"; then
-  echo -e "${GREEN}✓ VPA components installed successfully${NC}"
+  log_success "VPA components installed successfully"
 else
-  echo -e "${RED}Failed to install VPA components${NC}"
+  log_error "Failed to install VPA components"
   exit 1
 fi
 
 # Wait for VPA components to be ready
-echo -e "${YELLOW}Waiting for VPA components to be ready (may take 1-2 minutes)...${NC}"
+log_info "Waiting for VPA components to be ready (may take 1-2 minutes)..."
 
 # Wait for VPA Recommender
-kubectl wait --for=condition=available deployment/vpa-recommender -n kube-system --timeout=120s || echo -e "${YELLOW}VPA Recommender still starting...${NC}"
+kubectl wait --for=condition=available deployment/vpa-recommender -n kube-system --timeout=120s || log_warning "VPA Recommender still starting..."
 
 # Wait for VPA Updater
-kubectl wait --for=condition=available deployment/vpa-updater -n kube-system --timeout=120s || echo -e "${YELLOW}VPA Updater still starting...${NC}"
+kubectl wait --for=condition=available deployment/vpa-updater -n kube-system --timeout=120s || log_warning "VPA Updater still starting..."
 
 # Wait for VPA Admission Controller
-kubectl wait --for=condition=available deployment/vpa-admission-controller -n kube-system --timeout=120s || echo -e "${YELLOW}VPA Admission Controller still starting...${NC}"
+kubectl wait --for=condition=available deployment/vpa-admission-controller -n kube-system --timeout=120s || log_warning "VPA Admission Controller still starting..."
 
 # Verify installation
-echo ""
-echo -e "${GREEN}=== VPA Installation Complete ===${NC}"
-echo ""
+log_section "VPA Installation Complete"
 
-echo -e "${BLUE}VPA Components Status:${NC}"
+log_info "VPA Components Status:"
 kubectl get pods -n kube-system -l app.kubernetes.io/name=vpa || kubectl get pods -n kube-system | grep vpa || true
 
-echo ""
-echo -e "${BLUE}VPA Deployments:${NC}"
+log_info "VPA Deployments:"
 kubectl get deployments -n kube-system | grep vpa || true
 
-echo ""
-echo -e "${YELLOW}Next Steps:${NC}"
+log_info "Next Steps:"
 echo "1. Create VPA resources for your applications"
 echo "2. Start with 'updateMode: Off' to observe recommendations"
 echo "3. Review recommendations: kubectl describe vpa <vpa-name>"
 echo "4. Enable auto-updates when confident: 'updateMode: Recreate' or 'Auto'"
 echo ""
-echo -e "${BLUE}Example VPA Resource:${NC}"
+log_info "Example VPA Resource:"
 echo "See ${MANIFESTS_DIR}/example-vpa.yaml for configuration examples"
 echo ""
-echo -e "${BLUE}Documentation:${NC}"
+log_info "Documentation:"
 echo "- Local: ${MANIFESTS_DIR}/README.md"
 echo "- Official: https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler"
-echo "- BengoERP Guide: $(dirname "$SCRIPT_DIR")/docs/scaling.md"
+echo "- BengoERP Guide: $(dirname "$SCRIPT_DIR")/../docs/scaling.md"
 echo ""
 
 # Check if metrics-server is installed (required for VPA)
 if ! kubectl get deployment metrics-server -n kube-system >/dev/null 2>&1; then
-  echo -e "${YELLOW}⚠️  Warning: metrics-server not found${NC}"
-  echo -e "${YELLOW}VPA requires metrics-server to function properly${NC}"
-  echo -e "${BLUE}Install metrics-server:${NC}"
+  log_warning "metrics-server not found"
+  log_warning "VPA requires metrics-server to function properly"
+  log_info "Install metrics-server:"
   echo "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
   echo ""
 fi
 
-echo -e "${GREEN}✅ VPA installation complete!${NC}"
+log_success "VPA installation complete!"
 
