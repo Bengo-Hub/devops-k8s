@@ -647,6 +647,31 @@ if [ $HELM_REDIS_EXIT -eq 0 ]; then
     echo -e "${BLUE}Checking pod status...${NC}"
     kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis || true
     
+    # Check for image pull errors
+    IMAGE_PULL_ERRORS=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
+      jq -r '.items[] | select(.status.containerStatuses[]?.state.waiting.reason == "ImagePullBackOff" or .status.containerStatuses[]?.state.waiting.reason == "ErrImagePull") | .metadata.name' 2>/dev/null || true)
+    
+    if [ -n "$IMAGE_PULL_ERRORS" ]; then
+      echo -e "${RED}⚠️  Image pull errors detected for pods: $IMAGE_PULL_ERRORS${NC}"
+      echo -e "${YELLOW}Checking registry-credentials secret...${NC}"
+      
+      if ! kubectl get secret registry-credentials -n "${NAMESPACE}" >/dev/null 2>&1; then
+        echo -e "${RED}ERROR: registry-credentials secret missing in namespace ${NAMESPACE}${NC}"
+        echo -e "${YELLOW}This secret is required for Docker Hub authentication.${NC}"
+        echo -e "${YELLOW}Please ensure REGISTRY_USERNAME, REGISTRY_PASSWORD, and REGISTRY_EMAIL are set in GitHub secrets.${NC}"
+        echo -e "${YELLOW}The workflow should create this automatically, but it may have failed.${NC}"
+      else
+        echo -e "${GREEN}✓ registry-credentials secret exists${NC}"
+        echo -e "${YELLOW}Checking if pods are using imagePullSecrets...${NC}"
+        kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
+          jq -r '.items[] | "\(.metadata.name): imagePullSecrets=\(.spec.imagePullSecrets // [] | map(.name) | join(", "))"' 2>/dev/null || true
+      fi
+      
+      # Check if the image tag exists or suggest using latest
+      echo -e "${YELLOW}Note: If image pull fails, the Redis image tag may not exist.${NC}"
+      echo -e "${YELLOW}Consider using 'latest' tag or a different version.${NC}"
+    fi
+    
     # Check for crash loops
     CRASH_LOOP=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "CrashLoop\|Error" || echo "")
     if [[ -n "$CRASH_LOOP" ]]; then
