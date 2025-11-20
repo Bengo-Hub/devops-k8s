@@ -91,8 +91,11 @@ if kubectl get deployment vpa-admission-controller -n kube-system >/dev/null 2>&
     # Check if TLS secret exists and has correct structure
     if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
       log_warning "VPA admission controller has TLS mount but secret is missing. Removing TLS requirement..."
-      kubectl patch deployment vpa-admission-controller -n kube-system --type=json \
-        -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts"}, {"op": "remove", "path": "/spec/template/spec/volumes"}]' 2>/dev/null || true
+      kubectl get deployment vpa-admission-controller -n kube-system -o json | \
+        jq 'del(.spec.template.spec.containers[0].volumeMounts) | 
+            del(.spec.template.spec.volumes) | 
+            .spec.template.spec.containers[0].args = (.spec.template.spec.containers[0].args | map(select(. != "--reload-cert")))' | \
+        kubectl apply -f - 2>/dev/null || true
       kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
       sleep 5
     else
@@ -100,8 +103,11 @@ if kubectl get deployment vpa-admission-controller -n kube-system >/dev/null 2>&
       SECRET_KEYS=$(kubectl get secret vpa-tls-certs -n kube-system -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null || echo "")
       if echo "$SECRET_KEYS" | grep -qv "serverCert.pem\|serverKey.pem"; then
         log_warning "VPA TLS secret has incorrect structure. Removing TLS requirement..."
-        kubectl patch deployment vpa-admission-controller -n kube-system --type=json \
-          -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts"}, {"op": "remove", "path": "/spec/template/spec/volumes"}]' 2>/dev/null || true
+        kubectl get deployment vpa-admission-controller -n kube-system -o json | \
+          jq 'del(.spec.template.spec.containers[0].volumeMounts) | 
+              del(.spec.template.spec.volumes) | 
+              .spec.template.spec.containers[0].args = (.spec.template.spec.containers[0].args | map(select(. != "--reload-cert")))' | \
+          kubectl apply -f - 2>/dev/null || true
         kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
         sleep 5
       fi
