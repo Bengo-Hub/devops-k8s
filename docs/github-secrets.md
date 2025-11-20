@@ -67,6 +67,17 @@ Contact emails:
 - Business email: info@codevertexitsolutions.com
 Website: https://www.codevertexitsolutions.com
 
+**Repository-level secrets (for application deployment workflows):**
+- `GH_PAT`: GitHub Personal Access Token for cross-repo Git operations
+  - Used by application workflows to clone/push to devops-k8s repository
+  - Required for updating Helm values in devops-k8s repo from application repos
+  - Scope: `repo` (full control)
+- `DEVOPS_K8S_ACCESS_TOKEN`: Alternative name for GitHub PAT (same as GH_PAT)
+  - Used interchangeably with GH_PAT in some workflows
+  - Provides access to devops-k8s repository for Git operations
+
+**Note:** These repository secrets are used by application deployment workflows (erp-api, erp-ui, etc.) to update Helm values in the devops-k8s repository. The provision.yml workflow runs in devops-k8s repo and doesn't require these tokens.
+
 Per-repo overrides are supported by defining the same secrets at the repository level.
 
 ---
