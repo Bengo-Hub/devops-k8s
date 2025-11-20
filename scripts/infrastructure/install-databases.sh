@@ -223,13 +223,74 @@ fix_orphaned_networkpolicy() {
   return 0  # NetworkPolicy is properly configured
 }
 
+# Function to fix orphaned resources with invalid Helm ownership metadata (generic)
+fix_orphaned_resources() {
+  local release_name=$1
+  local namespace=${2:-${NAMESPACE}}
+  local resource_types=($@)
+  shift 2  # Remove first two arguments (release_name, namespace)
+  
+  # Default resource types if none specified
+  if [ $# -eq 0 ]; then
+    resource_types=("networkpolicies" "poddisruptionbudgets" "configmaps" "services" "secrets")
+  fi
+  
+  for resource_type in "${resource_types[@]}"; do
+    # Handle plural/singular forms
+    plural_type="${resource_type}s"
+    resource_list=$(kubectl api-resources | awk '$1 ~ /^'"${resource_type}"'$/ {print $2}' || echo "${plural_type}")
+    
+    # Get resources for this release
+    resources=$(kubectl get "${resource_list}" -n "${namespace}" -l "app.kubernetes.io/instance=${release_name}" -o name 2>/dev/null || true)
+    
+    if [ -n "$resources" ]; then
+      log_info "Checking ${resource_list} for ownership issues..."
+      for resource in $resources; do
+        resource_name=$(basename "$resource")
+        
+        # Check Helm ownership annotations
+        release_name_annotation=$(kubectl get "${resource}" -n "${namespace}" \
+          -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+        release_namespace_annotation=$(kubectl get "${resource}" -n "${namespace}" \
+          -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+        
+        if [ -z "$release_name_annotation" ] || [ -z "$release_namespace_annotation" ]; then
+          log_warning "Found ${resource_type} '${resource_name}' with invalid Helm ownership metadata"
+          
+          # Try to add proper Helm annotations
+          if kubectl patch "${resource}" -n "${namespace}" \
+            --type='json' \
+            -p="[{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-name\",\"value\":\"${release_name}\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-namespace\",\"value\":\"${namespace}\"}]" 2>/dev/null; then
+            log_success "Added Helm ownership annotations to ${resource_type} '${resource_name}'"
+          else
+            # Fallback: Remove finalizers and delete
+            log_warning "Failed to patch ${resource_type} '${resource_name}' - deleting to let Helm recreate..."
+            kubectl patch "${resource}" -n "${namespace}" \
+              -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            kubectl delete "${resource}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
+            log_success "${resource_type} '${resource_name}' deleted - Helm will recreate"
+            sleep 1
+          fi
+        elif [ "$release_name_annotation" != "$release_name" ] || [ "$release_namespace_annotation" != "$namespace" ]; then
+          log_warning "${resource_type} '${resource_name}' has incorrect Helm ownership - deleting..."
+          kubectl patch "${resource}" -n "${namespace}" \
+            -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+          kubectl delete "${resource}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
+          log_success "${resource_type} '${resource_name}' deleted - Helm will recreate with correct ownership"
+          sleep 1
+        fi
+      done
+    fi
+  done
+}
+
 # Check for stuck Helm operations before proceeding
 log_info "Checking for stuck Helm operations..."
 fix_stuck_helm_operation "postgresql" "${NAMESPACE}" || true
 
-# Check for orphaned NetworkPolicy with invalid Helm ownership metadata
-log_info "Checking for orphaned NetworkPolicy resources..."
-fix_orphaned_networkpolicy "postgresql" "${NAMESPACE}" || true
+# Check for orphaned resources with invalid Helm ownership metadata
+log_info "Checking for orphaned resources..."
+fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
 
 # Install or upgrade PostgreSQL (idempotent)
 log_section "Installing/upgrading PostgreSQL"
@@ -406,8 +467,8 @@ else
   else
     log_info "Cleanup mode inactive - checking for existing resources to update..."
     
-    # Fix orphaned NetworkPolicy before attempting Helm operations
-    fix_orphaned_networkpolicy "postgresql" "${NAMESPACE}" || true
+    # Fix orphaned resources before attempting Helm operations
+    fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
     
     # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
     if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
@@ -433,8 +494,8 @@ else
   
   # Install PostgreSQL if cleanup mode or no existing resources
   if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
-    # Ensure NetworkPolicy is fixed before fresh install
-    fix_orphaned_networkpolicy "postgresql" "${NAMESPACE}" || true
+    # Ensure resources are fixed before fresh install
+    fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
     
     log_info "Installing PostgreSQL..."
     helm install postgresql bitnami/postgresql \
