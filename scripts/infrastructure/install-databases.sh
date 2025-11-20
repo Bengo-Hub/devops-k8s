@@ -324,15 +324,19 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     # Get current password from secret
     CURRENT_PG_PASS=$(kubectl -n "${NAMESPACE}" get secret postgresql -o jsonpath='{.data.postgres-password}' 2>/dev/null | base64 -d || true)
     
-    if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" && "${FORCE_DB_INSTALL}" != "true" ]]; then
-      log_success "PostgreSQL password unchanged - skipping upgrade"
+    # Only skip Helm upgrade when BOTH:
+    #   - the password matches, and
+    #   - PostgreSQL is already healthy
+    # This prevents us from skipping upgrades when pods are failing
+    if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" && "${FORCE_DB_INSTALL}" != "true" && "$IS_HEALTHY" == "true" ]]; then
+      log_success "PostgreSQL password unchanged and StatefulSet healthy - skipping upgrade"
       log_info "Current secret password matches provided POSTGRES_PASSWORD"
       HELM_PG_EXIT=0
     else
       log_warning "Password mismatch detected"
       log_info "Current password length: ${#CURRENT_PG_PASS} chars"
       log_info "New password length: ${#POSTGRES_PASSWORD} chars"
-      log_error "WARNING: Updating passwords requires pod restart and may take time"
+      log_warning "WARNING: Updating passwords requires pod restart and may take time"
       log_info "Checking if PostgreSQL is currently healthy..."
       
       # Check if PostgreSQL is currently running - if yes, just update the secret without Helm upgrade

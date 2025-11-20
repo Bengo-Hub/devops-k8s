@@ -191,8 +191,12 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
     # Get current password from secret
     CURRENT_RABBITMQ_PASS=$(kubectl -n "${NAMESPACE}" get secret rabbitmq -o jsonpath='{.data.rabbitmq-password}' 2>/dev/null | base64 -d || true)
     
-    if [[ "$CURRENT_RABBITMQ_PASS" == "$RABBITMQ_PASSWORD" && "${FORCE_RABBITMQ_INSTALL}" != "true" ]]; then
-      log_success "RabbitMQ password unchanged - skipping upgrade"
+    # Only skip Helm upgrade when BOTH:
+    #   - the password matches, and
+    #   - RabbitMQ is already healthy
+    # This prevents us from skipping upgrades when pods are failing
+    if [[ "$CURRENT_RABBITMQ_PASS" == "$RABBITMQ_PASSWORD" && "${FORCE_RABBITMQ_INSTALL}" != "true" && "$IS_RABBITMQ_HEALTHY" == "true" ]]; then
+      log_success "RabbitMQ password unchanged and StatefulSet healthy - skipping upgrade"
       log_info "Current secret password matches provided RABBITMQ_PASSWORD"
       HELM_RABBITMQ_EXIT=0
     else
