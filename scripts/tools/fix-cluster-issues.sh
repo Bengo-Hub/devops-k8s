@@ -82,9 +82,49 @@ log_info "Checking VPA TLS secret..."
 if kubectl get deployment vpa-admission-controller -n kube-system >/dev/null 2>&1; then
   if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
     log_warning "VPA admission controller is installed but TLS secret is missing."
-    log_info "VPA admission controller will generate the secret automatically on first run."
-    log_info "If it's stuck, you can delete the admission controller pod to trigger secret generation:"
-    echo "  kubectl delete pod -n kube-system -l app=vpa-admission-controller"
+    log_info "Creating VPA TLS secret placeholder..."
+    kubectl create secret generic vpa-tls-certs \
+      --from-literal=ca.crt="dummy" \
+      --from-literal=tls.crt="dummy" \
+      --from-literal=tls.key="dummy" \
+      -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
+    
+    log_info "Restarting VPA admission controller pod to trigger cert generation..."
+    kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
+    sleep 5
+  fi
+fi
+
+# 4a. Check for duplicate ingress-nginx pods (port conflicts)
+log_info "Checking for duplicate ingress-nginx pods..."
+INGRESS_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | wc -l || echo "0")
+INGRESS_RUNNING=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+INGRESS_CRASHING=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers 2>/dev/null | wc -l || echo "0")
+
+if [ "$INGRESS_PODS" -gt 1 ] || [ "$INGRESS_CRASHING" -gt 0 ]; then
+  log_warning "Found ${INGRESS_PODS} ingress-nginx pods (${INGRESS_RUNNING} running, ${INGRESS_CRASHING} crashing)"
+  log_info "Cleaning up duplicate/crashing ingress-nginx pods..."
+  
+  # Delete all non-running pods
+  kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null | \
+    xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+  
+  # Delete orphaned replicasets
+  kubectl get replicasets -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | \
+    awk '{if ($2 != $3 || $2 != $4) print $1}' | \
+    xargs -r -I {} kubectl delete replicaset {} -n ingress-nginx --wait=false 2>/dev/null || true
+  
+  # Ensure deployment is scaled to 1 replica
+  kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1 2>/dev/null || true
+fi
+
+# 4b. Check for storage provisioner
+log_info "Checking storage provisioner..."
+if ! kubectl get pods -n local-path-storage -l app=local-path-provisioner --field-selector=status.phase=Running --no-headers 2>/dev/null | grep -q Running; then
+  log_warning "local-path-provisioner pod is not running. PVCs may fail to bind."
+  log_info "Installing storage provisioner..."
+  if [ -f "${SCRIPT_DIR}/../infrastructure/install-storage-provisioner.sh" ]; then
+    "${SCRIPT_DIR}/../infrastructure/install-storage-provisioner.sh" || log_warning "Failed to install storage provisioner"
   fi
 fi
 
