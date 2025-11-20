@@ -219,6 +219,15 @@ fix_orphaned_resources() {
         log_info "Found ServiceMonitor '${release_name}' by name (no Helm labels present) - checking ownership..."
       fi
     fi
+
+    # Fallback: for NetworkPolicies, also check by exact name if no labelled resources are found
+    # This fixes cases like NetworkPolicy "postgresql" blocking Helm installs/upgrades
+    if [ -z "$resources" ] && { [ "${resource_type}" = "networkpolicies" ] || [ "${resource_type}" = "networkpolicy" ]; }; then
+      if kubectl get networkpolicy "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
+        resources="networkpolicy/${release_name}"
+        log_info "Found NetworkPolicy '${release_name}' by name (no Helm labels present) - checking ownership..."
+      fi
+    fi
     
     if [ -n "$resources" ]; then
       log_info "Checking ${resource_list} for ownership issues..."
