@@ -301,6 +301,10 @@ CERT_SECRET=$(kubectl get secret -n "${MONITORING_NAMESPACE}" grafana-tls -o jso
 
 if [ "$CERT_READY" = "True" ] && [ -n "$CERT_SECRET" ]; then
   echo -e "${GREEN}✓ TLS certificate is ready${NC}"
+  CERT_EXPIRY=$(kubectl get certificate -n "${MONITORING_NAMESPACE}" grafana-tls -o jsonpath='{.status.notAfter}' 2>/dev/null || echo "")
+  if [ -n "$CERT_EXPIRY" ]; then
+    echo -e "${BLUE}  Certificate expires: ${CERT_EXPIRY}${NC}"
+  fi
 elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
   echo -e "${YELLOW}⚠️  TLS certificate not ready yet${NC}"
   echo -e "${BLUE}Checking cert-manager status...${NC}"
