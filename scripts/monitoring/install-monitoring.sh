@@ -32,10 +32,10 @@ fi
 ensure_cert_manager "${SCRIPT_DIR}"
 
 # Add Helm repository
-# add_helm_repo "prometheus-community" "https://prometheus-community.github.io/helm-charts" # This line is removed as per the edit hint.
+add_helm_repo "prometheus-community" "https://prometheus-community.github.io/helm-charts"
 
 # Create infra namespace (monitoring is deployed here as shared infrastructure)
-# ensure_namespace "${MONITORING_NAMESPACE}" # This line is removed as per the edit hint.
+ensure_namespace "${MONITORING_NAMESPACE}"
 
 # Update prometheus-values.yaml with dynamic domain
 TEMP_VALUES=/tmp/prometheus-values-prod.yaml
@@ -94,6 +94,70 @@ if [ -n "${GRAFANA_PVC_SIZE:-}" ]; then
   log_info "Detected existing Grafana PVC size: ${GRAFANA_PVC_SIZE} - preventing shrink on upgrade"
   HELM_EXTRA_OPTS="$HELM_EXTRA_OPTS --set-string grafana.persistence.size=${GRAFANA_PVC_SIZE}"
 fi
+
+# Function to fix stuck Helm operations
+fix_stuck_helm() {
+    local release_name=${1:-prometheus}
+    local namespace=${2:-${MONITORING_NAMESPACE}}
+
+    echo -e "${YELLOW}🔧 Attempting to fix stuck Helm operation for ${release_name}...${NC}"
+
+    # Check for stuck operations
+    local status=$(helm status ${release_name} -n ${namespace} 2>/dev/null | grep "STATUS:" | awk '{print $2}')
+    
+    if [[ "$status" == "pending-upgrade" || "$status" == "pending-install" || "$status" == "pending-rollback" ]]; then
+        echo -e "${YELLOW}📊 Found stuck operation (status: $status), attempting cleanup...${NC}"
+
+        # CRITICAL: Delete the Helm secret that's locking the operation
+        echo -e "${YELLOW}🔓 Unlocking Helm release by removing pending secret...${NC}"
+        
+        # Find and delete the pending-upgrade secret
+        PENDING_SECRETS=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-upgrade,name=${release_name}" -o name 2>/dev/null || true)
+        if [ -n "$PENDING_SECRETS" ]; then
+            echo -e "${YELLOW}Deleting pending operation secrets:${NC}"
+            echo "$PENDING_SECRETS" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
+        fi
+        
+        # Also clean up pending-install and pending-rollback
+        PENDING_INSTALL=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-install,name=${release_name}" -o name 2>/dev/null || true)
+        if [ -n "$PENDING_INSTALL" ]; then
+            echo "$PENDING_INSTALL" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
+        fi
+        PENDING_ROLLBACK=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-rollback,name=${release_name}" -o name 2>/dev/null || true)
+        if [ -n "$PENDING_ROLLBACK" ]; then
+            echo "$PENDING_ROLLBACK" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
+        fi
+
+        # Force delete problematic pods
+        echo -e "${YELLOW}🗑️  Force deleting stuck pods...${NC}"
+        kubectl delete pods -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --force --grace-period=0 2>/dev/null || true
+        
+        # Wait for cleanup
+        sleep 10
+
+        # Find the last successfully deployed revision
+        echo -e "${YELLOW}📜 Checking Helm history...${NC}"
+        if helm history ${release_name} -n ${namespace} >/dev/null 2>&1; then
+            # Get last deployed (successful) revision
+            LAST_DEPLOYED=$(helm history ${release_name} -n ${namespace} --max 100 -o json 2>/dev/null | jq -r '.[] | select(.status == "deployed") | .revision' | tail -1)
+            
+            if [ -n "$LAST_DEPLOYED" ] && [ "$LAST_DEPLOYED" != "null" ]; then
+                echo -e "${YELLOW}📉 Rolling back to last deployed revision: $LAST_DEPLOYED...${NC}"
+                helm rollback ${release_name} $LAST_DEPLOYED -n ${namespace} --force --wait --timeout=5m 2>/dev/null || {
+                    echo -e "${YELLOW}⚠️  Rollback command failed, but lock is removed. Proceeding...${NC}"
+                }
+                sleep 15
+                return 0
+            fi
+        fi
+
+        echo -e "${GREEN}✅ Helm lock removed. Ready for fresh install/upgrade${NC}"
+        return 0
+    else
+        echo -e "${GREEN}✓ No stuck operation detected (status: ${status})${NC}"
+        return 0
+    fi
+}
 
 # Check for and clean up conflicting ingress resources
 echo -e "${YELLOW}Checking for conflicting ingress resources...${NC}"
@@ -155,7 +219,7 @@ fi
 # Check for stuck operations first
 if helm status prometheus -n "${MONITORING_NAMESPACE}" 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
     echo -e "${YELLOW}⚠️  Detected stuck Helm operation. Running fix...${NC}"
-    fix_stuck_helm_operation prometheus "${MONITORING_NAMESPACE}"
+    fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
 fi
 
 # Run Helm with output to both stdout and capture exit code
@@ -225,7 +289,7 @@ else
   # Check for common failure patterns and attempt fixes
   if grep -q "another operation.*in progress" /tmp/helm-monitoring-install.log 2>/dev/null; then
     echo -e "${YELLOW}🔧 Stuck operation detected during installation. Running fix...${NC}"
-    fix_stuck_helm_operation prometheus "${MONITORING_NAMESPACE}"
+    fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
     echo -e "${BLUE}🔄 Please retry the installation after cleanup completes${NC}"
   elif grep -q "host.*is already defined in ingress" /tmp/helm-monitoring-install.log 2>/dev/null; then
     echo -e "${YELLOW}🔧 Ingress conflict detected. Cleaning up conflicting ingresses...${NC}"
