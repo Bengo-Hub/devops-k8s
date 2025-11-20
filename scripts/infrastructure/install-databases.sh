@@ -596,6 +596,50 @@ fix_orphaned_redis_resources() {
     done
     sleep 3
   fi
+
+  # Check for orphaned service accounts (e.g., redis-master)
+  ORPHANED_REDIS_SAS=$(kubectl -n "${NAMESPACE}" get serviceaccount -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "redis" or .metadata.name | contains("redis")) and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "redis")) | .metadata.name' 2>/dev/null || true)
+
+  if [ -n "$ORPHANED_REDIS_SAS" ]; then
+    log_warning "Found orphaned Redis serviceaccounts without Helm ownership: $ORPHANED_REDIS_SAS"
+    for sa in $ORPHANED_REDIS_SAS; do
+      log_info "Fixing orphaned serviceaccount: $sa"
+      if kubectl -n "${NAMESPACE}" annotate serviceaccount "$sa" \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated serviceaccount $sa with Helm ownership"
+      else
+        log_warning "Failed to annotate serviceaccount $sa, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete serviceaccount "$sa" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned serviceaccount $sa"
+      fi
+    done
+    sleep 3
+  fi
+
+  # Check for orphaned Redis secrets (e.g., redis password secret)
+  ORPHANED_REDIS_SECRETS=$(kubectl -n "${NAMESPACE}" get secret -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "redis" or .metadata.name == "redis") and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "redis")) | .metadata.name' 2>/dev/null || true)
+
+  if [ -n "$ORPHANED_REDIS_SECRETS" ]; then
+    log_warning "Found orphaned Redis secrets without Helm ownership: $ORPHANED_REDIS_SECRETS"
+    for sec in $ORPHANED_REDIS_SECRETS; do
+      log_info "Fixing orphaned secret: $sec"
+      if kubectl -n "${NAMESPACE}" annotate secret "$sec" \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated secret $sec with Helm ownership"
+      else
+        log_warning "Failed to annotate secret $sec, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete secret "$sec" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned secret $sec"
+      fi
+    done
+    sleep 3
+  fi
 }
 
 # Install or upgrade Redis (idempotent)

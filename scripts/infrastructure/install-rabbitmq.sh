@@ -103,8 +103,79 @@ RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
 # Common functions already sourced above
 
+# Function to fix orphaned RabbitMQ resources (ownership / annotations)
+fix_orphaned_rabbitmq_resources() {
+  log_info "Checking for orphaned RabbitMQ resources..."
+
+  # Fix orphaned ServiceAccounts (e.g., rabbitmq)
+  ORPHANED_RMQ_SAS=$(kubectl -n "${NAMESPACE}" get serviceaccount -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "rabbitmq" or .metadata.name | contains("rabbitmq")) and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "rabbitmq")) | .metadata.name' 2>/dev/null || true)
+
+  if [ -n "$ORPHANED_RMQ_SAS" ]; then
+    log_warning "Found orphaned RabbitMQ serviceaccounts without Helm ownership: $ORPHANED_RMQ_SAS"
+    for sa in $ORPHANED_RMQ_SAS; do
+      log_info "Fixing orphaned serviceaccount: $sa"
+      if kubectl -n "${NAMESPACE}" annotate serviceaccount "$sa" \
+        meta.helm.sh/release-name=rabbitmq \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated serviceaccount $sa with Helm ownership"
+      else
+        log_warning "Failed to annotate serviceaccount $sa, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete serviceaccount "$sa" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned serviceaccount $sa"
+      fi
+    done
+    sleep 3
+  fi
+
+  # Fix orphaned RabbitMQ secrets
+  ORPHANED_RMQ_SECRETS=$(kubectl -n "${NAMESPACE}" get secret -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "rabbitmq" or .metadata.name == "rabbitmq") and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "rabbitmq")) | .metadata.name' 2>/dev/null || true)
+
+  if [ -n "$ORPHANED_RMQ_SECRETS" ]; then
+    log_warning "Found orphaned RabbitMQ secrets without Helm ownership: $ORPHANED_RMQ_SECRETS"
+    for sec in $ORPHANED_RMQ_SECRETS; do
+      log_info "Fixing orphaned secret: $sec"
+      if kubectl -n "${NAMESPACE}" annotate secret "$sec" \
+        meta.helm.sh/release-name=rabbitmq \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated secret $sec with Helm ownership"
+      else
+        log_warning "Failed to annotate secret $sec, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete secret "$sec" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned secret $sec"
+      fi
+    done
+    sleep 3
+  fi
+
+  # Fix orphaned RabbitMQ services
+  ORPHANED_RMQ_SERVICES=$(kubectl -n "${NAMESPACE}" get service -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "rabbitmq" or .metadata.name | contains("rabbitmq")) and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "rabbitmq")) | .metadata.name' 2>/dev/null || true)
+
+  if [ -n "$ORPHANED_RMQ_SERVICES" ]; then
+    log_warning "Found orphaned RabbitMQ services without Helm ownership: $ORPHANED_RMQ_SERVICES"
+    for svc in $ORPHANED_RMQ_SERVICES; do
+      log_info "Fixing orphaned service: $svc"
+      if kubectl -n "${NAMESPACE}" annotate service "$svc" \
+        meta.helm.sh/release-name=rabbitmq \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated service $svc with Helm ownership"
+      else
+        log_warning "Failed to annotate service $svc, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete service "$svc" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned service $svc"
+      fi
+    done
+    sleep 3
+  fi
+}
+
 log_info "Checking for orphaned RabbitMQ resources..."
-fix_orphaned_resources "rabbitmq" "${RABBITMQ_NAMESPACE}" || true
+fix_orphaned_rabbitmq_resources || true
 
 set +e
 if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
