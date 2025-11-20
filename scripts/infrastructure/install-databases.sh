@@ -470,46 +470,56 @@ if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install"
   sleep 5
 fi
 
-# Fix orphaned Redis resources (services, configmaps, etc.) that lack Helm ownership annotations
-log_info "Checking for orphaned Redis resources..."
-ORPHANED_REDIS_SERVICES=$(kubectl -n "${NAMESPACE}" get service -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
-  jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
+# Function to fix orphaned Redis resources
+fix_orphaned_redis_resources() {
+  log_info "Checking for orphaned Redis resources..."
+  
+  # Check for orphaned services (including redis-metrics)
+  ORPHANED_REDIS_SERVICES=$(kubectl -n "${NAMESPACE}" get service -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name | contains("redis")) and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
 
-if [ -n "$ORPHANED_REDIS_SERVICES" ]; then
-  log_warning "Found orphaned Redis services without Helm ownership: $ORPHANED_REDIS_SERVICES"
-  for svc in $ORPHANED_REDIS_SERVICES; do
-    log_info "Fixing orphaned service: $svc"
-    # Try to add Helm ownership annotations
-    kubectl -n "${NAMESPACE}" annotate service "$svc" \
-      meta.helm.sh/release-name=redis \
-      meta.helm.sh/release-namespace="${NAMESPACE}" \
-      --overwrite 2>/dev/null || {
-      # If annotation fails, delete the orphaned service (Helm will recreate it)
-      log_warning "Failed to annotate service $svc, deleting it (Helm will recreate)..."
-      kubectl -n "${NAMESPACE}" delete service "$svc" --wait=false 2>/dev/null || true
-    }
-  done
-  sleep 3
-fi
+  if [ -n "$ORPHANED_REDIS_SERVICES" ]; then
+    log_warning "Found orphaned Redis services without Helm ownership: $ORPHANED_REDIS_SERVICES"
+    for svc in $ORPHANED_REDIS_SERVICES; do
+      log_info "Fixing orphaned service: $svc"
+      # Try to add Helm ownership annotations
+      if kubectl -n "${NAMESPACE}" annotate service "$svc" \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated service $svc with Helm ownership"
+      else
+        # If annotation fails, delete the orphaned service (Helm will recreate it)
+        log_warning "Failed to annotate service $svc, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete service "$svc" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned service $svc"
+      fi
+    done
+    sleep 3
+  fi
 
-# Also check for orphaned configmaps
-ORPHANED_REDIS_CONFIGMAPS=$(kubectl -n "${NAMESPACE}" get configmap -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
-  jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
+  # Check for orphaned configmaps
+  ORPHANED_REDIS_CONFIGMAPS=$(kubectl -n "${NAMESPACE}" get configmap -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
+    jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
 
-if [ -n "$ORPHANED_REDIS_CONFIGMAPS" ]; then
-  log_warning "Found orphaned Redis configmaps without Helm ownership: $ORPHANED_REDIS_CONFIGMAPS"
-  for cm in $ORPHANED_REDIS_CONFIGMAPS; do
-    log_info "Fixing orphaned configmap: $cm"
-    kubectl -n "${NAMESPACE}" annotate configmap "$cm" \
-      meta.helm.sh/release-name=redis \
-      meta.helm.sh/release-namespace="${NAMESPACE}" \
-      --overwrite 2>/dev/null || {
-      log_warning "Failed to annotate configmap $cm, deleting it (Helm will recreate)..."
-      kubectl -n "${NAMESPACE}" delete configmap "$cm" --wait=false 2>/dev/null || true
-    }
-  done
-  sleep 3
-fi
+  if [ -n "$ORPHANED_REDIS_CONFIGMAPS" ]; then
+    log_warning "Found orphaned Redis configmaps without Helm ownership: $ORPHANED_REDIS_CONFIGMAPS"
+    for cm in $ORPHANED_REDIS_CONFIGMAPS; do
+      log_info "Fixing orphaned configmap: $cm"
+      if kubectl -n "${NAMESPACE}" annotate configmap "$cm" \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated configmap $cm with Helm ownership"
+      else
+        log_warning "Failed to annotate configmap $cm, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete configmap "$cm" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned configmap $cm"
+      fi
+    done
+    sleep 3
+  fi
+}
 
 # Install or upgrade Redis (idempotent)
 echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
@@ -533,66 +543,67 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
   # Check if Redis is healthy
   IS_REDIS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset redis-master -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
   
-  # If REDIS_PASSWORD is explicitly set, check if it matches current secret
+  # Always ensure password matches GitHub secrets if REDIS_PASSWORD is provided
   if [[ -n "${REDIS_PASSWORD:-}" ]]; then
     # Get current password from secret
     CURRENT_REDIS_PASS=$(kubectl -n "${NAMESPACE}" get secret redis -o jsonpath='{.data.redis-password}' 2>/dev/null | base64 -d || true)
     
-    if [[ "$CURRENT_REDIS_PASS" == "$REDIS_PASSWORD" ]]; then
-      echo -e "${GREEN}✓ Redis password unchanged - skipping upgrade${NC}"
-      echo -e "${BLUE}Current secret password matches provided REDIS_PASSWORD${NC}"
+    # Always update secret to match GitHub secrets password (source of truth)
+    if [[ "$CURRENT_REDIS_PASS" != "$REDIS_PASSWORD" ]]; then
+      echo -e "${YELLOW}Updating Redis secret to match GitHub secrets password...${NC}"
+      echo -e "${BLUE}Current password length: ${#CURRENT_REDIS_PASS} chars${NC}"
+      echo -e "${BLUE}GitHub secrets password length: ${#REDIS_PASSWORD} chars${NC}"
+      
+      # Update the secret to match GitHub secrets (source of truth)
+      kubectl create secret generic redis \
+        --from-literal=redis-password="$REDIS_PASSWORD" \
+        -n "${NAMESPACE}" \
+        --dry-run=client -o yaml | kubectl apply -f -
+      
+      echo -e "${GREEN}✓ Redis secret updated to match GitHub secrets password${NC}"
+    else
+      echo -e "${GREEN}✓ Redis password already matches GitHub secrets${NC}"
+    fi
+    
+    # If Redis is healthy, no need to upgrade - secret is already updated
+    if [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
+      echo -e "${GREEN}✓ Redis is healthy and password matches GitHub secrets - skipping upgrade${NC}"
       HELM_REDIS_EXIT=0
     else
-      echo -e "${YELLOW}Password mismatch detected - updating Redis to sync password${NC}"
-      echo -e "${BLUE}Current password length: ${#CURRENT_REDIS_PASS} chars${NC}"
-      echo -e "${BLUE}New password length: ${#REDIS_PASSWORD} chars${NC}"
+      echo -e "${YELLOW}Redis not healthy. Checking for stuck Helm operation and orphaned resources...${NC}"
       
-      # Check if Redis is currently healthy - if yes, update secret directly without Helm upgrade
-      if [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
-        echo -e "${GREEN}Redis is healthy. Updating password via secret...${NC}"
+      # Check for stuck Helm operation before upgrading
+      HELM_STATUS=$(helm -n "${NAMESPACE}" status redis 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+      if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+        echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
         
-        # Update the secret directly (Redis will use it on next restart)
-        kubectl create secret generic redis \
-          --from-literal=redis-password="$REDIS_PASSWORD" \
-          -n "${NAMESPACE}" \
-          --dry-run=client -o yaml | kubectl apply -f -
+        # Delete pending Helm secrets
+        kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+        kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+        kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
         
-        echo -e "${GREEN}✓ Password updated in secret. Redis will use it on next restart.${NC}"
-        echo -e "${YELLOW}Note: Password change will take effect on next pod restart${NC}"
-        HELM_REDIS_EXIT=0
-      else
-        echo -e "${YELLOW}Redis not healthy. Checking for stuck Helm operation...${NC}"
-        
-        # Check for stuck Helm operation before upgrading
-        HELM_STATUS=$(helm -n "${NAMESPACE}" status redis 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
-        if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
-          echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
-          
-          # Delete pending Helm secrets
-          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-          
-          echo -e "${GREEN}✓ Helm lock removed. Proceeding with upgrade...${NC}"
-          sleep 5
-        fi
-        
-        echo -e "${YELLOW}Performing Helm upgrade...${NC}"
-        helm upgrade redis bitnami/redis \
-          -n "${NAMESPACE}" \
-          --reset-values \
-          -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-          "${REDIS_HELM_ARGS[@]}" \
-          --timeout=10m \
-          --wait=false 2>&1 | tee /tmp/helm-redis-install.log
-        HELM_REDIS_EXIT=${PIPESTATUS[0]}
+        echo -e "${GREEN}✓ Helm lock removed${NC}"
+        sleep 5
       fi
+      
+      # Fix orphaned resources BEFORE Helm upgrade
+      fix_orphaned_redis_resources
+      
+      echo -e "${YELLOW}Performing Helm upgrade with GitHub secrets password...${NC}"
+      helm upgrade redis bitnami/redis \
+        -n "${NAMESPACE}" \
+        --reset-values \
+        -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
+        "${REDIS_HELM_ARGS[@]}" \
+        --timeout=10m \
+        --wait=false 2>&1 | tee /tmp/helm-redis-install.log
+      HELM_REDIS_EXIT=${PIPESTATUS[0]}
     fi
   elif [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
     echo -e "${GREEN}✓ Redis already installed and healthy - skipping${NC}"
     HELM_REDIS_EXIT=0
   else
-    echo -e "${YELLOW}Redis exists but not ready; checking for stuck operation...${NC}"
+    echo -e "${YELLOW}Redis exists but not ready; checking for stuck operation and orphaned resources...${NC}"
     
     # Check for stuck Helm operation
     HELM_STATUS=$(helm -n "${NAMESPACE}" status redis 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
@@ -608,10 +619,14 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
       sleep 5
     fi
     
+    # Fix orphaned resources BEFORE Helm upgrade
+    fix_orphaned_redis_resources
+    
     echo -e "${YELLOW}Performing safe upgrade...${NC}"
     helm upgrade redis bitnami/redis \
       -n "${NAMESPACE}" \
       --reuse-values \
+      "${REDIS_HELM_ARGS[@]}" \
       --timeout=10m \
       --wait=false 2>&1 | tee /tmp/helm-redis-install.log
     HELM_REDIS_EXIT=${PIPESTATUS[0]}
