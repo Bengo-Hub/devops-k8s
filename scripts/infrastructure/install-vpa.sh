@@ -186,13 +186,14 @@ kubectl wait --for=condition=available deployment/vpa-updater -n kube-system --t
 # Wait for VPA Admission Controller
 kubectl wait --for=condition=available deployment/vpa-admission-controller -n kube-system --timeout=120s || log_warning "VPA Admission Controller still starting..."
 
-# Ensure VPA TLS secret exists (required for admission controller)
+# Ensure VPA TLS secret exists with correct structure (required for admission controller)
+# VPA admission controller expects serverCert.pem and serverKey.pem in the secret
 if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
   log_info "Creating VPA TLS secret placeholder (admission controller will generate real certs)..."
+  # Create secret with correct structure that VPA expects
   kubectl create secret generic vpa-tls-certs \
-    --from-literal=ca.crt="dummy" \
-    --from-literal=tls.crt="dummy" \
-    --from-literal=tls.key="dummy" \
+    --from-literal=serverCert.pem="dummy" \
+    --from-literal=serverKey.pem="dummy" \
     -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
   
   # Wait a moment for secret to be created
@@ -202,6 +203,20 @@ if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
   log_info "Restarting VPA admission controller to generate TLS certificates..."
   kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
   sleep 5
+else
+  # Check if secret has correct structure, fix if needed
+  SECRET_KEYS=$(kubectl get secret vpa-tls-certs -n kube-system -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null || echo "")
+  if echo "$SECRET_KEYS" | grep -qv "serverCert.pem\|serverKey.pem"; then
+    log_warning "VPA TLS secret exists but has incorrect structure. Updating..."
+    kubectl delete secret vpa-tls-certs -n kube-system 2>/dev/null || true
+    kubectl create secret generic vpa-tls-certs \
+      --from-literal=serverCert.pem="dummy" \
+      --from-literal=serverKey.pem="dummy" \
+      -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
+    sleep 2
+    kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
+    sleep 5
+  fi
 fi
 
 # Verify installation
