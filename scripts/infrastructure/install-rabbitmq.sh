@@ -31,6 +31,9 @@ log_info "Purpose: Shared message broker for all services"
 check_kubectl
 ensure_helm
 
+# Create namespace if it doesn't exist
+ensure_namespace "${NAMESPACE}"
+
 # Ensure PriorityClass exists (required by RabbitMQ)
 MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 log_info "Ensuring PriorityClass db-critical exists..."
