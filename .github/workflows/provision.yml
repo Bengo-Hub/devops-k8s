@@ -427,12 +427,14 @@ jobs:
           echo "✅ VPA check/install complete"
           echo "::endgroup::"
 
-      - name: Setup Git Access (SSH Keys & Configuration)
+      - name: Setup Git Access (SSH Keys & Configuration) [Optional]
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        continue-on-error: true
         run: |
-          echo "::group::Setting up Git SSH Access"
+          echo "::group::Setting up Git SSH Access (Optional)"
           echo "⚠️  Note: Git SSH access setup is optional and requires manual GitHub deploy key configuration"
           echo "This step generates a key pair, but you must manually add the public key to GitHub"
+          echo "This step will skip if SSH keys already exist"
           echo ""
           
           # Create SSH directory if it doesn't exist
