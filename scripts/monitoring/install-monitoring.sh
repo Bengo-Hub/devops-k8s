@@ -20,6 +20,15 @@ log_info "Grafana Domain: ${GRAFANA_DOMAIN}"
 check_kubectl
 ensure_storage_class "${SCRIPT_DIR}"
 ensure_helm
+
+# Ensure Helm is in PATH (may be installed via snap)
+if ! command -v helm >/dev/null 2>&1; then
+  if [ -f /snap/bin/helm ]; then
+    export PATH="$PATH:/snap/bin"
+    log_info "Added /snap/bin to PATH for Helm"
+  fi
+fi
+
 ensure_cert_manager "${SCRIPT_DIR}"
 
 # Add Helm repository
