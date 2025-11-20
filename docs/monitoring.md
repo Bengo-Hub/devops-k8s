@@ -30,8 +30,10 @@ From the devops-k8s repository root:
 ```bash
 # Run the automated installation script
 # Note: Script includes automatic stuck Helm operation fixes and ingress conflict resolution
+# Script automatically adds Helm to PATH if installed via snap
 export MONITORING_NAMESPACE=infra
 export GRAFANA_DOMAIN=grafana.masterspace.co.ke
+chmod +x scripts/monitoring/install-monitoring.sh
 ./scripts/monitoring/install-monitoring.sh
 
 # With custom Grafana domain (optional)
@@ -41,10 +43,16 @@ GRAFANA_DOMAIN=grafana.yourdomain.com ./scripts/monitoring/install-monitoring.sh
 
 The script will:
 - Check for cert-manager (install if missing)
+- Ensure Helm is in PATH (adds /snap/bin if Helm installed via snap)
 - Install Prometheus + Grafana with production settings
 - Apply ERP-specific alerts
-- Configure TLS ingress for Grafana
+- Configure TLS ingress for Grafana (if ingress-nginx admission webhook is working)
 - Display credentials and access information
+
+**Note:** If ingress is not created automatically:
+1. Check ingress-nginx controller is running: `kubectl get pods -n ingress-nginx`
+2. If admission webhook is failing, delete it: `kubectl delete validatingwebhookconfiguration ingress-nginx-admission`
+3. Retry Helm upgrade or create ingress manually (see troubleshooting section)
 
 **Default Grafana Domain:** `grafana.masterspace.co.ke`
 
