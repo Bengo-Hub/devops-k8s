@@ -293,6 +293,45 @@ else
   log_warning "erp-alerts.yaml not found, skipping..."
 fi
 
+# Check certificate status
+echo ""
+echo -e "${YELLOW}Checking TLS certificate status...${NC}"
+CERT_READY=$(kubectl get certificate -n "${MONITORING_NAMESPACE}" grafana-tls -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
+CERT_SECRET=$(kubectl get secret -n "${MONITORING_NAMESPACE}" grafana-tls -o jsonpath='{.data.tls\.crt}' 2>/dev/null || echo "")
+
+if [ "$CERT_READY" = "True" ] && [ -n "$CERT_SECRET" ]; then
+  echo -e "${GREEN}✓ TLS certificate is ready${NC}"
+elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
+  echo -e "${YELLOW}⚠️  TLS certificate not ready yet${NC}"
+  echo -e "${BLUE}Checking cert-manager status...${NC}"
+  
+  # Check cert-manager ClusterIssuer
+  if kubectl get clusterissuer letsencrypt-prod >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ cert-manager ClusterIssuer 'letsencrypt-prod' exists${NC}"
+  else
+    echo -e "${RED}✗ cert-manager ClusterIssuer 'letsencrypt-prod' not found${NC}"
+    echo -e "${YELLOW}  Run: ./scripts/infrastructure/install-cert-manager.sh${NC}"
+  fi
+  
+  # Check Certificate resource
+  if kubectl get certificate -n "${MONITORING_NAMESPACE}" grafana-tls >/dev/null 2>&1; then
+    echo -e "${BLUE}Certificate resource exists. Checking status...${NC}"
+    kubectl describe certificate -n "${MONITORING_NAMESPACE}" grafana-tls | grep -A 5 "Status\|Events" || true
+  else
+    echo -e "${YELLOW}⚠️  Certificate resource 'grafana-tls' not found in ${MONITORING_NAMESPACE} namespace${NC}"
+    echo -e "${BLUE}  This should be created automatically by cert-manager when the ingress is created${NC}"
+  fi
+  
+  echo ""
+  echo -e "${YELLOW}Troubleshooting TLS:${NC}"
+  echo "1. Verify DNS: dig ${GRAFANA_DOMAIN} +short"
+  echo "2. Check cert-manager logs: kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager"
+  echo "3. Check ingress: kubectl get ingress -n ${MONITORING_NAMESPACE} prometheus-grafana -o yaml"
+  echo "4. Check certificate: kubectl get certificate -n ${MONITORING_NAMESPACE} grafana-tls -o yaml"
+  echo "5. Wait 2-5 minutes for cert-manager to provision certificate"
+  echo ""
+fi
+
 # Get Grafana admin password
 echo ""
 echo -e "${GREEN}=== Monitoring Stack Installation Complete ===${NC}"
@@ -310,12 +349,17 @@ echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 VPS_IP=${VPS_IP:-YOUR_VPS_IP}
 echo "1. Ensure DNS: ${GRAFANA_DOMAIN} → Your VPS IP (${VPS_IP})"
-echo "2. Wait for cert-manager to provision TLS (~2 mins)"
+if [ "$CERT_READY" != "True" ]; then
+  echo "2. ⚠️  Wait for cert-manager to provision TLS certificate (check status above)"
+  echo "   Monitor: kubectl get certificate -n ${MONITORING_NAMESPACE} grafana-tls -w"
+else
+  echo "2. ✓ TLS certificate is ready"
+fi
 echo "3. Visit https://${GRAFANA_DOMAIN} and login"
 echo "4. Import dashboards (315, 6417, 1860) - see docs/monitoring.md"
-echo "5. Configure Alertmanager email: kubectl apply -f manifests/monitoring/alertmanager-config.yaml"
+echo "5. Configure Alertmanager email: sed 's/namespace: monitoring/namespace: ${MONITORING_NAMESPACE}/g' manifests/monitoring/alertmanager-config.yaml | kubectl apply -f -"
 echo ""
-echo -e "${BLUE}Alternative Access (port-forward):${NC}"
+echo -e "${BLUE}Alternative Access (port-forward - no TLS required):${NC}"
 echo "kubectl port-forward -n ${MONITORING_NAMESPACE} svc/prometheus-grafana 3000:80"
 echo "Then visit: http://localhost:3000"
 echo ""
