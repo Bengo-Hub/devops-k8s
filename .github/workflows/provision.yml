@@ -29,11 +29,11 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
-      # Cleanup enabled via workflow input OR GitHub secret (for automation)
-      # Priority: workflow input > GitHub secret > default false
+      # Cleanup enabled by default, can be disabled via workflow input OR GitHub secret
+      # Priority: workflow input > GitHub secret > default true
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
+        && (github.event.inputs.enable_cleanup == 'false' && 'false' || 'true')
+        || (secrets.ENABLE_CLEANUP == 'false' && 'false' || 'true') }}
       FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
         || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
@@ -236,8 +236,36 @@ jobs:
           fi
           echo "::endgroup::"
 
+      - name: Cleanup cluster (enabled by default)
+        if: ${{ steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true' }}
+        env:
+          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
+          FORCE_CLEANUP: ${{ env.FORCE_REPROVISION || 'true' }}
+        run: |
+          echo "::group::Cluster Cleanup & Reprovisioning"
+          echo "ENABLE_CLEANUP=${ENABLE_CLEANUP}"
+          echo "FORCE_REPROVISION=${FORCE_REPROVISION}"
+          if [[ "${FORCE_REPROVISION}" == "true" ]]; then
+            echo "🔄 FORCE_REPROVISION is ENABLED - Full cleanup and reinstall"
+          else
+            echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
+          fi
+          echo "⚠️  Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
+          echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
+          export ENABLE_CLEANUP=true
+          export FORCE_CLEANUP=${FORCE_REPROVISION:-true}
+          ./scripts/cluster/cleanup-cluster.sh
+          echo "✅ Cleanup complete"
+          echo "::endgroup::"
+
       - name: Ensure scripts executable
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP != 'true'
+        run: |
+          chmod +x scripts/**/*.sh || true
+          chmod +x scripts/*/*.sh || true
+
+      - name: Ensure scripts executable (after cleanup)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true'
         run: |
           chmod +x scripts/**/*.sh || true
           chmod +x scripts/*/*.sh || true
@@ -404,23 +432,6 @@ jobs:
           fi
           
           echo "✅ etcd space check complete"
-          echo "::endgroup::"
-
-      - name: Cleanup cluster (opt-in only)
-        if: ${{ steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && env.ENABLE_CLEANUP == 'true' }}
-        env:
-          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
-          FORCE_CLEANUP: 'true'
-        run: |
-          echo "::group::Cluster Cleanup"
-          echo "ENABLE_CLEANUP=${ENABLE_CLEANUP}"
-          echo "🧹 Cleanup is ENABLED - This will delete ALL applications and data!"
-          echo "⚠️  Deleting namespaces: erp, truload, infra, argocd, monitoring, cafe, treasury, notifications, auth-service"
-          echo "⚠️  System namespaces preserved: kube-system, calico-system, cert-manager, ingress-nginx"
-          export ENABLE_CLEANUP=true
-          export FORCE_CLEANUP=true
-          ./scripts/cluster/cleanup-cluster.sh
-          echo "✅ Cleanup complete"
           echo "::endgroup::"
 
       - name: Install storage provisioner (idempotent)
