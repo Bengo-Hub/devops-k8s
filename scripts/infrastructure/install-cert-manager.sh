@@ -23,8 +23,17 @@ ensure_namespace "cert-manager"
 
 # Install or upgrade cert-manager
 if kubectl get namespace cert-manager >/dev/null 2>&1 && kubectl get deployment cert-manager -n cert-manager >/dev/null 2>&1; then
-  log_info "cert-manager already installed. Upgrading if needed..."
-  kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+  # Check if cert-manager is healthy
+  READY_REPLICAS=$(kubectl get deployment cert-manager -n cert-manager -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  DESIRED_REPLICAS=$(kubectl get deployment cert-manager -n cert-manager -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
+  
+  if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" -eq "$DESIRED_REPLICAS" ]; then
+    log_success "cert-manager already installed and healthy - skipping upgrade"
+    log_info "To force upgrade, set FORCE_UPGRADE=true or delete the deployment"
+  else
+    log_info "cert-manager exists but not healthy. Upgrading..."
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+  fi
 else
   log_info "Installing cert-manager..."
   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml

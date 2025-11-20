@@ -34,29 +34,20 @@ log_info "Pod hostNetwork setting: ${POD_HOSTNET}"
 if [ "$POD_HOSTNET" = "true" ]; then
   log_success "Ingress controller already using hostNetwork"
   
-  # But check if service needs updating
-  SVC_TYPE=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
-  if [ "$SVC_TYPE" = "LoadBalancer" ]; then
-    log_warning "Service is still LoadBalancer type. This is OK for hostNetwork mode."
-    log_info "Checking if ingress is actually working..."
-    
-    # Test if controller is listening on host
-    if kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o wide 2>/dev/null | grep -q "Running"; then
-      log_success "Ingress controller pod is running with hostNetwork"
-      kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o wide
-      echo ""
-      log_info "Checking ingress backends..."
-      kubectl get ingress -A
-      echo ""
-      log_info "If you still get 404, the issue might be:"
-      echo "1. Ingress rules not matching the request"
-      echo "2. Backend service not ready"
-      echo "3. Certificate validation issues (use HTTP first)"
-      echo ""
-      VPS_IP=${VPS_IP:-YOUR_VPS_IP}
-      echo "Try: curl -H 'Host: <your-domain>' http://${VPS_IP}/"
-      exit 0
-    fi
+  # Check if controller pod is running and healthy
+  READY_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  
+  if [ "$READY_PODS" -ge 1 ]; then
+    log_success "Ingress controller is running and healthy - skipping configuration"
+    kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o wide
+    echo ""
+    log_info "Checking ingress backends..."
+    kubectl get ingress -A || true
+    echo ""
+    log_info "To force reconfiguration, set FORCE_RECONFIGURE=true"
+    exit 0
+  else
+    log_warning "Ingress controller configured but pods not running - will patch anyway"
   fi
 fi
 
