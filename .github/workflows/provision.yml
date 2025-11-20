@@ -256,9 +256,12 @@ jobs:
           if [ "$PENDING_COUNT" -gt 0 ]; then
             echo "⚠️  Warning: Found $PENDING_COUNT Pending pods"
             echo "Running diagnostics..."
-            if [ -f ./scripts/diagnostics/diagnose-pending-pods.sh ]; then
+            if [ -f ./scripts/tools/fix-cluster-issues.sh ]; then
+              chmod +x ./scripts/tools/fix-cluster-issues.sh
+              ./scripts/tools/fix-cluster-issues.sh || true
+            elif [ -f ./scripts/diagnostics/diagnose-pending-pods.sh ]; then
               chmod +x ./scripts/diagnostics/diagnose-pending-pods.sh
-            ./scripts/diagnostics/diagnose-pending-pods.sh || true
+              ./scripts/diagnostics/diagnose-pending-pods.sh || true
             fi
           else
             echo "✅ No Pending pods found"
