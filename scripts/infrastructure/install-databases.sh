@@ -245,10 +245,8 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     POSTGRES_DEPLOYED=true
   fi
   
-  # Only set to false if we haven't already marked it as deployed
-  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
-    POSTGRES_DEPLOYED=false
-  fi
+  # POSTGRES_DEPLOYED is set to true above if already installed/healthy
+  # If not set, it means we need to install (will be checked below)
 
 else
   echo -e "${YELLOW}PostgreSQL not found; installing fresh${NC}"
