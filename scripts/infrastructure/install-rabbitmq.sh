@@ -16,11 +16,18 @@ NAMESPACE=${RABBITMQ_NAMESPACE:-infra}
 RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-user}
 FORCE_RABBITMQ_INSTALL=${FORCE_RABBITMQ_INSTALL:-${FORCE_INSTALL:-false}}
 
-# RABBITMQ_PASSWORD is required from GitHub secrets (no default fallback)
+# Shared password policy:
+# - POSTGRES_PASSWORD (GitHub secret) is the canonical infra password
+# - RabbitMQ reuses the same password unless explicitly overridden (and we strongly recommend keeping them identical)
 if [[ -z "${RABBITMQ_PASSWORD:-}" ]]; then
-  log_error "RABBITMQ_PASSWORD is required but not set in GitHub secrets"
-  log_error "Please set RABBITMQ_PASSWORD in GitHub organization secrets"
-  exit 1
+  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    RABBITMQ_PASSWORD="$POSTGRES_PASSWORD"
+    log_info "RABBITMQ_PASSWORD not set - reusing POSTGRES_PASSWORD for RabbitMQ (shared infra password)"
+  else
+    log_error "RABBITMQ_PASSWORD is required but not set, and POSTGRES_PASSWORD is also empty"
+    log_error "Please set POSTGRES_PASSWORD (preferred) or RABBITMQ_PASSWORD in GitHub organization secrets"
+    exit 1
+  fi
 fi
 
 log_section "Installing RabbitMQ (Shared Infrastructure)"
@@ -102,8 +109,12 @@ RABBITMQ_HELM_ARGS+=(--set priorityClassName=db-critical)
 # Metrics
 RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
-# Use stable Bitnami 'latest' tag to avoid NotFound errors on rotated versioned tags
-RABBITMQ_HELM_ARGS+=(--set image.tag=latest)
+# Use official RabbitMQ image instead of deprecated Bitnami Docker Hub images
+# We pin to the 4.2.x series (Ubuntu-based image from the official RabbitMQ library image)
+#   Docs / Dockerfile: https://github.com/docker-library/rabbitmq/tree/master/4.2/ubuntu
+RABBITMQ_HELM_ARGS+=(--set image.registry=docker.io)
+RABBITMQ_HELM_ARGS+=(--set image.repository=rabbitmq)
+RABBITMQ_HELM_ARGS+=(--set image.tag=4.2.1)
 
 # Common functions already sourced above
 
