@@ -84,3 +84,4 @@ monitoring:
 
 serviceMonitor:
   enabled: false
+  namespace: infra  # Set namespace even if disabled for consistency
