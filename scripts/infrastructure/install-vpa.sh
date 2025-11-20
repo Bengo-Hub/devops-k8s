@@ -34,22 +34,64 @@ if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
   
   CURRENT_VERSION=$(kubectl get deployment -n kube-system vpa-recommender -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -oP '(?<=:v)\d+\.\d+\.\d+' || echo "unknown")
   log_warning "VPA CRD exists but components not healthy. Current version: ${CURRENT_VERSION}"
+  log_info "VPA components status: Admission=${VPA_ADMISSION_RUNNING}, Recommender=${VPA_RECOMMENDER_RUNNING}, Updater=${VPA_UPDATER_RUNNING}"
   
   # Check if running in CI/CD (non-interactive)
   if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
-    if [[ "${FORCE_INSTALL:-}" != "true" ]]; then
-      log_info "Running in CI/CD and FORCE_INSTALL not set; skipping VPA upgrade"
-      log_warning "VPA exists but not healthy. Set FORCE_INSTALL=true to reinstall"
+    if [[ "${FORCE_INSTALL:-}" == "true" ]]; then
+      log_info "FORCE_INSTALL=true set - proceeding with VPA reinstallation"
+    else
+      log_info "Running in CI/CD - attempting automatic recovery of unhealthy VPA..."
+      log_info "Checking VPA pod status for diagnostics..."
+      
+      # Show VPA pod status for diagnostics
+      kubectl get pods -n kube-system -l app.kubernetes.io/name=vpa || kubectl get pods -n kube-system | grep vpa || true
+      
+      # Check for common issues and attempt recovery
+      # Check if pods are stuck in CrashLoopBackOff or ImagePullBackOff
+      CRASH_LOOP_PODS=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=vpa -o json 2>/dev/null | \
+        jq -r '.items[] | select(.status.containerStatuses[]?.state.waiting?.reason == "CrashLoopBackOff" or .status.containerStatuses[]?.state.waiting?.reason == "ImagePullBackOff") | .metadata.name' 2>/dev/null || true)
+      
+      if [ -n "$CRASH_LOOP_PODS" ]; then
+        log_warning "Found unhealthy VPA pods: $CRASH_LOOP_PODS"
+        log_info "Attempting to restart VPA deployments to recover..."
+        
+        # Restart deployments to trigger pod recreation
+        kubectl rollout restart deployment/vpa-recommender -n kube-system 2>/dev/null || true
+        kubectl rollout restart deployment/vpa-updater -n kube-system 2>/dev/null || true
+        kubectl rollout restart deployment/vpa-admission-controller -n kube-system 2>/dev/null || true
+        
+        log_info "Waiting for VPA pods to restart (30 seconds)..."
+        sleep 30
+        
+        # Re-check health after restart
+        VPA_ADMISSION_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-admission-controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+        VPA_RECOMMENDER_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-recommender --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+        VPA_UPDATER_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-updater --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+        
+        if [ "$VPA_ADMISSION_RUNNING" -ge 1 ] && [ "$VPA_RECOMMENDER_RUNNING" -ge 1 ] && [ "$VPA_UPDATER_RUNNING" -ge 1 ]; then
+          log_success "VPA recovered successfully after restart"
+          exit 0
+        else
+          log_warning "VPA still unhealthy after restart. Full reinstallation may be required."
+          log_info "Set FORCE_INSTALL=true to force complete reinstallation"
+          log_info "Current status: Admission=${VPA_ADMISSION_RUNNING}, Recommender=${VPA_RECOMMENDER_RUNNING}, Updater=${VPA_UPDATER_RUNNING}"
+          exit 0
+        fi
+      else
+        log_info "VPA pods not in crash loop. May need full reinstallation."
+        log_info "Set FORCE_INSTALL=true to force complete reinstallation"
+        exit 0
+      fi
+    fi
+  else
+    # Interactive mode - ask user
+    read -p "Do you want to upgrade/reinstall VPA? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      log_success "VPA installation skipped."
       exit 0
     fi
-  fi
-  
-  # Interactive mode - ask user
-  read -p "Do you want to upgrade/reinstall VPA? (y/N): " -n 1 -r
-  echo
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    log_success "VPA installation skipped."
-    exit 0
   fi
 fi
 
