@@ -82,7 +82,7 @@ fi
 HELM_EXTRA_OPTS=""
 GRAFANA_PVC_SIZE=$(kubectl -n "${MONITORING_NAMESPACE}" get pvc prometheus-grafana -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null || true)
 if [ -n "${GRAFANA_PVC_SIZE:-}" ]; then
-  echo -e "${YELLOW}Detected existing Grafana PVC size: ${GRAFANA_PVC_SIZE} - preventing shrink on upgrade${NC}"
+  log_info "Detected existing Grafana PVC size: ${GRAFANA_PVC_SIZE} - preventing shrink on upgrade"
   HELM_EXTRA_OPTS="$HELM_EXTRA_OPTS --set-string grafana.persistence.size=${GRAFANA_PVC_SIZE}"
 fi
 
