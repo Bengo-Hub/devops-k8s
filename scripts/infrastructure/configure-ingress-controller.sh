@@ -34,11 +34,46 @@ log_info "Pod hostNetwork setting: ${POD_HOSTNET}"
 if [ "$POD_HOSTNET" = "true" ]; then
   log_success "Ingress controller already using hostNetwork"
   
-  # Check if controller pod is running and healthy
+  # Check deployment replica count (should be 1 for hostNetwork)
+  CURRENT_REPLICAS=$(kubectl get deployment ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+  if [ "$CURRENT_REPLICAS" != "1" ]; then
+    log_warning "Deployment has ${CURRENT_REPLICAS} replicas, but hostNetwork requires 1 replica"
+    log_info "Scaling deployment to 1 replica..."
+    kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1
+    sleep 5
+  fi
+  
+  # Check for duplicate/crashing pods and clean them up
+  ALL_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | wc -l || echo "0")
+  RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  CRASHING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers 2>/dev/null | wc -l || echo "0")
+  
+  if [ "$ALL_PODS" -gt 1 ] || [ "$CRASHING_PODS" -gt 0 ]; then
+    log_warning "Found ${ALL_PODS} total pods (${RUNNING_PODS} running, ${CRASHING_PODS} crashing)"
+    log_info "Cleaning up duplicate/crashing pods..."
+    
+    # Delete all non-running pods
+    kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null | \
+      xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+    
+    # If we have multiple running pods, keep only the newest one
+    if [ "$RUNNING_PODS" -gt 1 ]; then
+      log_info "Multiple running pods detected, keeping only the newest one..."
+      OLDEST_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+      if [ -n "$OLDEST_POD" ]; then
+        log_info "Deleting older pod: $OLDEST_POD"
+        kubectl delete pod "$OLDEST_POD" -n ingress-nginx --wait=false || true
+      fi
+    fi
+    
+    sleep 5
+  fi
+  
+  # Re-check after cleanup
   READY_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
   
-  if [ "$READY_PODS" -ge 1 ]; then
-    log_success "Ingress controller is running and healthy - skipping configuration"
+  if [ "$READY_PODS" -eq 1 ]; then
+    log_success "Ingress controller is running and healthy (1 pod)"
     kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o wide
     echo ""
     log_info "Checking ingress backends..."
@@ -46,9 +81,19 @@ if [ "$POD_HOSTNET" = "true" ]; then
     echo ""
     log_info "To force reconfiguration, set FORCE_RECONFIGURE=true"
     exit 0
+  elif [ "$READY_PODS" -gt 1 ]; then
+    log_warning "Multiple pods still running - will force cleanup"
   else
-    log_warning "Ingress controller configured but pods not running - will patch anyway"
+    log_warning "No healthy pods found - will patch anyway"
   fi
+fi
+
+# Ensure deployment is scaled to 1 replica (required for hostNetwork)
+CURRENT_REPLICAS=$(kubectl get deployment ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+if [ "$CURRENT_REPLICAS" != "1" ]; then
+  log_info "Scaling deployment to 1 replica (required for hostNetwork)..."
+  kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1
+  sleep 5
 fi
 
 # Patch ingress controller to use hostNetwork
@@ -56,16 +101,46 @@ log_info "Patching ingress controller to use hostNetwork..."
 kubectl patch deployment ingress-nginx-controller \
   -n ingress-nginx \
   --type='json' \
-  -p='[{"op": "add", "path": "/spec/template/spec/hostNetwork", "value": true}]'
+  -p='[{"op": "add", "path": "/spec/template/spec/hostNetwork", "value": true}]' || \
+kubectl patch deployment ingress-nginx-controller \
+  -n ingress-nginx \
+  --type='merge' \
+  -p='{"spec":{"template":{"spec":{"hostNetwork":true}}}}'
 
 # Also set dnsPolicy to ClusterFirstWithHostNet for proper DNS resolution
 kubectl patch deployment ingress-nginx-controller \
   -n ingress-nginx \
   --type='json' \
-  -p='[{"op": "add", "path": "/spec/template/spec/dnsPolicy", "value": "ClusterFirstWithHostNet"}]'
+  -p='[{"op": "add", "path": "/spec/template/spec/dnsPolicy", "value": "ClusterFirstWithHostNet"}]' || \
+kubectl patch deployment ingress-nginx-controller \
+  -n ingress-nginx \
+  --type='merge' \
+  -p='{"spec":{"template":{"spec":{"dnsPolicy":"ClusterFirstWithHostNet"}}}}'
+
+# Clean up any duplicate pods before waiting for rollout
+log_info "Cleaning up any duplicate pods..."
+kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null | \
+  xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
 
 log_info "Waiting for ingress controller to restart..."
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=120s || true
+
+# Final cleanup check - ensure only one pod exists
+sleep 5
+FINAL_POD_COUNT=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | wc -l || echo "0")
+if [ "$FINAL_POD_COUNT" -gt 1 ]; then
+  log_warning "Multiple pods still exist after rollout, cleaning up duplicates..."
+  # Keep only the newest running pod
+  RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+  if [ -n "$RUNNING_PODS" ]; then
+    POD_ARRAY=($RUNNING_PODS)
+    # Delete all but the last (newest) pod
+    for i in $(seq 0 $((${#POD_ARRAY[@]} - 2))); do
+      log_info "Deleting duplicate pod: ${POD_ARRAY[$i]}"
+      kubectl delete pod "${POD_ARRAY[$i]}" -n ingress-nginx --wait=false || true
+    done
+  fi
+fi
 
 # Verification
 log_section "Ingress Controller Configuration Complete"
