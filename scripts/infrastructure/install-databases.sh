@@ -168,9 +168,68 @@ fix_stuck_helm_operation() {
   return 1
 }
 
+# Function to fix orphaned NetworkPolicy with invalid Helm ownership metadata
+fix_orphaned_networkpolicy() {
+  local release_name=$1
+  local namespace=${2:-${NAMESPACE}}
+  
+  # Check if NetworkPolicy exists
+  if ! kubectl get networkpolicy "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
+    return 0  # NetworkPolicy doesn't exist, nothing to fix
+  fi
+  
+  # Check if NetworkPolicy has proper Helm ownership annotations
+  local release_name_annotation=$(kubectl get networkpolicy "${release_name}" -n "${namespace}" \
+    -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+  local release_namespace_annotation=$(kubectl get networkpolicy "${release_name}" -n "${namespace}" \
+    -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+  
+  if [ -z "$release_name_annotation" ] || [ -z "$release_namespace_annotation" ]; then
+    log_warning "Found NetworkPolicy '${release_name}' with invalid Helm ownership metadata"
+    log_info "NetworkPolicy exists but missing Helm annotations - fixing..."
+    
+    # Try to add proper Helm annotations first
+    if kubectl patch networkpolicy "${release_name}" -n "${namespace}" \
+      --type='json' \
+      -p="[{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-name\",\"value\":\"${release_name}\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-namespace\",\"value\":\"${namespace}\"}]" 2>/dev/null; then
+      log_success "Added Helm ownership annotations to NetworkPolicy"
+      return 0
+    else
+      # If patching fails (e.g., annotations path doesn't exist), delete and let Helm recreate
+      log_warning "Failed to patch NetworkPolicy annotations - deleting to let Helm recreate..."
+      kubectl patch networkpolicy "${release_name}" -n "${namespace}" \
+        -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+      kubectl delete networkpolicy "${release_name}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
+      log_success "NetworkPolicy deleted - Helm will recreate it with proper ownership"
+      sleep 2
+      return 0
+    fi
+  fi
+  
+  # Check if annotations match expected values
+  if [ "$release_name_annotation" != "$release_name" ] || [ "$release_namespace_annotation" != "$namespace" ]; then
+    log_warning "NetworkPolicy '${release_name}' has incorrect Helm ownership annotations"
+    log_info "Expected: release-name=${release_name}, release-namespace=${namespace}"
+    log_info "Found: release-name=${release_name_annotation}, release-namespace=${release_namespace_annotation}"
+    log_info "Deleting NetworkPolicy to let Helm recreate with correct ownership..."
+    kubectl patch networkpolicy "${release_name}" -n "${namespace}" \
+      -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+    kubectl delete networkpolicy "${release_name}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
+    log_success "NetworkPolicy deleted - Helm will recreate it with proper ownership"
+    sleep 2
+    return 0
+  fi
+  
+  return 0  # NetworkPolicy is properly configured
+}
+
 # Check for stuck Helm operations before proceeding
 log_info "Checking for stuck Helm operations..."
 fix_stuck_helm_operation "postgresql" "${NAMESPACE}" || true
+
+# Check for orphaned NetworkPolicy with invalid Helm ownership metadata
+log_info "Checking for orphaned NetworkPolicy resources..."
+fix_orphaned_networkpolicy "postgresql" "${NAMESPACE}" || true
 
 # Install or upgrade PostgreSQL (idempotent)
 log_section "Installing/upgrading PostgreSQL"
@@ -346,6 +405,10 @@ else
     fi
   else
     log_info "Cleanup mode inactive - checking for existing resources to update..."
+    
+    # Fix orphaned NetworkPolicy before attempting Helm operations
+    fix_orphaned_networkpolicy "postgresql" "${NAMESPACE}" || true
+    
     # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
     if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
       log_warning "PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade..."
@@ -370,6 +433,9 @@ else
   
   # Install PostgreSQL if cleanup mode or no existing resources
   if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
+    # Ensure NetworkPolicy is fixed before fresh install
+    fix_orphaned_networkpolicy "postgresql" "${NAMESPACE}" || true
+    
     log_info "Installing PostgreSQL..."
     helm install postgresql bitnami/postgresql \
       --version 16.7.27 \
