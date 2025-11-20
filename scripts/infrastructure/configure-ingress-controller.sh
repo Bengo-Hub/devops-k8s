@@ -119,8 +119,13 @@ kubectl patch deployment ingress-nginx-controller \
 
 # Clean up any duplicate pods before waiting for rollout
 log_info "Cleaning up any duplicate pods..."
+# Delete all non-running pods first
 kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null | \
   xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+# Also delete any duplicate replicasets that might exist
+kubectl get replicasets -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | \
+  awk '{if ($2 != $3 || $2 != $4) print $1}' | \
+  xargs -r -I {} kubectl delete replicaset {} -n ingress-nginx --wait=false 2>/dev/null || true
 
 log_info "Waiting for ingress controller to restart..."
 kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=120s || true

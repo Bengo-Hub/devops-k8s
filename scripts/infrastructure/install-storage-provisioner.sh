@@ -12,11 +12,25 @@ log_section "Installing Storage Provisioner"
 # Pre-flight checks
 check_kubectl
 
-# Check if any storage class already exists
+# Check if local-path-provisioner is running
+if kubectl get pods -n local-path-storage -l app=local-path-provisioner --field-selector=status.phase=Running --no-headers 2>/dev/null | grep -q Running; then
+  log_success "local-path-provisioner is already running"
+  # Check if default storage class exists
+  if kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
+    log_success "Default storage class already configured"
+    kubectl get storageclass
+    exit 0
+  else
+    log_info "Storage provisioner running but no default storage class. Setting local-path as default..."
+    kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' 2>/dev/null || true
+    kubectl get storageclass
+    exit 0
+  fi
+fi
+
+# Check if any storage class already exists (but provisioner not running)
 if kubectl get storageclass 2>/dev/null | grep -q "(default)"; then
-  log_success "Default storage class already configured"
-  kubectl get storageclass
-  exit 0
+  log_warning "Default storage class exists but provisioner pod not running. Reinstalling..."
 fi
 
 # Install local-path-provisioner
