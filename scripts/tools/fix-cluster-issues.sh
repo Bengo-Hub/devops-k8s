@@ -56,6 +56,9 @@ for ns in $NAMESPACES; do
   
   # Check if namespace has pods that need registry-credentials
   HAS_APP_PODS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | grep -v "Completed\|Succeeded" | wc -l || echo "0")
+  # Convert to integer (handle whitespace)
+  HAS_APP_PODS=$(echo "$HAS_APP_PODS" | tr -d '[:space:]')
+  HAS_APP_PODS=${HAS_APP_PODS:-0}
   if [ "$HAS_APP_PODS" -gt 0 ]; then
     if ! kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
       MISSING_REGISTRY_SECRETS="$MISSING_REGISTRY_SECRETS $ns"
@@ -72,9 +75,11 @@ if [ -n "$MISSING_REGISTRY_SECRETS" ]; then
   log_info "To create registry-credentials secret, run:"
   echo "  kubectl create secret docker-registry registry-credentials \\"
   echo "    --docker-server=docker.io \\"
-  echo "    --docker-username=$REGISTRY_USERNAME \\"
-  echo "    --docker-password=$REGISTRY_PASSWORD \\"
+  echo "    --docker-username=\${REGISTRY_USERNAME} \\"
+  echo "    --docker-password=\${REGISTRY_PASSWORD} \\"
   echo "    -n <namespace>"
+  echo ""
+  log_info "Note: Set REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables before running the command above"
 fi
 
 # 4. Check for VPA TLS secret
