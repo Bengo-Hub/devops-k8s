@@ -26,7 +26,7 @@ if [[ -z "${RABBITMQ_PASSWORD:-}" ]]; then
   else
     log_error "RABBITMQ_PASSWORD is required but not set, and POSTGRES_PASSWORD is also empty"
     log_error "Please set POSTGRES_PASSWORD (preferred) or RABBITMQ_PASSWORD in GitHub organization secrets"
-    exit 1
+  exit 1
   fi
 fi
 
