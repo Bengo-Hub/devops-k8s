@@ -186,6 +186,24 @@ kubectl wait --for=condition=available deployment/vpa-updater -n kube-system --t
 # Wait for VPA Admission Controller
 kubectl wait --for=condition=available deployment/vpa-admission-controller -n kube-system --timeout=120s || log_warning "VPA Admission Controller still starting..."
 
+# Ensure VPA TLS secret exists (required for admission controller)
+if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
+  log_info "Creating VPA TLS secret placeholder (admission controller will generate real certs)..."
+  kubectl create secret generic vpa-tls-certs \
+    --from-literal=ca.crt="dummy" \
+    --from-literal=tls.crt="dummy" \
+    --from-literal=tls.key="dummy" \
+    -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
+  
+  # Wait a moment for secret to be created
+  sleep 2
+  
+  # Restart admission controller pod to trigger cert generation
+  log_info "Restarting VPA admission controller to generate TLS certificates..."
+  kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
+  sleep 5
+fi
+
 # Verify installation
 log_section "VPA Installation Complete"
 
