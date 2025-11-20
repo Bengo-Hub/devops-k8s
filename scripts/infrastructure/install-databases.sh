@@ -285,8 +285,9 @@ fi
 # Always use values file for complete configuration (includes FIPS settings as backup)
 PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
-# Simplify password logic around line 353-409
-# Replace the complex if-else password matching with:
+FORCE_DB_INSTALL=${FORCE_DB_INSTALL:-${FORCE_INSTALL:-false}}
+
+# Simplify password logic: environment is the source of truth
 if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
   ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
   PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
@@ -309,7 +310,7 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     # Get current password from secret
     CURRENT_PG_PASS=$(kubectl -n "${NAMESPACE}" get secret postgresql -o jsonpath='{.data.postgres-password}' 2>/dev/null | base64 -d || true)
     
-    if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" ]]; then
+    if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" && "${FORCE_DB_INSTALL}" != "true" ]]; then
       log_success "PostgreSQL password unchanged - skipping upgrade"
       log_info "Current secret password matches provided POSTGRES_PASSWORD"
       HELM_PG_EXIT=0
@@ -671,6 +672,9 @@ fi
 log_info "Using REDIS_PASSWORD from environment/GitHub secrets"
 log_info "  - Redis password: ${#REDIS_PASSWORD} chars"
 REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
+
+# Always fix orphaned Redis resources before any Helm operation (install or upgrade)
+fix_orphaned_redis_resources
 
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
