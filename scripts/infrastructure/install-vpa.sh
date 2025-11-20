@@ -32,17 +32,30 @@ fi
 
 echo -e "${GREEN}✓ kubectl configured and cluster reachable${NC}"
 
-# Check if VPA is already installed
+# Check if VPA is already installed and healthy
 if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
-  echo -e "${YELLOW}VPA already installed. Checking version...${NC}"
+  # Check if VPA components are running
+  VPA_ADMISSION_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-admission-controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  VPA_RECOMMENDER_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-recommender --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  VPA_UPDATER_RUNNING=$(kubectl get pods -n kube-system -l app=vpa-updater --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  
+  if [ "$VPA_ADMISSION_RUNNING" -ge 1 ] && [ "$VPA_RECOMMENDER_RUNNING" -ge 1 ] && [ "$VPA_UPDATER_RUNNING" -ge 1 ]; then
+    echo -e "${GREEN}✓ VPA already installed and healthy - skipping${NC}"
+    echo -e "${BLUE}VPA components running: Admission=${VPA_ADMISSION_RUNNING}, Recommender=${VPA_RECOMMENDER_RUNNING}, Updater=${VPA_UPDATER_RUNNING}${NC}"
+    echo -e "${BLUE}To force reinstallation, set FORCE_INSTALL=true${NC}"
+    exit 0
+  fi
+  
   CURRENT_VERSION=$(kubectl get deployment -n kube-system vpa-recommender -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -oP '(?<=:v)\d+\.\d+\.\d+' || echo "unknown")
-  echo -e "${BLUE}Current VPA version: ${CURRENT_VERSION}${NC}"
+  echo -e "${YELLOW}VPA CRD exists but components not healthy. Current version: ${CURRENT_VERSION}${NC}"
   
   # Check if running in CI/CD (non-interactive)
-  if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || "${FORCE_INSTALL:-}" == "true" ]]; then
-    echo -e "${BLUE}Running in CI/CD or FORCE_INSTALL=true; skipping VPA upgrade${NC}"
-    echo -e "${GREEN}VPA is already installed and running${NC}"
-    exit 0
+  if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+    if [[ "${FORCE_INSTALL:-}" != "true" ]]; then
+      echo -e "${BLUE}Running in CI/CD and FORCE_INSTALL not set; skipping VPA upgrade${NC}"
+      echo -e "${YELLOW}VPA exists but not healthy. Set FORCE_INSTALL=true to reinstall${NC}"
+      exit 0
+    fi
   fi
   
   # Interactive mode - ask user
