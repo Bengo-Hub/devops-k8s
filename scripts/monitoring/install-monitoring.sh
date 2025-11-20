@@ -221,6 +221,37 @@ set -e
 # Check if Helm succeeded
 if [ $HELM_EXIT_CODE -eq 0 ]; then
   echo -e "${GREEN}✓ kube-prometheus-stack installed successfully${NC}"
+  
+  # Verify ingress was created (wait a bit for resources to settle)
+  echo -e "${BLUE}Verifying Grafana ingress was created...${NC}"
+  sleep 5
+  if ! kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  Grafana ingress not found after Helm upgrade. Checking Helm values...${NC}"
+    
+    # Check if ingress is enabled in Helm values
+    INGRESS_ENABLED=$(helm -n "${MONITORING_NAMESPACE}" get values prometheus -o json 2>/dev/null | jq -r '.grafana.ingress.enabled // "true"' || echo "true")
+    if [ "$INGRESS_ENABLED" != "true" ]; then
+      echo -e "${YELLOW}⚠️  Ingress is disabled in Helm values. Enabling it...${NC}"
+      helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+        -n "${MONITORING_NAMESPACE}" \
+        -f "${TEMP_VALUES}" \
+        ${HELM_EXTRA_OPTS} \
+        --set grafana.ingress.enabled=true \
+        --timeout=5m \
+        --wait=false 2>&1 | tee /tmp/helm-monitoring-fix-ingress.log
+      sleep 10
+    else
+      echo -e "${BLUE}Ingress is enabled in values. Waiting for it to be created...${NC}"
+      sleep 10
+      if kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Grafana ingress now exists${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Ingress still not found. This may be normal if Grafana service is not ready yet.${NC}"
+      fi
+    fi
+  else
+    echo -e "${GREEN}✓ Grafana ingress exists${NC}"
+  fi
 else
   echo -e "${RED}Installation failed with exit code $HELM_EXIT_CODE${NC}"
   echo ""
@@ -372,12 +403,34 @@ elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
     fi
   else
     echo -e "${RED}✗ Grafana ingress not found${NC}"
+    echo -e "${YELLOW}⚠️  Ingress was deleted but Helm didn't recreate it. Checking Helm release...${NC}"
+    
+    # Check if Helm release exists and try to recreate ingress
+    if helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
+      echo -e "${BLUE}Helm release exists. Ingress should be managed by Helm.${NC}"
+      echo -e "${BLUE}Waiting a few seconds for ingress to be created...${NC}"
+      sleep 10
+      
+      # Check again
+      if kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Grafana ingress now exists${NC}"
+      else
+        echo -e "${YELLOW}⚠️  Ingress still not found. This may indicate a Helm values issue.${NC}"
+        echo -e "${BLUE}Checking Helm values for ingress configuration...${NC}"
+        helm -n "${MONITORING_NAMESPACE}" get values prometheus | grep -A 10 "ingress:" || true
+      fi
+    else
+      echo -e "${RED}✗ Helm release 'prometheus' not found${NC}"
+    fi
   fi
   
   # Check certificate challenges
   echo -e "${BLUE}4. Checking certificate challenges...${NC}"
   CHALLENGES=$(kubectl get challenges -n "${MONITORING_NAMESPACE}" -l acme.cert-manager.io/order-name 2>/dev/null | grep -v NAME | wc -l || echo "0")
-  if [ "$CHALLENGES" -gt 0 ]; then
+  # Trim whitespace from wc output
+  CHALLENGES=$(echo "$CHALLENGES" | tr -d '[:space:]')
+  CHALLENGES=${CHALLENGES:-0}
+  if [[ "$CHALLENGES" =~ ^[0-9]+$ ]] && [ "$CHALLENGES" -gt 0 ]; then
     echo -e "${BLUE}Found ${CHALLENGES} challenge(s). Status:${NC}"
     kubectl get challenges -n "${MONITORING_NAMESPACE}" -l acme.cert-manager.io/order-name -o custom-columns=NAME:.metadata.name,STATUS:.status.state,REASON:.status.reason 2>/dev/null || true
   else
