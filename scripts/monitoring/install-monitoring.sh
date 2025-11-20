@@ -146,29 +146,59 @@ fix_stuck_helm() {
 
 # Check for and clean up conflicting ingress resources
 echo -e "${YELLOW}Checking for conflicting ingress resources...${NC}"
-CONFLICTING_INGRESSES=$(kubectl get ingress -n "${MONITORING_NAMESPACE}" -o json 2>/dev/null | \
+ALL_INGRESSES=$(kubectl get ingress -n "${MONITORING_NAMESPACE}" -o json 2>/dev/null | \
   jq -r ".items[] | select(.spec.rules[]?.host == \"${GRAFANA_DOMAIN}\") | .metadata.name" 2>/dev/null || true)
 
-if [ -n "$CONFLICTING_INGRESSES" ]; then
-  echo -e "${YELLOW}Found conflicting ingress(es) for ${GRAFANA_DOMAIN}:${NC}"
-  echo "$CONFLICTING_INGRESSES"
+if [ -n "$ALL_INGRESSES" ]; then
+  echo -e "${YELLOW}Found ingress(es) for ${GRAFANA_DOMAIN}:${NC}"
+  echo "$ALL_INGRESSES"
   
-  # Check if this is from a previous monitoring installation
-  for ingress_name in $CONFLICTING_INGRESSES; do
-    INGRESS_LABELS=$(kubectl get ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels}' 2>/dev/null || true)
+  CONFLICTING_INGRESSES=""
+  
+  # Filter out cert-manager ACME solver ingresses (temporary, used for Let's Encrypt validation)
+  # These have naming pattern: cm-acme-http-solver-*
+  for ingress_name in $ALL_INGRESSES; do
+    # Skip cert-manager ACME solver ingresses (they're temporary and should be ignored)
+    if echo "$ingress_name" | grep -q "^cm-acme-http-solver-"; then
+      echo -e "${BLUE}ℹ️  Ignoring cert-manager ACME solver ingress: $ingress_name (temporary, used for TLS validation)${NC}"
+      continue
+    fi
     
-    # If it's from monitoring/grafana, safe to delete
-    if echo "$INGRESS_LABELS" | grep -q "grafana\|prometheus\|monitoring"; then
-      echo -e "${YELLOW}Deleting conflicting monitoring ingress: $ingress_name${NC}"
-      kubectl delete ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" --wait=false 2>/dev/null || true
+    # Check if ingress is managed by Helm release
+    INGRESS_LABELS=$(kubectl get ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels}' 2>/dev/null || true)
+    INGRESS_OWNER=$(kubectl get ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.ownerReferences[*].name}' 2>/dev/null || true)
+    
+    # Check if it's managed by the prometheus Helm release
+    if echo "$INGRESS_LABELS" | grep -q "app.kubernetes.io/instance=prometheus\|app.kubernetes.io/managed-by=Helm"; then
+      if helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Ingress $ingress_name is managed by Helm release 'prometheus' - keeping it${NC}"
+        continue
+      else
+        echo -e "${YELLOW}⚠️  Ingress $ingress_name has Helm labels but release doesn't exist - will delete${NC}"
+        CONFLICTING_INGRESSES="$CONFLICTING_INGRESSES $ingress_name"
+      fi
+    # Check if it's from monitoring/grafana but not managed by Helm
+    elif echo "$INGRESS_LABELS" | grep -q "grafana\|prometheus\|monitoring"; then
+      echo -e "${YELLOW}⚠️  Found orphaned monitoring ingress: $ingress_name (not managed by Helm)${NC}"
+      CONFLICTING_INGRESSES="$CONFLICTING_INGRESSES $ingress_name"
     else
-      echo -e "${RED}⚠️  Warning: Ingress $ingress_name exists but doesn't appear to be from monitoring stack${NC}"
-      echo -e "${RED}    You may need to manually resolve this conflict${NC}"
+      echo -e "${YELLOW}⚠️  Warning: Ingress $ingress_name exists but doesn't appear to be from monitoring stack${NC}"
+      echo -e "${YELLOW}    Skipping deletion - may be managed by another service${NC}"
     fi
   done
   
-  sleep 5
-  echo -e "${GREEN}✓ Conflicting ingresses cleaned up${NC}"
+  # Only delete truly conflicting ingresses
+  if [ -n "$CONFLICTING_INGRESSES" ]; then
+    echo -e "${YELLOW}Deleting conflicting/orphaned ingresses...${NC}"
+    for ingress_name in $CONFLICTING_INGRESSES; do
+      echo -e "${YELLOW}  Deleting: $ingress_name${NC}"
+      kubectl delete ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" --wait=false 2>/dev/null || true
+    done
+    sleep 5
+    echo -e "${GREEN}✓ Conflicting ingresses cleaned up${NC}"
+  else
+    echo -e "${GREEN}✓ No conflicting ingresses found (cert-manager solver ingresses ignored)${NC}"
+  fi
 fi
 
 # Check for stuck operations first
