@@ -415,8 +415,18 @@ kubectl patch deployment ingress-nginx-controller \
 kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1
 
 # Clean up any duplicate pods/replicasets
-kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name | \
-  xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+# Note: Check for pods before deleting to avoid errors
+NON_RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null || true)
+if [ -n "$NON_RUNNING_PODS" ]; then
+  echo "$NON_RUNNING_PODS" | xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+fi
+
+# Also clean up orphaned replicasets
+ORPHANED_RS=$(kubectl get replicasets -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | \
+  awk '{if ($2 != $3 || $2 != $4) print $1}' || true)
+if [ -n "$ORPHANED_RS" ]; then
+  echo "$ORPHANED_RS" | xargs -r -I {} kubectl delete replicaset {} -n ingress-nginx --wait=false 2>/dev/null || true
+fi
 
 # Verify
 kubectl get pods -n ingress-nginx
