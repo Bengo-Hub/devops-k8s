@@ -470,6 +470,47 @@ if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install"
   sleep 5
 fi
 
+# Fix orphaned Redis resources (services, configmaps, etc.) that lack Helm ownership annotations
+log_info "Checking for orphaned Redis resources..."
+ORPHANED_REDIS_SERVICES=$(kubectl -n "${NAMESPACE}" get service -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
+  jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
+
+if [ -n "$ORPHANED_REDIS_SERVICES" ]; then
+  log_warning "Found orphaned Redis services without Helm ownership: $ORPHANED_REDIS_SERVICES"
+  for svc in $ORPHANED_REDIS_SERVICES; do
+    log_info "Fixing orphaned service: $svc"
+    # Try to add Helm ownership annotations
+    kubectl -n "${NAMESPACE}" annotate service "$svc" \
+      meta.helm.sh/release-name=redis \
+      meta.helm.sh/release-namespace="${NAMESPACE}" \
+      --overwrite 2>/dev/null || {
+      # If annotation fails, delete the orphaned service (Helm will recreate it)
+      log_warning "Failed to annotate service $svc, deleting it (Helm will recreate)..."
+      kubectl -n "${NAMESPACE}" delete service "$svc" --wait=false 2>/dev/null || true
+    }
+  done
+  sleep 3
+fi
+
+# Also check for orphaned configmaps
+ORPHANED_REDIS_CONFIGMAPS=$(kubectl -n "${NAMESPACE}" get configmap -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
+  jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
+
+if [ -n "$ORPHANED_REDIS_CONFIGMAPS" ]; then
+  log_warning "Found orphaned Redis configmaps without Helm ownership: $ORPHANED_REDIS_CONFIGMAPS"
+  for cm in $ORPHANED_REDIS_CONFIGMAPS; do
+    log_info "Fixing orphaned configmap: $cm"
+    kubectl -n "${NAMESPACE}" annotate configmap "$cm" \
+      meta.helm.sh/release-name=redis \
+      meta.helm.sh/release-namespace="${NAMESPACE}" \
+      --overwrite 2>/dev/null || {
+      log_warning "Failed to annotate configmap $cm, deleting it (Helm will recreate)..."
+      kubectl -n "${NAMESPACE}" delete configmap "$cm" --wait=false 2>/dev/null || true
+    }
+  done
+  sleep 3
+fi
+
 # Install or upgrade Redis (idempotent)
 echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
 echo -e "${BLUE}This may take 3-5 minutes...${NC}"
