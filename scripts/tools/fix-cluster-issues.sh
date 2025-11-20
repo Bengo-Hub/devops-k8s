@@ -87,20 +87,48 @@ log_info "Checking VPA TLS secret..."
 if kubectl get deployment vpa-admission-controller -n kube-system >/dev/null 2>&1; then
   if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
     log_warning "VPA admission controller is installed but TLS secret is missing."
-    log_info "Creating VPA TLS secret placeholder..."
+    log_info "Creating VPA TLS secret placeholder with correct structure..."
     kubectl create secret generic vpa-tls-certs \
-      --from-literal=ca.crt="dummy" \
-      --from-literal=tls.crt="dummy" \
-      --from-literal=tls.key="dummy" \
+      --from-literal=serverCert.pem="dummy" \
+      --from-literal=serverKey.pem="dummy" \
       -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
     
     log_info "Restarting VPA admission controller pod to trigger cert generation..."
     kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
     sleep 5
+  else
+    # Check if secret has correct structure
+    SECRET_KEYS=$(kubectl get secret vpa-tls-certs -n kube-system -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null || echo "")
+    if echo "$SECRET_KEYS" | grep -qv "serverCert.pem\|serverKey.pem"; then
+      log_warning "VPA TLS secret has incorrect structure. Fixing..."
+      kubectl delete secret vpa-tls-certs -n kube-system 2>/dev/null || true
+      kubectl create secret generic vpa-tls-certs \
+        --from-literal=serverCert.pem="dummy" \
+        --from-literal=serverKey.pem="dummy" \
+        -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
+      sleep 2
+      kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
+      sleep 5
+    fi
   fi
 fi
 
-# 4a. Check for duplicate ingress-nginx pods (port conflicts)
+# 4a. Check for port conflicts (port 80/443 in use)
+log_info "Checking for port conflicts..."
+PORT_80_IN_USE=$(netstat -tuln 2>/dev/null | grep ':80 ' || ss -tuln 2>/dev/null | grep ':80 ' || echo "")
+if [ -n "$PORT_80_IN_USE" ]; then
+  log_warning "Port 80 is already in use. Checking what's using it..."
+  DOCKER_CONTAINER=$(docker ps --format "{{.Names}}\t{{.Ports}}" 2>/dev/null | grep ':80' | head -1 || echo "")
+  if [ -n "$DOCKER_CONTAINER" ]; then
+    CONTAINER_NAME=$(echo "$DOCKER_CONTAINER" | awk '{print $1}')
+    log_warning "Found Docker container using port 80: $CONTAINER_NAME"
+    log_info "Stopping conflicting container to free port 80 for ingress-nginx..."
+    docker stop "$CONTAINER_NAME" 2>/dev/null || log_warning "Failed to stop container $CONTAINER_NAME"
+    sleep 2
+  fi
+fi
+
+# 4b. Check for duplicate ingress-nginx pods (port conflicts)
 log_info "Checking for duplicate ingress-nginx pods..."
 INGRESS_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | wc -l || echo "0")
 INGRESS_RUNNING=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
