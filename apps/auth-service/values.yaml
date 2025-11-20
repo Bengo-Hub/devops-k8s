@@ -6,6 +6,18 @@ image:
 service:
   port: 4101
   targetPort: 4101
+env:
+  - name: AUTH_SERVICE_ENV
+    value: production
+  - name: AUTH_SERVICE_PORT
+    value: "4101"
+  - name: AUTH_POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: auth-service-secrets
+        key: postgresUrl
+  - name: AUTH_REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
 healthCheck:
   enabled: true
   readiness:
