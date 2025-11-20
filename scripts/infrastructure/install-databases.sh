@@ -474,6 +474,46 @@ fi
 fix_orphaned_redis_resources() {
   log_info "Checking for orphaned Redis resources..."
   
+  # Check for orphaned ServiceMonitors (in monitoring namespace or infra namespace)
+  MONITORING_NS=${MONITORING_NAMESPACE:-infra}
+  ORPHANED_REDIS_SERVICEMONITORS=$(kubectl get servicemonitor -n "${MONITORING_NS}" -o json 2>/dev/null | \
+    jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name == "redis") and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
+  
+  # Also check in infra namespace if different from monitoring namespace
+  if [ "${MONITORING_NS}" != "${NAMESPACE}" ]; then
+    ORPHANED_REDIS_SERVICEMONITORS_INFRA=$(kubectl get servicemonitor -n "${NAMESPACE}" -o json 2>/dev/null | \
+      jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name == "redis") and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
+    if [ -n "$ORPHANED_REDIS_SERVICEMONITORS_INFRA" ]; then
+      ORPHANED_REDIS_SERVICEMONITORS="${ORPHANED_REDIS_SERVICEMONITORS} ${ORPHANED_REDIS_SERVICEMONITORS_INFRA}"
+    fi
+  fi
+
+  if [ -n "$ORPHANED_REDIS_SERVICEMONITORS" ]; then
+    log_warning "Found orphaned Redis ServiceMonitors without Helm ownership: $ORPHANED_REDIS_SERVICEMONITORS"
+    for sm in $ORPHANED_REDIS_SERVICEMONITORS; do
+      log_info "Fixing orphaned ServiceMonitor: $sm"
+      # Determine which namespace the ServiceMonitor is in
+      SM_NS="${MONITORING_NS}"
+      if ! kubectl get servicemonitor "$sm" -n "${MONITORING_NS}" >/dev/null 2>&1; then
+        SM_NS="${NAMESPACE}"
+      fi
+      
+      # Try to add Helm ownership annotations
+      if kubectl -n "${SM_NS}" annotate servicemonitor "$sm" \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated ServiceMonitor $sm with Helm ownership"
+      else
+        # If annotation fails, delete the orphaned ServiceMonitor (Helm will recreate it)
+        log_warning "Failed to annotate ServiceMonitor $sm, deleting it (Helm will recreate)..."
+        kubectl -n "${SM_NS}" delete servicemonitor "$sm" --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned ServiceMonitor $sm"
+      fi
+    done
+    sleep 3
+  fi
+  
   # Check for orphaned services (including redis-metrics)
   ORPHANED_REDIS_SERVICES=$(kubectl -n "${NAMESPACE}" get service -o json 2>/dev/null | \
     jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name | contains("redis")) and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
