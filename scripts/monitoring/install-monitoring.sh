@@ -254,8 +254,14 @@ fi
 
 # Apply ERP-specific alerts
 echo -e "${YELLOW}Applying ERP-specific alerts...${NC}"
-kubectl apply -f "${MANIFESTS_DIR}/monitoring/erp-alerts.yaml"
-echo -e "${GREEN}✓ ERP alerts configured${NC}"
+# Manifests have hardcoded 'monitoring' namespace, but we're using ${MONITORING_NAMESPACE} (usually 'infra')
+# Replace namespace in manifest before applying
+if [ -f "${MANIFESTS_DIR}/monitoring/erp-alerts.yaml" ]; then
+  sed "s/namespace: monitoring/namespace: ${MONITORING_NAMESPACE}/g" "${MANIFESTS_DIR}/monitoring/erp-alerts.yaml" | kubectl apply -f -
+  echo -e "${GREEN}✓ ERP alerts configured in ${MONITORING_NAMESPACE} namespace${NC}"
+else
+  log_warning "erp-alerts.yaml not found, skipping..."
+fi
 
 # Get Grafana admin password
 echo ""
