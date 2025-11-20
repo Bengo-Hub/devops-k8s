@@ -233,6 +233,191 @@ jobs:
           chmod +x scripts/**/*.sh || true
           chmod +x scripts/*/*.sh || true
 
+      - name: Create registry-credentials secrets in all namespaces
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || 'codevertex' }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL || 'info@codevertexitsolutions.com' }}
+        run: |
+          echo "::group::Creating registry-credentials secrets"
+          
+          if [ -z "${REGISTRY_PASSWORD}" ]; then
+            echo "⚠️  REGISTRY_PASSWORD not set - skipping registry secret creation"
+            echo "⚠️  Pods may fail with ImagePullBackOff if Docker Hub rate limit is exceeded"
+            echo "⚠️  Set REGISTRY_PASSWORD GitHub secret to enable Docker Hub authentication"
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          echo "Using registry credentials:"
+          echo "  Username: ${REGISTRY_USERNAME}"
+          echo "  Email: ${REGISTRY_EMAIL}"
+          echo "  Server: docker.io"
+          
+          # List of namespaces that need registry-credentials
+          # These are application namespaces that pull images from Docker Hub
+          NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos"
+          
+          for ns in $NAMESPACES; do
+            # Check if namespace exists
+            if kubectl get namespace "$ns" >/dev/null 2>&1; then
+              # Check if secret already exists
+              if kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
+                echo "✓ registry-credentials already exists in namespace: $ns"
+                # Update it anyway to ensure it's current
+                kubectl create secret docker-registry registry-credentials \
+                  --docker-server=docker.io \
+                  --docker-username="${REGISTRY_USERNAME}" \
+                  --docker-password="${REGISTRY_PASSWORD}" \
+                  --docker-email="${REGISTRY_EMAIL}" \
+                  -n "$ns" \
+                  --dry-run=client -o yaml | kubectl apply -f - || true
+                echo "  Updated registry-credentials in namespace: $ns"
+              else
+                # Create new secret
+                kubectl create secret docker-registry registry-credentials \
+                  --docker-server=docker.io \
+                  --docker-username="${REGISTRY_USERNAME}" \
+                  --docker-password="${REGISTRY_PASSWORD}" \
+                  --docker-email="${REGISTRY_EMAIL}" \
+                  -n "$ns" || true
+                echo "✓ Created registry-credentials in namespace: $ns"
+              fi
+            else
+              echo "⚠️  Namespace $ns does not exist yet - will be created when needed"
+            fi
+          done
+          
+          # Also create in any existing namespaces that might need it
+          echo ""
+          echo "Checking for other namespaces that might need registry-credentials..."
+          EXISTING_NS=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+          
+          for ns in $EXISTING_NS; do
+            # Skip system namespaces
+            if [[ "$ns" == "kube-system" || "$ns" == "kube-public" || "$ns" == "kube-node-lease" || "$ns" == "default" || "$ns" == "calico-system" || "$ns" == "cert-manager" || "$ns" == "ingress-nginx" || "$ns" == "argocd" ]]; then
+              continue
+            fi
+            
+            # Skip if already processed above
+            if echo "$NAMESPACES" | grep -q "\b$ns\b"; then
+              continue
+            fi
+            
+            # Check if namespace has pods that reference registry-credentials
+            HAS_REGISTRY_REF=$(kubectl get pods -n "$ns" -o json 2>/dev/null | \
+              jq -r '.items[]?.spec.imagePullSecrets[]?.name // empty' 2>/dev/null | \
+              grep -q "registry-credentials" && echo "yes" || echo "no")
+            
+            if [ "$HAS_REGISTRY_REF" = "yes" ]; then
+              if ! kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
+                kubectl create secret docker-registry registry-credentials \
+                  --docker-server=docker.io \
+                  --docker-username="${REGISTRY_USERNAME}" \
+                  --docker-password="${REGISTRY_PASSWORD}" \
+                  --docker-email="${REGISTRY_EMAIL}" \
+                  -n "$ns" || true
+                echo "✓ Created registry-credentials in namespace: $ns (detected imagePullSecrets reference)"
+              fi
+            fi
+          done
+          
+          echo "✅ Registry credentials setup complete"
+          echo "::endgroup::"
+
+      - name: Check cluster health and readiness
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || 'codevertex' }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL || 'info@codevertexitsolutions.com' }}
+        run: |
+          echo "::group::Creating registry-credentials secrets"
+          
+          if [ -z "${REGISTRY_PASSWORD}" ]; then
+            echo "⚠️  REGISTRY_PASSWORD not set - skipping registry secret creation"
+            echo "⚠️  Pods may fail with ImagePullBackOff if Docker Hub rate limit is exceeded"
+            echo "::endgroup::"
+            exit 0
+          fi
+          
+          echo "Using registry credentials:"
+          echo "  Username: ${REGISTRY_USERNAME}"
+          echo "  Email: ${REGISTRY_EMAIL}"
+          echo "  Server: docker.io"
+          
+          # List of namespaces that need registry-credentials
+          # These are application namespaces that pull images from Docker Hub
+          NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos"
+          
+          for ns in $NAMESPACES; do
+            # Check if namespace exists
+            if kubectl get namespace "$ns" >/dev/null 2>&1; then
+              # Check if secret already exists
+              if kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
+                echo "✓ registry-credentials already exists in namespace: $ns"
+                # Update it anyway to ensure it's current
+                kubectl create secret docker-registry registry-credentials \
+                  --docker-server=docker.io \
+                  --docker-username="${REGISTRY_USERNAME}" \
+                  --docker-password="${REGISTRY_PASSWORD}" \
+                  --docker-email="${REGISTRY_EMAIL}" \
+                  -n "$ns" \
+                  --dry-run=client -o yaml | kubectl apply -f - || true
+                echo "  Updated registry-credentials in namespace: $ns"
+              else
+                # Create new secret
+                kubectl create secret docker-registry registry-credentials \
+                  --docker-server=docker.io \
+                  --docker-username="${REGISTRY_USERNAME}" \
+                  --docker-password="${REGISTRY_PASSWORD}" \
+                  --docker-email="${REGISTRY_EMAIL}" \
+                  -n "$ns" || true
+                echo "✓ Created registry-credentials in namespace: $ns"
+              fi
+            else
+              echo "⚠️  Namespace $ns does not exist yet - will be created when needed"
+            fi
+          done
+          
+          # Also create in any existing namespaces that might need it
+          echo ""
+          echo "Checking for other namespaces that might need registry-credentials..."
+          EXISTING_NS=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+          
+          for ns in $EXISTING_NS; do
+            # Skip system namespaces
+            if [[ "$ns" == "kube-system" || "$ns" == "kube-public" || "$ns" == "kube-node-lease" || "$ns" == "default" || "$ns" == "calico-system" || "$ns" == "cert-manager" || "$ns" == "ingress-nginx" || "$ns" == "argocd" ]]; then
+              continue
+            fi
+            
+            # Skip if already processed above
+            if echo "$NAMESPACES" | grep -q "\b$ns\b"; then
+              continue
+            fi
+            
+            # Check if namespace has pods that reference registry-credentials
+            HAS_REGISTRY_REF=$(kubectl get pods -n "$ns" -o json 2>/dev/null | \
+              jq -r '.items[]?.spec.imagePullSecrets[]?.name // empty' 2>/dev/null | \
+              grep -q "registry-credentials" && echo "yes" || echo "no")
+            
+            if [ "$HAS_REGISTRY_REF" = "yes" ]; then
+              if ! kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
+                kubectl create secret docker-registry registry-credentials \
+                  --docker-server=docker.io \
+                  --docker-username="${REGISTRY_USERNAME}" \
+                  --docker-password="${REGISTRY_PASSWORD}" \
+                  --docker-email="${REGISTRY_EMAIL}" \
+                  -n "$ns" || true
+                echo "✓ Created registry-credentials in namespace: $ns (detected imagePullSecrets reference)"
+              fi
+            fi
+          done
+          
+          echo "✅ Registry credentials setup complete"
+          echo "::endgroup::"
+
       - name: Check cluster health and readiness
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
