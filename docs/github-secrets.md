@@ -2,11 +2,16 @@ GitHub Secrets
 --------------
 
 Organization-level (recommended):
-- REGISTRY_USERNAME: Docker Hub username (codevertex)
-- REGISTRY_PASSWORD: Docker Hub token/password
+- REGISTRY_USERNAME: Docker Hub username (default: codevertex)
+- REGISTRY_PASSWORD: Docker Hub token/password (required for authenticated pulls)
+- REGISTRY_EMAIL: Docker Hub email (default: info@codevertexitsolutions.com)
 - KUBE_CONFIG: base64-encoded kubeconfig with apply permissions (for K8s deploy)
 - SSH_PRIVATE_KEY: SSH key for VPS deployments over SSH (optional for K8s)
 - DOCKER_SSH_KEY: base64 private key for docker build ssh forwarding (optional)
+- SSH_HOST: VPS IP address (Priority 1 - takes precedence over Contabo API)
+- SSH_USER: SSH username for VPS access (optional, defaults to root)
+- GIT_USER: Git commit author name (optional, for Git operations)
+- GIT_EMAIL: Git commit author email (optional, for Git operations)
 
 Contabo API (optional, enables automated VPS management):
 - CONTABO_CLIENT_ID: OAuth2 client id
