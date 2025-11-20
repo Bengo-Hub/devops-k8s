@@ -509,12 +509,16 @@ kubectl exec -n infra redis-master-0 -- redis-cli INFO
 # PostgreSQL read replicas (in-cluster)
 helm upgrade postgresql bitnami/postgresql \
   -n erp \
-  --set readReplicas.replicaCount=2
+  --set readReplicas.replicaCount=2 \
+  --set image.tag=latest \
+  --set metrics.image.tag=latest
 
 # Redis replicas
 helm upgrade redis bitnami/redis \
   -n erp \
-  --set replica.replicaCount=3
+  --set replica.replicaCount=3 \
+  --set image.tag=latest \
+  --set metrics.image.tag=latest
 ```
 
 ---
