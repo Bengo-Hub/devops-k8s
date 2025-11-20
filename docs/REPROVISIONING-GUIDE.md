@@ -181,8 +181,11 @@ export ARGOCD_DOMAIN=argocd.masterspace.co.ke
 
 # 7. Monitoring (in infra namespace)
 # Note: This script includes automatic stuck Helm operation fixes and ingress conflict resolution
+# Script automatically adds Helm to PATH if installed via snap
 export GRAFANA_DOMAIN=grafana.masterspace.co.ke
 export MONITORING_NAMESPACE=infra
+# Ensure Helm is in PATH (may be installed via snap)
+export PATH="$PATH:/snap/bin"
 ./scripts/monitoring/install-monitoring.sh
 
 # 8. VPA
