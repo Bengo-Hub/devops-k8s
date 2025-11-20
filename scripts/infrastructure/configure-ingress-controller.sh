@@ -12,25 +12,6 @@ log_section "Configuring NGINX Ingress Controller for VPS"
 # Pre-flight checks
 check_kubectl
 
-# Check for port conflicts (port 80/443 in use by other processes)
-log_info "Checking for port conflicts..."
-PORT_80_IN_USE=$(netstat -tuln 2>/dev/null | grep ':80 ' || ss -tuln 2>/dev/null | grep ':80 ' || echo "")
-if [ -n "$PORT_80_IN_USE" ]; then
-  log_warning "Port 80 is already in use. Checking what's using it..."
-  # Check if it's a Docker container
-  DOCKER_CONTAINER=$(docker ps --format "{{.Names}}\t{{.Ports}}" 2>/dev/null | grep ':80' | head -1 || echo "")
-  if [ -n "$DOCKER_CONTAINER" ]; then
-    CONTAINER_NAME=$(echo "$DOCKER_CONTAINER" | awk '{print $1}')
-    log_warning "Found Docker container using port 80: $CONTAINER_NAME"
-    log_info "Stopping conflicting container to free port 80 for ingress-nginx..."
-    docker stop "$CONTAINER_NAME" 2>/dev/null || log_warning "Failed to stop container $CONTAINER_NAME"
-    sleep 2
-  else
-    log_warning "Port 80 is in use by a non-Docker process. Ingress controller may fail to start."
-    log_info "Consider stopping the process using port 80 or configuring ingress-nginx to use different ports."
-  fi
-fi
-
 # Ensure namespace exists
 ensure_namespace "ingress-nginx"
 

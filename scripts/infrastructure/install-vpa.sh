@@ -186,36 +186,162 @@ kubectl wait --for=condition=available deployment/vpa-updater -n kube-system --t
 # Wait for VPA Admission Controller
 kubectl wait --for=condition=available deployment/vpa-admission-controller -n kube-system --timeout=120s || log_warning "VPA Admission Controller still starting..."
 
-# VPA admission controller TLS is optional - remove TLS requirement if causing issues
-# Check if VPA admission controller has TLS volume mount (which requires TLS secret)
-VPA_HAS_TLS_MOUNT=$(kubectl get deployment vpa-admission-controller -n kube-system -o jsonpath='{.spec.template.spec.containers[0].volumeMounts[?(@.name=="tls-certs")].name}' 2>/dev/null || echo "")
-if [ -n "$VPA_HAS_TLS_MOUNT" ]; then
-  log_info "VPA admission controller has TLS volume mount. Checking if TLS secret exists..."
-  if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
-    log_warning "VPA TLS secret missing but TLS volume mount exists. Removing TLS requirement..."
-    # Remove TLS volume mount, volume, and --reload-cert arg using jq
-    kubectl get deployment vpa-admission-controller -n kube-system -o json | \
-      jq 'del(.spec.template.spec.containers[0].volumeMounts) | 
-          del(.spec.template.spec.volumes) | 
-          .spec.template.spec.containers[0].args = ["--v=4", "--stderrthreshold=info"]' | \
-      kubectl apply -f - 2>/dev/null || true
-    log_info "Restarting VPA admission controller without TLS requirement..."
-    kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
-    sleep 5
-  else
-    # Secret exists, check if it has correct structure
-    SECRET_KEYS=$(kubectl get secret vpa-tls-certs -n kube-system -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null || echo "")
-    if echo "$SECRET_KEYS" | grep -qv "serverCert.pem\|serverKey.pem"; then
-      log_warning "VPA TLS secret has incorrect structure. Removing TLS requirement instead..."
-      kubectl get deployment vpa-admission-controller -n kube-system -o json | \
-        jq 'del(.spec.template.spec.containers[0].volumeMounts) | 
-            del(.spec.template.spec.volumes) | 
-            .spec.template.spec.containers[0].args = ["--v=4", "--stderrthreshold=info"]' | \
-        kubectl apply -f - 2>/dev/null || true
-      kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
-      sleep 5
-    fi
+# Ensure VPA TLS secret exists and is properly configured (required for admission controller)
+log_info "Configuring VPA TLS certificates for admission controller..."
+
+# Function to generate VPA TLS certificates
+create_vpa_tls_secret() {
+  if kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
+    log_info "VPA TLS secret already exists"
+    return 0
   fi
+
+  if ! command -v openssl >/dev/null 2>&1; then
+    log_warning "OpenSSL not found - cannot auto-generate VPA TLS certificates."
+    log_info "Create the secret manually with:"
+    cat <<'EOF'
+kubectl create secret generic vpa-tls-certs \
+  --from-file=caCert.pem=<path-to-ca-crt> \
+  --from-file=serverCert.pem=<path-to-server-crt> \
+  --from-file=serverKey.pem=<path-to-server-key> \
+  -n kube-system
+EOF
+    return 1
+  fi
+
+  local TMP_DIR
+  TMP_DIR=$(mktemp -d)
+  trap "rm -rf ${TMP_DIR}" EXIT
+
+  log_info "Generating VPA TLS certificates..."
+
+  # Generate CA private key
+  openssl genrsa -out "${TMP_DIR}/ca.key" 2048 >/dev/null 2>&1 || {
+    log_error "Failed to generate CA private key"
+    rm -rf "${TMP_DIR}"
+    return 1
+  }
+
+  # Generate CA certificate
+  openssl req -x509 -new -nodes -key "${TMP_DIR}/ca.key" \
+    -subj "/CN=vpa-ca" -days 365 -out "${TMP_DIR}/ca.crt" >/dev/null 2>&1 || {
+    log_error "Failed to generate CA certificate"
+    rm -rf "${TMP_DIR}"
+    return 1
+  }
+
+  # Generate server private key
+  openssl genrsa -out "${TMP_DIR}/server.key" 2048 >/dev/null 2>&1 || {
+    log_error "Failed to generate server private key"
+    rm -rf "${TMP_DIR}"
+    return 1
+  }
+
+  # Generate server certificate signing request
+  openssl req -new -key "${TMP_DIR}/server.key" \
+    -subj "/CN=vpa-admission-controller.kube-system.svc" \
+    -out "${TMP_DIR}/server.csr" >/dev/null 2>&1 || {
+    log_error "Failed to generate server CSR"
+    rm -rf "${TMP_DIR}"
+    return 1
+  }
+
+  # Generate server certificate signed by CA
+  openssl x509 -req -in "${TMP_DIR}/server.csr" \
+    -CA "${TMP_DIR}/ca.crt" -CAkey "${TMP_DIR}/ca.key" \
+    -CAcreateserial -out "${TMP_DIR}/server.crt" -days 365 >/dev/null 2>&1 || {
+    log_error "Failed to generate server certificate"
+    rm -rf "${TMP_DIR}"
+    return 1
+  }
+
+  # Create Kubernetes secret with proper key names
+  if kubectl create secret generic vpa-tls-certs \
+    --from-file=caCert.pem="${TMP_DIR}/ca.crt" \
+    --from-file=serverCert.pem="${TMP_DIR}/server.crt" \
+    --from-file=serverKey.pem="${TMP_DIR}/server.key" \
+    -n kube-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1; then
+    log_success "VPA TLS secret created with self-signed certificates"
+  else
+    log_error "Failed to create vpa-tls-certs secret"
+    rm -rf "${TMP_DIR}"
+    return 1
+  fi
+
+  rm -rf "${TMP_DIR}"
+  trap - EXIT
+  return 0
+}
+
+# Function to ensure VPA deployment has TLS volume mounts
+ensure_vpa_tls_mounts() {
+  local volume_mount_exists
+  local volume_exists
+  
+  volume_mount_exists=$(kubectl get deployment vpa-admission-controller -n kube-system \
+    -o jsonpath='{.spec.template.spec.containers[0].volumeMounts[?(@.name=="tls-certs")].name}' 2>/dev/null || echo "")
+  volume_exists=$(kubectl get deployment vpa-admission-controller -n kube-system \
+    -o jsonpath='{.spec.template.spec.volumes[?(@.name=="tls-certs")].name}' 2>/dev/null || echo "")
+
+  if [ -z "$volume_mount_exists" ] || [ -z "$volume_exists" ]; then
+    log_info "Configuring TLS volume mounts for VPA admission controller..."
+    
+    # Check if volumeMounts array exists
+    local existing_mounts
+    existing_mounts=$(kubectl get deployment vpa-admission-controller -n kube-system \
+      -o jsonpath='{.spec.template.spec.containers[0].volumeMounts}' 2>/dev/null || echo "[]")
+    
+    # Add volumeMount if missing
+    if [ -z "$volume_mount_exists" ]; then
+      if [ "$existing_mounts" = "[]" ] || [ -z "$existing_mounts" ]; then
+        kubectl patch deployment vpa-admission-controller -n kube-system \
+          --type='json' \
+          -p='[{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts","value":[{"name":"tls-certs","mountPath":"/etc/tls-certs","readOnly":true}]}]' >/dev/null 2>&1 || true
+      else
+        kubectl patch deployment vpa-admission-controller -n kube-system \
+          --type='json' \
+          -p='[{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"tls-certs","mountPath":"/etc/tls-certs","readOnly":true}}]' >/dev/null 2>&1 || true
+      fi
+    fi
+    
+    # Check if volumes array exists
+    local existing_volumes
+    existing_volumes=$(kubectl get deployment vpa-admission-controller -n kube-system \
+      -o jsonpath='{.spec.template.spec.volumes}' 2>/dev/null || echo "[]")
+    
+    # Add volume if missing
+    if [ -z "$volume_exists" ]; then
+      if [ "$existing_volumes" = "[]" ] || [ -z "$existing_volumes" ]; then
+        kubectl patch deployment vpa-admission-controller -n kube-system \
+          --type='json' \
+          -p='[{"op":"add","path":"/spec/template/spec/volumes","value":[{"name":"tls-certs","secret":{"secretName":"vpa-tls-certs"}}]}]' >/dev/null 2>&1 || true
+      else
+        kubectl patch deployment vpa-admission-controller -n kube-system \
+          --type='json' \
+          -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"tls-certs","secret":{"secretName":"vpa-tls-certs"}}}]' >/dev/null 2>&1 || true
+      fi
+    fi
+    
+    log_success "TLS volume mounts configured"
+  else
+    log_info "TLS volume mounts already configured"
+  fi
+}
+
+# Create TLS secret
+if create_vpa_tls_secret; then
+  # Ensure volume mounts are configured
+  ensure_vpa_tls_mounts
+  
+  # Wait a moment for changes to propagate
+  sleep 3
+  
+  # Restart admission controller pod to use new certificates
+  log_info "Restarting VPA admission controller to use TLS certificates..."
+  kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
+  sleep 5
+else
+  log_warning "VPA TLS secret creation failed - admission controller may not work properly"
 fi
 
 # Verify installation
@@ -250,6 +376,4 @@ if ! kubectl get deployment metrics-server -n kube-system >/dev/null 2>&1; then
   echo "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
   echo ""
 fi
-
 log_success "VPA installation complete!"
-
