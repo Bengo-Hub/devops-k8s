@@ -76,16 +76,34 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
       log_warning "Password mismatch detected - updating RabbitMQ to sync password"
       log_info "Current password length: ${#CURRENT_RABBITMQ_PASS} chars"
       log_info "New password length: ${#RABBITMQ_PASSWORD} chars"
-      helm upgrade rabbitmq bitnami/rabbitmq \
-        -n "${NAMESPACE}" \
-        --reset-values \
-        "${RABBITMQ_HELM_ARGS[@]}" \
-        --timeout=10m \
-        --wait 2>&1 | tee /tmp/helm-rabbitmq-install.log
-      HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
+      
+      # Check if RabbitMQ is currently healthy - if yes, update secret directly without Helm upgrade
+      if [[ "$IS_RABBITMQ_HEALTHY" == "true" ]]; then
+        log_info "RabbitMQ is healthy. Updating password via secret..."
+        
+        # Update the secret directly (RabbitMQ will use it on next restart)
+        kubectl create secret generic rabbitmq \
+          --from-literal=rabbitmq-password="$RABBITMQ_PASSWORD" \
+          --from-literal=rabbitmq-erlang-cookie=$(openssl rand -hex 32) \
+          -n "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        log_success "Password updated in secret. RabbitMQ will use it on next restart."
+        log_info "Note: Password change will take effect on next pod restart"
+        HELM_RABBITMQ_EXIT=0
+      else
+        log_warning "RabbitMQ not healthy. Performing Helm upgrade..."
+        helm upgrade rabbitmq bitnami/rabbitmq \
+          -n "${NAMESPACE}" \
+          --reset-values \
+          "${RABBITMQ_HELM_ARGS[@]}" \
+          --timeout=10m \
+          --wait 2>&1 | tee /tmp/helm-rabbitmq-install.log
+        HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
+      fi
     fi
   elif [[ "$IS_RABBITMQ_HEALTHY" == "true" ]]; then
-    echo -e "${GREEN}✓ RabbitMQ already installed and healthy - skipping${NC}"
+    log_success "RabbitMQ already installed and healthy - skipping"
     HELM_RABBITMQ_EXIT=0
   else
     echo -e "${YELLOW}RabbitMQ exists but not ready; performing safe upgrade${NC}"
