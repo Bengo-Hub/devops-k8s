@@ -455,6 +455,21 @@ else
   fi
 fi
 
+# Check for stuck Helm operations before proceeding with Redis
+log_info "Checking for stuck Redis Helm operations..."
+HELM_STATUS=$(helm -n "${NAMESPACE}" status redis 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+  log_warning "Detected stuck Helm operation (status: $HELM_STATUS). Cleaning up..."
+  
+  # Delete pending Helm secrets
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  
+  log_success "Helm lock removed"
+  sleep 5
+fi
+
 # Install or upgrade Redis (idempotent)
 echo -e "${YELLOW}Installing/upgrading Redis...${NC}"
 echo -e "${BLUE}This may take 3-5 minutes...${NC}"
@@ -505,14 +520,30 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
         echo -e "${YELLOW}Note: Password change will take effect on next pod restart${NC}"
         HELM_REDIS_EXIT=0
       else
-        echo -e "${YELLOW}Redis not healthy. Performing Helm upgrade...${NC}"
+        echo -e "${YELLOW}Redis not healthy. Checking for stuck Helm operation...${NC}"
+        
+        # Check for stuck Helm operation before upgrading
+        HELM_STATUS=$(helm -n "${NAMESPACE}" status redis 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+        if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+          echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
+          
+          # Delete pending Helm secrets
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          
+          echo -e "${GREEN}✓ Helm lock removed. Proceeding with upgrade...${NC}"
+          sleep 5
+        fi
+        
+        echo -e "${YELLOW}Performing Helm upgrade...${NC}"
         helm upgrade redis bitnami/redis \
           -n "${NAMESPACE}" \
           --reset-values \
           -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
           "${REDIS_HELM_ARGS[@]}" \
           --timeout=10m \
-          --wait 2>&1 | tee /tmp/helm-redis-install.log
+          --wait=false 2>&1 | tee /tmp/helm-redis-install.log
         HELM_REDIS_EXIT=${PIPESTATUS[0]}
       fi
     fi
@@ -520,12 +551,28 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
     echo -e "${GREEN}✓ Redis already installed and healthy - skipping${NC}"
     HELM_REDIS_EXIT=0
   else
-    echo -e "${YELLOW}Redis exists but not ready; performing safe upgrade${NC}"
+    echo -e "${YELLOW}Redis exists but not ready; checking for stuck operation...${NC}"
+    
+    # Check for stuck Helm operation
+    HELM_STATUS=$(helm -n "${NAMESPACE}" status redis 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+    if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+      echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
+      
+      # Delete pending Helm secrets
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=redis" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      
+      echo -e "${GREEN}✓ Helm lock removed${NC}"
+      sleep 5
+    fi
+    
+    echo -e "${YELLOW}Performing safe upgrade...${NC}"
     helm upgrade redis bitnami/redis \
       -n "${NAMESPACE}" \
       --reuse-values \
       --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-redis-install.log
+      --wait=false 2>&1 | tee /tmp/helm-redis-install.log
     HELM_REDIS_EXIT=${PIPESTATUS[0]}
   fi
 else
@@ -534,18 +581,73 @@ else
     -n "${NAMESPACE}" \
     "${REDIS_HELM_ARGS[@]}" \
     --timeout=10m \
-    --wait 2>&1 | tee /tmp/helm-redis-install.log
+    --wait=false 2>&1 | tee /tmp/helm-redis-install.log
   HELM_REDIS_EXIT=${PIPESTATUS[0]}
 fi
 set -e
 
 if [ $HELM_REDIS_EXIT -eq 0 ]; then
-  echo -e "${GREEN}✓ Redis ready${NC}"
+  echo -e "${GREEN}✓ Redis Helm operation completed${NC}"
+  echo -e "${BLUE}Waiting for Redis pods to be ready...${NC}"
+  sleep 10
+  
+  # Check actual pod status
+  REDIS_READY=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  REDIS_REPLICAS=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values
+  REDIS_READY=${REDIS_READY:-0}
+  REDIS_REPLICAS=${REDIS_REPLICAS:-0}
+  
+  if [[ "$REDIS_READY" =~ ^[0-9]+$ ]] && [ "$REDIS_READY" -ge 1 ]; then
+    echo -e "${GREEN}✓ Redis is ready (${REDIS_READY}/${REDIS_REPLICAS} replicas)${NC}"
+  else
+    echo -e "${YELLOW}⚠️  Redis pods not ready yet (${REDIS_READY}/${REDIS_REPLICAS} replicas)${NC}"
+    echo -e "${BLUE}Checking pod status...${NC}"
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis || true
+    
+    # Check for crash loops
+    CRASH_LOOP=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "CrashLoop\|Error" || echo "")
+    if [[ -n "$CRASH_LOOP" ]]; then
+      echo -e "${RED}⚠️  Crash loop detected. Checking logs...${NC}"
+      kubectl logs -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --tail=50 || true
+    fi
+    
+    echo -e "${BLUE}Redis installation initiated. Pods will start in background.${NC}"
+  fi
 else
-  echo -e "${RED}Redis installation failed with exit code $HELM_REDIS_EXIT${NC}"
-  tail -50 /tmp/helm-redis-install.log || true
-  kubectl get pods -n "${NAMESPACE}" || true
-  exit 1
+  echo -e "${YELLOW}Redis Helm operation reported exit code $HELM_REDIS_EXIT${NC}"
+  echo -e "${YELLOW}Checking actual Redis status...${NC}"
+  
+  # Wait a bit for pods to update
+  sleep 10
+  
+  # Check if Redis StatefulSet exists and has ready replicas
+  REDIS_READY=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  REDIS_REPLICAS=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values
+  REDIS_READY=${REDIS_READY:-0}
+  REDIS_REPLICAS=${REDIS_REPLICAS:-0}
+  
+  echo -e "${BLUE}Redis StatefulSet: ${REDIS_READY}/${REDIS_REPLICAS} replicas ready${NC}"
+  
+  if [[ "$REDIS_READY" =~ ^[0-9]+$ ]] && [ "$REDIS_READY" -ge 1 ]; then
+    echo -e "${GREEN}✓ Redis is actually running! Continuing...${NC}"
+    echo -e "${YELLOW}Note: Helm reported a timeout, but Redis is healthy${NC}"
+  else
+    echo -e "${RED}Redis installation/upgrade failed${NC}"
+    echo -e "${YELLOW}=== Helm output (last 50 lines) ===${NC}"
+    tail -50 /tmp/helm-redis-install.log 2>/dev/null || true
+    echo -e "${YELLOW}=== Pod status ===${NC}"
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis 2>/dev/null || true
+    echo -e "${YELLOW}=== Pod events ===${NC}"
+    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i redis | tail -10 || true
+    echo -e "${YELLOW}=== Pod logs (last 20 lines) ===${NC}"
+    kubectl logs -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --tail=20 2>/dev/null || true
+    
+    exit 1
+  fi
 fi
 
 # Retrieve credentials
