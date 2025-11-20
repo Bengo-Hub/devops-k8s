@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Production-ready Database Installation
@@ -191,7 +191,8 @@ fix_orphaned_resources() {
   # Default resource types if none specified
   if [ $# -eq 0 ]; then
     # Include secrets and serviceaccounts explicitly to handle ownership issues
-    resource_types=("poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts" "networkpolicies")
+    # Also include ServiceMonitor to fix ownership for database metrics resources
+    resource_types=("poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts" "networkpolicies" "servicemonitors")
   fi
   
   for resource_type in "${resource_types[@]}"; do
@@ -207,6 +208,15 @@ fix_orphaned_resources() {
       if kubectl get secret "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
         resources="secret/${release_name}"
         log_info "Found secret '${release_name}' by name (no Helm labels present) - checking ownership..."
+      fi
+    fi
+
+    # Fallback: for ServiceMonitors, also check by exact name if no labelled resources are found
+    # This specifically fixes cases like ServiceMonitor "postgresql" blocking Helm upgrades
+    if [ -z "$resources" ] && { [ "${resource_type}" = "servicemonitors" ] || [ "${resource_type}" = "servicemonitor" ]; }; then
+      if kubectl get servicemonitor "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
+        resources="servicemonitor/${release_name}"
+        log_info "Found ServiceMonitor '${release_name}' by name (no Helm labels present) - checking ownership..."
       fi
     fi
     
