@@ -37,6 +37,22 @@ add_helm_repo "prometheus-community" "https://prometheus-community.github.io/hel
 # Create infra namespace (monitoring is deployed here as shared infrastructure)
 ensure_namespace "${MONITORING_NAMESPACE}"
 
+# Idempotency/force flags
+FORCE_MONITORING_INSTALL=${FORCE_MONITORING_INSTALL:-${FORCE_INSTALL:-false}}
+
+# If release already exists and stack is healthy, skip unless forced
+if helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1 && [ "${FORCE_MONITORING_INSTALL}" != "true" ]; then
+  log_info "Helm release 'prometheus' already exists - checking monitoring health..."
+  GRAFANA_READY=$(kubectl get pods -n "${MONITORING_NAMESPACE}" -l app.kubernetes.io/name=grafana --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  PROM_READY=$(kubectl get pods -n "${MONITORING_NAMESPACE}" -l app.kubernetes.io/name=prometheus --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  if [ "${GRAFANA_READY}" -ge 1 ] && [ "${PROM_READY}" -ge 1 ]; then
+    log_success "Monitoring stack already installed and healthy - skipping install/upgrade (set FORCE_MONITORING_INSTALL=true or FORCE_INSTALL=true to override)."
+    exit 0
+  else
+    log_warning "Monitoring release exists but not fully healthy - continuing with installation/upgrade."
+  fi
+fi
+
 # Update prometheus-values.yaml with dynamic domain
 TEMP_VALUES=/tmp/prometheus-values-prod.yaml
 
