@@ -191,8 +191,9 @@ fix_orphaned_resources() {
   # Default resource types if none specified
   if [ $# -eq 0 ]; then
     # Include secrets and serviceaccounts explicitly to handle ownership issues
-    # Also include ServiceMonitor to fix ownership for database metrics resources
-    resource_types=("poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts" "networkpolicies" "servicemonitors")
+    # Also include ServiceMonitor and NetworkPolicy to fix ownership for database metrics and network resources
+    # Include StatefulSets to handle cases where the main workload (postgresql) already exists without Helm ownership
+    resource_types=("poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts" "networkpolicies" "servicemonitors" "statefulsets")
   fi
   
   for resource_type in "${resource_types[@]}"; do
@@ -226,6 +227,15 @@ fix_orphaned_resources() {
       if kubectl get networkpolicy "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
         resources="networkpolicy/${release_name}"
         log_info "Found NetworkPolicy '${release_name}' by name (no Helm labels present) - checking ownership..."
+      fi
+    fi
+
+    # Fallback: for StatefulSets, also check by exact name if no labelled resources are found
+    # This fixes cases like StatefulSet "postgresql" existing without Helm ownership, blocking installs/upgrades
+    if [ -z "$resources" ] && { [ "${resource_type}" = "statefulsets" ] || [ "${resource_type}" = "statefulset" ]; }; then
+      if kubectl get statefulset "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
+        resources="statefulset/${release_name}"
+        log_info "Found StatefulSet '${release_name}' by name (no Helm labels present) - checking ownership..."
       fi
     fi
     
