@@ -38,21 +38,47 @@ if ! systemctl is-active --quiet containerd; then
 fi
 
 echo -e "${BLUE}Step 1: Adding Kubernetes repository...${NC}"
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
-
-echo -e "${GREEN}✓ Kubernetes repository added${NC}"
+# Check if Kubernetes repository already exists
+if [ -f /etc/apt/sources.list.d/kubernetes.list ]; then
+    echo -e "${GREEN}✓ Kubernetes repository already configured${NC}"
+else
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBERNETES_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list
+    
+    echo -e "${GREEN}✓ Kubernetes repository added${NC}"
+fi
 echo ""
 
 echo -e "${BLUE}Step 2: Installing Kubernetes components...${NC}"
 apt-get update
-apt-get install -y kubelet kubeadm kubectl
 
-# Hold versions to prevent auto-upgrade
-apt-mark hold kubelet kubeadm kubectl
+# Check which components need installation
+COMPONENTS_TO_INSTALL=""
+if ! command -v kubelet &> /dev/null; then
+    COMPONENTS_TO_INSTALL="$COMPONENTS_TO_INSTALL kubelet"
+fi
+if ! command -v kubeadm &> /dev/null; then
+    COMPONENTS_TO_INSTALL="$COMPONENTS_TO_INSTALL kubeadm"
+fi
+if ! command -v kubectl &> /dev/null; then
+    COMPONENTS_TO_INSTALL="$COMPONENTS_TO_INSTALL kubectl"
+fi
 
-echo -e "${GREEN}✓ Kubernetes components installed${NC}"
+if [ -n "$COMPONENTS_TO_INSTALL" ]; then
+    echo -e "${BLUE}Installing missing components:${COMPONENTS_TO_INSTALL}${NC}"
+    apt-get install -y $COMPONENTS_TO_INSTALL
+    
+    # Hold versions to prevent auto-upgrade
+    apt-mark hold kubelet kubeadm kubectl 2>/dev/null || true
+    
+    echo -e "${GREEN}✓ Kubernetes components installed${NC}"
+else
+    echo -e "${GREEN}✓ Kubernetes components already installed${NC}"
+    # Ensure versions are held
+    apt-mark hold kubelet kubeadm kubectl 2>/dev/null || true
+fi
 echo ""
 
 echo -e "${BLUE}Step 3: Enabling kubelet...${NC}"
@@ -61,60 +87,99 @@ echo -e "${GREEN}✓ kubelet enabled${NC}"
 echo ""
 
 echo -e "${BLUE}Step 4: Initializing Kubernetes cluster...${NC}"
-# Get the primary IP address
-APISERVER_ADVERTISE_ADDRESS=$(hostname -I | awk '{print $1}')
-
-echo -e "${YELLOW}Using API server address: ${APISERVER_ADVERTISE_ADDRESS}${NC}"
-
-kubeadm init \
-  --pod-network-cidr="${POD_NETWORK_CIDR}" \
-  --apiserver-advertise-address="${APISERVER_ADVERTISE_ADDRESS}" \
-  --kubernetes-version="v${KUBERNETES_VERSION}.0"
-
-echo -e "${GREEN}✓ Cluster initialized${NC}"
+# Check if cluster is already initialized
+if [ -f /etc/kubernetes/admin.conf ]; then
+    echo -e "${GREEN}✓ Kubernetes cluster already initialized${NC}"
+    echo -e "${BLUE}Skipping cluster initialization.${NC}"
+    echo -e "${BLUE}If you need to reinitialize, run: kubeadm reset${NC}"
+    echo ""
+else
+    # Get the primary IP address
+    APISERVER_ADVERTISE_ADDRESS=$(hostname -I | awk '{print $1}')
+    
+    echo -e "${YELLOW}Using API server address: ${APISERVER_ADVERTISE_ADDRESS}${NC}"
+    
+    kubeadm init \
+      --pod-network-cidr="${POD_NETWORK_CIDR}" \
+      --apiserver-advertise-address="${APISERVER_ADVERTISE_ADDRESS}" \
+      --kubernetes-version="v${KUBERNETES_VERSION}.0"
+    
+    echo -e "${GREEN}✓ Cluster initialized${NC}"
+fi
 echo ""
 
 echo -e "${BLUE}Step 5: Configuring kubectl for root user...${NC}"
-mkdir -p $HOME/.kube
-cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-chown $(id -u):$(id -g) $HOME/.kube/config
-
-# Also configure for other users if they exist
-if id "ubuntu" &>/dev/null; then
-    mkdir -p /home/ubuntu/.kube
-    cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
-    chown -R ubuntu:ubuntu /home/ubuntu/.kube
+if [ ! -f /etc/kubernetes/admin.conf ]; then
+    echo -e "${YELLOW}⚠️  Cluster not initialized. Skipping kubectl configuration.${NC}"
+else
+    mkdir -p $HOME/.kube
+    if [ ! -f $HOME/.kube/config ]; then
+        cp /etc/kubernetes/admin.conf $HOME/.kube/config
+        chown $(id -u):$(id -g) $HOME/.kube/config
+        echo -e "${GREEN}✓ kubectl configured for root${NC}"
+    else
+        echo -e "${GREEN}✓ kubectl already configured for root${NC}"
+    fi
+    
+    # Also configure for other users if they exist
+    if id "ubuntu" &>/dev/null; then
+        mkdir -p /home/ubuntu/.kube
+        if [ ! -f /home/ubuntu/.kube/config ]; then
+            cp /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+            chown -R ubuntu:ubuntu /home/ubuntu/.kube
+            echo -e "${GREEN}✓ kubectl configured for ubuntu user${NC}"
+        else
+            echo -e "${GREEN}✓ kubectl already configured for ubuntu user${NC}"
+        fi
+    fi
 fi
-
-echo -e "${GREEN}✓ kubectl configured${NC}"
 echo ""
 
 echo -e "${BLUE}Step 6: Allowing pods on master node (single-node setup)...${NC}"
-kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
-echo -e "${GREEN}✓ Master node taint removed${NC}"
+if kubectl get nodes >/dev/null 2>&1; then
+    # Check if taint already removed
+    TAINT_COUNT=$(kubectl describe nodes | grep -c "node-role.kubernetes.io/control-plane" || echo "0")
+    if [ "$TAINT_COUNT" -eq 0 ]; then
+        echo -e "${GREEN}✓ Master node taint already removed${NC}"
+    else
+        kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
+        echo -e "${GREEN}✓ Master node taint removed${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  Cannot connect to cluster. Skipping taint removal.${NC}"
+fi
 echo ""
 
 echo -e "${BLUE}Step 7: Installing Calico CNI...${NC}"
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml
-
-# Wait for operator to be ready
-echo -e "${YELLOW}Waiting for Tigera operator to be ready...${NC}"
-kubectl wait --for=condition=available --timeout=120s deployment/tigera-operator -n tigera-operator || true
-
-kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/custom-resources.yaml
-
-# Wait for Calico pods
-echo -e "${YELLOW}Waiting for Calico pods to be ready...${NC}"
-sleep 30
-for i in {1..30}; do
-    if kubectl get pods -n calico-system | grep -q Running; then
-        break
-    fi
-    echo -e "${BLUE}  Waiting for Calico... (${i}/30)${NC}"
-    sleep 5
-done
-
-echo -e "${GREEN}✓ Calico CNI installed${NC}"
+if kubectl get namespace calico-system >/dev/null 2>&1 && kubectl get pods -n calico-system >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Calico CNI already installed${NC}"
+    echo -e "${BLUE}Verifying Calico pods...${NC}"
+    kubectl get pods -n calico-system || true
+else
+    echo -e "${BLUE}Installing Calico CNI...${NC}"
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml 2>/dev/null || \
+        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/tigera-operator.yaml
+    
+    # Wait for operator to be ready
+    echo -e "${YELLOW}Waiting for Tigera operator to be ready...${NC}"
+    kubectl wait --for=condition=available --timeout=120s deployment/tigera-operator -n tigera-operator 2>/dev/null || true
+    
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/custom-resources.yaml 2>/dev/null || \
+        kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.0/manifests/custom-resources.yaml
+    
+    # Wait for Calico pods
+    echo -e "${YELLOW}Waiting for Calico pods to be ready...${NC}"
+    sleep 30
+    for i in {1..30}; do
+        if kubectl get pods -n calico-system 2>/dev/null | grep -q Running; then
+            break
+        fi
+        echo -e "${BLUE}  Waiting for Calico... (${i}/30)${NC}"
+        sleep 5
+    done
+    
+    echo -e "${GREEN}✓ Calico CNI installed${NC}"
+fi
 echo ""
 
 echo -e "${BLUE}Step 8: Verifying cluster status...${NC}"
