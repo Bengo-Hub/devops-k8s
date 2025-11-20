@@ -8,7 +8,12 @@ on:
       enable_cleanup:
         description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Set to false to disable.'
         required: false
-        default: false
+        default: true
+        type: boolean
+      force_reprovision:
+        description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
+        required: false
+        default: true
         type: boolean
 
 jobs:
@@ -24,10 +29,14 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
-      # Cleanup disabled by default (opt-in only)
+      # Cleanup enabled via workflow input OR GitHub secret (for automation)
+      # Priority: workflow input > GitHub secret > default false
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || 'false' }}
+        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
+      FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
+        && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
+        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -467,7 +476,8 @@ jobs:
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 20
         env:
-          # Priority: GitHub secrets first, fallback to auto-generated
+          # Priority: GitHub secrets required (no fallback to auto-generated)
+          # Both postgres superuser and admin_user will use POSTGRES_PASSWORD unless POSTGRES_ADMIN_PASSWORD is explicitly set
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || '' }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD || '' }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
@@ -493,8 +503,8 @@ jobs:
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
         env:
-          # Priority: GitHub secrets first, fallback to default
-          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || 'rabbitmq' }}
+          # Priority: GitHub secrets required (no fallback to default)
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || '' }}
           RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |

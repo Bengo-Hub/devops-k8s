@@ -198,25 +198,26 @@ fi
 # Always use values file for complete configuration (includes FIPS settings as backup)
 PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
-# Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets)
+# Priority 1: Use POSTGRES_PASSWORD from environment (GitHub secrets) - REQUIRED
 # These --set flags will override values file
-if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-  log_info "Using POSTGRES_PASSWORD from environment/GitHub secrets"
-  log_info "  - postgres user password: ${#POSTGRES_PASSWORD} chars"
-  PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
-  PG_HELM_ARGS+=(--set global.postgresql.auth.database="$PG_DATABASE")
-  
-  # Use same password for admin_user (unless explicitly overridden)
-  if [[ -z "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
-    log_info "  - admin_user password: using same as postgres user"
-    PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_PASSWORD")
-  fi
+if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
+  log_error "POSTGRES_PASSWORD is required but not set in GitHub secrets"
+  log_error "Please set POSTGRES_PASSWORD in GitHub organization secrets"
+  exit 1
 fi
 
-# Add admin_user password if explicitly provided (overrides POSTGRES_PASSWORD)
-if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]] && [[ "${POSTGRES_ADMIN_PASSWORD}" != "${POSTGRES_PASSWORD}" ]]; then
-  log_info "Using separate POSTGRES_ADMIN_PASSWORD for admin_user (${#POSTGRES_ADMIN_PASSWORD} chars)"
+log_info "Using POSTGRES_PASSWORD from environment/GitHub secrets"
+log_info "  - postgres superuser password: ${#POSTGRES_PASSWORD} chars"
+PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
+PG_HELM_ARGS+=(--set global.postgresql.auth.database="$PG_DATABASE")
+
+# Use POSTGRES_ADMIN_PASSWORD for admin_user if set, otherwise use POSTGRES_PASSWORD
+if [[ -n "${POSTGRES_ADMIN_PASSWORD:-}" ]]; then
+  log_info "  - admin_user password: using POSTGRES_ADMIN_PASSWORD (${#POSTGRES_ADMIN_PASSWORD} chars)"
   PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_ADMIN_PASSWORD")
+else
+  log_info "  - admin_user password: using same as postgres superuser (POSTGRES_PASSWORD)"
+  PG_HELM_ARGS+=(--set global.postgresql.auth.password="$POSTGRES_PASSWORD")
 fi
 
 # Redundant FIPS setting for extra safety
@@ -248,11 +249,12 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
         log_info "PostgreSQL is healthy. Updating password via secret..."
         
-        # Update the secret directly
+        # Update the secret directly - use POSTGRES_ADMIN_PASSWORD if set, otherwise POSTGRES_PASSWORD
+        ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
         kubectl create secret generic postgresql \
           --from-literal=postgres-password="$POSTGRES_PASSWORD" \
-          --from-literal=password="$POSTGRES_PASSWORD" \
-          --from-literal=admin-user-password="$POSTGRES_PASSWORD" \
+          --from-literal=password="$ADMIN_PASS" \
+          --from-literal=admin-user-password="$ADMIN_PASS" \
           -n "${NAMESPACE}" \
           --dry-run=client -o yaml | kubectl apply -f -
         
@@ -541,13 +543,16 @@ else
   REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
 fi
 
-# Priority 1: Use REDIS_PASSWORD from environment (GitHub secrets)
-if [[ -n "${REDIS_PASSWORD:-}" ]]; then
-  log_info "Using REDIS_PASSWORD from environment/GitHub secrets (priority)"
-  REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
-else
-  log_warning "No REDIS_PASSWORD in environment; using values file or auto-generated"
+# Priority 1: Use REDIS_PASSWORD from environment (GitHub secrets) - REQUIRED
+if [[ -z "${REDIS_PASSWORD:-}" ]]; then
+  log_error "REDIS_PASSWORD is required but not set in GitHub secrets"
+  log_error "Please set REDIS_PASSWORD in GitHub organization secrets"
+  exit 1
 fi
+
+log_info "Using REDIS_PASSWORD from environment/GitHub secrets"
+log_info "  - Redis password: ${#REDIS_PASSWORD} chars"
+REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
 
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then

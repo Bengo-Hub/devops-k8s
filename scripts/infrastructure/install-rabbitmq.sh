@@ -10,8 +10,14 @@ source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Configuration
 NAMESPACE=${RABBITMQ_NAMESPACE:-infra}
-RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-rabbitmq}
 RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-user}
+
+# RABBITMQ_PASSWORD is required from GitHub secrets (no default fallback)
+if [[ -z "${RABBITMQ_PASSWORD:-}" ]]; then
+  log_error "RABBITMQ_PASSWORD is required but not set in GitHub secrets"
+  log_error "Please set RABBITMQ_PASSWORD in GitHub organization secrets"
+  exit 1
+fi
 
 log_section "Installing RabbitMQ (Shared Infrastructure)"
 log_info "Namespace: ${NAMESPACE}"
@@ -67,13 +73,14 @@ log_info "This may take 3-5 minutes..."
 # Build Helm arguments - prioritize environment variables
 RABBITMQ_HELM_ARGS=()
 
-# Priority 1: Use RABBITMQ_PASSWORD from environment (GitHub secrets)
-if [[ -n "${RABBITMQ_PASSWORD:-}" ]]; then
-  log_info "Using RABBITMQ_PASSWORD from environment/GitHub secrets (priority)"
-  RABBITMQ_HELM_ARGS+=(--set auth.username="$RABBITMQ_USERNAME")
-  RABBITMQ_HELM_ARGS+=(--set auth.password="$RABBITMQ_PASSWORD")
-  RABBITMQ_HELM_ARGS+=(--set auth.erlangCookie=$(openssl rand -hex 32))
-fi
+# Priority 1: Use RABBITMQ_PASSWORD from environment (GitHub secrets) - REQUIRED
+# RABBITMQ_PASSWORD is already validated above
+log_info "Using RABBITMQ_PASSWORD from environment/GitHub secrets"
+log_info "  - RabbitMQ username: ${RABBITMQ_USERNAME}"
+log_info "  - RabbitMQ password: ${#RABBITMQ_PASSWORD} chars"
+RABBITMQ_HELM_ARGS+=(--set auth.username="$RABBITMQ_USERNAME")
+RABBITMQ_HELM_ARGS+=(--set auth.password="$RABBITMQ_PASSWORD")
+RABBITMQ_HELM_ARGS+=(--set auth.erlangCookie=$(openssl rand -hex 32))
 
 # Resource configuration for production
 RABBITMQ_HELM_ARGS+=(--set resources.requests.memory="512Mi")
