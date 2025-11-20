@@ -78,37 +78,43 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     "${INFRA_DIR}/install-storage-provisioner.sh"
     echo ""
     
-    # 2. Databases (PostgreSQL & Redis)
-    echo -e "${BLUE}[2/9] Installing databases (PostgreSQL & Redis)...${NC}"
+    # 2. PostgreSQL
+    echo -e "${BLUE}[2/9] Installing PostgreSQL...${NC}"
     export NAMESPACE=${DB_NAMESPACE:-infra}
     export PG_DATABASE=postgres
-    "${INFRA_DIR}/install-databases.sh"
+    "${INFRA_DIR}/install-postgres.sh"
+    echo ""
+
+    # 3. Redis
+    echo -e "${BLUE}[3/9] Installing Redis...${NC}"
+    export DB_NAMESPACE=${DB_NAMESPACE:-infra}
+    "${INFRA_DIR}/install-redis.sh"
     echo ""
     
-    # 3. RabbitMQ
-    echo -e "${BLUE}[3/9] Installing RabbitMQ...${NC}"
+    # 4. RabbitMQ
+    echo -e "${BLUE}[4/10] Installing RabbitMQ...${NC}"
     export RABBITMQ_NAMESPACE=${DB_NAMESPACE:-infra}
     "${INFRA_DIR}/install-rabbitmq.sh"
     echo ""
     
     # 4. Ingress Controller
-    echo -e "${BLUE}[4/9] Configuring ingress controller...${NC}"
+    echo -e "${BLUE}[5/10] Configuring ingress controller...${NC}"
     "${INFRA_DIR}/configure-ingress-controller.sh"
     echo ""
     
     # 5. cert-manager
-    echo -e "${BLUE}[5/9] Installing cert-manager...${NC}"
+    echo -e "${BLUE}[6/10] Installing cert-manager...${NC}"
     "${INFRA_DIR}/install-cert-manager.sh"
     echo ""
     
     # 6. Argo CD
-    echo -e "${BLUE}[6/9] Installing Argo CD...${NC}"
+    echo -e "${BLUE}[7/10] Installing Argo CD...${NC}"
     export ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.masterspace.co.ke}
     "${INFRA_DIR}/install-argocd.sh"
     echo ""
     
     # 7. Bootstrap ArgoCD applications
-    echo -e "${BLUE}[7/9] Bootstrapping ArgoCD applications...${NC}"
+    echo -e "${BLUE}[8/10] Bootstrapping ArgoCD applications...${NC}"
     if [ -f "${SCRIPT_DIR}/../apps/root-app.yaml" ]; then
         kubectl apply -f "${SCRIPT_DIR}/../apps/root-app.yaml" || true
     fi
@@ -122,14 +128,14 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     echo ""
     
     # 8. Monitoring
-    echo -e "${BLUE}[8/9] Installing monitoring stack...${NC}"
+    echo -e "${BLUE}[9/10] Installing monitoring stack...${NC}"
     export GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
     export MONITORING_NAMESPACE=${DB_NAMESPACE:-infra}
     "${MONITORING_DIR}/install-monitoring.sh"
     echo ""
     
     # 9. VPA
-    echo -e "${BLUE}[9/9] Installing Vertical Pod Autoscaler...${NC}"
+    echo -e "${BLUE}[10/10] Installing Vertical Pod Autoscaler...${NC}"
     "${INFRA_DIR}/install-vpa.sh"
     echo ""
     
