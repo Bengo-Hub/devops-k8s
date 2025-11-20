@@ -294,31 +294,31 @@ log_info "Checking for orphaned resources..."
 fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
 
 if [[ "$ONLY_COMPONENT" == "all" || "$ONLY_COMPONENT" == "postgres" ]]; then
-  # Install or upgrade PostgreSQL (idempotent)
-  log_section "Installing/upgrading PostgreSQL"
-  log_info "This may take 5-10 minutes..."
+# Install or upgrade PostgreSQL (idempotent)
+log_section "Installing/upgrading PostgreSQL"
+log_info "This may take 5-10 minutes..."
 
-  # Build Helm arguments - prioritize environment variables
-  # Using chart version 16.7.27 (PostgreSQL 17.6.0) - stable production version
-  # This version is well-tested and doesn't have the FIPS validation bugs from 15.5.26
-  PG_HELM_ARGS=()
+# Build Helm arguments - prioritize environment variables
+# Using chart version 16.7.27 (PostgreSQL 17.6.0) - stable production version
+# This version is well-tested and doesn't have the FIPS validation bugs from 15.5.26
+PG_HELM_ARGS=()
 
-  # Set FIPS configuration first (for compatibility)
-  # Chart version 16.7.27 handles FIPS gracefully, but we set it explicitly
-  PG_HELM_ARGS+=(--set global.defaultFips=false)
-  PG_HELM_ARGS+=(--set fips.openssl=false)
+# Set FIPS configuration first (for compatibility)
+# Chart version 16.7.27 handles FIPS gracefully, but we set it explicitly
+PG_HELM_ARGS+=(--set global.defaultFips=false)
+PG_HELM_ARGS+=(--set fips.openssl=false)
 
-  # Enable ServiceMonitor only if Prometheus Operator CRDs exist
-  if [ "$PROMETHEUS_OPERATOR_CRDS_EXIST" = true ]; then
-      PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true)
-      log_info "ServiceMonitor enabled for PostgreSQL metrics"
-  else
-      PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
-      log_info "ServiceMonitor disabled (Prometheus Operator not installed yet)"
-  fi
+# Enable ServiceMonitor only if Prometheus Operator CRDs exist
+if [ "$PROMETHEUS_OPERATOR_CRDS_EXIST" = true ]; then
+    PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true)
+    log_info "ServiceMonitor enabled for PostgreSQL metrics"
+else
+    PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
+    log_info "ServiceMonitor disabled (Prometheus Operator not installed yet)"
+fi
 
-  # Always use values file for complete configuration (includes FIPS settings as backup)
-  PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
+# Always use values file for complete configuration (includes FIPS settings as backup)
+PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
 
   FORCE_DB_INSTALL=${FORCE_DB_INSTALL:-${FORCE_INSTALL:-false}}
 
@@ -329,7 +329,7 @@ if [[ "$ONLY_COMPONENT" == "all" || "$ONLY_COMPONENT" == "postgres" ]]; then
     #   - admin_user (admin DB user)
     #   - all secret fields (postgres-password, password, admin-user-password)
     ADMIN_PASS="$POSTGRES_PASSWORD"
-    PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
+PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
     PG_HELM_ARGS+=(--set global.postgresql.auth.password="$ADMIN_PASS")
     log_info "PostgreSQL passwords configured from POSTGRES_PASSWORD (GitHub secret)"
     log_info "  - Superuser (postgres): ${#POSTGRES_PASSWORD} chars"
@@ -343,33 +343,33 @@ if [[ "$ONLY_COMPONENT" == "all" || "$ONLY_COMPONENT" == "postgres" ]]; then
   PG_HELM_ARGS+=(--set image.tag=latest)
   PG_HELM_ARGS+=(--set metrics.image.tag=latest)
 
-  set +e
-  if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-    # Check if PostgreSQL is healthy
-    IS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
+set +e
+if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
+  # Check if PostgreSQL is healthy
+  IS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
+  
+  # If POSTGRES_PASSWORD is explicitly set, check if it matches current secret
+  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    # Get current password from secret
+    CURRENT_PG_PASS=$(kubectl -n "${NAMESPACE}" get secret postgresql -o jsonpath='{.data.postgres-password}' 2>/dev/null | base64 -d || true)
     
-    # If POSTGRES_PASSWORD is explicitly set, check if it matches current secret
-    if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-      # Get current password from secret
-      CURRENT_PG_PASS=$(kubectl -n "${NAMESPACE}" get secret postgresql -o jsonpath='{.data.postgres-password}' 2>/dev/null | base64 -d || true)
-      
       # Only skip Helm upgrade when BOTH:
       #   - the password matches, and
       #   - PostgreSQL is already healthy
       # This prevents us from skipping upgrades when pods are failing
       if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" && "${FORCE_DB_INSTALL}" != "true" && "$IS_HEALTHY" == "true" ]]; then
         log_success "PostgreSQL password unchanged and StatefulSet healthy - skipping upgrade"
-        log_info "Current secret password matches provided POSTGRES_PASSWORD"
-        HELM_PG_EXIT=0
-      else
-        log_warning "Password mismatch detected"
-        log_info "Current password length: ${#CURRENT_PG_PASS} chars"
-        log_info "New password length: ${#POSTGRES_PASSWORD} chars"
+      log_info "Current secret password matches provided POSTGRES_PASSWORD"
+      HELM_PG_EXIT=0
+    else
+      log_warning "Password mismatch detected"
+      log_info "Current password length: ${#CURRENT_PG_PASS} chars"
+      log_info "New password length: ${#POSTGRES_PASSWORD} chars"
         log_warning "WARNING: Updating passwords requires pod restart and may take time"
-        log_info "Checking if PostgreSQL is currently healthy..."
-        
+      log_info "Checking if PostgreSQL is currently healthy..."
+      
         # Check if PostgreSQL is currently running - if yes, sync DATABASE passwords + secret without Helm upgrade
-        if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
+      if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
           log_info "PostgreSQL is healthy. Syncing superuser/admin passwords with POSTGRES_PASSWORD..."
           
           # Try to update actual database passwords first using the CURRENT_PG_PASS
@@ -393,181 +393,181 @@ if [[ "$ONLY_COMPONENT" == "all" || "$ONLY_COMPONENT" == "postgres" ]]; then
           
           # Update the secret directly - keep ALL secret fields in sync with POSTGRES_PASSWORD
           ADMIN_PASS="$POSTGRES_PASSWORD"
-          kubectl create secret generic postgresql \
-            --from-literal=postgres-password="$POSTGRES_PASSWORD" \
-            --from-literal=password="$ADMIN_PASS" \
-            --from-literal=admin-user-password="$ADMIN_PASS" \
-            -n "${NAMESPACE}" \
-            --dry-run=client -o yaml | kubectl apply -f -
-          
-          log_success "Password updated in secret. PostgreSQL will use it on next restart."
-          log_warning "Note: Password change will take effect on next pod restart"
-          HELM_PG_EXIT=0
-          POSTGRES_DEPLOYED=true
-        else
-          log_warning "PostgreSQL not healthy. Checking for stuck Helm operation..."
-          
-          # Fix stuck Helm operation before upgrading
-          fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
-          
-          log_warning "Performing Helm upgrade..."
-          helm upgrade postgresql bitnami/postgresql \
-            --version 16.7.27 \
-            -n "${NAMESPACE}" \
-            --reset-values \
-            "${PG_HELM_ARGS[@]}" \
-            --timeout=10m \
-            --wait=false 2>&1 | tee /tmp/helm-postgresql-install.log
-          HELM_PG_EXIT=${PIPESTATUS[0]}
-        fi
-      fi
-    elif [[ "$IS_HEALTHY" == "true" ]]; then
-      log_success "PostgreSQL already installed and healthy - skipping"
-      HELM_PG_EXIT=0
-      POSTGRES_DEPLOYED=true
-    else
-      log_warning "PostgreSQL exists but not ready; checking for stuck operation..."
-      
-      # Fix stuck Helm operation
-      fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
-      
-      log_warning "Performing safe upgrade..."
-      helm upgrade postgresql bitnami/postgresql \
-        --version 16.7.27 \
-        -n "${NAMESPACE}" \
-        --reuse-values \
-        --timeout=10m \
-        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-      HELM_PG_EXIT=${PIPESTATUS[0]}
-      POSTGRES_DEPLOYED=true
-    fi
-    
-    # POSTGRES_DEPLOYED is set to true above if already installed/healthy
-    # If not set, it means we need to install (will be checked below)
-
-  else
-    log_info "PostgreSQL not found; installing fresh"
-    
-    # Only clean up orphaned resources if cleanup mode is active
-    if is_cleanup_mode; then
-      log_info "Cleanup mode active - checking for orphaned PostgreSQL resources..."
-      
-      # Check for StatefulSets first (these recreate resources)
-      STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
-      if [ -n "$STATEFULSETS" ]; then
-        log_warning "Found PostgreSQL StatefulSet - deleting (cleanup mode)..."
-        kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-      fi
-      
-      # Check for failed/pending Helm release
-      if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
-        log_warning "Found existing Helm release - checking for stuck operation..."
+        kubectl create secret generic postgresql \
+          --from-literal=postgres-password="$POSTGRES_PASSWORD" \
+          --from-literal=password="$ADMIN_PASS" \
+          --from-literal=admin-user-password="$ADMIN_PASS" \
+          -n "${NAMESPACE}" \
+          --dry-run=client -o yaml | kubectl apply -f -
         
-        # Fix stuck Helm operation before uninstalling
+        log_success "Password updated in secret. PostgreSQL will use it on next restart."
+        log_warning "Note: Password change will take effect on next pod restart"
+        HELM_PG_EXIT=0
+        POSTGRES_DEPLOYED=true
+      else
+        log_warning "PostgreSQL not healthy. Checking for stuck Helm operation..."
+        
+        # Fix stuck Helm operation before upgrading
         fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
         
-        log_warning "Uninstalling Helm release (cleanup mode)..."
-        helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
-        sleep 5
+        log_warning "Performing Helm upgrade..."
+        helm upgrade postgresql bitnami/postgresql \
+          --version 16.7.27 \
+          -n "${NAMESPACE}" \
+          --reset-values \
+          "${PG_HELM_ARGS[@]}" \
+          --timeout=10m \
+          --wait=false 2>&1 | tee /tmp/helm-postgresql-install.log
+        HELM_PG_EXIT=${PIPESTATUS[0]}
       fi
+    fi
+  elif [[ "$IS_HEALTHY" == "true" ]]; then
+    log_success "PostgreSQL already installed and healthy - skipping"
+    HELM_PG_EXIT=0
+    POSTGRES_DEPLOYED=true
+  else
+    log_warning "PostgreSQL exists but not ready; checking for stuck operation..."
+    
+    # Fix stuck Helm operation
+    fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
+    
+    log_warning "Performing safe upgrade..."
+    helm upgrade postgresql bitnami/postgresql \
+      --version 16.7.27 \
+      -n "${NAMESPACE}" \
+      --reuse-values \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+    HELM_PG_EXIT=${PIPESTATUS[0]}
+    POSTGRES_DEPLOYED=true
+  fi
+  
+  # POSTGRES_DEPLOYED is set to true above if already installed/healthy
+  # If not set, it means we need to install (will be checked below)
+
+else
+  log_info "PostgreSQL not found; installing fresh"
+  
+  # Only clean up orphaned resources if cleanup mode is active
+  if is_cleanup_mode; then
+    log_info "Cleanup mode active - checking for orphaned PostgreSQL resources..."
+    
+    # Check for StatefulSets first (these recreate resources)
+    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
+    if [ -n "$STATEFULSETS" ]; then
+      log_warning "Found PostgreSQL StatefulSet - deleting (cleanup mode)..."
+      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+    fi
+    
+    # Check for failed/pending Helm release
+    if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
+      log_warning "Found existing Helm release - checking for stuck operation..."
       
-      # Clean up orphaned resources
-      ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
-      if [ -n "$ORPHANED_RESOURCES" ]; then
-        log_warning "Cleaning up orphaned resources (cleanup mode)..."
-        kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-        sleep 10
-      fi
-    else
-      log_info "Cleanup mode inactive - checking for existing resources to update..."
+      # Fix stuck Helm operation before uninstalling
+      fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
+      
+      log_warning "Uninstalling Helm release (cleanup mode)..."
+      helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
+      sleep 5
+    fi
+    
+    # Clean up orphaned resources
+    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+    if [ -n "$ORPHANED_RESOURCES" ]; then
+      log_warning "Cleaning up orphaned resources (cleanup mode)..."
+      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+      sleep 10
+    fi
+  else
+    log_info "Cleanup mode inactive - checking for existing resources to update..."
       
       # Fix orphaned resources before attempting Helm operations
       fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
       
-      # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
-      if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
-        log_warning "PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade..."
-        helm upgrade postgresql bitnami/postgresql \
-          --version 16.7.27 \
-          -n "${NAMESPACE}" \
-          "${PG_HELM_ARGS[@]}" \
-          --timeout=10m \
-          --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-        HELM_PG_EXIT=${PIPESTATUS[0]}
-        set -e
-        if [ $HELM_PG_EXIT -eq 0 ]; then
-          log_success "PostgreSQL upgraded"
-          POSTGRES_DEPLOYED=true
-        else
-          log_warning "PostgreSQL upgrade failed (release missing). Falling back to fresh install..."
-          POSTGRES_DEPLOYED=false
-          HELM_PG_EXIT=1
-        fi
-      fi
-    fi
-    
-    # Install PostgreSQL if cleanup mode or no existing resources
-    if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
-      # Ensure resources are fixed before fresh install
-      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-      
-      log_info "Installing PostgreSQL..."
-      helm install postgresql bitnami/postgresql \
+    # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
+    if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
+      log_warning "PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade..."
+      helm upgrade postgresql bitnami/postgresql \
         --version 16.7.27 \
         -n "${NAMESPACE}" \
         "${PG_HELM_ARGS[@]}" \
         --timeout=10m \
         --wait 2>&1 | tee /tmp/helm-postgresql-install.log
       HELM_PG_EXIT=${PIPESTATUS[0]}
+      set -e
       if [ $HELM_PG_EXIT -eq 0 ]; then
+        log_success "PostgreSQL upgraded"
         POSTGRES_DEPLOYED=true
+      else
+        log_warning "PostgreSQL upgrade failed (release missing). Falling back to fresh install..."
+        POSTGRES_DEPLOYED=false
+        HELM_PG_EXIT=1
       fi
     fi
   fi
-  set -e
+  
+  # Install PostgreSQL if cleanup mode or no existing resources
+  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
+      # Ensure resources are fixed before fresh install
+      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
+      
+    log_info "Installing PostgreSQL..."
+    helm install postgresql bitnami/postgresql \
+      --version 16.7.27 \
+      -n "${NAMESPACE}" \
+      "${PG_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+    HELM_PG_EXIT=${PIPESTATUS[0]}
+    if [ $HELM_PG_EXIT -eq 0 ]; then
+      POSTGRES_DEPLOYED=true
+    fi
+  fi
+fi
+set -e
 
-  if [ $HELM_PG_EXIT -eq 0 ]; then
-    log_success "PostgreSQL ready"
+if [ $HELM_PG_EXIT -eq 0 ]; then
+  log_success "PostgreSQL ready"
+else
+  log_warning "PostgreSQL Helm operation reported exit code $HELM_PG_EXIT"
+  log_warning "Checking actual PostgreSQL status..."
+  
+  # Wait a bit for pods to update
+  sleep 10
+  
+  # Check if PostgreSQL StatefulSet exists and has ready replicas
+  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values (StatefulSet might not exist)
+  PG_READY=${PG_READY:-0}
+  PG_REPLICAS=${PG_REPLICAS:-0}
+  
+  log_info "PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready"
+  
+  # Check if PG_READY is a valid number before comparison
+  if [[ "$PG_READY" =~ ^[0-9]+$ ]] && [ "$PG_READY" -ge 1 ]; then
+    log_success "PostgreSQL is actually running! Continuing..."
+    log_warning "Note: Helm reported a timeout, but PostgreSQL is healthy"
   else
-    log_warning "PostgreSQL Helm operation reported exit code $HELM_PG_EXIT"
-    log_warning "Checking actual PostgreSQL status..."
+    log_error "PostgreSQL installation/upgrade failed"
+    log_warning "=== Helm output (last 50 lines) ==="
+    tail -50 /tmp/helm-postgresql-install.log 2>/dev/null || true
+    log_warning "=== Pod status ==="
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    log_warning "=== Pod events ==="
+    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i postgresql | tail -10 || true
+    log_warning "=== PVC status ==="
+    kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
     
-    # Wait a bit for pods to update
-    sleep 10
+    # Check for common issues
+    log_warning "=== Diagnosing issues ==="
+    PENDING_PVCS=$(kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+    if [ "$PENDING_PVCS" -gt 0 ]; then
+      log_error "Found ${PENDING_PVCS} Pending PVCs - storage may not be available"
+    fi
     
-    # Check if PostgreSQL StatefulSet exists and has ready replicas
-    PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
-    PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
-    
-    # Handle empty values (StatefulSet might not exist)
-    PG_READY=${PG_READY:-0}
-    PG_REPLICAS=${PG_REPLICAS:-0}
-    
-    log_info "PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready"
-    
-    # Check if PG_READY is a valid number before comparison
-    if [[ "$PG_READY" =~ ^[0-9]+$ ]] && [ "$PG_READY" -ge 1 ]; then
-      log_success "PostgreSQL is actually running! Continuing..."
-      log_warning "Note: Helm reported a timeout, but PostgreSQL is healthy"
-    else
-      log_error "PostgreSQL installation/upgrade failed"
-      log_warning "=== Helm output (last 50 lines) ==="
-      tail -50 /tmp/helm-postgresql-install.log 2>/dev/null || true
-      log_warning "=== Pod status ==="
-      kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-      log_warning "=== Pod events ==="
-      kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i postgresql | tail -10 || true
-      log_warning "=== PVC status ==="
-      kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-      
-      # Check for common issues
-      log_warning "=== Diagnosing issues ==="
-      PENDING_PVCS=$(kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
-      if [ "$PENDING_PVCS" -gt 0 ]; then
-        log_error "Found ${PENDING_PVCS} Pending PVCs - storage may not be available"
-      fi
-      
-      exit 1
+    exit 1
     fi
   fi
 fi
@@ -779,7 +779,7 @@ if [[ -z "${REDIS_PASSWORD:-}" ]]; then
   else
     log_error "REDIS_PASSWORD is required but not set, and POSTGRES_PASSWORD is also empty"
     log_error "Please set POSTGRES_PASSWORD (preferred) or REDIS_PASSWORD in GitHub organization secrets"
-    exit 1
+  exit 1
   fi
 fi
 
