@@ -152,7 +152,8 @@ kubectl get applications -A
 
 ```bash
 # 1. Storage provisioner
-./scripts/install-storage-provisioner.sh
+# Note: This script verifies the provisioner pod is running before declaring success
+./scripts/infrastructure/install-storage-provisioner.sh
 
 # 2. Databases (PostgreSQL & Redis)
 export NAMESPACE=infra
@@ -160,28 +161,33 @@ export PG_DATABASE=postgres
 export POSTGRES_PASSWORD="your-password"
 export POSTGRES_ADMIN_PASSWORD="your-admin-password"
 export REDIS_PASSWORD="your-redis-password"
-./scripts/install-databases.sh
+./scripts/infrastructure/install-databases.sh
 
 # 3. RabbitMQ
 export RABBITMQ_NAMESPACE=infra
 export RABBITMQ_PASSWORD="your-rabbitmq-password"
-./scripts/install-rabbitmq.sh
+./scripts/infrastructure/install-rabbitmq.sh
 
 # 4. Ingress Controller
-./scripts/configure-ingress-controller.sh
+# Note: This script automatically handles duplicate pods and orphaned replicasets
+./scripts/infrastructure/configure-ingress-controller.sh
 
 # 5. cert-manager
-./scripts/install-cert-manager.sh
+./scripts/infrastructure/install-cert-manager.sh
 
 # 6. Argo CD
-./scripts/install-argocd.sh
+export ARGOCD_DOMAIN=argocd.masterspace.co.ke
+./scripts/infrastructure/install-argocd.sh
 
 # 7. Monitoring (in infra namespace)
+# Note: This script includes automatic stuck Helm operation fixes and ingress conflict resolution
 export GRAFANA_DOMAIN=grafana.masterspace.co.ke
-./scripts/install-monitoring.sh
+export MONITORING_NAMESPACE=infra
+./scripts/monitoring/install-monitoring.sh
 
 # 8. VPA
-./scripts/install-vpa.sh
+# Note: This script automatically creates TLS secret placeholder if missing
+./scripts/infrastructure/install-vpa.sh
 ```
 
 ---
@@ -226,6 +232,85 @@ argocd app sync <app-name> -n argocd
 ```
 
 ---
+
+## Troubleshooting Common Issues
+
+### Duplicate Ingress-NGINX Pods
+
+If you see multiple ingress-nginx pods or port conflicts:
+
+```bash
+# Run the automated fix script
+./scripts/tools/fix-cluster-issues.sh
+
+# Or manually:
+kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller
+kubectl delete pod <duplicate-pod-name> -n ingress-nginx
+kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1
+```
+
+### Storage Provisioner Not Running
+
+If PVCs are stuck in Pending state:
+
+```bash
+# Check if provisioner is running
+kubectl get pods -n local-path-storage
+
+# Reinstall if needed
+./scripts/infrastructure/install-storage-provisioner.sh
+```
+
+### VPA Admission Controller TLS Secret Missing
+
+If VPA admission controller is stuck in ContainerCreating:
+
+```bash
+# Run the automated fix script
+./scripts/tools/fix-cluster-issues.sh
+
+# Or manually create placeholder secret
+kubectl create secret generic vpa-tls-certs \
+  --from-literal=ca.crt="dummy" \
+  --from-literal=tls.crt="dummy" \
+  --from-literal=tls.key="dummy" \
+  -n kube-system
+kubectl delete pod -n kube-system -l app=vpa-admission-controller
+```
+
+### Monitoring Installation Stuck
+
+If Helm operation is stuck:
+
+```bash
+# Run the automated fix script
+./scripts/monitoring/fix-stuck-helm-monitoring.sh
+
+# Or check Helm status
+helm status prometheus -n infra
+
+# Delete pending secrets
+kubectl get secrets -n infra -l owner=helm,status=pending-upgrade -o name | \
+  xargs kubectl delete -n infra
+```
+
+### Registry Credentials Missing
+
+If pods fail with ImagePullBackOff:
+
+```bash
+# Create registry credentials in all namespaces
+export REGISTRY_USERNAME=your-username
+export REGISTRY_PASSWORD=your-password
+for ns in infra erp truload cafe treasury notifications auth inventory logistics pos argocd; do
+  kubectl create secret docker-registry registry-credentials \
+    --docker-server=docker.io \
+    --docker-username=$REGISTRY_USERNAME \
+    --docker-password=$REGISTRY_PASSWORD \
+    --docker-email=your-email@example.com \
+    -n $ns --dry-run=client -o yaml | kubectl apply -f -
+done
+```
 
 ## Troubleshooting
 

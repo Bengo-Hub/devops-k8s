@@ -396,10 +396,27 @@ kubectl wait --namespace ingress-nginx \
 kubectl get svc -n ingress-nginx
 
 # For single-node VPS, patch to use hostNetwork
+# Note: Use the automated script instead for better error handling:
+# ./scripts/infrastructure/configure-ingress-controller.sh
+# 
+# Manual method (if script not available):
 kubectl patch deployment ingress-nginx-controller \
   -n ingress-nginx \
   --type='json' \
   -p='[{"op": "add", "path": "/spec/template/spec/hostNetwork", "value": true}]'
+
+# Also set dnsPolicy for proper DNS resolution
+kubectl patch deployment ingress-nginx-controller \
+  -n ingress-nginx \
+  --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/dnsPolicy", "value": "ClusterFirstWithHostNet"}]'
+
+# Scale to 1 replica (required for hostNetwork)
+kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1
+
+# Clean up any duplicate pods/replicasets
+kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name | \
+  xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
 
 # Verify
 kubectl get pods -n ingress-nginx
