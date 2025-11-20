@@ -322,13 +322,89 @@ elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
     echo -e "${BLUE}  This should be created automatically by cert-manager when the ingress is created${NC}"
   fi
   
+  # Enhanced diagnostics
   echo ""
-  echo -e "${YELLOW}Troubleshooting TLS:${NC}"
+  echo -e "${YELLOW}=== Enhanced TLS Diagnostics ===${NC}"
+  
+  # Check DNS resolution
+  echo -e "${BLUE}1. Checking DNS resolution...${NC}"
+  VPS_IP=${VPS_IP:-$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "UNKNOWN")}
+  DNS_RESOLVED=$(dig +short "${GRAFANA_DOMAIN}" 2>/dev/null | head -1 || echo "")
+  if [ -n "$DNS_RESOLVED" ]; then
+    echo -e "${GREEN}✓ DNS resolves to: ${DNS_RESOLVED}${NC}"
+    if [ "$DNS_RESOLVED" != "$VPS_IP" ] && [ "$VPS_IP" != "UNKNOWN" ]; then
+      echo -e "${RED}✗ DNS points to ${DNS_RESOLVED}, but VPS IP is ${VPS_IP}${NC}"
+      echo -e "${YELLOW}  Action: Update DNS A record to point ${GRAFANA_DOMAIN} → ${VPS_IP}${NC}"
+    fi
+  else
+    echo -e "${RED}✗ DNS does not resolve for ${GRAFANA_DOMAIN}${NC}"
+    echo -e "${YELLOW}  Action: Create DNS A record: ${GRAFANA_DOMAIN} → ${VPS_IP}${NC}"
+  fi
+  
+  # Check ingress controller
+  echo -e "${BLUE}2. Checking ingress controller...${NC}"
+  INGRESS_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+  if [ "$INGRESS_PODS" -ge 1 ]; then
+    echo -e "${GREEN}✓ Ingress controller is running (${INGRESS_PODS} pod(s))${NC}"
+    INGRESS_HOSTNET=$(kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o jsonpath='{.items[0].spec.hostNetwork}' 2>/dev/null || echo "false")
+    if [ "$INGRESS_HOSTNET" = "true" ]; then
+      echo -e "${GREEN}✓ Ingress controller using hostNetwork (ports 80/443 bound to node)${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Ingress controller not using hostNetwork - may need NodePort/LoadBalancer${NC}"
+    fi
+  else
+    echo -e "${RED}✗ Ingress controller not running${NC}"
+  fi
+  
+  # Check ingress resource
+  echo -e "${BLUE}3. Checking Grafana ingress...${NC}"
+  if kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Grafana ingress exists${NC}"
+    INGRESS_HOST=$(kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || echo "")
+    if [ "$INGRESS_HOST" = "${GRAFANA_DOMAIN}" ]; then
+      echo -e "${GREEN}✓ Ingress host matches: ${INGRESS_HOST}${NC}"
+    else
+      echo -e "${YELLOW}⚠️  Ingress host mismatch: ${INGRESS_HOST} (expected: ${GRAFANA_DOMAIN})${NC}"
+    fi
+  else
+    echo -e "${RED}✗ Grafana ingress not found${NC}"
+  fi
+  
+  # Check certificate challenges
+  echo -e "${BLUE}4. Checking certificate challenges...${NC}"
+  CHALLENGES=$(kubectl get challenges -n "${MONITORING_NAMESPACE}" -l acme.cert-manager.io/order-name 2>/dev/null | grep -v NAME | wc -l || echo "0")
+  if [ "$CHALLENGES" -gt 0 ]; then
+    echo -e "${BLUE}Found ${CHALLENGES} challenge(s). Status:${NC}"
+    kubectl get challenges -n "${MONITORING_NAMESPACE}" -l acme.cert-manager.io/order-name -o custom-columns=NAME:.metadata.name,STATUS:.status.state,REASON:.status.reason 2>/dev/null || true
+  else
+    echo -e "${YELLOW}No challenges found yet (may still be creating)${NC}"
+  fi
+  
+  # Check cert-manager logs for errors
+  echo -e "${BLUE}5. Checking cert-manager logs (last 20 lines)...${NC}"
+  CERT_MGR_LOGS=$(kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager --tail=20 2>/dev/null | grep -i "error\|fail\|denied" || echo "")
+  if [ -n "$CERT_MGR_LOGS" ]; then
+    echo -e "${RED}Found errors in cert-manager logs:${NC}"
+    echo "$CERT_MGR_LOGS"
+  else
+    echo -e "${GREEN}No errors found in recent cert-manager logs${NC}"
+  fi
+  
+  echo ""
+  echo -e "${YELLOW}=== Manual Troubleshooting Commands ===${NC}"
   echo "1. Verify DNS: dig ${GRAFANA_DOMAIN} +short"
-  echo "2. Check cert-manager logs: kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager"
-  echo "3. Check ingress: kubectl get ingress -n ${MONITORING_NAMESPACE} prometheus-grafana -o yaml"
-  echo "4. Check certificate: kubectl get certificate -n ${MONITORING_NAMESPACE} grafana-tls -o yaml"
-  echo "5. Wait 2-5 minutes for cert-manager to provision certificate"
+  echo "2. Check certificate: kubectl get certificate -n ${MONITORING_NAMESPACE} grafana-tls -o yaml"
+  echo "3. Check challenges: kubectl get challenges -n ${MONITORING_NAMESPACE}"
+  echo "4. Check cert-manager logs: kubectl logs -n cert-manager -l app.kubernetes.io/name=cert-manager --tail=50"
+  echo "5. Check ingress: kubectl get ingress -n ${MONITORING_NAMESPACE} prometheus-grafana -o yaml"
+  echo "6. Test HTTP access: curl -H 'Host: ${GRAFANA_DOMAIN}' http://${VPS_IP}/"
+  echo "7. Wait 2-5 minutes for cert-manager to provision certificate"
+  echo ""
+  echo -e "${YELLOW}Common Issues:${NC}"
+  echo "- DNS not pointing to VPS IP: Update DNS A record"
+  echo "- Port 80 blocked: Ensure firewall allows port 80 (required for HTTP-01 challenge)"
+  echo "- Certificate still issuing: Wait 2-5 minutes and check again"
+  echo "- Ingress controller not accessible: Check hostNetwork configuration"
   echo ""
 fi
 
