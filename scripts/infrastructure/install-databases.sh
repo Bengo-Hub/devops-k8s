@@ -339,9 +339,28 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
       log_warning "WARNING: Updating passwords requires pod restart and may take time"
       log_info "Checking if PostgreSQL is currently healthy..."
       
-      # Check if PostgreSQL is currently running - if yes, just update the secret without Helm upgrade
+      # Check if PostgreSQL is currently running - if yes, sync DATABASE passwords + secret without Helm upgrade
       if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
-        log_info "PostgreSQL is healthy. Updating password via secret..."
+        log_info "PostgreSQL is healthy. Syncing superuser/admin passwords with GitHub secret..."
+        
+        # Try to update actual database passwords first using the CURRENT_PG_PASS
+        PG_POD=$(kubectl -n "${NAMESPACE}" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [[ -n "$PG_POD" && -n "$CURRENT_PG_PASS" ]]; then
+          # Update postgres superuser password
+          kubectl -n "${NAMESPACE}" exec "$PG_POD" -- \
+            env PGPASSWORD="$CURRENT_PG_PASS" \
+            psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH PASSWORD '${POSTGRES_PASSWORD}';" \
+            >/dev/null 2>&1 || log_warning "Failed to update postgres superuser password in database (will rely on secret/Helm sync)"
+
+          # Update admin_user password (used for per‑service DB management)
+          ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
+          kubectl -n "${NAMESPACE}" exec "$PG_POD" -- \
+            env PGPASSWORD="$CURRENT_PG_PASS" \
+            psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER admin_user WITH PASSWORD '${ADMIN_PASS}';" \
+            >/dev/null 2>&1 || log_warning "Failed to update admin_user password in database"
+        else
+          log_warning "Could not determine PostgreSQL pod name or current password; skipping in‑database password sync"
+        fi
         
         # Update the secret directly - use POSTGRES_ADMIN_PASSWORD if set, otherwise POSTGRES_PASSWORD
         ADMIN_PASS="${POSTGRES_ADMIN_PASSWORD:-$POSTGRES_PASSWORD}"
