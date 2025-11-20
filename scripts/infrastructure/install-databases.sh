@@ -96,7 +96,7 @@ primary:
 metrics:
   enabled: true
   serviceMonitor:
-    enabled: true
+    enabled: false  # Will be enabled conditionally if Prometheus Operator CRDs exist
     namespace: infra
   resources:
     requests:
