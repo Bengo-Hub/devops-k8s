@@ -24,8 +24,17 @@ ensure_namespace "argocd"
 
 # Install or upgrade Argo CD
 if kubectl -n argocd get deploy argocd-server >/dev/null 2>&1; then
-  log_info "Argo CD already installed. Upgrading if needed..."
-  kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  # Check if Argo CD is healthy
+  READY_REPLICAS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  DESIRED_REPLICAS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
+  
+  if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" -eq "$DESIRED_REPLICAS" ]; then
+    log_success "Argo CD already installed and healthy - skipping upgrade"
+    log_info "To force upgrade, set FORCE_UPGRADE=true or delete the deployment"
+  else
+    log_info "Argo CD exists but not healthy. Upgrading..."
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  fi
 else
   log_info "Installing Argo CD..."
   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
