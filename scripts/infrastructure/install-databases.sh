@@ -129,6 +129,37 @@ else
     log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
 fi
 
+# Ensure PriorityClass exists (required by PostgreSQL)
+log_info "Ensuring PriorityClass db-critical exists..."
+if ! kubectl get priorityclass db-critical >/dev/null 2>&1; then
+  log_info "Creating PriorityClass db-critical..."
+  kubectl apply -f "${MANIFESTS_DIR}/priorityclasses/db-critical.yaml" || {
+    log_warning "Failed to apply PriorityClass. Creating inline..."
+    kubectl create priorityclass db-critical \
+      --value=1000000000 \
+      --description="High priority for critical data services (PostgreSQL/Redis/RabbitMQ)" \
+      --dry-run=client -o yaml | kubectl apply -f -
+  }
+  log_success "PriorityClass db-critical created"
+else
+  log_success "PriorityClass db-critical already exists"
+fi
+
+# Check for stuck Helm operations before proceeding
+log_info "Checking for stuck Helm operations..."
+HELM_STATUS=$(helm -n "${NAMESPACE}" status postgresql 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+  log_warning "Detected stuck Helm operation (status: $HELM_STATUS). Cleaning up..."
+  
+  # Delete pending Helm secrets
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+  
+  log_success "Helm lock removed"
+  sleep 5
+fi
+
 # Install or upgrade PostgreSQL (idempotent)
 echo -e "${YELLOW}Installing/upgrading PostgreSQL...${NC}"
 echo -e "${BLUE}This may take 5-10 minutes...${NC}"
@@ -218,7 +249,23 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
         HELM_PG_EXIT=0
         POSTGRES_DEPLOYED=true
       else
-        echo -e "${YELLOW}PostgreSQL not healthy. Performing Helm upgrade...${NC}"
+        echo -e "${YELLOW}PostgreSQL not healthy. Checking for stuck Helm operation...${NC}"
+        
+        # Check for stuck Helm operation before upgrading
+        HELM_STATUS=$(helm -n "${NAMESPACE}" status postgresql 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+        if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+          echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
+          
+          # Delete pending Helm secrets
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+          
+          echo -e "${GREEN}✓ Helm lock removed. Proceeding with upgrade...${NC}"
+          sleep 5
+        fi
+        
+        echo -e "${YELLOW}Performing Helm upgrade...${NC}"
         helm upgrade postgresql bitnami/postgresql \
           --version 16.7.27 \
           -n "${NAMESPACE}" \
@@ -234,7 +281,23 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     HELM_PG_EXIT=0
     POSTGRES_DEPLOYED=true
   else
-    echo -e "${YELLOW}PostgreSQL exists but not ready; performing safe upgrade${NC}"
+    echo -e "${YELLOW}PostgreSQL exists but not ready; checking for stuck operation...${NC}"
+    
+    # Check for stuck Helm operation
+    HELM_STATUS=$(helm -n "${NAMESPACE}" status postgresql 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+    if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+      echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
+      
+      # Delete pending Helm secrets
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+      
+      echo -e "${GREEN}✓ Helm lock removed${NC}"
+      sleep 5
+    fi
+    
+    echo -e "${YELLOW}Performing safe upgrade...${NC}"
     helm upgrade postgresql bitnami/postgresql \
       --version 16.7.27 \
       -n "${NAMESPACE}" \
@@ -270,7 +333,23 @@ else
     
     # Check for failed/pending Helm release
     if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
-      echo -e "${YELLOW}Found existing Helm release - uninstalling (cleanup mode)...${NC}"
+      echo -e "${YELLOW}Found existing Helm release - checking for stuck operation...${NC}"
+      
+      # Check for stuck Helm operation before uninstalling
+      HELM_STATUS=$(helm -n "${NAMESPACE}" status postgresql 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
+      if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
+        echo -e "${YELLOW}⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up...${NC}"
+        
+        # Delete pending Helm secrets
+        kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+        kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+        kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=postgresql" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
+        
+        echo -e "${GREEN}✓ Helm lock removed${NC}"
+        sleep 5
+      fi
+      
+      echo -e "${YELLOW}Uninstalling Helm release (cleanup mode)...${NC}"
       helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
       sleep 5
     fi
@@ -341,12 +420,17 @@ else
   sleep 10
   
   # Check if PostgreSQL StatefulSet exists and has ready replicas
-  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
+  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values (StatefulSet might not exist)
+  PG_READY=${PG_READY:-0}
+  PG_REPLICAS=${PG_REPLICAS:-0}
   
   echo -e "${BLUE}PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready${NC}"
   
-  if [ "$PG_READY" -ge 1 ]; then
+  # Check if PG_READY is a valid number before comparison
+  if [[ "$PG_READY" =~ ^[0-9]+$ ]] && [ "$PG_READY" -ge 1 ]; then
     echo -e "${GREEN}✓ PostgreSQL is actually running! Continuing...${NC}"
     echo -e "${YELLOW}Note: Helm reported a timeout, but PostgreSQL is healthy${NC}"
   else
