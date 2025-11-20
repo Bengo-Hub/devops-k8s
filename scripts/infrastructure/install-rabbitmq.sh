@@ -6,7 +6,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../tools/common.sh"
+source "${SCRIPT_DIR}/../tools/common.sh" || {
+  echo "ERROR: Failed to source common.sh - required for logging and utilities"
+  exit 1
+}
 
 # Configuration
 NAMESPACE=${RABBITMQ_NAMESPACE:-infra}
@@ -99,6 +102,9 @@ RABBITMQ_HELM_ARGS+=(--set priorityClassName=db-critical)
 RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 
 # Common functions already sourced above
+
+log_info "Checking for orphaned RabbitMQ resources..."
+fix_orphaned_resources "rabbitmq" "${RABBITMQ_NAMESPACE}" || true
 
 set +e
 if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
