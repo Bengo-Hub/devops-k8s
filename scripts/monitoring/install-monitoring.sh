@@ -106,12 +106,18 @@ fix_stuck_helm() {
         PENDING_SECRETS=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-upgrade,name=${release_name}" -o name 2>/dev/null || true)
         if [ -n "$PENDING_SECRETS" ]; then
             echo -e "${YELLOW}Deleting pending operation secrets:${NC}"
-            echo "$PENDING_SECRETS" | xargs kubectl -n ${namespace} delete 2>/dev/null || true
+            echo "$PENDING_SECRETS" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
         fi
         
         # Also clean up pending-install and pending-rollback
-        kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-install,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n ${namespace} delete 2>/dev/null || true
-        kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-rollback,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n ${namespace} delete 2>/dev/null || true
+        PENDING_INSTALL=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-install,name=${release_name}" -o name 2>/dev/null || true)
+        if [ -n "$PENDING_INSTALL" ]; then
+            echo "$PENDING_INSTALL" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
+        fi
+        PENDING_ROLLBACK=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-rollback,name=${release_name}" -o name 2>/dev/null || true)
+        if [ -n "$PENDING_ROLLBACK" ]; then
+            echo "$PENDING_ROLLBACK" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
+        fi
 
         # Force delete problematic pods
         echo -e "${YELLOW}🗑️  Force deleting stuck pods...${NC}"
