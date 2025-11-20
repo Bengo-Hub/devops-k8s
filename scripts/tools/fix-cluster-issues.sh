@@ -111,13 +111,17 @@ if [ "$INGRESS_PODS" -gt 1 ] || [ "$INGRESS_CRASHING" -gt 0 ]; then
   log_info "Cleaning up duplicate/crashing ingress-nginx pods..."
   
   # Delete all non-running pods
-  kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null | \
-    xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+  NON_RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null || true)
+  if [ -n "$NON_RUNNING_PODS" ]; then
+    echo "$NON_RUNNING_PODS" | xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
+  fi
   
   # Delete orphaned replicasets
-  kubectl get replicasets -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | \
-    awk '{if ($2 != $3 || $2 != $4) print $1}' | \
-    xargs -r -I {} kubectl delete replicaset {} -n ingress-nginx --wait=false 2>/dev/null || true
+  ORPHANED_RS=$(kubectl get replicasets -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | \
+    awk '{if ($2 != $3 || $2 != $4) print $1}' || true)
+  if [ -n "$ORPHANED_RS" ]; then
+    echo "$ORPHANED_RS" | xargs -r -I {} kubectl delete replicaset {} -n ingress-nginx --wait=false 2>/dev/null || true
+  fi
   
   # Ensure deployment is scaled to 1 replica
   kubectl scale deployment ingress-nginx-controller -n ingress-nginx --replicas=1 2>/dev/null || true
