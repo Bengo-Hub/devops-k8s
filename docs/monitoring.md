@@ -29,10 +29,14 @@ From the devops-k8s repository root:
 
 ```bash
 # Run the automated installation script
-./scripts/install-monitoring.sh
+# Note: Script includes automatic stuck Helm operation fixes and ingress conflict resolution
+export MONITORING_NAMESPACE=infra
+export GRAFANA_DOMAIN=grafana.masterspace.co.ke
+./scripts/monitoring/install-monitoring.sh
 
 # With custom Grafana domain (optional)
-GRAFANA_DOMAIN=grafana.yourdomain.com ./scripts/install-monitoring.sh
+export MONITORING_NAMESPACE=infra
+GRAFANA_DOMAIN=grafana.yourdomain.com ./scripts/monitoring/install-monitoring.sh
 ```
 
 The script will:
