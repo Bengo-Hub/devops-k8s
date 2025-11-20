@@ -82,33 +82,29 @@ if [ -n "$MISSING_REGISTRY_SECRETS" ]; then
   log_info "Note: Set REGISTRY_USERNAME and REGISTRY_PASSWORD environment variables before running the command above"
 fi
 
-# 4. Check for VPA TLS secret
-log_info "Checking VPA TLS secret..."
+# 4. Check for VPA TLS issues
+log_info "Checking VPA admission controller..."
 if kubectl get deployment vpa-admission-controller -n kube-system >/dev/null 2>&1; then
-  if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
-    log_warning "VPA admission controller is installed but TLS secret is missing."
-    log_info "Creating VPA TLS secret placeholder with correct structure..."
-    kubectl create secret generic vpa-tls-certs \
-      --from-literal=serverCert.pem="dummy" \
-      --from-literal=serverKey.pem="dummy" \
-      -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
-    
-    log_info "Restarting VPA admission controller pod to trigger cert generation..."
-    kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
-    sleep 5
-  else
-    # Check if secret has correct structure
-    SECRET_KEYS=$(kubectl get secret vpa-tls-certs -n kube-system -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null || echo "")
-    if echo "$SECRET_KEYS" | grep -qv "serverCert.pem\|serverKey.pem"; then
-      log_warning "VPA TLS secret has incorrect structure. Fixing..."
-      kubectl delete secret vpa-tls-certs -n kube-system 2>/dev/null || true
-      kubectl create secret generic vpa-tls-certs \
-        --from-literal=serverCert.pem="dummy" \
-        --from-literal=serverKey.pem="dummy" \
-        -n kube-system --dry-run=client -o yaml | kubectl apply -f - || true
-      sleep 2
+  # Check if VPA has TLS volume mount
+  VPA_HAS_TLS_MOUNT=$(kubectl get deployment vpa-admission-controller -n kube-system -o jsonpath='{.spec.template.spec.containers[0].volumeMounts[?(@.name=="tls-certs")].name}' 2>/dev/null || echo "")
+  if [ -n "$VPA_HAS_TLS_MOUNT" ]; then
+    # Check if TLS secret exists and has correct structure
+    if ! kubectl get secret vpa-tls-certs -n kube-system >/dev/null 2>&1; then
+      log_warning "VPA admission controller has TLS mount but secret is missing. Removing TLS requirement..."
+      kubectl patch deployment vpa-admission-controller -n kube-system --type=json \
+        -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts"}, {"op": "remove", "path": "/spec/template/spec/volumes"}]' 2>/dev/null || true
       kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
       sleep 5
+    else
+      # Check secret structure
+      SECRET_KEYS=$(kubectl get secret vpa-tls-certs -n kube-system -o jsonpath='{.data}' 2>/dev/null | jq -r 'keys[]' 2>/dev/null || echo "")
+      if echo "$SECRET_KEYS" | grep -qv "serverCert.pem\|serverKey.pem"; then
+        log_warning "VPA TLS secret has incorrect structure. Removing TLS requirement..."
+        kubectl patch deployment vpa-admission-controller -n kube-system --type=json \
+          -p='[{"op": "remove", "path": "/spec/template/spec/containers/0/volumeMounts"}, {"op": "remove", "path": "/spec/template/spec/volumes"}]' 2>/dev/null || true
+        kubectl delete pod -n kube-system -l app=vpa-admission-controller --wait=false 2>/dev/null || true
+        sleep 5
+      fi
     fi
   fi
 fi
