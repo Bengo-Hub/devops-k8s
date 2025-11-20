@@ -100,7 +100,7 @@ metrics:
   enabled: true
   serviceMonitor:
     enabled: false  # Disabled by default - will be enabled if Prometheus Operator CRDs exist
-    namespace: "${MONITORING_NS}"
+    namespace: infra
   resources:
     requests:
       memory: "128Mi"
