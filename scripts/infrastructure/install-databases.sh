@@ -868,8 +868,8 @@ fix_orphaned_redis_resources() {
     sleep 3
   fi
 
-  # Fallback: ensure well-known legacy serviceaccount 'redis-master' is fixed even if jq selector misses it
-  if kubectl -n "${NAMESPACE}" get serviceaccount redis-master >/dev/null 2>&1; then
+  # Fallback: ensure well-known serviceaccount 'redis-master' is fixed even if jq selector misses it
+  if kubectl -n "${NAMESPACE}" get serviceaccount redis-master > /dev/null 2>&1; then
     SA_ANN_RELEASE=$(kubectl -n "${NAMESPACE}" get serviceaccount redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
     SA_ANN_NS=$(kubectl -n "${NAMESPACE}" get serviceaccount redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
     if [ -z "$SA_ANN_RELEASE" ] || [ -z "$SA_ANN_NS" ] || [ "$SA_ANN_RELEASE" != "redis" ] || [ "$SA_ANN_NS" != "${NAMESPACE}" ]; then
@@ -883,6 +883,26 @@ fix_orphaned_redis_resources() {
         log_warning "Failed to annotate serviceaccount redis-master, deleting it (Helm will recreate)..."
         kubectl -n "${NAMESPACE}" delete serviceaccount redis-master --wait=false 2>/dev/null || true
         log_success "✓ Deleted orphaned serviceaccount redis-master"
+      fi
+      sleep 2
+    fi
+  fi
+
+  # Fallback: ensure well-known service 'redis-metrics' is fixed even if jq selector misses it
+  if kubectl -n "${NAMESPACE}" get service redis-metrics > /dev/null 2>&1; then
+    SVC_ANN_RELEASE_METRICS=$(kubectl -n "${NAMESPACE}" get service redis-metrics -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+    SVC_ANN_NS_METRICS=$(kubectl -n "${NAMESPACE}" get service redis-metrics -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+    if [ -z "$SVC_ANN_RELEASE_METRICS" ] || [ -z "$SVC_ANN_NS_METRICS" ] || [ "$SVC_ANN_RELEASE_METRICS" != "redis" ] || [ "$SVC_ANN_NS_METRICS" != "${NAMESPACE}" ]; then
+      log_warning "Service 'redis-metrics' has invalid or missing Helm ownership metadata - repairing..."
+      if kubectl -n "${NAMESPACE}" annotate service redis-metrics \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated service redis-metrics with Helm ownership"
+      else
+        log_warning "Failed to annotate service redis-metrics, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete service redis-metrics --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned service redis-metrics"
       fi
       sleep 2
     fi
