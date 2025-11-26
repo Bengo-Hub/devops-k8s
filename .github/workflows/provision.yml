@@ -542,6 +542,10 @@ jobs:
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
           DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
+          # Docker registry credentials for custom PostgreSQL image build
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || secrets.DOCKER_USERNAME || secrets.DOCKERHUB_USERNAME || 'codevertex' }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || secrets.DOCKER_PASSWORD || secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PASSWORD }}
+          REGISTRY_SERVER: docker.io
         run: |
           echo "::group::Installing Shared Databases (PostgreSQL & Redis in ${DB_NAMESPACE} namespace)"
           echo "Installing shared infrastructure databases..."
