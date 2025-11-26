@@ -34,6 +34,7 @@ spec:
         primary:
           ## Create admin user with superuser privileges for managing all service databases
           ## This allows services to create their own databases using this admin user
+          ## Enable pgvector extension for all databases
           initdb:
             scripts:
               create-admin-user.sql: |
@@ -46,6 +47,20 @@ spec:
                   END IF;
                 END
                 $$;
+              enable-pgvector.sql: |
+                -- Enable pgvector extension in postgres database
+                -- Services can enable it in their own databases during initialization
+                CREATE EXTENSION IF NOT EXISTS vector;
+                
+                -- Grant usage on vector extension to admin_user
+                GRANT USAGE ON SCHEMA public TO admin_user;
+          ## Custom PostgreSQL image with pgvector extension
+          ## Uses custom image built via GitHub Actions workflow
+          image:
+            registry: docker.io
+            repository: codevertex/postgresql-pgvector
+            tag: latest
+            pullPolicy: Always
           resources:
             requests:
               memory: "512Mi"

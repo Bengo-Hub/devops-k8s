@@ -36,6 +36,7 @@ Quick Links
 
 - **Infrastructure**
   - **database setup (PostgreSQL + Redis):** [docs/database-setup.md](docs/database-setup.md)
+  - **Data Analytics platform setup (Superset + pgvector):** [docs/data-analytics-setup.md](docs/data-analytics-setup.md)
   - certificates, domains, and ingress: [docs/domains-gateway.md](docs/domains-gateway.md)
   - image registry: See [docs/onboarding.md](docs/onboarding.md)
 

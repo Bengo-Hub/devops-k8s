@@ -35,6 +35,7 @@ Documentation Index
 
 **Infrastructure**
 - **Database setup (PostgreSQL + Redis):** database-setup.md
+- **Data Analytics platform setup (Superset + pgvector):** data-analytics-setup.md
 - Certificates, domains, and ingress: domains-gateway.md
 - Image registry: See onboarding.md
 

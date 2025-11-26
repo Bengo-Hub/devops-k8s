@@ -112,9 +112,28 @@ RABBITMQ_HELM_ARGS+=(--set metrics.enabled=true)
 # Use official RabbitMQ image instead of deprecated Bitnami Docker Hub images
 # We pin to the 4.2.x series (Ubuntu-based image from the official RabbitMQ library image)
 #   Docs / Dockerfile: https://github.com/docker-library/rabbitmq/tree/master/4.2/ubuntu
-RABBITMQ_HELM_ARGS+=(--set image.registry=docker.io)
-RABBITMQ_HELM_ARGS+=(--set image.repository=rabbitmq)
-RABBITMQ_HELM_ARGS+=(--set image.tag=4.2.1)
+RABBITMQ_IMAGE_REGISTRY="docker.io"
+RABBITMQ_IMAGE_REPO="rabbitmq"
+RABBITMQ_IMAGE_TAG="4.2.1"
+RABBITMQ_IMAGE_FULL="${RABBITMQ_IMAGE_REGISTRY}/${RABBITMQ_IMAGE_REPO}:${RABBITMQ_IMAGE_TAG}"
+
+# Verify RabbitMQ image exists if Docker is available
+if command -v docker &> /dev/null; then
+  log_info "Verifying RabbitMQ image exists: ${RABBITMQ_IMAGE_FULL}"
+  if docker manifest inspect "${RABBITMQ_IMAGE_FULL}" >/dev/null 2>&1; then
+    log_success "RabbitMQ image verified: ${RABBITMQ_IMAGE_FULL}"
+  else
+    log_warning "RabbitMQ image not found: ${RABBITMQ_IMAGE_FULL}"
+    log_warning "Falling back to latest tag"
+    RABBITMQ_IMAGE_TAG="latest"
+    RABBITMQ_IMAGE_FULL="${RABBITMQ_IMAGE_REGISTRY}/${RABBITMQ_IMAGE_REPO}:${RABBITMQ_IMAGE_TAG}"
+    log_info "Using: ${RABBITMQ_IMAGE_FULL}"
+  fi
+fi
+
+RABBITMQ_HELM_ARGS+=(--set image.registry="${RABBITMQ_IMAGE_REGISTRY}")
+RABBITMQ_HELM_ARGS+=(--set image.repository="${RABBITMQ_IMAGE_REPO}")
+RABBITMQ_HELM_ARGS+=(--set image.tag="${RABBITMQ_IMAGE_TAG}")
 
 # Common functions already sourced above
 

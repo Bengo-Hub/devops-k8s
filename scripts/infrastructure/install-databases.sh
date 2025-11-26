@@ -55,7 +55,28 @@ fips:
   openssl: false
 
 ## Primary PostgreSQL configuration
-primary:
+        primary:
+  ## Enable pgvector extension initialization scripts
+  initdb:
+    scripts:
+      create-admin-user.sql: |
+        -- Ensure admin_user has superuser privileges for managing all service databases
+        -- The user is created by the chart's auth.username setting, but we ensure proper privileges
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT FROM pg_user WHERE usename = 'admin_user') THEN
+            ALTER USER admin_user WITH SUPERUSER CREATEDB;
+          END IF;
+        END
+        $$;
+      enable-pgvector.sql: |
+        -- Enable pgvector extension in postgres database
+        -- Services can enable it in their own databases during initialization
+        CREATE EXTENSION IF NOT EXISTS vector;
+        
+        -- Grant usage on vector extension to admin_user
+        GRANT USAGE ON SCHEMA public TO admin_user;
+  
   resources:
     requests:
       memory: "512Mi"
@@ -294,6 +315,115 @@ log_info "Checking for orphaned resources..."
 fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
 
 if [[ "$ONLY_COMPONENT" == "all" || "$ONLY_COMPONENT" == "postgres" ]]; then
+# Build and push custom PostgreSQL image with pgvector extension
+log_section "Building Custom PostgreSQL Image with pgvector"
+DOCKERFILE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/docker/postgresql-pgvector"
+CUSTOM_IMAGE_REGISTRY=${REGISTRY_SERVER:-docker.io}
+CUSTOM_IMAGE_USERNAME=${REGISTRY_USERNAME:-${DOCKER_USERNAME:-codevertex}}
+CUSTOM_IMAGE_NAME="${CUSTOM_IMAGE_USERNAME}/postgresql-pgvector"
+CUSTOM_IMAGE_TAG="latest"
+CUSTOM_IMAGE_FULL="${CUSTOM_IMAGE_REGISTRY}/${CUSTOM_IMAGE_NAME}:${CUSTOM_IMAGE_TAG}"
+
+# Check if Docker is available
+if command -v docker &> /dev/null; then
+  log_info "Docker is available - checking custom PostgreSQL image..."
+  
+  # Check if Dockerfile exists
+  if [ -f "${DOCKERFILE_DIR}/Dockerfile" ]; then
+    log_info "Dockerfile found at: ${DOCKERFILE_DIR}/Dockerfile"
+    
+    # Calculate Dockerfile checksum
+    DOCKERFILE_CHECKSUM=$(sha256sum "${DOCKERFILE_DIR}/Dockerfile" 2>/dev/null | cut -d' ' -f1 || md5sum "${DOCKERFILE_DIR}/Dockerfile" 2>/dev/null | cut -d' ' -f1 || echo "")
+    CHECKSUM_FILE="/tmp/postgresql-pgvector-dockerfile-checksum"
+    
+    # Check if image exists remotely (if we have registry credentials)
+    IMAGE_EXISTS_REMOTE=false
+    IMAGE_NEEDS_BUILD=true
+    
+    if [[ -n "${REGISTRY_USERNAME:-}" && -n "${REGISTRY_PASSWORD:-}" ]]; then
+      log_info "Checking if custom PostgreSQL image exists remotely..."
+      if docker pull "${CUSTOM_IMAGE_FULL}" >/dev/null 2>&1; then
+        IMAGE_EXISTS_REMOTE=true
+        log_success "Custom PostgreSQL image found remotely: ${CUSTOM_IMAGE_FULL}"
+        
+        # Check if Dockerfile has changed
+        if [ -f "${CHECKSUM_FILE}" ]; then
+          OLD_CHECKSUM=$(cat "${CHECKSUM_FILE}" 2>/dev/null || echo "")
+          if [ "${OLD_CHECKSUM}" == "${DOCKERFILE_CHECKSUM}" ] && [ -n "${DOCKERFILE_CHECKSUM}" ]; then
+            log_info "Dockerfile unchanged - using existing image"
+            IMAGE_NEEDS_BUILD=false
+          else
+            log_info "Dockerfile changed - will rebuild image"
+            IMAGE_NEEDS_BUILD=true
+          fi
+        else
+          log_info "No previous checksum found - will check/build image"
+        fi
+      else
+        log_info "Custom PostgreSQL image not found remotely - will build"
+        IMAGE_NEEDS_BUILD=true
+      fi
+    else
+      log_info "Registry credentials not available - will attempt local build only"
+      # Check if image exists locally
+      if docker images "${CUSTOM_IMAGE_FULL}" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | grep -q "${CUSTOM_IMAGE_NAME}:${CUSTOM_IMAGE_TAG}"; then
+        log_info "Custom PostgreSQL image found locally: ${CUSTOM_IMAGE_FULL}"
+        IMAGE_NEEDS_BUILD=false
+      else
+        log_info "Custom PostgreSQL image not found locally - will build"
+        IMAGE_NEEDS_BUILD=true
+      fi
+    fi
+    
+    # Build image if needed
+    if [ "${IMAGE_NEEDS_BUILD}" == "true" ]; then
+      log_info "Building custom PostgreSQL image with pgvector extension..."
+      log_info "Image: ${CUSTOM_IMAGE_FULL}"
+      
+      if [[ -n "${REGISTRY_USERNAME:-}" && -n "${REGISTRY_PASSWORD:-}" ]]; then
+        log_info "Logging in to Docker registry..."
+        echo "${REGISTRY_PASSWORD}" | docker login "${CUSTOM_IMAGE_REGISTRY}" -u "${REGISTRY_USERNAME}" --password-stdin >/dev/null 2>&1 || {
+          log_warning "Failed to login to Docker registry - continuing with local build only"
+        }
+      fi
+      
+      if docker build -t "${CUSTOM_IMAGE_FULL}" "${DOCKERFILE_DIR}" >/tmp/postgresql-pgvector-build.log 2>&1; then
+        log_success "Custom PostgreSQL image built successfully"
+        
+        # Save checksum
+        echo "${DOCKERFILE_CHECKSUM}" > "${CHECKSUM_FILE}" 2>/dev/null || true
+        
+        # Push to registry if credentials are available
+        if [[ -n "${REGISTRY_USERNAME:-}" && -n "${REGISTRY_PASSWORD:-}" ]] && [[ "${IMAGE_EXISTS_REMOTE}" != "true" ]]; then
+          log_info "Pushing custom PostgreSQL image to registry..."
+          if docker push "${CUSTOM_IMAGE_FULL}" >/tmp/postgresql-pgvector-push.log 2>&1; then
+            log_success "Custom PostgreSQL image pushed to registry: ${CUSTOM_IMAGE_FULL}"
+          else
+            log_warning "Failed to push custom PostgreSQL image to registry"
+            log_warning "Image built locally but not pushed. Check /tmp/postgresql-pgvector-push.log for details"
+          fi
+        else
+          log_info "Skipping push (already exists remotely or no credentials)"
+        fi
+      else
+        log_warning "Failed to build custom PostgreSQL image"
+        log_warning "Falling back to Bitnami PostgreSQL with pgvector init scripts"
+        log_warning "Check /tmp/postgresql-pgvector-build.log for build errors"
+        CUSTOM_IMAGE_FULL=""
+      fi
+    else
+      log_success "Using existing custom PostgreSQL image: ${CUSTOM_IMAGE_FULL}"
+    fi
+  else
+    log_warning "Dockerfile not found at: ${DOCKERFILE_DIR}/Dockerfile"
+    log_info "Will use Bitnami PostgreSQL with pgvector init scripts instead"
+    CUSTOM_IMAGE_FULL=""
+  fi
+else
+  log_info "Docker not available - will use Bitnami PostgreSQL with pgvector init scripts"
+  CUSTOM_IMAGE_FULL=""
+fi
+
 # Install or upgrade PostgreSQL (idempotent)
 log_section "Installing/upgrading PostgreSQL"
 log_info "This may take 5-10 minutes..."
@@ -339,8 +469,17 @@ PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD
     exit 1
   fi
 
-  # Use stable Bitnami 'latest' tags to avoid NotFound errors on rotated versioned tags
-  PG_HELM_ARGS+=(--set image.tag=latest)
+  # Use custom image if built successfully, otherwise use Bitnami latest
+  if [[ -n "${CUSTOM_IMAGE_FULL:-}" ]]; then
+    log_info "Using custom PostgreSQL image with pgvector: ${CUSTOM_IMAGE_FULL}"
+    PG_HELM_ARGS+=(--set image.registry="${CUSTOM_IMAGE_REGISTRY}")
+    PG_HELM_ARGS+=(--set image.repository="${CUSTOM_IMAGE_NAME}")
+    PG_HELM_ARGS+=(--set image.tag="${CUSTOM_IMAGE_TAG}")
+  else
+    log_info "Using Bitnami PostgreSQL with pgvector init scripts"
+    # Use stable Bitnami 'latest' tags to avoid NotFound errors on rotated versioned tags
+    PG_HELM_ARGS+=(--set image.tag=latest)
+  fi
   PG_HELM_ARGS+=(--set metrics.image.tag=latest)
 
 set +e
