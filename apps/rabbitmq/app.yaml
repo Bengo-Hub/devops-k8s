@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: rabbitmq
-    targetRevision: 14.8.0
+    targetRevision: 14.8.1
     helm:
       values: |
         ## Bitnami RabbitMQ Helm Chart Values

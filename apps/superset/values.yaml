@@ -1,0 +1,40 @@
+replicaCount: 1
+
+image:
+  repository: apache/superset
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8088
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  hosts:
+    - host: superset.bengobox.local
+      paths:
+        - /
+
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+supersetNode:
+  connections:
+    db_host: postgresql.default.svc.cluster.local
+    db_port: 5432
+    db_user: postgres
+    db_pass: postgres
+    db_name: superset
+    redis_host: redis-master.default.svc.cluster.local
+    redis_port: 6379
+
+configOverrides:
+  enable_oauth: |
+    from flask_appbuilder.security.manager import AUTH_DB
+    AUTH_TYPE = AUTH_DB
