@@ -2,8 +2,8 @@ FROM bitnami/postgresql:latest
 
 USER root
 
-# Install build dependencies
-RUN install_packages git make gcc postgresql-server-dev-all
+# Install build dependencies (Bitnami uses tdnf package manager with different naming)
+RUN install_packages git make gcc postgresql-devel
 
 # Clone and install pgvector
 RUN git clone --branch v0.7.0 https://github.com/pgvector/pgvector.git \
@@ -13,7 +13,7 @@ RUN git clone --branch v0.7.0 https://github.com/pgvector/pgvector.git \
 
 # Cleanup
 RUN rm -rf pgvector \
-    && apt-get remove -y git make gcc postgresql-server-dev-all \
-    && apt-get autoremove -y
+    && tdnf remove -y git make gcc postgresql-devel \
+    && tdnf clean all
 
 USER 1001
