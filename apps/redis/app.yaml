@@ -22,7 +22,7 @@ spec:
         ## Master configuration
         master:
           image:
-            tag: latest
+            tag: "7"
           resources:
             requests:
               memory: "256Mi"

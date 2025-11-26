@@ -479,10 +479,10 @@ PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD
     log_info "Using Bitnami PostgreSQL with pgvector init scripts"
   fi
   
-  # ALWAYS use latest tags to avoid NotFound errors on rotated versioned tags
-  # This applies to both custom and Bitnami images
-  PG_HELM_ARGS+=(--set image.tag=latest)
-  PG_HELM_ARGS+=(--set metrics.image.tag=latest)
+  # Use stable major version tags instead of latest (more predictable than latest, stable than patch versions)
+  # PostgreSQL 16 is the current stable LTS version
+  PG_HELM_ARGS+=(--set image.tag=16)
+  PG_HELM_ARGS+=(--set metrics.image.tag=0.15)  # postgres-exporter stable version
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
@@ -971,9 +971,9 @@ REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
 # Always fix orphaned Redis resources before any Helm operation (install or upgrade)
 fix_orphaned_redis_resources
 
-# Use stable Bitnami 'latest' tags to avoid NotFound errors on rotated versioned tags
-REDIS_HELM_ARGS+=(--set image.tag=latest)
-REDIS_HELM_ARGS+=(--set metrics.image.tag=latest)
+# Use stable major version tags (Redis 7 is current stable)
+REDIS_HELM_ARGS+=(--set image.tag=7)
+REDIS_HELM_ARGS+=(--set metrics.image.tag=1.58)  # redis-exporter stable version
 
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
