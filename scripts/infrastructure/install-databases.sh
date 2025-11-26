@@ -477,9 +477,11 @@ PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD
     PG_HELM_ARGS+=(--set image.tag="${CUSTOM_IMAGE_TAG}")
   else
     log_info "Using Bitnami PostgreSQL with pgvector init scripts"
-    # Use stable Bitnami 'latest' tags to avoid NotFound errors on rotated versioned tags
-    PG_HELM_ARGS+=(--set image.tag=latest)
   fi
+  
+  # ALWAYS use latest tags to avoid NotFound errors on rotated versioned tags
+  # This applies to both custom and Bitnami images
+  PG_HELM_ARGS+=(--set image.tag=latest)
   PG_HELM_ARGS+=(--set metrics.image.tag=latest)
 
 set +e
