@@ -55,7 +55,7 @@ fips:
   openssl: false
 
 ## Primary PostgreSQL configuration
-        primary:
+primary:
   ## Enable pgvector extension initialization scripts
   initdb:
     scripts:
