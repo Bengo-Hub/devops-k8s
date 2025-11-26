@@ -18,21 +18,26 @@ spec:
             username: admin
             firstname: Admin
             lastname: User
-            email: admin@bengobox.com
-            password: admin
+            email: admin@codevertexitsolutions.com
+            password: changeme
         postgresql:
           enabled: false
         redis:
           enabled: false
         supersetNode:
           connections:
-            db_host: postgresql.default.svc.cluster.local
+            db_host: postgresql.infra.svc.cluster.local
             db_port: 5432
-            db_user: postgres
-            db_pass: postgres
+            db_user: admin_user
+            db_pass: changeme
             db_name: superset
-            redis_host: redis-master.default.svc.cluster.local
+            redis_host: redis-master.infra.svc.cluster.local
             redis_port: 6379
+        # Note: Passwords should be managed via Kubernetes secrets
+        # Create a secret named 'superset-secrets' with keys:
+        # - SUPERSET_ADMIN_PASSWORD
+        # - POSTGRES_PASSWORD
+        # Then reference them in the deployment via envFrom
   destination:
     server: https://kubernetes.default.svc
     namespace: default
