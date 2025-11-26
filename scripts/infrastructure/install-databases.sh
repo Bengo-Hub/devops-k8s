@@ -802,6 +802,26 @@ fix_orphaned_redis_resources() {
     fi
   fi
 
+  # Fallback: ensure well-known service 'redis-master' is fixed even if jq selector misses it
+  if kubectl -n "${NAMESPACE}" get service redis-master > /dev/null 2>&1; then
+    SVC_ANN_RELEASE_MASTER=$(kubectl -n "${NAMESPACE}" get service redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+    SVC_ANN_NS_MASTER=$(kubectl -n "${NAMESPACE}" get service redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+    if [ -z "$SVC_ANN_RELEASE_MASTER" ] || [ -z "$SVC_ANN_NS_MASTER" ] || [ "$SVC_ANN_RELEASE_MASTER" != "redis" ] || [ "$SVC_ANN_NS_MASTER" != "${NAMESPACE}" ]; then
+      log_warning "Service 'redis-master' has invalid or missing Helm ownership metadata - repairing..."
+      if kubectl -n "${NAMESPACE}" annotate service redis-master \
+        meta.helm.sh/release-name=redis \
+        meta.helm.sh/release-namespace="${NAMESPACE}" \
+        --overwrite 2>/dev/null; then
+        log_success "✓ Annotated service redis-master with Helm ownership"
+      else
+        log_warning "Failed to annotate service redis-master, deleting it (Helm will recreate)..."
+        kubectl -n "${NAMESPACE}" delete service redis-master --wait=false 2>/dev/null || true
+        log_success "✓ Deleted orphaned service redis-master"
+      fi
+      sleep 2
+    fi
+  fi
+
   # Check for orphaned configmaps
   ORPHANED_REDIS_CONFIGMAPS=$(kubectl -n "${NAMESPACE}" get configmap -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
     jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
