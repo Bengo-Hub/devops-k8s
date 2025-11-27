@@ -7,6 +7,10 @@ global:
     password: ""  # Leave empty, will be auto-generated
   imagePullSecrets:
     - name: registry-credentials
+  image:
+    registry: docker.io
+    repository: bitnami/redis
+    tag: 7.4.1-debian-12-r0
 
 ## Architecture
 architecture: standalone  # Use 'replication' for HA with replicas
