@@ -475,14 +475,15 @@ PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD
     PG_HELM_ARGS+=(--set image.registry="${CUSTOM_IMAGE_REGISTRY}")
     PG_HELM_ARGS+=(--set image.repository="${CUSTOM_IMAGE_NAME}")
     PG_HELM_ARGS+=(--set image.tag="${CUSTOM_IMAGE_TAG}")
+    # Enable custom image usage (bypass Bitnami security check for non-standard images)
+    PG_HELM_ARGS+=(--set global.security.allowInsecureImages=true)
   else
     log_info "Using Bitnami PostgreSQL with pgvector init scripts"
+    # Use stable major version tags instead of latest (more predictable than latest, stable than patch versions)
+    # PostgreSQL 16 is the current stable LTS version
+    PG_HELM_ARGS+=(--set image.tag="16")
+    PG_HELM_ARGS+=(--set metrics.image.tag="0.15")  # postgres-exporter stable version
   fi
-  
-  # Use stable major version tags instead of latest (more predictable than latest, stable than patch versions)
-  # PostgreSQL 16 is the current stable LTS version
-  PG_HELM_ARGS+=(--set image.tag=16)
-  PG_HELM_ARGS+=(--set metrics.image.tag=0.15)  # postgres-exporter stable version
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
