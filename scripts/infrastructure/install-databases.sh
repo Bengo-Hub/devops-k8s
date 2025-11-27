@@ -586,145 +586,6 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     HELM_PG_EXIT=${PIPESTATUS[0]}
     POSTGRES_DEPLOYED=true
   fi
-  
-  # POSTGRES_DEPLOYED is set to true above if already installed/healthy
-  # If not set, it means we need to install (will be checked below)
-
-else
-  log_info "PostgreSQL not found; installing fresh"
-  
-  # Only clean up orphaned resources if cleanup mode is active
-  if is_cleanup_mode; then
-    log_info "Cleanup mode active - checking for orphaned PostgreSQL resources..."
-    
-    # Check for StatefulSets first (these recreate resources)
-    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
-    if [ -n "$STATEFULSETS" ]; then
-      log_warning "Found PostgreSQL StatefulSet - deleting (cleanup mode)..."
-      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-    fi
-    
-    # Check for failed/pending Helm release
-    if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
-      log_warning "Found existing Helm release - checking for stuck operation..."
-      
-      # Fix stuck Helm operation before uninstalling
-      fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
-      
-      log_warning "Uninstalling Helm release (cleanup mode)..."
-      helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
-      sleep 5
-    fi
-    
-    # Clean up orphaned resources
-    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
-    if [ -n "$ORPHANED_RESOURCES" ]; then
-      log_warning "Cleaning up orphaned resources (cleanup mode)..."
-      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-      sleep 10
-    fi
-  else
-    log_info "Cleanup mode inactive - checking for existing resources to update..."
-      
-      # Fix orphaned resources before attempting Helm operations
-      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-      
-    # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
-    if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
-      log_warning "PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade..."
-      helm upgrade postgresql bitnami/postgresql \
-        --version 16.7.27 \
-        -n "${NAMESPACE}" \
-        "${PG_HELM_ARGS[@]}" \
-        --timeout=10m \
-        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-      HELM_PG_EXIT=${PIPESTATUS[0]}
-      set -e
-      if [ $HELM_PG_EXIT -eq 0 ]; then
-        log_success "PostgreSQL upgraded"
-        POSTGRES_DEPLOYED=true
-      else
-        log_warning "PostgreSQL upgrade failed (release missing). Falling back to fresh install..."
-        POSTGRES_DEPLOYED=false
-        HELM_PG_EXIT=1
-      fi
-    fi
-  fi
-  
-  # Install PostgreSQL if cleanup mode or no existing resources
-  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
-      # Ensure resources are fixed before fresh install
-      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-      
-    log_info "Installing PostgreSQL..."
-    helm install postgresql bitnami/postgresql \
-      --version 16.7.27 \
-      -n "${NAMESPACE}" \
-      "${PG_HELM_ARGS[@]}" \
-      --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-    HELM_PG_EXIT=${PIPESTATUS[0]}
-    if [ $HELM_PG_EXIT -eq 0 ]; then
-      POSTGRES_DEPLOYED=true
-    fi
-  fi
-fi
-set -e
-
-if [ $HELM_PG_EXIT -eq 0 ]; then
-  log_success "PostgreSQL ready"
-else
-  log_warning "PostgreSQL Helm operation reported exit code $HELM_PG_EXIT"
-  log_warning "Checking actual PostgreSQL status..."
-  
-  # Wait a bit for pods to update
-  sleep 10
-  
-  # Check if PostgreSQL StatefulSet exists and has ready replicas
-  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
-  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
-  
-  # Handle empty values (StatefulSet might not exist)
-  PG_READY=${PG_READY:-0}
-  PG_REPLICAS=${PG_REPLICAS:-0}
-  
-  log_info "PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready"
-  
-  # Check if PG_READY is a valid number before comparison
-  if [[ "$PG_READY" =~ ^[0-9]+$ ]] && [ "$PG_READY" -ge 1 ]; then
-    log_success "PostgreSQL is actually running! Continuing..."
-    log_warning "Note: Helm reported a timeout, but PostgreSQL is healthy"
-  else
-    log_error "PostgreSQL installation/upgrade failed"
-    log_warning "=== Helm output (last 50 lines) ==="
-    tail -50 /tmp/helm-postgresql-install.log 2>/dev/null || true
-    log_warning "=== Pod status ==="
-    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-    log_warning "=== Pod events ==="
-    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i postgresql | tail -10 || true
-    log_warning "=== PVC status ==="
-    kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-    
-    # Check for common issues
-    log_warning "=== Diagnosing issues ==="
-    PENDING_PVCS=$(kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
-    if [ "$PENDING_PVCS" -gt 0 ]; then
-      log_error "Found ${PENDING_PVCS} Pending PVCs - storage may not be available"
-    fi
-    
-    exit 1
-    fi
-  fi
-fi
-
-# Check for stuck Helm operations before proceeding with Redis
-log_info "Checking for stuck Redis Helm operations..."
-fix_stuck_helm_operation "redis" "${NAMESPACE}" || true
-
-# Function to fix orphaned Redis resources
-fix_orphaned_redis_resources() {
-  log_info "Checking for orphaned Redis resources..."
-  
   # Use MONITORING_NS from script scope (defined at top)
   ORPHANED_REDIS_SERVICEMONITORS=$(kubectl get servicemonitor -n "${MONITORING_NS}" -o json 2>/dev/null | \
     jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name == "redis") and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
@@ -1052,6 +913,53 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
   fi
 else
   log_info "Redis not found; installing fresh"
+  
+  # Only clean up orphaned resources if cleanup mode is active
+  if is_cleanup_mode; then
+    log_info "Cleanup mode active - checking for orphaned Redis resources..."
+    
+    # Check for StatefulSets first (these recreate resources)
+    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o name 2>/dev/null || true)
+    # Also check for redis-master specifically
+    if kubectl get statefulset redis-master -n "${NAMESPACE}" >/dev/null 2>&1; then
+      STATEFULSETS="${STATEFULSETS} statefulset/redis-master"
+    fi
+    
+    if [ -n "$STATEFULSETS" ]; then
+      log_warning "Found Redis StatefulSet - deleting (cleanup mode)..."
+      # Force delete to ensure PVCs are released
+      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --wait=true --grace-period=0 --force 2>/dev/null || true
+      kubectl delete statefulset redis-master -n "${NAMESPACE}" --wait=true --grace-period=0 --force 2>/dev/null || true
+      kubectl delete statefulset redis-replicas -n "${NAMESPACE}" --wait=true --grace-period=0 --force 2>/dev/null || true
+    fi
+    
+    # Delete PVCs to ensure fresh data
+    log_warning "Deleting Redis PVCs (cleanup mode)..."
+    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --wait=true --grace-period=0 --force 2>/dev/null || true
+    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/instance=redis --wait=true --grace-period=0 --force 2>/dev/null || true
+    
+    # Check for failed/pending Helm release
+    if helm -n "${NAMESPACE}" list -q | grep -q "^redis$" 2>/dev/null; then
+      log_warning "Found existing Helm release - checking for stuck operation..."
+      
+      # Fix stuck Helm operation before uninstalling
+      fix_stuck_helm_operation "redis" "${NAMESPACE}"
+      
+      log_warning "Uninstalling Helm release (cleanup mode)..."
+      helm uninstall redis -n "${NAMESPACE}" --wait 2>/dev/null || true
+      sleep 5
+    fi
+    
+    # Clean up orphaned resources
+    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=redis 2>/dev/null | grep -v NAME || true)
+    if [ -n "$ORPHANED_RESOURCES" ]; then
+      log_warning "Cleaning up orphaned resources (cleanup mode)..."
+      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --wait=true --grace-period=0 --force 2>/dev/null || true
+      sleep 10
+    fi
+  else
+    log_info "Cleanup mode inactive - checking for existing resources to update..."
+  fi
   helm install redis bitnami/redis \
     -n "${NAMESPACE}" \
     "${REDIS_HELM_ARGS[@]}" \
