@@ -1,17 +1,3 @@
-## Bitnami PostgreSQL Helm Chart Values
-## For ERP In-Cluster Database
-
-## Global settings
-global:
-  postgresql:
-    auth:
-      postgresPassword: "" # Leave empty, will be auto-generated
-      username: "erp_user"
-      password: ""         # Leave empty, will be auto-generated
-      database: "bengo_erp"
-  # FIPS compliance settings (required for newer chart versions)
-  defaultFips: false
-  imagePullSecrets:
     - name: registry-credentials
   image:
     registry: docker.io
