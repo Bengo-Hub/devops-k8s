@@ -11,6 +11,8 @@ global:
       database: "bengo_erp"
   # FIPS compliance settings (required for newer chart versions)
   defaultFips: false
+  imagePullSecrets:
+    - name: registry-credentials
 
 # FIPS OpenSSL configuration
 fips:
