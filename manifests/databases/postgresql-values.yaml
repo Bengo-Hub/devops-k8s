@@ -13,6 +13,10 @@ global:
   defaultFips: false
   imagePullSecrets:
     - name: registry-credentials
+  image:
+    registry: docker.io
+    repository: codevertex/postgresql-pgvector
+    tag: latest
 
 # FIPS OpenSSL configuration
 fips:
