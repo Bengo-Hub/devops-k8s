@@ -586,215 +586,146 @@ if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
     HELM_PG_EXIT=${PIPESTATUS[0]}
     POSTGRES_DEPLOYED=true
   fi
-  # Use MONITORING_NS from script scope (defined at top)
-  ORPHANED_REDIS_SERVICEMONITORS=$(kubectl get servicemonitor -n "${MONITORING_NS}" -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name == "redis") and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
   
-  # Also check in infra namespace if different from monitoring namespace
-  if [ "${MONITORING_NS}" != "${NAMESPACE}" ]; then
-    ORPHANED_REDIS_SERVICEMONITORS_INFRA=$(kubectl get servicemonitor -n "${NAMESPACE}" -o json 2>/dev/null | \
-      jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name == "redis") and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
-    if [ -n "$ORPHANED_REDIS_SERVICEMONITORS_INFRA" ]; then
-      ORPHANED_REDIS_SERVICEMONITORS="${ORPHANED_REDIS_SERVICEMONITORS} ${ORPHANED_REDIS_SERVICEMONITORS_INFRA}"
-    fi
-  fi
+  # POSTGRES_DEPLOYED is set to true above if already installed/healthy
+  # If not set, it means we need to install (will be checked below)
 
-  if [ -n "$ORPHANED_REDIS_SERVICEMONITORS" ]; then
-    log_warning "Found orphaned Redis ServiceMonitors without Helm ownership: $ORPHANED_REDIS_SERVICEMONITORS"
-    for sm in $ORPHANED_REDIS_SERVICEMONITORS; do
-      log_info "Fixing orphaned ServiceMonitor: $sm"
-      # Determine which namespace the ServiceMonitor is in
-      SM_NS="${MONITORING_NS}"
-      if ! kubectl get servicemonitor "$sm" -n "${MONITORING_NS}" >/dev/null 2>&1; then
-        SM_NS="${NAMESPACE}"
-      fi
+else
+  log_info "PostgreSQL not found; installing fresh"
+  
+  # Only clean up orphaned resources if cleanup mode is active
+  if is_cleanup_mode; then
+    log_info "Cleanup mode active - checking for orphaned PostgreSQL resources..."
+    
+    # Check for StatefulSets first (these recreate resources)
+    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
+    if [ -n "$STATEFULSETS" ]; then
+      log_warning "Found PostgreSQL StatefulSet - deleting (cleanup mode)..."
+      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+    fi
+    
+    # Delete PVCs to ensure fresh data
+    log_warning "Deleting PostgreSQL PVCs (cleanup mode)..."
+    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/instance=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+    
+    # Check for failed/pending Helm release
+    if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
+      log_warning "Found existing Helm release - checking for stuck operation..."
       
-      # Try to add Helm ownership annotations
-      if kubectl -n "${SM_NS}" annotate servicemonitor "$sm" \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated ServiceMonitor $sm with Helm ownership"
+      # Fix stuck Helm operation before uninstalling
+      fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
+      
+      log_warning "Uninstalling Helm release (cleanup mode)..."
+      helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
+      sleep 5
+    fi
+    
+    # Clean up orphaned resources
+    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
+    if [ -n "$ORPHANED_RESOURCES" ]; then
+      log_warning "Cleaning up orphaned resources (cleanup mode)..."
+      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
+      sleep 10
+    fi
+  else
+    log_info "Cleanup mode inactive - checking for existing resources to update..."
+      
+      # Fix orphaned resources before attempting Helm operations
+      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
+      
+    # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
+    if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
+      log_warning "PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade..."
+      helm upgrade postgresql bitnami/postgresql \
+        --version 16.7.27 \
+        -n "${NAMESPACE}" \
+        "${PG_HELM_ARGS[@]}" \
+        --timeout=10m \
+        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+      HELM_PG_EXIT=${PIPESTATUS[0]}
+      set -e
+      if [ $HELM_PG_EXIT -eq 0 ]; then
+        log_success "PostgreSQL upgraded"
+        POSTGRES_DEPLOYED=true
       else
-        # If annotation fails, delete the orphaned ServiceMonitor (Helm will recreate it)
-        log_warning "Failed to annotate ServiceMonitor $sm, deleting it (Helm will recreate)..."
-        kubectl -n "${SM_NS}" delete servicemonitor "$sm" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned ServiceMonitor $sm"
+        log_warning "PostgreSQL upgrade failed (release missing). Falling back to fresh install..."
+        POSTGRES_DEPLOYED=false
+        HELM_PG_EXIT=1
       fi
-    done
-    sleep 3
+    fi
   fi
   
-  # Check for orphaned services (including redis-metrics)
-  ORPHANED_REDIS_SERVICES=$(kubectl -n "${NAMESPACE}" get service -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels."app.kubernetes.io/name" == "redis" or .metadata.name | contains("redis")) and (.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis")) | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_REDIS_SERVICES" ]; then
-    log_warning "Found orphaned Redis services without Helm ownership: $ORPHANED_REDIS_SERVICES"
-    for svc in $ORPHANED_REDIS_SERVICES; do
-      log_info "Fixing orphaned service: $svc"
-      # Try to add Helm ownership annotations
-      if kubectl -n "${NAMESPACE}" annotate service "$svc" \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated service $svc with Helm ownership"
-      else
-        # If annotation fails, delete the orphaned service (Helm will recreate it)
-        log_warning "Failed to annotate service $svc, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete service "$svc" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned service $svc"
-      fi
-    done
-    sleep 3
-  fi
-
-  # Fallback: ensure well-known legacy headless service 'redis-headless' is fixed even if jq selector misses it
-  if kubectl -n "${NAMESPACE}" get service redis-headless >/dev/null 2>&1; then
-    SVC_ANN_RELEASE=$(kubectl -n "${NAMESPACE}" get service redis-headless -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-    SVC_ANN_NS=$(kubectl -n "${NAMESPACE}" get service redis-headless -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-    if [ -z "$SVC_ANN_RELEASE" ] || [ -z "$SVC_ANN_NS" ] || [ "$SVC_ANN_RELEASE" != "redis" ] || [ "$SVC_ANN_NS" != "${NAMESPACE}" ]; then
-      log_warning "Service 'redis-headless' has invalid or missing Helm ownership metadata - repairing..."
-      if kubectl -n "${NAMESPACE}" annotate service redis-headless \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated service redis-headless with Helm ownership"
-      else
-        log_warning "Failed to annotate service redis-headless, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete service redis-headless --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned service redis-headless"
-      fi
-      sleep 2
+  # Install PostgreSQL if cleanup mode or no existing resources
+  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
+      # Ensure resources are fixed before fresh install
+      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
+      
+    log_info "Installing PostgreSQL..."
+    helm install postgresql bitnami/postgresql \
+      --version 16.7.27 \
+      -n "${NAMESPACE}" \
+      "${PG_HELM_ARGS[@]}" \
+      --timeout=10m \
+      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
+    HELM_PG_EXIT=${PIPESTATUS[0]}
+    if [ $HELM_PG_EXIT -eq 0 ]; then
+      POSTGRES_DEPLOYED=true
     fi
   fi
+fi
+set -e
 
-  # Fallback: ensure well-known service 'redis-master' is fixed even if jq selector misses it
-  if kubectl -n "${NAMESPACE}" get service redis-master > /dev/null 2>&1; then
-    SVC_ANN_RELEASE_MASTER=$(kubectl -n "${NAMESPACE}" get service redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-    SVC_ANN_NS_MASTER=$(kubectl -n "${NAMESPACE}" get service redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-    if [ -z "$SVC_ANN_RELEASE_MASTER" ] || [ -z "$SVC_ANN_NS_MASTER" ] || [ "$SVC_ANN_RELEASE_MASTER" != "redis" ] || [ "$SVC_ANN_NS_MASTER" != "${NAMESPACE}" ]; then
-      log_warning "Service 'redis-master' has invalid or missing Helm ownership metadata - repairing..."
-      if kubectl -n "${NAMESPACE}" annotate service redis-master \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated service redis-master with Helm ownership"
-      else
-        log_warning "Failed to annotate service redis-master, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete service redis-master --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned service redis-master"
-      fi
-      sleep 2
+if [ $HELM_PG_EXIT -eq 0 ]; then
+  log_success "PostgreSQL ready"
+else
+  log_warning "PostgreSQL Helm operation reported exit code $HELM_PG_EXIT"
+  log_warning "Checking actual PostgreSQL status..."
+  
+  # Wait a bit for pods to update
+  sleep 10
+  
+  # Check if PostgreSQL StatefulSet exists and has ready replicas
+  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
+  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
+  
+  # Handle empty values (StatefulSet might not exist)
+  PG_READY=${PG_READY:-0}
+  PG_REPLICAS=${PG_REPLICAS:-0}
+  
+  log_info "PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready"
+  
+  # Check if PG_READY is a valid number before comparison
+  if [[ "$PG_READY" =~ ^[0-9]+$ ]] && [ "$PG_READY" -ge 1 ]; then
+    log_success "PostgreSQL is actually running! Continuing..."
+    log_warning "Note: Helm reported a timeout, but PostgreSQL is healthy"
+  else
+    log_error "PostgreSQL installation/upgrade failed"
+    log_warning "=== Helm output (last 50 lines) ==="
+    tail -50 /tmp/helm-postgresql-install.log 2>/dev/null || true
+    log_warning "=== Pod status ==="
+    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    log_warning "=== Pod events ==="
+    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i postgresql | tail -10 || true
+    log_warning "=== PVC status ==="
+    kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
+    
+    # Check for common issues
+    log_warning "=== Diagnosing issues ==="
+    PENDING_PVCS=$(kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+    if [ "$PENDING_PVCS" -gt 0 ]; then
+      log_error "Found ${PENDING_PVCS} Pending PVCs - storage may not be available"
+    fi
+    
+    exit 1
     fi
   fi
+fi
 
-  # Check for orphaned configmaps
-  ORPHANED_REDIS_CONFIGMAPS=$(kubectl -n "${NAMESPACE}" get configmap -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
-    jq -r '.items[] | select(.metadata.annotations."meta.helm.sh/release-name" == null or .metadata.annotations."meta.helm.sh/release-name" != "redis") | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_REDIS_CONFIGMAPS" ]; then
-    log_warning "Found orphaned Redis configmaps without Helm ownership: $ORPHANED_REDIS_CONFIGMAPS"
-    for cm in $ORPHANED_REDIS_CONFIGMAPS; do
-      log_info "Fixing orphaned configmap: $cm"
-      if kubectl -n "${NAMESPACE}" annotate configmap "$cm" \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated configmap $cm with Helm ownership"
-      else
-        log_warning "Failed to annotate configmap $cm, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete configmap "$cm" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned configmap $cm"
-      fi
-    done
-    sleep 3
-  fi
-
-  # Check for orphaned service accounts (e.g., redis-master)
-  ORPHANED_REDIS_SAS=$(kubectl -n "${NAMESPACE}" get serviceaccount -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "redis" or .metadata.name | contains("redis")) and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "redis")) | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_REDIS_SAS" ]; then
-    log_warning "Found orphaned Redis serviceaccounts without Helm ownership: $ORPHANED_REDIS_SAS"
-    for sa in $ORPHANED_REDIS_SAS; do
-      log_info "Fixing orphaned serviceaccount: $sa"
-      if kubectl -n "${NAMESPACE}" annotate serviceaccount "$sa" \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated serviceaccount $sa with Helm ownership"
-      else
-        log_warning "Failed to annotate serviceaccount $sa, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete serviceaccount "$sa" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned serviceaccount $sa"
-      fi
-    done
-    sleep 3
-  fi
-
-  # Fallback: ensure well-known serviceaccount 'redis-master' is fixed even if jq selector misses it
-  if kubectl -n "${NAMESPACE}" get serviceaccount redis-master > /dev/null 2>&1; then
-    SA_ANN_RELEASE=$(kubectl -n "${NAMESPACE}" get serviceaccount redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-    SA_ANN_NS=$(kubectl -n "${NAMESPACE}" get serviceaccount redis-master -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-    if [ -z "$SA_ANN_RELEASE" ] || [ -z "$SA_ANN_NS" ] || [ "$SA_ANN_RELEASE" != "redis" ] || [ "$SA_ANN_NS" != "${NAMESPACE}" ]; then
-      log_warning "ServiceAccount 'redis-master' has invalid or missing Helm ownership metadata - repairing..."
-      if kubectl -n "${NAMESPACE}" annotate serviceaccount redis-master \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated serviceaccount redis-master with Helm ownership"
-      else
-        log_warning "Failed to annotate serviceaccount redis-master, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete serviceaccount redis-master --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned serviceaccount redis-master"
-      fi
-      sleep 2
-    fi
-  fi
-
-  # Fallback: ensure well-known service 'redis-metrics' is fixed even if jq selector misses it
-  if kubectl -n "${NAMESPACE}" get service redis-metrics > /dev/null 2>&1; then
-    SVC_ANN_RELEASE_METRICS=$(kubectl -n "${NAMESPACE}" get service redis-metrics -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-    SVC_ANN_NS_METRICS=$(kubectl -n "${NAMESPACE}" get service redis-metrics -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-    if [ -z "$SVC_ANN_RELEASE_METRICS" ] || [ -z "$SVC_ANN_NS_METRICS" ] || [ "$SVC_ANN_RELEASE_METRICS" != "redis" ] || [ "$SVC_ANN_NS_METRICS" != "${NAMESPACE}" ]; then
-      log_warning "Service 'redis-metrics' has invalid or missing Helm ownership metadata - repairing..."
-      if kubectl -n "${NAMESPACE}" annotate service redis-metrics \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated service redis-metrics with Helm ownership"
-      else
-        log_warning "Failed to annotate service redis-metrics, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete service redis-metrics --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned service redis-metrics"
-      fi
-      sleep 2
-    fi
-  fi
-
-  # Check for orphaned Redis secrets (e.g., redis password secret)
-  ORPHANED_REDIS_SECRETS=$(kubectl -n "${NAMESPACE}" get secret -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "redis" or .metadata.name == "redis") and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "redis")) | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_REDIS_SECRETS" ]; then
-    log_warning "Found orphaned Redis secrets without Helm ownership: $ORPHANED_REDIS_SECRETS"
-    for sec in $ORPHANED_REDIS_SECRETS; do
-      log_info "Fixing orphaned secret: $sec"
-      if kubectl -n "${NAMESPACE}" annotate secret "$sec" \
-        meta.helm.sh/release-name=redis \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated secret $sec with Helm ownership"
-      else
-        log_warning "Failed to annotate secret $sec, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete secret "$sec" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned secret $sec"
-      fi
-    done
-    sleep 3
-  fi
-}
+# Function to fix orphaned Redis resources
+fix_orphaned_redis_resources() {
+  log_info "Checking for orphaned Redis resources..."
+  
 
 # Install or upgrade Redis (idempotent)
 log_section "Installing/upgrading Redis"
