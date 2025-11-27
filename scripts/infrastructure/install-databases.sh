@@ -418,22 +418,21 @@ if command -v docker &> /dev/null; then
           log_info "Skipping push (already exists remotely or no credentials)"
         fi
       else
-        log_warning "Failed to build custom PostgreSQL image"
-        log_warning "Falling back to Bitnami PostgreSQL with pgvector init scripts"
-        log_warning "Check /tmp/postgresql-pgvector-build.log for build errors"
-        CUSTOM_IMAGE_FULL=""
+        log_error "Failed to build custom PostgreSQL image"
+        log_error "Check /tmp/postgresql-pgvector-build.log for build errors"
+        exit 1
       fi
     else
       log_success "Using existing custom PostgreSQL image: ${CUSTOM_IMAGE_FULL}"
     fi
   else
-    log_warning "Dockerfile not found at: ${DOCKERFILE_DIR}/Dockerfile"
-    log_info "Will use Bitnami PostgreSQL with pgvector init scripts instead"
-    CUSTOM_IMAGE_FULL=""
+    log_error "Dockerfile not found at: ${DOCKERFILE_DIR}/Dockerfile"
+    exit 1
   fi
 else
-  log_info "Docker not available - will use Bitnami PostgreSQL with pgvector init scripts"
-  CUSTOM_IMAGE_FULL=""
+  log_info "Docker not available - assuming custom image exists in registry or will be pulled by K8s"
+  # We still define the image details so Helm can use them
+  CUSTOM_IMAGE_FULL="${CUSTOM_IMAGE_REGISTRY}/${CUSTOM_IMAGE_NAME}:${CUSTOM_IMAGE_TAG}"
 fi
 
 # Install or upgrade PostgreSQL (idempotent)
@@ -481,21 +480,13 @@ PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD
     exit 1
   fi
 
-  # Use custom image if built successfully, otherwise use Bitnami latest
-  if [[ -n "${CUSTOM_IMAGE_FULL:-}" ]]; then
-    log_info "Using custom PostgreSQL image with pgvector: ${CUSTOM_IMAGE_FULL}"
-    PG_HELM_ARGS+=(--set image.registry="${CUSTOM_IMAGE_REGISTRY}")
-    PG_HELM_ARGS+=(--set image.repository="${CUSTOM_IMAGE_NAME}")
-    PG_HELM_ARGS+=(--set image.tag="${CUSTOM_IMAGE_TAG}")
-    # Enable custom image usage (bypass Bitnami security check for non-standard images)
-    PG_HELM_ARGS+=(--set global.security.allowInsecureImages=true)
-  else
-    log_info "Using Bitnami PostgreSQL with pgvector init scripts"
-    # Use stable major version tags instead of latest (more predictable than latest, stable than patch versions)
-    # PostgreSQL 16 is the current stable LTS version
-    PG_HELM_ARGS+=(--set image.tag="16")
-    PG_HELM_ARGS+=(--set metrics.image.tag="0.15")  # postgres-exporter stable version
-  fi
+  # Enforce custom image usage
+  log_info "Using custom PostgreSQL image with pgvector: ${CUSTOM_IMAGE_FULL}"
+  PG_HELM_ARGS+=(--set image.registry="${CUSTOM_IMAGE_REGISTRY}")
+  PG_HELM_ARGS+=(--set image.repository="${CUSTOM_IMAGE_NAME}")
+  PG_HELM_ARGS+=(--set image.tag="${CUSTOM_IMAGE_TAG}")
+  # Enable custom image usage (bypass Bitnami security check for non-standard images)
+  PG_HELM_ARGS+=(--set global.security.allowInsecureImages=true)
 
 set +e
 if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
