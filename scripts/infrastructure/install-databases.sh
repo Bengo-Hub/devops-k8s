@@ -1038,3 +1038,5 @@ echo "3. Update service secrets with connection strings pointing to infra namesp
 echo "4. Deploy services via Argo CD - databases will be created automatically"
 echo ""
 log_success "Done!"
+
+exit 0
