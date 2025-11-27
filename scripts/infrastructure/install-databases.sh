@@ -18,11 +18,19 @@ MONITORING_NS=${MONITORING_NAMESPACE:-infra}
 # - "postgres": PostgreSQL only
 # - "redis"   : Redis only
 ONLY_COMPONENT=${ONLY_COMPONENT:-all}
+# Enable cleanup mode by default (deletes existing resources for fresh install)
+# WARNING: This will delete all existing database data and PVCs
+ENABLE_CLEANUP=${ENABLE_CLEANUP:-true}
 
 log_section "Installing Shared Infrastructure Databases (Production)"
 log_info "Namespace: ${NAMESPACE}"
 log_info "Monitoring Namespace: ${MONITORING_NS}"
 log_info "PostgreSQL Database: ${PG_DATABASE} (services create their own databases)"
+if [ "${ENABLE_CLEANUP}" = "true" ]; then
+  log_warning "⚠️  CLEANUP MODE ENABLED - Will delete existing resources and data"
+else
+  log_info "Cleanup mode disabled - Will update existing resources"
+fi
 
 # Pre-flight checks
 check_kubectl
