@@ -264,6 +264,18 @@ fix_orphaned_resources() {
         log_info "Found StatefulSet '${release_name}' by name (no Helm labels present) - checking ownership..."
       fi
     fi
+
+    # Fallback: for Redis StatefulSets specifically (redis-master, redis-replicas)
+    if [ -z "$resources" ] && { [ "${resource_type}" = "statefulsets" ] || [ "${resource_type}" = "statefulset" ]; } && [ "${release_name}" = "redis" ]; then
+      if kubectl get statefulset redis-master -n "${namespace}" >/dev/null 2>&1; then
+        resources="${resources} statefulset/redis-master"
+        log_info "Found StatefulSet 'redis-master' - checking ownership..."
+      fi
+      if kubectl get statefulset redis-replicas -n "${namespace}" >/dev/null 2>&1; then
+        resources="${resources} statefulset/redis-replicas"
+        log_info "Found StatefulSet 'redis-replicas' - checking ownership..."
+      fi
+    fi
     
     if [ -n "$resources" ]; then
       log_info "Checking ${resource_list} for ownership issues..."

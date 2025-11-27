@@ -5,6 +5,8 @@
 global:
   redis:
     password: ""  # Leave empty, will be auto-generated
+  imagePullSecrets:
+    - name: registry-credentials
 
 ## Architecture
 architecture: standalone  # Use 'replication' for HA with replicas
