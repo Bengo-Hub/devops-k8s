@@ -64,6 +64,13 @@ global:
 fips:
   openssl: false
 
+## Custom PostgreSQL image with pgvector extension
+image:
+  registry: docker.io
+  repository: codevertex/postgresql-pgvector
+  tag: POSTGRES_IMAGE_TAG_PLACEHOLDER
+  pullPolicy: IfNotPresent
+
 ## Primary PostgreSQL configuration
 primary:
   ## Enable pgvector extension initialization scripts
@@ -165,6 +172,11 @@ if [[ "$PG_DATABASE" != "postgres" ]]; then
     sed -i '' "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
 fi
 
+# Update image tag (default to latest if not set)
+POSTGRES_IMAGE_TAG=${POSTGRES_IMAGE_TAG:-latest}
+sed -i "s|tag: POSTGRES_IMAGE_TAG_PLACEHOLDER|tag: ${POSTGRES_IMAGE_TAG}|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
+  sed -i '' "s|tag: POSTGRES_IMAGE_TAG_PLACEHOLDER|tag: ${POSTGRES_IMAGE_TAG}|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
+
 # Build PostgreSQL Helm arguments
 PG_HELM_ARGS=()
 PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
@@ -218,6 +230,12 @@ if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
 else
   log_info "ServiceMonitor CRD not found - disabling Redis metrics ServiceMonitor"
   REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
+fi
+
+# Set Redis password via Helm args (required by Bitnami chart)
+if [[ -n "${REDIS_PASSWORD:-}" ]]; then
+  REDIS_HELM_ARGS+=(--set global.redis.password="${REDIS_PASSWORD}")
+  log_info "Redis password configured via Helm values"
 fi
 
 # Shared password policy:
