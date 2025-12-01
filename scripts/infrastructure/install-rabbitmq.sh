@@ -10,6 +10,10 @@ source "${SCRIPT_DIR}/../tools/common.sh" || {
   echo "ERROR: Failed to source common.sh - required for logging and utilities"
   exit 1
 }
+source "${SCRIPT_DIR}/../tools/helm-utils.sh" || {
+  echo "ERROR: Failed to source helm-utils.sh - required for Helm operations"
+  exit 1
+}
 
 # Configuration
 NAMESPACE=${RABBITMQ_NAMESPACE:-infra}
@@ -61,18 +65,7 @@ fi
 
 # Check for stuck Helm operations before proceeding
 log_info "Checking for stuck Helm operations..."
-HELM_STATUS=$(helm -n "${NAMESPACE}" status rabbitmq 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
-if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
-  log_warning "Detected stuck Helm operation (status: $HELM_STATUS). Cleaning up..."
-  
-  # Delete pending Helm secrets
-  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-  kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-  
-  log_success "Helm lock removed"
-  sleep 5
-fi
+fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
 
 # Ensure Helm repos
 add_helm_repo "bitnami" "https://charts.bitnami.com/bitnami"
@@ -147,69 +140,10 @@ fix_orphaned_rabbitmq_resources() {
 
   if [ -n "$ORPHANED_RMQ_SAS" ]; then
     log_warning "Found orphaned RabbitMQ serviceaccounts without Helm ownership: $ORPHANED_RMQ_SAS"
-    for sa in $ORPHANED_RMQ_SAS; do
-      log_info "Fixing orphaned serviceaccount: $sa"
-      if kubectl -n "${NAMESPACE}" annotate serviceaccount "$sa" \
-        meta.helm.sh/release-name=rabbitmq \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated serviceaccount $sa with Helm ownership"
-      else
-        log_warning "Failed to annotate serviceaccount $sa, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete serviceaccount "$sa" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned serviceaccount $sa"
-      fi
-    done
-    sleep 3
-  fi
 
-  # Fix orphaned RabbitMQ secrets
-  ORPHANED_RMQ_SECRETS=$(kubectl -n "${NAMESPACE}" get secret -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "rabbitmq" or .metadata.name == "rabbitmq") and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "rabbitmq")) | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_RMQ_SECRETS" ]; then
-    log_warning "Found orphaned RabbitMQ secrets without Helm ownership: $ORPHANED_RMQ_SECRETS"
-    for sec in $ORPHANED_RMQ_SECRETS; do
-      log_info "Fixing orphaned secret: $sec"
-      if kubectl -n "${NAMESPACE}" annotate secret "$sec" \
-        meta.helm.sh/release-name=rabbitmq \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated secret $sec with Helm ownership"
-      else
-        log_warning "Failed to annotate secret $sec, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete secret "$sec" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned secret $sec"
-      fi
-    done
-    sleep 3
-  fi
-
-  # Fix orphaned RabbitMQ services
-  ORPHANED_RMQ_SERVICES=$(kubectl -n "${NAMESPACE}" get service -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "rabbitmq" or .metadata.name | contains("rabbitmq")) and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "rabbitmq")) | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_RMQ_SERVICES" ]; then
-    log_warning "Found orphaned RabbitMQ services without Helm ownership: $ORPHANED_RMQ_SERVICES"
-    for svc in $ORPHANED_RMQ_SERVICES; do
-      log_info "Fixing orphaned service: $svc"
-      if kubectl -n "${NAMESPACE}" annotate service "$svc" \
-        meta.helm.sh/release-name=rabbitmq \
-        meta.helm.sh/release-namespace="${NAMESPACE}" \
-        --overwrite 2>/dev/null; then
-        log_success "✓ Annotated service $svc with Helm ownership"
-      else
-        log_warning "Failed to annotate service $svc, deleting it (Helm will recreate)..."
-        kubectl -n "${NAMESPACE}" delete service "$svc" --wait=false 2>/dev/null || true
-        log_success "✓ Deleted orphaned service $svc"
-      fi
-    done
-    sleep 3
-  fi
-}
 
 log_info "Checking for orphaned RabbitMQ resources..."
-fix_orphaned_rabbitmq_resources || true
+fix_orphaned_resources "rabbitmq" "${NAMESPACE}"
 
 set +e
 if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
@@ -252,18 +186,7 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
         log_warning "RabbitMQ not healthy. Checking for stuck Helm operation..."
         
         # Check for stuck Helm operation before upgrading
-        HELM_STATUS=$(helm -n "${NAMESPACE}" status rabbitmq 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
-        if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
-          log_warning "⚠️  Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up..."
-          
-          # Delete pending Helm secrets
-          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-          kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-          
-          log_success "✓ Helm lock removed. Proceeding with upgrade..."
-          sleep 5
-        fi
+        fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
         
         log_warning "Performing Helm upgrade..."
         helm upgrade rabbitmq bitnami/rabbitmq \
@@ -282,18 +205,7 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
     log_warning "RabbitMQ exists but not ready; checking for stuck operation..."
     
     # Check for stuck Helm operation
-    HELM_STATUS=$(helm -n "${NAMESPACE}" status rabbitmq 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
-    if [[ "$HELM_STATUS" == "pending-upgrade" || "$HELM_STATUS" == "pending-install" || "$HELM_STATUS" == "pending-rollback" ]]; then
-      log_warning "Stuck Helm operation detected (status: $HELM_STATUS). Cleaning up..."
-      
-      # Delete pending Helm secrets
-      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-upgrade,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-install,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-      kubectl -n "${NAMESPACE}" get secrets -l "owner=helm,status=pending-rollback,name=rabbitmq" -o name 2>/dev/null | xargs kubectl -n "${NAMESPACE}" delete 2>/dev/null || true
-      
-      log_success "Helm lock removed"
-      sleep 5
-    fi
+    fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
     
     log_warning "Performing safe upgrade..."
     helm upgrade rabbitmq bitnami/rabbitmq \

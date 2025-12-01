@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # MANIFESTS_DIR is at repo root, not under scripts
 MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
+source "${SCRIPT_DIR}/../tools/helm-utils.sh"
 
 # Configuration
 NAMESPACE=${DB_NAMESPACE:-infra}
@@ -171,336 +172,6 @@ if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
 else
     log_info "Prometheus Operator CRDs not found - ServiceMonitor disabled (will be enabled after monitoring stack installation)"
     log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
-fi
-
-# Ensure PriorityClass exists (required by PostgreSQL)
-log_info "Ensuring PriorityClass db-critical exists..."
-if ! kubectl get priorityclass db-critical >/dev/null 2>&1; then
-  log_info "Creating PriorityClass db-critical..."
-  cat <<'PRIORITY_EOF' | kubectl apply -f -
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: db-critical
-  labels:
-    app.kubernetes.io/name: db-critical
-spec:
-  globalDefault: false
-  description: "High priority for critical data services (PostgreSQL/Redis/RabbitMQ)"
-  value: 1000000000
-PRIORITY_EOF
-  log_success "PriorityClass db-critical created"
-else
-  log_success "PriorityClass db-critical already exists"
-fi
-
-# Function to fix stuck Helm operations
-fix_stuck_helm_operation() {
-  local release_name=$1
-  local namespace=${2:-${NAMESPACE}}
-  
-  local helm_status=$(helm -n "${namespace}" status "${release_name}" 2>/dev/null | grep "STATUS:" | awk '{print $2}' || echo "")
-  if [[ "$helm_status" == "pending-upgrade" || "$helm_status" == "pending-install" || "$helm_status" == "pending-rollback" ]]; then
-    log_warning "Detected stuck Helm operation for ${release_name} (status: $helm_status). Cleaning up..."
-    
-    # Delete pending Helm secrets
-    kubectl -n "${namespace}" get secrets -l "owner=helm,status=pending-upgrade,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n "${namespace}" delete 2>/dev/null || true
-    kubectl -n "${namespace}" get secrets -l "owner=helm,status=pending-install,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n "${namespace}" delete 2>/dev/null || true
-    kubectl -n "${namespace}" get secrets -l "owner=helm,status=pending-rollback,name=${release_name}" -o name 2>/dev/null | xargs kubectl -n "${namespace}" delete 2>/dev/null || true
-    
-    log_success "Helm lock removed for ${release_name}"
-    sleep 5
-    return 0
-  fi
-  return 1
-}
-
-# Function to fix orphaned resources with invalid Helm ownership metadata (generic)
-fix_orphaned_resources() {
-  local release_name=$1
-  local namespace=${2:-${NAMESPACE}}
-  local resource_types=($@)
-  shift 2  # Remove first two arguments (release_name, namespace)
-  
-  # Default resource types if none specified
-  if [ $# -eq 0 ]; then
-    # Include secrets and serviceaccounts explicitly to handle ownership issues
-    # Also include ServiceMonitor and NetworkPolicy to fix ownership for database metrics and network resources
-    # Include StatefulSets to handle cases where the main workload (postgresql) already exists without Helm ownership
-    resource_types=("poddisruptionbudgets" "configmaps" "services" "secrets" "serviceaccounts" "networkpolicies" "servicemonitors" "statefulsets")
-  fi
-  
-  for resource_type in "${resource_types[@]}"; do
-    # Handle plural/singular forms
-    plural_type="${resource_type}s"
-    resource_list=$(kubectl api-resources | awk '$1 ~ /^'"${resource_type}"'$/ {print $2}' || echo "${plural_type}")
-    
-    # Get resources for this release by label
-    resources=$(kubectl get "${resource_list}" -n "${namespace}" -l "app.kubernetes.io/instance=${release_name}" -o name 2>/dev/null || true)
-    
-    # Fallback: for secrets, also check by exact name if no labelled resources are found
-    if [ -z "$resources" ] && { [ "${resource_type}" = "secrets" ] || [ "${resource_type}" = "secret" ]; }; then
-      if kubectl get secret "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
-        resources="secret/${release_name}"
-        log_info "Found secret '${release_name}' by name (no Helm labels present) - checking ownership..."
-      fi
-    fi
-
-    # Fallback: for ServiceMonitors, also check by exact name if no labelled resources are found
-    # This specifically fixes cases like ServiceMonitor "postgresql" blocking Helm upgrades
-    if [ -z "$resources" ] && { [ "${resource_type}" = "servicemonitors" ] || [ "${resource_type}" = "servicemonitor" ]; }; then
-      if kubectl get servicemonitor "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
-        resources="servicemonitor/${release_name}"
-        log_info "Found ServiceMonitor '${release_name}' by name (no Helm labels present) - checking ownership..."
-      fi
-    fi
-
-    # Fallback: for NetworkPolicies, also check by exact name if no labelled resources are found
-    # This fixes cases like NetworkPolicy "postgresql" blocking Helm installs/upgrades
-    if [ -z "$resources" ] && { [ "${resource_type}" = "networkpolicies" ] || [ "${resource_type}" = "networkpolicy" ]; }; then
-      if kubectl get networkpolicy "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
-        resources="networkpolicy/${release_name}"
-        log_info "Found NetworkPolicy '${release_name}' by name (no Helm labels present) - checking ownership..."
-      fi
-    fi
-
-    # Fallback: for StatefulSets, also check by exact name if no labelled resources are found
-    # This fixes cases like StatefulSet "postgresql" existing without Helm ownership, blocking installs/upgrades
-    if [ -z "$resources" ] && { [ "${resource_type}" = "statefulsets" ] || [ "${resource_type}" = "statefulset" ]; }; then
-      if kubectl get statefulset "${release_name}" -n "${namespace}" >/dev/null 2>&1; then
-        resources="statefulset/${release_name}"
-        log_info "Found StatefulSet '${release_name}' by name (no Helm labels present) - checking ownership..."
-      fi
-    fi
-
-    # Fallback: for Redis StatefulSets specifically (redis-master, redis-replicas)
-    if [ -z "$resources" ] && { [ "${resource_type}" = "statefulsets" ] || [ "${resource_type}" = "statefulset" ]; } && [ "${release_name}" = "redis" ]; then
-      if kubectl get statefulset redis-master -n "${namespace}" >/dev/null 2>&1; then
-        resources="${resources} statefulset/redis-master"
-        log_info "Found StatefulSet 'redis-master' - checking ownership..."
-      fi
-      if kubectl get statefulset redis-replicas -n "${namespace}" >/dev/null 2>&1; then
-        resources="${resources} statefulset/redis-replicas"
-        log_info "Found StatefulSet 'redis-replicas' - checking ownership..."
-      fi
-    fi
-    
-    if [ -n "$resources" ]; then
-      log_info "Checking ${resource_list} for ownership issues..."
-      for resource in $resources; do
-        resource_name=$(basename "$resource")
-        
-        # Check Helm ownership annotations
-        release_name_annotation=$(kubectl get "${resource}" -n "${namespace}" \
-          -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-        release_namespace_annotation=$(kubectl get "${resource}" -n "${namespace}" \
-          -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-        
-        if [ -z "$release_name_annotation" ] || [ -z "$release_namespace_annotation" ]; then
-          log_warning "Found ${resource_type} '${resource_name}' with invalid Helm ownership metadata"
-          
-          # Try to add proper Helm annotations
-          if kubectl patch "${resource}" -n "${namespace}" \
-            --type='json' \
-            -p="[{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-name\",\"value\":\"${release_name}\"},{\"op\":\"add\",\"path\":\"/metadata/annotations/meta.helm.sh~1release-namespace\",\"value\":\"${namespace}\"}]" 2>/dev/null; then
-            log_success "Added Helm ownership annotations to ${resource_type} '${resource_name}'"
-          else
-            # Fallback: Remove finalizers and delete
-            log_warning "Failed to patch ${resource_type} '${resource_name}' - deleting to let Helm recreate..."
-            kubectl patch "${resource}" -n "${namespace}" \
-              -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            kubectl delete "${resource}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
-            log_success "${resource_type} '${resource_name}' deleted - Helm will recreate"
-            sleep 1
-          fi
-        elif [ "$release_name_annotation" != "$release_name" ] || [ "$release_namespace_annotation" != "$namespace" ]; then
-          log_warning "${resource_type} '${resource_name}' has incorrect Helm ownership - deleting..."
-          kubectl patch "${resource}" -n "${namespace}" \
-            -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-          kubectl delete "${resource}" -n "${namespace}" --wait=true --grace-period=0 2>/dev/null || true
-          log_success "${resource_type} '${resource_name}' deleted - Helm will recreate with correct ownership"
-          sleep 1
-        fi
-      done
-    fi
-  done
-}
-
-# Check for stuck Helm operations before proceeding
-log_info "Checking for stuck Helm operations..."
-fix_stuck_helm_operation "postgresql" "${NAMESPACE}" || true
-
-# Check for orphaned resources with invalid Helm ownership metadata
-log_info "Checking for orphaned resources..."
-fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-
-if [[ "$ONLY_COMPONENT" == "all" || "$ONLY_COMPONENT" == "postgres" ]]; then
-# Build and push custom PostgreSQL image with pgvector extension
-log_section "Building Custom PostgreSQL Image with pgvector"
-DOCKERFILE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/docker/postgresql-pgvector"
-CUSTOM_IMAGE_REGISTRY=${REGISTRY_SERVER:-docker.io}
-CUSTOM_IMAGE_USERNAME=${REGISTRY_USERNAME:-${DOCKER_USERNAME:-codevertex}}
-CUSTOM_IMAGE_NAME="${CUSTOM_IMAGE_USERNAME}/postgresql-pgvector"
-CUSTOM_IMAGE_TAG="latest"
-CUSTOM_IMAGE_FULL="${CUSTOM_IMAGE_REGISTRY}/${CUSTOM_IMAGE_NAME}:${CUSTOM_IMAGE_TAG}"
-
-# Check if Docker is available
-if command -v docker &> /dev/null; then
-  log_info "Docker is available - checking custom PostgreSQL image..."
-  
-  # Check if Dockerfile exists
-  if [ -f "${DOCKERFILE_DIR}/Dockerfile" ]; then
-    log_info "Dockerfile found at: ${DOCKERFILE_DIR}/Dockerfile"
-    
-    # Calculate Dockerfile checksum
-    DOCKERFILE_CHECKSUM=$(sha256sum "${DOCKERFILE_DIR}/Dockerfile" 2>/dev/null | cut -d' ' -f1 || md5sum "${DOCKERFILE_DIR}/Dockerfile" 2>/dev/null | cut -d' ' -f1 || echo "")
-    CHECKSUM_FILE="/tmp/postgresql-pgvector-dockerfile-checksum"
-    
-    # Check if image exists remotely (if we have registry credentials)
-    IMAGE_EXISTS_REMOTE=false
-    IMAGE_NEEDS_BUILD=true
-    
-    if [[ -n "${REGISTRY_USERNAME:-}" && -n "${REGISTRY_PASSWORD:-}" ]]; then
-      log_info "Checking if custom PostgreSQL image exists remotely..."
-      if docker pull "${CUSTOM_IMAGE_FULL}" >/dev/null 2>&1; then
-        IMAGE_EXISTS_REMOTE=true
-        log_success "Custom PostgreSQL image found remotely: ${CUSTOM_IMAGE_FULL}"
-        
-        # Check if Dockerfile has changed
-        if [ -f "${CHECKSUM_FILE}" ]; then
-          OLD_CHECKSUM=$(cat "${CHECKSUM_FILE}" 2>/dev/null || echo "")
-          if [ "${OLD_CHECKSUM}" == "${DOCKERFILE_CHECKSUM}" ] && [ -n "${DOCKERFILE_CHECKSUM}" ]; then
-            log_info "Dockerfile unchanged - using existing image"
-            IMAGE_NEEDS_BUILD=false
-          else
-            log_info "Dockerfile changed - will rebuild image"
-            IMAGE_NEEDS_BUILD=true
-          fi
-        else
-          log_info "No previous checksum found - will check/build image"
-        fi
-      else
-        log_info "Custom PostgreSQL image not found remotely - will build"
-        IMAGE_NEEDS_BUILD=true
-      fi
-    else
-      log_info "Registry credentials not available - will attempt local build only"
-      # Check if image exists locally
-      if docker images "${CUSTOM_IMAGE_FULL}" --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | grep -q "${CUSTOM_IMAGE_NAME}:${CUSTOM_IMAGE_TAG}"; then
-        log_info "Custom PostgreSQL image found locally: ${CUSTOM_IMAGE_FULL}"
-        IMAGE_NEEDS_BUILD=false
-      else
-        log_info "Custom PostgreSQL image not found locally - will build"
-        IMAGE_NEEDS_BUILD=true
-      fi
-    fi
-    
-    # Build image if needed
-    if [ "${IMAGE_NEEDS_BUILD}" == "true" ]; then
-      log_info "Building custom PostgreSQL image with pgvector extension..."
-      log_info "Image: ${CUSTOM_IMAGE_FULL}"
-      
-      if [[ -n "${REGISTRY_USERNAME:-}" && -n "${REGISTRY_PASSWORD:-}" ]]; then
-        log_info "Logging in to Docker registry..."
-        echo "${REGISTRY_PASSWORD}" | docker login "${CUSTOM_IMAGE_REGISTRY}" -u "${REGISTRY_USERNAME}" --password-stdin >/dev/null 2>&1 || {
-          log_warning "Failed to login to Docker registry - continuing with local build only"
-        }
-      fi
-      
-      if docker build -t "${CUSTOM_IMAGE_FULL}" "${DOCKERFILE_DIR}" >/tmp/postgresql-pgvector-build.log 2>&1; then
-        log_success "Custom PostgreSQL image built successfully"
-        
-        # Save checksum
-        echo "${DOCKERFILE_CHECKSUM}" > "${CHECKSUM_FILE}" 2>/dev/null || true
-        
-        # Push to registry if credentials are available
-        if [[ -n "${REGISTRY_USERNAME:-}" && -n "${REGISTRY_PASSWORD:-}" ]] && [[ "${IMAGE_EXISTS_REMOTE}" != "true" ]]; then
-          log_info "Pushing custom PostgreSQL image to registry..."
-          if docker push "${CUSTOM_IMAGE_FULL}" >/tmp/postgresql-pgvector-push.log 2>&1; then
-            log_success "Custom PostgreSQL image pushed to registry: ${CUSTOM_IMAGE_FULL}"
-          else
-            log_warning "Failed to push custom PostgreSQL image to registry"
-            log_warning "Image built locally but not pushed. Check /tmp/postgresql-pgvector-push.log for details"
-          fi
-        else
-          log_info "Skipping push (already exists remotely or no credentials)"
-        fi
-      else
-        log_error "Failed to build custom PostgreSQL image"
-        log_error "Check /tmp/postgresql-pgvector-build.log for build errors"
-        exit 1
-      fi
-    else
-      log_success "Using existing custom PostgreSQL image: ${CUSTOM_IMAGE_FULL}"
-    fi
-  else
-    log_error "Dockerfile not found at: ${DOCKERFILE_DIR}/Dockerfile"
-    exit 1
-  fi
-else
-  log_info "Docker not available - assuming custom image exists in registry or will be pulled by K8s"
-  # We still define the image details so Helm can use them
-  CUSTOM_IMAGE_FULL="${CUSTOM_IMAGE_REGISTRY}/${CUSTOM_IMAGE_NAME}:${CUSTOM_IMAGE_TAG}"
-fi
-
-# Install or upgrade PostgreSQL (idempotent)
-log_section "Installing/upgrading PostgreSQL"
-log_info "This may take 5-10 minutes..."
-
-# Build Helm arguments - prioritize environment variables
-# Using chart version 16.7.27 (PostgreSQL 17.6.0) - stable production version
-# This version is well-tested and doesn't have the FIPS validation bugs from 15.5.26
-PG_HELM_ARGS=()
-
-# Set FIPS configuration first (for compatibility)
-# Chart version 16.7.27 handles FIPS gracefully, but we set it explicitly
-PG_HELM_ARGS+=(--set global.defaultFips=false)
-PG_HELM_ARGS+=(--set fips.openssl=false)
-
-# Enable ServiceMonitor only if Prometheus Operator CRDs exist
-if [ "$PROMETHEUS_OPERATOR_CRDS_EXIST" = true ]; then
-    PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true)
-    log_info "ServiceMonitor enabled for PostgreSQL metrics"
-else
-    PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
-    log_info "ServiceMonitor disabled (Prometheus Operator not installed yet)"
-fi
-
-# Always use values file for complete configuration (includes FIPS settings as backup)
-PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
-
-  FORCE_DB_INSTALL=${FORCE_DB_INSTALL:-${FORCE_INSTALL:-false}}
-
-  # Simplify password logic: POSTGRES_PASSWORD (GitHub secret) is the single source of truth
-  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-    # Use the same password for:
-    #   - postgres superuser
-    #   - admin_user (admin DB user)
-    #   - all secret fields (postgres-password, password, admin-user-password)
-    ADMIN_PASS="$POSTGRES_PASSWORD"
-PG_HELM_ARGS+=(--set global.postgresql.auth.postgresPassword="$POSTGRES_PASSWORD")
-    PG_HELM_ARGS+=(--set global.postgresql.auth.password="$ADMIN_PASS")
-    log_info "PostgreSQL passwords configured from POSTGRES_PASSWORD (GitHub secret)"
-    log_info "  - Superuser (postgres): ${#POSTGRES_PASSWORD} chars"
-    log_info "  - Admin user (admin_user): ${#ADMIN_PASS} chars"
-  else
-    log_error "POSTGRES_PASSWORD required but not set"
-    exit 1
-  fi
-
-  # Enforce custom image usage
-  log_info "Using custom PostgreSQL image with pgvector: ${CUSTOM_IMAGE_FULL}"
-  PG_HELM_ARGS+=(--set image.registry="${CUSTOM_IMAGE_REGISTRY}")
-  PG_HELM_ARGS+=(--set image.repository="${CUSTOM_IMAGE_NAME}")
-  PG_HELM_ARGS+=(--set image.tag="${CUSTOM_IMAGE_TAG}")
-  # Enable custom image usage (bypass Bitnami security check for non-standard images)
-  PG_HELM_ARGS+=(--set global.security.allowInsecureImages=true)
-
-set +e
-if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  # Check if PostgreSQL is healthy
-  IS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
-  
   # If POSTGRES_PASSWORD is explicitly set, check if it matches current secret
   if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
     # Get current password from secret
@@ -729,18 +400,6 @@ else
   fi
 fi
 
-# Function to fix orphaned Redis resources
-fix_orphaned_redis_resources() {
-  log_info "Checking for orphaned Redis resources..."
-  # Fix orphaned resources using the generic fix_orphaned_resources function
-  fix_orphaned_resources "redis" "${NAMESPACE}" || true
-}
-
-# Install or upgrade Redis (idempotent)
-log_section "Installing/upgrading Redis"
-log_info "This may take 3-5 minutes..."
-
-# Build Helm arguments - prioritize environment variables
 REDIS_HELM_ARGS=()
 
 # Always use values file as base
@@ -768,18 +427,6 @@ if [[ -z "${REDIS_PASSWORD:-}" ]]; then
   exit 1
   fi
 fi
-
-log_info "Using Redis password from environment (shared infra password)"
-log_info "  - Redis password: ${#REDIS_PASSWORD} chars"
-REDIS_HELM_ARGS+=(--set global.redis.password="$REDIS_PASSWORD")
-
-# Always fix orphaned Redis resources before any Helm operation (install or upgrade)
-fix_orphaned_redis_resources
-
-# Use stable major version tags (Redis 7 is current stable)
-REDIS_HELM_ARGS+=(--set image.tag=7)
-REDIS_HELM_ARGS+=(--set metrics.image.tag=1.58)  # redis-exporter stable version
-
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
   # Check if Redis is healthy
@@ -812,18 +459,6 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
       log_success "Redis is healthy and password matches GitHub secrets - skipping upgrade"
       HELM_REDIS_EXIT=0
     else
-      log_warning "Redis not healthy. Checking for stuck Helm operation and orphaned resources..."
-      
-      # Fix stuck Helm operation before upgrading
-      fix_stuck_helm_operation "redis" "${NAMESPACE}"
-      
-      # Fix orphaned resources BEFORE Helm upgrade
-      fix_orphaned_redis_resources
-      
-      log_warning "Performing Helm upgrade with GitHub secrets password..."
-      helm upgrade redis bitnami/redis \
-        -n "${NAMESPACE}" \
-        --reset-values \
         -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
         "${REDIS_HELM_ARGS[@]}" \
         --timeout=10m \
@@ -834,19 +469,6 @@ if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
     log_success "Redis already installed and healthy - skipping"
     HELM_REDIS_EXIT=0
   else
-    log_warning "Redis exists but not ready; checking for stuck operation and orphaned resources..."
-    
-    # Fix stuck Helm operation
-    fix_stuck_helm_operation "redis" "${NAMESPACE}"
-    
-    # Fix orphaned resources BEFORE Helm upgrade
-    fix_orphaned_redis_resources
-    
-    log_warning "Performing safe upgrade..."
-    helm upgrade redis bitnami/redis \
-      -n "${NAMESPACE}" \
-      --reuse-values \
-      "${REDIS_HELM_ARGS[@]}" \
       --timeout=10m \
       --wait=false 2>&1 | tee /tmp/helm-redis-install.log
     HELM_REDIS_EXIT=${PIPESTATUS[0]}
@@ -991,19 +613,6 @@ else
     kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis 2>/dev/null || true
     log_warning "=== Pod events ==="
     kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i redis | tail -10 || true
-    log_warning "=== Pod logs (last 20 lines) ==="
-    kubectl logs -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --tail=20 2>/dev/null || true
-    
-    exit 1
-  fi
-fi
-
-# Retrieve credentials
-log_section "Database Installation Complete"
-log_info "Retrieving credentials..."
-
-# Get PostgreSQL passwords
-log_info "PostgreSQL Credentials:"
 POSTGRES_PASSWORD=$(kubectl get secret postgresql -n "${NAMESPACE}" -o jsonpath="{.data.postgres-password}" 2>/dev/null | base64 -d || echo "")
 ADMIN_PASSWORD=$(kubectl get secret postgresql -n "${NAMESPACE}" -o jsonpath="{.data.admin-user-password}" 2>/dev/null | base64 -d || echo "$POSTGRES_PASSWORD")
 
