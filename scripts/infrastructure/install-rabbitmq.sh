@@ -65,7 +65,7 @@ fi
 
 # Check for stuck Helm operations before proceeding
 log_info "Checking for stuck Helm operations..."
-fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
+fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}" || true
 
 # Ensure Helm repos
 add_helm_repo "bitnami" "https://charts.bitnami.com/bitnami"
@@ -173,7 +173,7 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
         log_warning "RabbitMQ not healthy. Checking for stuck Helm operation..."
         
         # Check for stuck Helm operation before upgrading
-        fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
+        fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}" || true
         
         log_warning "Performing Helm upgrade..."
         helm upgrade rabbitmq bitnami/rabbitmq \
@@ -194,7 +194,7 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
       log_warning "RabbitMQ exists but not ready; checking for stuck operation..."
       
       # Check for stuck Helm operation
-      fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
+      fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}" || true
       
       log_warning "Performing safe upgrade..."
       helm upgrade rabbitmq bitnami/rabbitmq \
