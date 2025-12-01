@@ -77,12 +77,12 @@ Production Readiness Checklist
 ## ✅ Automation Scripts (Completed)
 
 ### Installation Scripts (All Idempotent)
-- [x] `scripts/install-storage-provisioner.sh` - Local-path PVC provisioner
-- [x] `scripts/configure-ingress-controller.sh` - NGINX with hostNetwork
-- [x] `scripts/install-cert-manager.sh` - TLS certificate automation
-- [x] `scripts/install-argocd.sh` - GitOps deployment
-- [x] `scripts/install-monitoring.sh` - Prometheus + Grafana
-- [x] `scripts/install-databases.sh` - PostgreSQL + Redis
+- [x] `scripts/infrastructure/install-storage-provisioner.sh` - Local-path PVC provisioner
+- [x] `scripts/infrastructure/configure-ingress-controller.sh` - NGINX with hostNetwork
+- [x] `scripts/infrastructure/install-cert-manager.sh` - TLS certificate automation
+- [x] `scripts/infrastructure/install-argocd.sh` - GitOps deployment
+- [x] `scripts/monitoring/install-monitoring.sh` - Prometheus + Grafana
+- [x] `scripts/infrastructure/install-databases.sh` - PostgreSQL (with pgvector) + Redis
 
 ### Utility Scripts
 - [x] `scripts/check-services.sh` - Service health check
@@ -256,7 +256,7 @@ git push
 **3. Pods Pending (PVC)**
 - Check: `kubectl get pvc -n <namespace>`
 - Verify: Storage class exists: `kubectl get storageclass`
-- Fix: Run `scripts/install-storage-provisioner.sh`
+- Fix: Run `scripts/infrastructure/install-storage-provisioner.sh`
 
 **4. Helm "name still in use"**
 - Check: `helm list -n <namespace>`
@@ -279,7 +279,7 @@ git push
 - **Kubernetes:** Stores as base64 internally regardless
 
 ### Database Passwords
-- Generated during `install-databases.sh`
+- Generated during `scripts/infrastructure/install-databases.sh`
 - Stored in Kubernetes Secrets
 - Retrieved: `kubectl get secret postgresql -n erp -o jsonpath="{.data.postgres-password}" | base64 -d`
 

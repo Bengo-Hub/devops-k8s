@@ -176,11 +176,16 @@ Relationship to CI/CD Workflows
 - See `docs/ETCD-OPTIMIZATION.md` for detailed etcd configuration guide
 
 **Shared Infrastructure Installation Details:**
-- **PostgreSQL & Redis**: Uses `scripts/install-databases.sh`
+- **PostgreSQL & Redis**: Uses `scripts/infrastructure/install-databases.sh`
   - Installed in `infra` namespace (shared infrastructure)
-  - Creates `admin_user` with superuser privileges for managing per-service databases
+  - **Custom PostgreSQL Image**: Uses `codevertex/postgresql-pgvector:latest` (built via GitHub Actions)
+    - Includes pgvector extension for vector similarity search
+    - pgvector automatically enabled in the `postgres` database during initialization
+  - Creates `admin_user` with SUPERUSER and CREATEDB privileges for managing per-service databases
   - Uses `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD` from GitHub secrets
   - Auto-generates secure passwords if secrets not provided
+  - Supports `POSTGRES_IMAGE_TAG` environment variable (defaults to `latest`)
+  - FIPS compliance settings configured
   - Each service creates its own database during deployment (cafe, bengo_erp, treasury, notifications)
   
 - **RabbitMQ**: Uses `scripts/install-rabbitmq.sh`

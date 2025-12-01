@@ -113,17 +113,28 @@ From the devops-k8s repository root:
 
 ```bash
 # Run the automated installation script
-./scripts/install-databases.sh
+# Script path: scripts/infrastructure/install-databases.sh
+export NAMESPACE=infra
+export PG_DATABASE=postgres
+export POSTGRES_PASSWORD="your-secure-password"  # Optional: auto-generated if not set
+export POSTGRES_ADMIN_PASSWORD="your-admin-password"  # Optional: falls back to POSTGRES_PASSWORD
+export POSTGRES_IMAGE_TAG="latest"  # Optional: defaults to latest
+export REDIS_PASSWORD="your-redis-password"  # Optional: auto-generated if not set
+./scripts/infrastructure/install-databases.sh
 
 # With custom namespace and database name (optional)
-DB_NAMESPACE=myapp PG_DATABASE=myapp_db ./scripts/install-databases.sh
+DB_NAMESPACE=myapp PG_DATABASE=myapp_db ./scripts/infrastructure/install-databases.sh
 ```
 
 The script will:
-- Check for kubectl connectivity
+- Check for kubectl connectivity and cluster health
 - Add Bitnami Helm repository
 - Create namespace (default: `infra` for shared infrastructure)
-- Install PostgreSQL with production config (20GB storage, optimized settings)
+- Install PostgreSQL with **custom pgvector image** (`codevertex/postgresql-pgvector:latest`)
+  - Includes pgvector extension for vector similarity search
+  - Uses `admin_user` (not `postgres`) for database management
+  - Production config: 20GB storage, optimized settings
+  - FIPS compliance settings configured
 - Install Redis with production config (8GB storage, LRU eviction)
 - Display connection strings and credentials
 - Provide next steps for secret configuration
@@ -142,7 +153,7 @@ The script will:
 
 ### 1. PostgreSQL Deployment
 
-We'll use Bitnami PostgreSQL Helm chart for production-ready setup.
+We'll use Bitnami PostgreSQL Helm chart with a **custom PostgreSQL image** that includes pgvector extension support.
 
 #### Install PostgreSQL
 
@@ -154,27 +165,59 @@ helm repo update
 # Create namespace (if not exists)
 kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
 
-# Install PostgreSQL
+# Install PostgreSQL with custom pgvector image
+# The custom image (codevertex/postgresql-pgvector) includes pgvector extension
+export POSTGRES_IMAGE_TAG=${POSTGRES_IMAGE_TAG:-latest}
+export POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-""}  # Auto-generated if empty
+export POSTGRES_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD:-${POSTGRES_PASSWORD}}
+
 helm install postgresql bitnami/postgresql \
   -n infra \
   -f manifests/databases/postgresql-values.yaml \
+  --set global.security.allowInsecureImages=true \
+  --set primary.image.registry=docker.io \
+  --set primary.image.repository=codevertex/postgresql-pgvector \
+  --set primary.image.tag="${POSTGRES_IMAGE_TAG}" \
+  --set readReplicas.image.registry=docker.io \
+  --set readReplicas.image.repository=codevertex/postgresql-pgvector \
+  --set readReplicas.image.tag="${POSTGRES_IMAGE_TAG}" \
+  --set global.postgresql.auth.postgresPassword="${POSTGRES_PASSWORD}" \
+  --set global.postgresql.auth.username=admin_user \
+  --set global.postgresql.auth.password="${POSTGRES_ADMIN_PASSWORD}" \
+  --set global.postgresql.auth.database=postgres \
   --timeout=10m \
   --wait
 ```
 
+**Important Notes:**
+- **Custom Image**: Uses `codevertex/postgresql-pgvector:latest` (built via GitHub Actions)
+- **pgvector Extension**: Automatically enabled in the `postgres` database during initialization
+- **Admin User**: Uses `admin_user` (not `postgres`) for database management
+- **FIPS Settings**: Configured to avoid chart validation errors
+- **allowInsecureImages**: Required to use the custom image (Bitnami chart security feature)
+
 #### Get PostgreSQL Credentials
 
 ```bash
-# Get password
+# Get admin user password (recommended for service database management)
+export POSTGRES_ADMIN_PASSWORD=$(kubectl get secret postgresql \
+  -n infra \
+  -o jsonpath="{.data.admin-user-password}" | base64 -d)
+
+# Get postgres superuser password (if needed)
 export POSTGRES_PASSWORD=$(kubectl get secret postgresql \
   -n infra \
   -o jsonpath="{.data.postgres-password}" | base64 -d)
 
-echo "PostgreSQL Password: $POSTGRES_PASSWORD"
+echo "Admin User Password: $POSTGRES_ADMIN_PASSWORD"
+echo "Postgres Password: $POSTGRES_PASSWORD"
 
-# Connection string format:
-# postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
-# Example: postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
+# Connection string format (using admin_user - recommended):
+# postgresql://admin_user:ADMIN_PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
+# Example: postgresql://admin_user:ADMIN_PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
+
+# Connection string format (using postgres superuser):
+# postgresql://postgres:POSTGRES_PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
 ```
 
 ### 2. Redis Deployment
@@ -269,13 +312,14 @@ type: Opaque
 stringData:
   # PostgreSQL - Connect to shared PostgreSQL service, use your service's database
   # Each service has its own database on the shared PostgreSQL instance
-  DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/my_database"
-  # Example: DATABASE_URL: "postgresql://postgres:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/cafe"
+  # Use admin_user for database management (recommended)
+  DATABASE_URL: "postgresql://admin_user:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/my_database"
+  # Example: DATABASE_URL: "postgresql://admin_user:CHANGE_ME@postgresql.infra.svc.cluster.local:5432/cafe"
   DB_HOST: "postgresql.infra.svc.cluster.local"
   DB_PORT: "5432"
   DB_NAME: "my_database"  # Replace with your service's database name (e.g., "cafe", "erp", "treasury")
-  DB_USER: "postgres"
-  DB_PASSWORD: "CHANGE_ME"
+  DB_USER: "admin_user"  # Use admin_user for database management
+  DB_PASSWORD: "CHANGE_ME"  # Use POSTGRES_ADMIN_PASSWORD or POSTGRES_PASSWORD
   
   # Redis - In-cluster
   REDIS_URL: "redis://:CHANGE_ME@redis-master.infra.svc.cluster.local:6379/0"
@@ -460,14 +504,17 @@ jobs:
 ```bash
 # Backup PostgreSQL (databases are in infra namespace)
 # Replace 'my_database' with your service's database name
+# Using admin_user (recommended) or postgres superuser
 kubectl exec -n infra postgresql-0 -- \
-  pg_dump -U postgres my_database > backup-$(date +%Y%m%d).sql
-# Example: kubectl exec -n infra postgresql-0 -- pg_dump -U postgres cafe > backup-$(date +%Y%m%d).sql
+  env PGPASSWORD="admin-password" \
+  pg_dump -U admin_user my_database > backup-$(date +%Y%m%d).sql
+# Example: kubectl exec -n infra postgresql-0 -- env PGPASSWORD="admin-password" pg_dump -U admin_user cafe > backup-$(date +%Y%m%d).sql
 
 # Restore PostgreSQL (replace with your database name)
 kubectl exec -i -n infra postgresql-0 -- \
-  psql -U postgres my_database < backup-20250109.sql
-# Example: kubectl exec -i -n infra postgresql-0 -- psql -U postgres cafe < backup-20250109.sql
+  env PGPASSWORD="admin-password" \
+  psql -U admin_user my_database < backup-20250109.sql
+# Example: kubectl exec -i -n infra postgresql-0 -- env PGPASSWORD="admin-password" psql -U admin_user cafe < backup-20250109.sql
 ```
 
 ### Backups (External VPS)
@@ -495,9 +542,11 @@ echo "0 2 * * * /root/backup-my-service-db.sh" | crontab -
 ```bash
 # PostgreSQL stats (databases are in infra namespace)
 # Replace 'my_database' with your service's database name
+# Using admin_user (recommended)
 kubectl exec -n infra postgresql-0 -- \
-  psql -U postgres -c "SELECT * FROM pg_stat_database WHERE datname='my_database';"
-# Example: kubectl exec -n infra postgresql-0 -- psql -U postgres -c "SELECT * FROM pg_stat_database WHERE datname='cafe';"
+  env PGPASSWORD="admin-password" \
+  psql -U admin_user -c "SELECT * FROM pg_stat_database WHERE datname='my_database';"
+# Example: kubectl exec -n infra postgresql-0 -- env PGPASSWORD="admin-password" psql -U admin_user -c "SELECT * FROM pg_stat_database WHERE datname='cafe';"
 
 # Redis info (databases are in infra namespace)
 kubectl exec -n infra redis-master-0 -- redis-cli INFO
@@ -528,9 +577,13 @@ helm upgrade redis bitnami/redis \
 ### In-Cluster (Service DNS)
 
 ```bash
-# PostgreSQL
-postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
-# Example: postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
+# PostgreSQL (using admin_user - recommended)
+postgresql://admin_user:ADMIN_PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
+# Example: postgresql://admin_user:ADMIN_PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
+
+# PostgreSQL (using postgres superuser - if needed)
+postgresql://postgres:POSTGRES_PASSWORD@postgresql.infra.svc.cluster.local:5432/my_database
+# Example: postgresql://postgres:POSTGRES_PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
 
 # Redis (cache - db 0)
 redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0
@@ -730,14 +783,24 @@ RabbitMQ is shared infrastructure in the `infra` namespace. Services can use dif
 
 **Step 1: Install Shared PostgreSQL (One-Time)**
 
-The PostgreSQL installation creates the common `admin_user`:
+The PostgreSQL installation creates the common `admin_user` and enables pgvector extension:
 
 ```bash
-# From devops-k8s repository
-POSTGRES_PASSWORD="your-secure-password" \
-POSTGRES_ADMIN_PASSWORD="your-admin-password" \
-./scripts/install-databases.sh
+# From devops-k8s repository root
+export NAMESPACE=infra
+export PG_DATABASE=postgres
+export POSTGRES_PASSWORD="your-secure-password"  # Optional: auto-generated if not set
+export POSTGRES_ADMIN_PASSWORD="your-admin-password"  # Optional: falls back to POSTGRES_PASSWORD
+export POSTGRES_IMAGE_TAG="latest"  # Optional: defaults to latest
+export REDIS_PASSWORD="your-redis-password"  # Optional: auto-generated if not set
+./scripts/infrastructure/install-databases.sh
 ```
+
+**What the script installs:**
+- PostgreSQL with **custom pgvector image** (`codevertex/postgresql-pgvector:latest`)
+- pgvector extension automatically enabled in the `postgres` database
+- `admin_user` with SUPERUSER and CREATEDB privileges
+- Production-optimized configuration (20GB storage, tuned settings)
 
 **Step 2: Create Per-Service Database**
 
