@@ -111,6 +111,12 @@ spec:
         ## Read replicas (optional, for scaling reads)
         readReplicas:
           replicaCount: 0  # Set to 1+ for read replicas
+          ## Use custom PostgreSQL image with pgvector extension (same as primary)
+          image:
+            registry: docker.io
+            repository: codevertex/postgresql-pgvector
+            tag: latest
+            pullPolicy: Always
           resources:
             requests:
               memory: "512Mi"

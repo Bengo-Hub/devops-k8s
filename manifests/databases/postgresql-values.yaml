@@ -19,15 +19,15 @@ global:
 fips:
   openssl: false
 
-## Custom PostgreSQL image with pgvector extension
-image:
-  registry: docker.io
-  repository: codevertex/postgresql-pgvector
-  tag: latest
-  pullPolicy: IfNotPresent
-
 ## Primary PostgreSQL configuration
 primary:
+  ## Custom PostgreSQL image with pgvector extension
+  ## Uses custom image built via GitHub Actions workflow
+  image:
+    registry: docker.io
+    repository: codevertex/postgresql-pgvector
+    tag: latest
+    pullPolicy: IfNotPresent
   resources:
     requests:
       memory: "512Mi"
@@ -75,6 +75,12 @@ primary:
 ## Read replicas (optional, for scaling reads)
 readReplicas:
   replicaCount: 0  # Set to 1+ for read replicas
+  ## Use custom PostgreSQL image with pgvector extension (same as primary)
+  image:
+    registry: docker.io
+    repository: codevertex/postgresql-pgvector
+    tag: latest
+    pullPolicy: IfNotPresent
   resources:
     requests:
       memory: "512Mi"
