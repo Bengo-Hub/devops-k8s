@@ -15,7 +15,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: db-init
-        image: docker.io/codevertex/erp-api:latest  # Replace with actual image
+        image: docker.io/codevertex/erp-api:latest
         command:
         - /bin/bash
         - -c
