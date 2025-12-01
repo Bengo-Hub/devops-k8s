@@ -30,7 +30,7 @@ if [[ -z "${RABBITMQ_PASSWORD:-}" ]]; then
   else
     log_error "RABBITMQ_PASSWORD is required but not set, and POSTGRES_PASSWORD is also empty"
     log_error "Please set POSTGRES_PASSWORD (preferred) or RABBITMQ_PASSWORD in GitHub organization secrets"
-  exit 1
+    exit 1
   fi
 fi
 
@@ -128,20 +128,7 @@ RABBITMQ_HELM_ARGS+=(--set image.registry="${RABBITMQ_IMAGE_REGISTRY}")
 RABBITMQ_HELM_ARGS+=(--set image.repository="${RABBITMQ_IMAGE_REPO}")
 RABBITMQ_HELM_ARGS+=(--set image.tag="${RABBITMQ_IMAGE_TAG}")
 
-# Common functions already sourced above
-
-# Function to fix orphaned RabbitMQ resources (ownership / annotations)
-fix_orphaned_rabbitmq_resources() {
-  log_info "Checking for orphaned RabbitMQ resources..."
-
-  # Fix orphaned ServiceAccounts (e.g., rabbitmq)
-  ORPHANED_RMQ_SAS=$(kubectl -n "${NAMESPACE}" get serviceaccount -o json 2>/dev/null | \
-    jq -r '.items[] | select((.metadata.labels["app.kubernetes.io/instance"] == "rabbitmq" or .metadata.name | contains("rabbitmq")) and (.metadata.annotations["meta.helm.sh/release-name"] == null or .metadata.annotations["meta.helm.sh/release-name"] != "rabbitmq")) | .metadata.name' 2>/dev/null || true)
-
-  if [ -n "$ORPHANED_RMQ_SAS" ]; then
-    log_warning "Found orphaned RabbitMQ serviceaccounts without Helm ownership: $ORPHANED_RMQ_SAS"
-
-
+# Check for orphaned RabbitMQ resources before proceeding
 log_info "Checking for orphaned RabbitMQ resources..."
 fix_orphaned_resources "rabbitmq" "${NAMESPACE}"
 
@@ -198,22 +185,25 @@ if helm -n "${NAMESPACE}" status rabbitmq >/dev/null 2>&1; then
         HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
       fi
     fi
-  elif [[ "$IS_RABBITMQ_HEALTHY" == "true" ]]; then
-    log_success "RabbitMQ already installed and healthy - skipping"
-    HELM_RABBITMQ_EXIT=0
   else
-    log_warning "RabbitMQ exists but not ready; checking for stuck operation..."
-    
-    # Check for stuck Helm operation
-    fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
-    
-    log_warning "Performing safe upgrade..."
-    helm upgrade rabbitmq bitnami/rabbitmq \
-      -n "${NAMESPACE}" \
-      --reuse-values \
-      --timeout=10m \
-      --wait=false 2>&1 | tee /tmp/helm-rabbitmq-install.log
-    HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
+    # RABBITMQ_PASSWORD not set - check health status
+    if [[ "$IS_RABBITMQ_HEALTHY" == "true" ]]; then
+      log_success "RabbitMQ already installed and healthy - skipping"
+      HELM_RABBITMQ_EXIT=0
+    else
+      log_warning "RabbitMQ exists but not ready; checking for stuck operation..."
+      
+      # Check for stuck Helm operation
+      fix_stuck_helm_operation "rabbitmq" "${NAMESPACE}"
+      
+      log_warning "Performing safe upgrade..."
+      helm upgrade rabbitmq bitnami/rabbitmq \
+        -n "${NAMESPACE}" \
+        --reuse-values \
+        --timeout=10m \
+        --wait=false 2>&1 | tee /tmp/helm-rabbitmq-install.log
+      HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
+    fi
   fi
 else
   log_info "RabbitMQ not found; installing fresh"
@@ -254,6 +244,9 @@ else
   HELM_RABBITMQ_EXIT=${PIPESTATUS[0]}
 fi
 set -e
+
+# Initialize HELM_RABBITMQ_EXIT if not set
+HELM_RABBITMQ_EXIT=${HELM_RABBITMQ_EXIT:-0}
 
 if [ $HELM_RABBITMQ_EXIT -eq 0 ]; then
   log_success "RabbitMQ Helm operation completed"
@@ -346,6 +339,4 @@ log_info "To access RabbitMQ Management UI:"
 echo "  kubectl port-forward -n ${NAMESPACE} svc/rabbitmq 15672:15672"
 echo -e "  Then open: http://localhost:15672"
 echo ""
-
 exit 0
-
