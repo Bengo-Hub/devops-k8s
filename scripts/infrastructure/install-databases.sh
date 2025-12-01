@@ -59,6 +59,9 @@ global:
       database: "postgres"
   # FIPS compliance settings (required for newer chart versions)
   defaultFips: false
+  # Allow custom images (required for codevertex/postgresql-pgvector)
+  security:
+    allowInsecureImages: true
 
 # FIPS OpenSSL configuration
 fips:
@@ -151,6 +154,11 @@ metrics:
     limits:
       memory: "256Mi"
       cpu: "200m"
+  # Use standard Bitnami postgres-exporter image (not custom)
+  image:
+    registry: docker.io
+    repository: bitnami/postgres-exporter
+    tag: ""  # Use chart default
 
 ## Network policy
 networkPolicy:
