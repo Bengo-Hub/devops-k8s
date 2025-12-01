@@ -281,7 +281,7 @@ git push
 ### Database Passwords
 - Generated during `scripts/infrastructure/install-databases.sh`
 - Stored in Kubernetes Secrets
-- Retrieved: `kubectl get secret postgresql -n erp -o jsonpath="{.data.postgres-password}" | base64 -d`
+- Retrieved: `kubectl get secret postgresql -n infra -o jsonpath="{.data.admin-user-password}" | base64 -d` (admin_user) or `{.data.postgres-password}` (postgres superuser)
 
 ### Image Tags
 - Format: 8-character git commit SHA (e.g., `abc12345`)
