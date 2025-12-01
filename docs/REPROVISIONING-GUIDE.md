@@ -158,9 +158,10 @@ kubectl get applications -A
 # 2. Databases (PostgreSQL & Redis)
 export NAMESPACE=infra
 export PG_DATABASE=postgres
-export POSTGRES_PASSWORD="your-password"
-export POSTGRES_ADMIN_PASSWORD="your-admin-password"
-export REDIS_PASSWORD="your-redis-password"
+export POSTGRES_PASSWORD="your-password"  # Optional: auto-generated if not set
+export POSTGRES_ADMIN_PASSWORD="your-admin-password"  # Optional: falls back to POSTGRES_PASSWORD
+export POSTGRES_IMAGE_TAG="latest"  # Optional: defaults to latest (custom pgvector image)
+export REDIS_PASSWORD="your-redis-password"  # Optional: auto-generated if not set
 ./scripts/infrastructure/install-databases.sh
 
 # 3. RabbitMQ

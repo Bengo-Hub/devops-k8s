@@ -253,7 +253,7 @@ After configuring secrets:
 **Phase 1: Infrastructure Provisioning (devops-k8s)**
 - **When:** Setting up the cluster infrastructure (databases, monitoring, etc.)
 - **Who:** DevOps team or initial setup
-- **Where:** `devops-k8s/scripts/install-databases.sh`
+- **Where:** `devops-k8s/scripts/infrastructure/install-databases.sh`
 - **Process:** Environment Variables → CREATE Kubernetes Secrets
 
 ```bash
@@ -265,7 +265,7 @@ export REDIS_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
 # - postgresql secret (with postgres-password key)
 # - redis secret (with redis-password key)
 
-./scripts/install-databases.sh
+./scripts/infrastructure/install-databases.sh
 ```
 
 **Phase 2: Application Deployment (bengobox-erp-api/ui)**
@@ -297,6 +297,7 @@ GitHub Secrets              devops-k8s                Kubernetes
      │                           │                         │
      │ POSTGRES_PASSWORD         │                         │
      ├──────────────────────────►│ install-databases.sh    │
+     │                            │ (infrastructure/)      │
      │ REDIS_PASSWORD             │         │              │
      │                            │         ▼              │
      │                            │    helm install         │
@@ -358,7 +359,7 @@ GitHub Actions              bengobox-erp-api          Kubernetes
 ### 🔧 Implementation Details
 
 **Infrastructure Scripts (devops-k8s):**
-- **File:** `scripts/install-databases.sh`
+- **File:** `scripts/infrastructure/install-databases.sh`
 - **Purpose:** Allow ops team to set passwords OR let Helm generate them
 - Environment variables are used to CREATE databases
 
@@ -395,8 +396,8 @@ kubectl get secret erp-api-env -n erp \
 
 **Diagnosis:**
 ```bash
-# Compare passwords
-PG_SECRET=$(kubectl get secret postgresql -n erp -o jsonpath='{.data.postgres-password}' | base64 -d)
+# Compare passwords (using admin_user - recommended)
+PG_SECRET=$(kubectl get secret postgresql -n infra -o jsonpath='{.data.admin-user-password}' | base64 -d)
 APP_SECRET=$(kubectl get secret erp-api-env -n erp -o jsonpath='{.data.DB_PASSWORD}' | base64 -d)
 
 if [[ "$PG_SECRET" == "$APP_SECRET" ]]; then
@@ -425,7 +426,7 @@ export ENV_SECRET_NAME=erp-api-env
 # Run once during cluster provisioning
 export POSTGRES_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
 export REDIS_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
-./scripts/install-databases.sh
+./scripts/infrastructure/install-databases.sh
 
 # Creates:
 # - postgresql secret (source of truth)
@@ -446,12 +447,21 @@ export REDIS_PASSWORD="REDACTED_PG_ADMIN_PASSWORD"
 
 **3. Password Rotation (when needed):**
 ```bash
-# Step 1: Update database password
-kubectl patch secret postgresql -n erp \
+# Step 1: Update admin_user password (recommended for service database management)
+kubectl patch secret postgresql -n infra \
+  -p '{"stringData":{"admin-user-password":"NewPassword123!"}}'
+
+# Step 2: Update database itself (admin_user)
+kubectl exec -it postgresql-0 -n infra -- \
+  env PGPASSWORD="old-password" \
+  psql -U admin_user -d postgres -c "ALTER USER admin_user PASSWORD 'NewPassword123!';"
+
+# Or update postgres superuser password (if needed)
+kubectl patch secret postgresql -n infra \
   -p '{"stringData":{"postgres-password":"NewPassword123!"}}'
 
-# Step 2: Update database itself
-kubectl exec -it postgresql-0 -n erp -- \
+kubectl exec -it postgresql-0 -n infra -- \
+  env PGPASSWORD="old-password" \
   psql -U postgres -c "ALTER USER postgres PASSWORD 'NewPassword123!';"
 
 # Step 3: Redeploy app (will auto-sync new password)
