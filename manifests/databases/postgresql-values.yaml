@@ -108,10 +108,7 @@ metrics:
       memory: "256Mi"
       cpu: "200m"
   # Use standard Bitnami postgres-exporter image (not custom)
-  image:
-    registry: docker.io
-    repository: bitnami/postgres-exporter
-    tag: ""  # Use chart default
+  # Leave image config to use chart defaults
 
 ## Backup configuration
 backup:

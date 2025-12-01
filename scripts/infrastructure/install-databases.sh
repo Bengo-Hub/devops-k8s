@@ -76,6 +76,7 @@ primary:
     repository: codevertex/postgresql-pgvector
     tag: POSTGRES_IMAGE_TAG_PLACEHOLDER
     pullPolicy: IfNotPresent
+  
   ## Enable pgvector extension initialization scripts
   initdb:
     scripts:
@@ -155,10 +156,7 @@ metrics:
       memory: "256Mi"
       cpu: "200m"
   # Use standard Bitnami postgres-exporter image (not custom)
-  image:
-    registry: docker.io
-    repository: bitnami/postgres-exporter
-    tag: ""  # Use chart default
+  # Leave image config to use chart defaults
 
 ## Network policy
 networkPolicy:
