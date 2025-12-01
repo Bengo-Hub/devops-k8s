@@ -24,7 +24,7 @@ metrics:
   enabled: true
   serviceMonitor:
     enabled: true
-    namespace: monitoring
+    namespace: infra
 
 networkPolicy:
   enabled: false
