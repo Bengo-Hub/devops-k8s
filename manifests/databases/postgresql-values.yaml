@@ -1,12 +1,27 @@
-    - name: registry-credentials
-  image:
-    registry: docker.io
-    repository: codevertex/postgresql-pgvector
-    tag: latest
+## Bitnami PostgreSQL Helm Chart Values
+## Custom image with pgvector extension
+
+## Global settings
+global:
+  postgresql:
+    auth:
+      postgresPassword: "" # Leave empty, will be auto-generated
+      username: "admin_user"
+      password: ""         # Leave empty, will be auto-generated
+      database: "postgres"
+  # FIPS compliance settings (required for newer chart versions)
+  defaultFips: false
 
 # FIPS OpenSSL configuration
 fips:
   openssl: false
+
+## Custom PostgreSQL image with pgvector extension
+image:
+  registry: docker.io
+  repository: codevertex/postgresql-pgvector
+  tag: latest
+  pullPolicy: IfNotPresent
 
 ## Primary PostgreSQL configuration
 primary:

@@ -4,6 +4,13 @@
 ## Global settings
 global:
   redis:
+    password: ""  # Leave empty, will be set via Helm --set or auto-generated
+
+## Architecture
+architecture: standalone  # Use 'replication' for HA with replicas
+
+## Master configuration
+master:
   resources:
     requests:
       memory: "256Mi"
