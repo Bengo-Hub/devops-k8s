@@ -155,7 +155,6 @@ metrics:
     limits:
       memory: "256Mi"
       cpu: "200m"
-  # Use standard Bitnami postgres-exporter image (not custom)
   # Leave image config to use chart defaults
 
 ## Network policy
