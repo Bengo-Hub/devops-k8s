@@ -8,12 +8,12 @@ on:
       enable_cleanup:
         description: 'Enable cluster cleanup (deletes all data). Default: true (enabled). Set to false to disable.'
         required: false
-        default: true
+        default: false
         type: boolean
       force_reprovision:
         description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
         required: false
-        default: true
+        default: false
         type: boolean
 
 jobs:
