@@ -67,15 +67,15 @@ global:
 fips:
   openssl: false
 
-## Custom PostgreSQL image with pgvector extension
-image:
-  registry: docker.io
-  repository: codevertex/postgresql-pgvector
-  tag: POSTGRES_IMAGE_TAG_PLACEHOLDER
-  pullPolicy: IfNotPresent
-
 ## Primary PostgreSQL configuration
 primary:
+  ## Custom PostgreSQL image with pgvector extension
+  ## Uses custom image built via GitHub Actions workflow
+  image:
+    registry: docker.io
+    repository: codevertex/postgresql-pgvector
+    tag: POSTGRES_IMAGE_TAG_PLACEHOLDER
+    pullPolicy: IfNotPresent
   ## Enable pgvector extension initialization scripts
   initdb:
     scripts:
