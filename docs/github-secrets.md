@@ -280,8 +280,8 @@ export REDIS_PASSWORD="Vertex2020!"
 
 ./scripts/setup_env_secrets.sh
 # ↓
-# Reads: kubectl get secret postgresql -n erp
-# Reads: kubectl get secret redis -n erp
+# Reads: kubectl get secret postgresql -n infra
+# Reads: kubectl get secret redis -n infra
 # ↓
 # Creates: erp-api-env secret with correct passwords
 ```
@@ -324,7 +324,7 @@ GitHub Actions              bengobox-erp-api          Kubernetes
      │                            │ setup_env_secrets.sh   │
      │                            │         │              │
      │                            │  kubectl get secret    │
-     │                            │  postgresql -n erp     │
+     │                            │  postgresql -n infra  │
      │                            │         │              │
      │                            │         ◄──────────────┤
      │                            │         │              │ Returns:
