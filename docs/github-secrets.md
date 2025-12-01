@@ -372,12 +372,16 @@ GitHub Actions              bengobox-erp-api          Kubernetes
 
 **Check What Password is Stored:**
 ```bash
-# Get PostgreSQL password from Kubernetes
-kubectl get secret postgresql -n erp \
+# Get PostgreSQL admin_user password from Kubernetes (recommended)
+kubectl get secret postgresql -n infra \
+  -o jsonpath='{.data.admin-user-password}' | base64 -d
+
+# Get PostgreSQL postgres superuser password (if needed)
+kubectl get secret postgresql -n infra \
   -o jsonpath='{.data.postgres-password}' | base64 -d
 
 # Get Redis password
-kubectl get secret redis -n erp \
+kubectl get secret redis -n infra \
   -o jsonpath='{.data.redis-password}' | base64 -d
 ```
 
