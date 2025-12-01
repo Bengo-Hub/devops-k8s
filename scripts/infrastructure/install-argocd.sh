@@ -24,21 +24,50 @@ ensure_cert_manager "${SCRIPT_DIR}"
 ensure_namespace "argocd"
 
 # Install or upgrade Argo CD
+FORCE_UPGRADE=${FORCE_UPGRADE:-false}
+
+# Check if Argo CD is already installed
 if kubectl -n argocd get deploy argocd-server >/dev/null 2>&1; then
   # Check if Argo CD is healthy
   READY_REPLICAS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   DESIRED_REPLICAS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
   
-  if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" -eq "$DESIRED_REPLICAS" ]; then
+  if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" -eq "$DESIRED_REPLICAS" ] && [ "$FORCE_UPGRADE" != "true" ]; then
     log_success "Argo CD already installed and healthy - skipping upgrade"
-    log_info "To force upgrade, set FORCE_UPGRADE=true or delete the deployment"
+    log_info "To force upgrade, set FORCE_UPGRADE=true"
   else
-    log_info "Argo CD exists but not healthy. Upgrading..."
-    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    if [ "$FORCE_UPGRADE" = "true" ]; then
+      log_info "Force upgrade requested. Upgrading Argo CD..."
+    else
+      log_info "Argo CD exists but not healthy. Upgrading..."
+    fi
+    # Use apply - handle "already exists" errors gracefully (idempotent operation)
+    set +e
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml >/dev/null 2>&1
+    APPLY_EXIT=$?
+    set -e
+    # Check if apply succeeded or if resources already exist (both are OK)
+    if [ $APPLY_EXIT -eq 0 ] || kubectl -n argocd get deploy argocd-server >/dev/null 2>&1; then
+      log_success "Argo CD manifests applied (some resources may already exist)"
+    else
+      log_error "Failed to apply Argo CD manifests"
+      exit 1
+    fi
   fi
 else
   log_info "Installing Argo CD..."
-  kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  # Apply manifest - handle "already exists" errors gracefully (idempotent operation)
+  set +e
+  kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml >/dev/null 2>&1
+  APPLY_EXIT=$?
+  set -e
+  # Check if apply succeeded or if resources already exist (both are OK)
+  if [ $APPLY_EXIT -eq 0 ] || kubectl -n argocd get deploy argocd-server >/dev/null 2>&1; then
+    log_success "Argo CD installed (some resources may already exist)"
+  else
+    log_error "Failed to install Argo CD"
+    exit 1
+  fi
 fi
 
 # Wait for pods to be ready
@@ -109,3 +138,5 @@ echo -e "${BLUE}Alternative Access (port-forward):${NC}"
 echo "kubectl port-forward svc/argocd-server -n argocd 8080:443"
 echo "Then visit: https://localhost:8080"
 echo ""
+
+exit 0
