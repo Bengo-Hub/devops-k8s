@@ -726,14 +726,15 @@ else
     fi
     
     exit 1
-    fi
   fi
 fi
 
 # Function to fix orphaned Redis resources
 fix_orphaned_redis_resources() {
   log_info "Checking for orphaned Redis resources..."
-  
+  # Fix orphaned resources using the generic fix_orphaned_resources function
+  fix_orphaned_resources "redis" "${NAMESPACE}" || true
+}
 
 # Install or upgrade Redis (idempotent)
 log_section "Installing/upgrading Redis"
@@ -1046,5 +1047,4 @@ echo "3. Update service secrets with connection strings pointing to infra namesp
 echo "4. Deploy services via Argo CD - databases will be created automatically"
 echo ""
 log_success "Done!"
-
 exit 0
