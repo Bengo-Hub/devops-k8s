@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 source "${SCRIPT_DIR}/../tools/helm-utils.sh"
+source "${SCRIPT_DIR}/../tools/database-utils.sh"
 
 # Configuration
 NAMESPACE=${DB_NAMESPACE:-infra}
@@ -164,238 +165,43 @@ if [[ "$PG_DATABASE" != "postgres" ]]; then
     sed -i '' "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
 fi
 
+# Build PostgreSQL Helm arguments
+PG_HELM_ARGS=()
+PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
+
 # Check if Prometheus Operator CRDs exist (for ServiceMonitor)
-PROMETHEUS_OPERATOR_CRDS_EXIST=false
 if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
-    PROMETHEUS_OPERATOR_CRDS_EXIST=true
-    log_info "Prometheus Operator CRDs detected - ServiceMonitor will be enabled"
+  log_info "Prometheus Operator CRDs detected - ServiceMonitor will be enabled"
+  PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true --set metrics.serviceMonitor.namespace="${MONITORING_NS}")
 else
-    log_info "Prometheus Operator CRDs not found - ServiceMonitor disabled (will be enabled after monitoring stack installation)"
-    log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
-  # If POSTGRES_PASSWORD is explicitly set, check if it matches current secret
-  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-    # Get current password from secret
-    CURRENT_PG_PASS=$(kubectl -n "${NAMESPACE}" get secret postgresql -o jsonpath='{.data.postgres-password}' 2>/dev/null | base64 -d || true)
-    
-      # Only skip Helm upgrade when BOTH:
-      #   - the password matches, and
-      #   - PostgreSQL is already healthy
-      # This prevents us from skipping upgrades when pods are failing
-      if [[ "$CURRENT_PG_PASS" == "$POSTGRES_PASSWORD" && "${FORCE_DB_INSTALL}" != "true" && "$IS_HEALTHY" == "true" ]]; then
-        log_success "PostgreSQL password unchanged and StatefulSet healthy - skipping upgrade"
-      log_info "Current secret password matches provided POSTGRES_PASSWORD"
-      HELM_PG_EXIT=0
-    else
-      log_warning "Password mismatch detected"
-      log_info "Current password length: ${#CURRENT_PG_PASS} chars"
-      log_info "New password length: ${#POSTGRES_PASSWORD} chars"
-        log_warning "WARNING: Updating passwords requires pod restart and may take time"
-      log_info "Checking if PostgreSQL is currently healthy..."
-      
-        # Check if PostgreSQL is currently running - if yes, sync DATABASE passwords + secret without Helm upgrade
-      if kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1"; then
-          log_info "PostgreSQL is healthy. Syncing superuser/admin passwords with POSTGRES_PASSWORD..."
-          
-          # Try to update actual database passwords first using the CURRENT_PG_PASS
-          PG_POD=$(kubectl -n "${NAMESPACE}" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-          if [[ -n "$PG_POD" && -n "$CURRENT_PG_PASS" ]]; then
-            # Update postgres superuser password
-            kubectl -n "${NAMESPACE}" exec "$PG_POD" -- \
-              env PGPASSWORD="$CURRENT_PG_PASS" \
-              psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH PASSWORD '${POSTGRES_PASSWORD}';" \
-              >/dev/null 2>&1 || log_warning "Failed to update postgres superuser password in database (will rely on secret/Helm sync)"
+  log_info "Prometheus Operator CRDs not found - ServiceMonitor disabled (will be enabled after monitoring stack installation)"
+  log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
+fi
 
-            # Update admin_user password (used for per‑service DB management)
-            ADMIN_PASS="$POSTGRES_PASSWORD"
-            kubectl -n "${NAMESPACE}" exec "$PG_POD" -- \
-              env PGPASSWORD="$CURRENT_PG_PASS" \
-              psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER admin_user WITH PASSWORD '${ADMIN_PASS}';" \
-              >/dev/null 2>&1 || log_warning "Failed to update admin_user password in database"
-          else
-            log_warning "Could not determine PostgreSQL pod name or current password; skipping in‑database password sync"
-          fi
-          
-          # Update the secret directly - keep ALL secret fields in sync with POSTGRES_PASSWORD
-          ADMIN_PASS="$POSTGRES_PASSWORD"
-        kubectl create secret generic postgresql \
-          --from-literal=postgres-password="$POSTGRES_PASSWORD" \
-          --from-literal=password="$ADMIN_PASS" \
-          --from-literal=admin-user-password="$ADMIN_PASS" \
-          -n "${NAMESPACE}" \
-          --dry-run=client -o yaml | kubectl apply -f -
-        
-        log_success "Password updated in secret. PostgreSQL will use it on next restart."
-        log_warning "Note: Password change will take effect on next pod restart"
-        HELM_PG_EXIT=0
-        POSTGRES_DEPLOYED=true
-      else
-        log_warning "PostgreSQL not healthy. Checking for stuck Helm operation..."
-        
-        # Fix stuck Helm operation before upgrading
-        fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
-        
-        log_warning "Performing Helm upgrade..."
-        helm upgrade postgresql bitnami/postgresql \
-          --version 16.7.27 \
-          -n "${NAMESPACE}" \
-          --reset-values \
-          "${PG_HELM_ARGS[@]}" \
-          --timeout=10m \
-          --wait=false 2>&1 | tee /tmp/helm-postgresql-install.log
-        HELM_PG_EXIT=${PIPESTATUS[0]}
-      fi
-    fi
-  elif [[ "$IS_HEALTHY" == "true" ]]; then
-    log_success "PostgreSQL already installed and healthy - skipping"
-    HELM_PG_EXIT=0
-    POSTGRES_DEPLOYED=true
-  else
-    log_warning "PostgreSQL exists but not ready; checking for stuck operation..."
-    
-    # Fix stuck Helm operation
-    fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
-    
-    log_warning "Performing safe upgrade..."
-    helm upgrade postgresql bitnami/postgresql \
-      --version 16.7.27 \
-      -n "${NAMESPACE}" \
-      --reuse-values \
-      --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-    HELM_PG_EXIT=${PIPESTATUS[0]}
+# Install or upgrade PostgreSQL
+set +e
+if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
+  # PostgreSQL Helm release exists - handle upgrade or skip
+  handle_existing_database "postgresql" "postgresql" "${NAMESPACE}" "bitnami/postgresql" "16.7.27" "PG_HELM_ARGS" "POSTGRES_PASSWORD" "${FORCE_DB_INSTALL:-false}"
+  HELM_PG_EXIT=$HELM_EXIT_CODE
+  if [[ $HELM_PG_EXIT -eq 0 ]]; then
     POSTGRES_DEPLOYED=true
   fi
-  
-  # POSTGRES_DEPLOYED is set to true above if already installed/healthy
-  # If not set, it means we need to install (will be checked below)
-
 else
-  log_info "PostgreSQL not found; installing fresh"
-  
-  # Only clean up orphaned resources if cleanup mode is active
-  if is_cleanup_mode; then
-    log_info "Cleanup mode active - checking for orphaned PostgreSQL resources..."
-    
-    # Check for StatefulSets first (these recreate resources)
-    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o name 2>/dev/null || true)
-    if [ -n "$STATEFULSETS" ]; then
-      log_warning "Found PostgreSQL StatefulSet - deleting (cleanup mode)..."
-      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-    fi
-    
-    # Delete PVCs to ensure fresh data
-    log_warning "Deleting PostgreSQL PVCs (cleanup mode)..."
-    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/instance=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-    
-    # Check for failed/pending Helm release
-    if helm -n "${NAMESPACE}" list -q | grep -q "^postgresql$" 2>/dev/null; then
-      log_warning "Found existing Helm release - checking for stuck operation..."
-      
-      # Fix stuck Helm operation before uninstalling
-      fix_stuck_helm_operation "postgresql" "${NAMESPACE}"
-      
-      log_warning "Uninstalling Helm release (cleanup mode)..."
-      helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
-      sleep 5
-    fi
-    
-    # Clean up orphaned resources
-    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null | grep -v NAME || true)
-    if [ -n "$ORPHANED_RESOURCES" ]; then
-      log_warning "Cleaning up orphaned resources (cleanup mode)..."
-      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --wait=true --grace-period=0 --force 2>/dev/null || true
-      sleep 10
-    fi
-  else
-    log_info "Cleanup mode inactive - checking for existing resources to update..."
-      
-      # Fix orphaned resources before attempting Helm operations
-      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-      
-    # If resources exist but Helm release doesn't, try to upgrade anyway (Helm will handle it)
-    if kubectl get statefulset postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
-      log_warning "PostgreSQL StatefulSet exists but Helm release missing - attempting upgrade..."
-      helm upgrade postgresql bitnami/postgresql \
-        --version 16.7.27 \
-        -n "${NAMESPACE}" \
-        "${PG_HELM_ARGS[@]}" \
-        --timeout=10m \
-        --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-      HELM_PG_EXIT=${PIPESTATUS[0]}
-      set -e
-      if [ $HELM_PG_EXIT -eq 0 ]; then
-        log_success "PostgreSQL upgraded"
-        POSTGRES_DEPLOYED=true
-      else
-        log_warning "PostgreSQL upgrade failed (release missing). Falling back to fresh install..."
-        POSTGRES_DEPLOYED=false
-        HELM_PG_EXIT=1
-      fi
-    fi
-  fi
-  
-  # Install PostgreSQL if cleanup mode or no existing resources
-  if [ "${POSTGRES_DEPLOYED:-false}" != "true" ]; then
-      # Ensure resources are fixed before fresh install
-      fix_orphaned_resources "postgresql" "${NAMESPACE}" || true
-      
-    log_info "Installing PostgreSQL..."
-    helm install postgresql bitnami/postgresql \
-      --version 16.7.27 \
-      -n "${NAMESPACE}" \
-      "${PG_HELM_ARGS[@]}" \
-      --timeout=10m \
-      --wait 2>&1 | tee /tmp/helm-postgresql-install.log
-    HELM_PG_EXIT=${PIPESTATUS[0]}
-    if [ $HELM_PG_EXIT -eq 0 ]; then
-      POSTGRES_DEPLOYED=true
-    fi
+  # PostgreSQL not found - install fresh
+  handle_fresh_database_install "postgresql" "postgresql" "${NAMESPACE}" "bitnami/postgresql" "16.7.27" "PG_HELM_ARGS" "$(is_cleanup_mode && echo true || echo false)"
+  HELM_PG_EXIT=$HELM_EXIT_CODE
+  if [[ $HELM_PG_EXIT -eq 0 ]]; then
+    POSTGRES_DEPLOYED=true
   fi
 fi
 set -e
 
-if [ $HELM_PG_EXIT -eq 0 ]; then
+# Verify PostgreSQL installation
+if [[ $HELM_PG_EXIT -eq 0 ]]; then
   log_success "PostgreSQL ready"
 else
-  log_warning "PostgreSQL Helm operation reported exit code $HELM_PG_EXIT"
-  log_warning "Checking actual PostgreSQL status..."
-  
-  # Wait a bit for pods to update
-  sleep 10
-  
-  # Check if PostgreSQL StatefulSet exists and has ready replicas
-  PG_READY=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
-  PG_REPLICAS=$(kubectl get statefulset postgresql -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
-  
-  # Handle empty values (StatefulSet might not exist)
-  PG_READY=${PG_READY:-0}
-  PG_REPLICAS=${PG_REPLICAS:-0}
-  
-  log_info "PostgreSQL StatefulSet: ${PG_READY}/${PG_REPLICAS} replicas ready"
-  
-  # Check if PG_READY is a valid number before comparison
-  if [[ "$PG_READY" =~ ^[0-9]+$ ]] && [ "$PG_READY" -ge 1 ]; then
-    log_success "PostgreSQL is actually running! Continuing..."
-    log_warning "Note: Helm reported a timeout, but PostgreSQL is healthy"
-  else
-    log_error "PostgreSQL installation/upgrade failed"
-    log_warning "=== Helm output (last 50 lines) ==="
-    tail -50 /tmp/helm-postgresql-install.log 2>/dev/null || true
-    log_warning "=== Pod status ==="
-    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-    log_warning "=== Pod events ==="
-    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i postgresql | tail -10 || true
-    log_warning "=== PVC status ==="
-    kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql 2>/dev/null || true
-    
-    # Check for common issues
-    log_warning "=== Diagnosing issues ==="
-    PENDING_PVCS=$(kubectl get pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
-    if [ "$PENDING_PVCS" -gt 0 ]; then
-      log_error "Found ${PENDING_PVCS} Pending PVCs - storage may not be available"
-    fi
-    
+  if ! verify_database_installation "postgresql" "postgresql" "${NAMESPACE}"; then
     exit 1
   fi
 fi
@@ -427,192 +233,55 @@ if [[ -z "${REDIS_PASSWORD:-}" ]]; then
   exit 1
   fi
 fi
+# Install or upgrade Redis
 set +e
 if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
-  # Check if Redis is healthy
-  IS_REDIS_HEALTHY=$(kubectl -n "${NAMESPACE}" get statefulset redis-master -o jsonpath='{.status.readyReplicas}' 2>/dev/null | grep -q "1" && echo "true" || echo "false")
-  
-  # Always ensure password matches GitHub secrets if REDIS_PASSWORD is provided
+  # Redis Helm release exists - ensure password matches GitHub secrets
   if [[ -n "${REDIS_PASSWORD:-}" ]]; then
-    # Get current password from secret
-    CURRENT_REDIS_PASS=$(kubectl -n "${NAMESPACE}" get secret redis -o jsonpath='{.data.redis-password}' 2>/dev/null | base64 -d || true)
+    CURRENT_REDIS_PASS=$(get_secret_password "redis" "redis-password" "${NAMESPACE}")
     
-    # Always update secret to match GitHub secrets password (source of truth)
+    # Always update secret to match GitHub secrets (source of truth)
     if [[ "$CURRENT_REDIS_PASS" != "$REDIS_PASSWORD" ]]; then
       log_warning "Updating Redis secret to match GitHub secrets password..."
-      log_info "Current password length: ${#CURRENT_REDIS_PASS} chars"
-      log_info "GitHub secrets password length: ${#REDIS_PASSWORD} chars"
-      
-      # Update the secret to match GitHub secrets (source of truth)
       kubectl create secret generic redis \
         --from-literal=redis-password="$REDIS_PASSWORD" \
         -n "${NAMESPACE}" \
         --dry-run=client -o yaml | kubectl apply -f -
-      
       log_success "Redis secret updated to match GitHub secrets password"
-    else
-      log_success "Redis password already matches GitHub secrets"
     fi
-    
-    # If Redis is healthy, no need to upgrade - secret is already updated
-    if [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
-      log_success "Redis is healthy and password matches GitHub secrets - skipping upgrade"
-      HELM_REDIS_EXIT=0
-    else
-        -f "${MANIFESTS_DIR}/databases/redis-values.yaml" \
-        "${REDIS_HELM_ARGS[@]}" \
-        --timeout=10m \
-        --wait=false 2>&1 | tee /tmp/helm-redis-install.log
-      HELM_REDIS_EXIT=${PIPESTATUS[0]}
-    fi
-  elif [[ "$IS_REDIS_HEALTHY" == "true" ]]; then
-    log_success "Redis already installed and healthy - skipping"
-    HELM_REDIS_EXIT=0
-  else
-      --timeout=10m \
-      --wait=false 2>&1 | tee /tmp/helm-redis-install.log
-    HELM_REDIS_EXIT=${PIPESTATUS[0]}
   fi
-else
-  log_info "Redis not found; installing fresh"
   
-  # Only clean up orphaned resources if cleanup mode is active
-  if is_cleanup_mode; then
-    log_info "Cleanup mode active - checking for orphaned Redis resources..."
-    
-    # Check for StatefulSets first (these recreate resources)
-    STATEFULSETS=$(kubectl get statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o name 2>/dev/null || true)
-    # Also check for redis-master specifically
-    if kubectl get statefulset redis-master -n "${NAMESPACE}" >/dev/null 2>&1; then
-      STATEFULSETS="${STATEFULSETS} statefulset/redis-master"
-    fi
-    
-    if [ -n "$STATEFULSETS" ]; then
-      log_warning "Found Redis StatefulSet - deleting (cleanup mode)..."
-      # Force delete to ensure PVCs are released
-      kubectl delete statefulset -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --wait=true --grace-period=0 --force 2>/dev/null || true
-      kubectl delete statefulset redis-master -n "${NAMESPACE}" --wait=true --grace-period=0 --force 2>/dev/null || true
-      kubectl delete statefulset redis-replicas -n "${NAMESPACE}" --wait=true --grace-period=0 --force 2>/dev/null || true
-    fi
-    
-    # Delete PVCs to ensure fresh data
-    log_warning "Deleting Redis PVCs (cleanup mode)..."
-    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --wait=true --grace-period=0 --force 2>/dev/null || true
-    kubectl delete pvc -n "${NAMESPACE}" -l app.kubernetes.io/instance=redis --wait=true --grace-period=0 --force 2>/dev/null || true
-    
-    # Check for failed/pending Helm release
-    if helm -n "${NAMESPACE}" list -q | grep -q "^redis$" 2>/dev/null; then
-      log_warning "Found existing Helm release - checking for stuck operation..."
-      
-      # Fix stuck Helm operation before uninstalling
-      fix_stuck_helm_operation "redis" "${NAMESPACE}"
-      
-      log_warning "Uninstalling Helm release (cleanup mode)..."
-      helm uninstall redis -n "${NAMESPACE}" --wait 2>/dev/null || true
-      sleep 5
-    fi
-    
-    # Clean up orphaned resources
-    ORPHANED_RESOURCES=$(kubectl get networkpolicy,configmap,service -n "${NAMESPACE}" -l app.kubernetes.io/name=redis 2>/dev/null | grep -v NAME || true)
-    if [ -n "$ORPHANED_RESOURCES" ]; then
-      log_warning "Cleaning up orphaned resources (cleanup mode)..."
-      kubectl delete pod,statefulset,service,networkpolicy,configmap -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --wait=true --grace-period=0 --force 2>/dev/null || true
-      sleep 10
-    fi
-  else
-    log_info "Cleanup mode inactive - checking for existing resources to update..."
-  fi
-  helm install redis bitnami/redis \
-    -n "${NAMESPACE}" \
-    "${REDIS_HELM_ARGS[@]}" \
-    --timeout=10m \
-    --wait=false 2>&1 | tee /tmp/helm-redis-install.log
-  HELM_REDIS_EXIT=${PIPESTATUS[0]}
+  # Handle upgrade or skip
+  handle_existing_database "redis" "redis-master" "${NAMESPACE}" "bitnami/redis" "" "REDIS_HELM_ARGS" "REDIS_PASSWORD" "${FORCE_DB_INSTALL:-false}"
+  HELM_REDIS_EXIT=$HELM_EXIT_CODE
+else
+  # Redis not found - install fresh
+  handle_fresh_database_install "redis" "redis-master" "${NAMESPACE}" "bitnami/redis" "" "REDIS_HELM_ARGS" "$(is_cleanup_mode && echo true || echo false)"
+  HELM_REDIS_EXIT=$HELM_EXIT_CODE
 fi
 set -e
 
-if [ $HELM_REDIS_EXIT -eq 0 ]; then
+# Verify Redis installation
+if [[ $HELM_REDIS_EXIT -eq 0 ]]; then
   log_success "Redis Helm operation completed"
-  log_info "Waiting for Redis pods to be ready..."
-  sleep 10
-  
-  # Check actual pod status
-  REDIS_READY=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
-  REDIS_REPLICAS=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
-  
-  # Handle empty values
-  REDIS_READY=${REDIS_READY:-0}
-  REDIS_REPLICAS=${REDIS_REPLICAS:-0}
-  
+  # Check if Redis is actually ready
+  REDIS_READY=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   if [[ "$REDIS_READY" =~ ^[0-9]+$ ]] && [ "$REDIS_READY" -ge 1 ]; then
-    log_success "Redis is ready (${REDIS_READY}/${REDIS_REPLICAS} replicas)"
+    log_success "Redis is ready"
   else
-    log_warning "Redis pods not ready yet (${REDIS_READY}/${REDIS_REPLICAS} replicas)"
-    log_info "Checking pod status..."
-    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis || true
-    
-    # Check for image pull errors
-    IMAGE_PULL_ERRORS=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
-      jq -r '.items[] | select(.status.containerStatuses[]?.state.waiting.reason == "ImagePullBackOff" or .status.containerStatuses[]?.state.waiting.reason == "ErrImagePull") | .metadata.name' 2>/dev/null || true)
-    
-    if [ -n "$IMAGE_PULL_ERRORS" ]; then
-      log_error "Image pull errors detected for pods: $IMAGE_PULL_ERRORS"
-      log_warning "Checking registry-credentials secret..."
-      
-      if ! kubectl get secret registry-credentials -n "${NAMESPACE}" >/dev/null 2>&1; then
-        log_error "ERROR: registry-credentials secret missing in namespace ${NAMESPACE}"
-        log_warning "This secret is required for Docker Hub authentication."
-        log_warning "Please ensure REGISTRY_USERNAME, REGISTRY_PASSWORD, and REGISTRY_EMAIL are set in GitHub secrets."
-        log_warning "The workflow should create this automatically, but it may have failed."
-      else
-        log_success "registry-credentials secret exists"
-        log_info "Checking if pods are using imagePullSecrets..."
-        kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o json 2>/dev/null | \
-          jq -r '.items[] | "\(.metadata.name): imagePullSecrets=\(.spec.imagePullSecrets // [] | map(.name) | join(", "))"' 2>/dev/null || true
-      fi
-      
-      # Check if the image tag exists or suggest using latest
-      log_warning "Note: If image pull fails, the Redis image tag may not exist."
-      log_warning "Consider using 'latest' tag or a different version."
-    fi
-    
-    # Check for crash loops
-    CRASH_LOOP=$(kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis -o jsonpath='{.items[*].status.containerStatuses[*].state.waiting.reason}' 2>/dev/null | grep -i "CrashLoop\|Error" || echo "")
-    if [[ -n "$CRASH_LOOP" ]]; then
-      log_error "Crash loop detected. Checking logs..."
-      kubectl logs -n "${NAMESPACE}" -l app.kubernetes.io/name=redis --tail=50 || true
-    fi
-    
     log_info "Redis installation initiated. Pods will start in background."
   fi
 else
-  log_warning "Redis Helm operation reported exit code $HELM_REDIS_EXIT"
-  log_warning "Checking actual Redis status..."
-  
-  # Wait a bit for pods to update
-  sleep 10
-  
-  # Check if Redis StatefulSet exists and has ready replicas
-  REDIS_READY=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "")
-  REDIS_REPLICAS=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "")
-  
-  # Handle empty values
-  REDIS_READY=${REDIS_READY:-0}
-  REDIS_REPLICAS=${REDIS_REPLICAS:-0}
-  
-  log_info "Redis StatefulSet: ${REDIS_READY}/${REDIS_REPLICAS} replicas ready"
-  
-  if [[ "$REDIS_READY" =~ ^[0-9]+$ ]] && [ "$REDIS_READY" -ge 1 ]; then
-    log_success "Redis is actually running! Continuing..."
-    log_warning "Note: Helm reported a timeout, but Redis is healthy"
-  else
-    log_error "Redis installation/upgrade failed"
-    log_warning "=== Helm output (last 50 lines) ==="
-    tail -50 /tmp/helm-redis-install.log 2>/dev/null || true
-    log_warning "=== Pod status ==="
-    kubectl get pods -n "${NAMESPACE}" -l app.kubernetes.io/name=redis 2>/dev/null || true
-    log_warning "=== Pod events ==="
-    kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' 2>/dev/null | grep -i redis | tail -10 || true
+  if ! verify_database_installation "redis" "redis-master" "${NAMESPACE}"; then
+    exit 1
+  fi
+fi
+
+# Display credentials
+log_section "Database Credentials"
+
+# Get PostgreSQL password
+log_info "PostgreSQL Credentials:"
 POSTGRES_PASSWORD=$(kubectl get secret postgresql -n "${NAMESPACE}" -o jsonpath="{.data.postgres-password}" 2>/dev/null | base64 -d || echo "")
 ADMIN_PASSWORD=$(kubectl get secret postgresql -n "${NAMESPACE}" -o jsonpath="{.data.admin-user-password}" 2>/dev/null | base64 -d || echo "$POSTGRES_PASSWORD")
 
