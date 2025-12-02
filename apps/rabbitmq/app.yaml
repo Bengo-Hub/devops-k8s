@@ -45,7 +45,7 @@ spec:
         ingress:
           enabled: true
           ingressClassName: nginx
-          hostname: rabbitmq.codevertex.co.ke
+          hostname: rabbitmq.codevertexitsolutions.co.ke
           path: /
           pathType: Prefix
           annotations:
@@ -55,8 +55,8 @@ spec:
           tls: true
           extraTls:
             - hosts:
-                - rabbitmq.codevertex.co.ke
-              secretName: rabbitmq-codevertex-tls
+                - rabbitmq.codevertexitsolutions.co.ke
+              secretName: rabbitmq-codevertexitsolutions-tls
   destination:
     server: https://kubernetes.default.svc
     namespace: infra
