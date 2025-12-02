@@ -114,10 +114,13 @@ fi
 
 log_info "Using PostgreSQL pod: ${PG_POD}"
 
-# Execute SQL script
+# Copy SQL script to pod and execute
+log_info "Copying SQL script to pod..."
+kubectl cp "${SQL_FILE}" "${NAMESPACE}/${PG_POD}:/tmp/superset-setup.sql" -c postgresql
+
 log_info "Executing SQL script..."
 kubectl exec -n "${NAMESPACE}" -c postgresql "${PG_POD}" \
-    -- psql -U admin_user -d postgres -f - < "${SQL_FILE}" || {
+    -- psql -U admin_user -d postgres -f /tmp/superset-setup.sql || {
     log_error "Failed to execute SQL script"
     rm -f "${SQL_FILE}"
     exit 1

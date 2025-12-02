@@ -103,11 +103,18 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     fi
 done
 
-# Get PostgreSQL pod
-PG_POD=$(kubectl -n "$PG_NAMESPACE" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+# Get PostgreSQL pod (custom manifests use app=postgresql label)
+PG_POD=$(kubectl -n "$PG_NAMESPACE" get pod -l app=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+
+if [[ -z "$PG_POD" ]]; then
+    # Fallback: try Helm label
+    PG_POD=$(kubectl -n "$PG_NAMESPACE" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+fi
 
 if [[ -z "$PG_POD" ]]; then
     log_error "Could not find PostgreSQL pod in namespace $PG_NAMESPACE"
+    log_error "Checked labels: app=postgresql, app.kubernetes.io/name=postgresql"
+    kubectl get pods -n "$PG_NAMESPACE" | grep -E "NAME|postgresql" || true
     exit 1
 fi
 
@@ -115,11 +122,11 @@ log_info "Found PostgreSQL pod: ${PG_POD}"
 
 # Create database if not exists
 log_info "Creating database '${SERVICE_DB_NAME}'..."
-kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
     psql -U "$ADMIN_USER" -d postgres -tc "
     SELECT 1 FROM pg_database WHERE datname = '${SERVICE_DB_NAME}'" | grep -q 1 || \
-kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
     psql -U "$ADMIN_USER" -d postgres -c "CREATE DATABASE ${SERVICE_DB_NAME};" || {
     log_warning "Database '${SERVICE_DB_NAME}' may already exist"
@@ -127,7 +134,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
 
 # Create user if not exists
 log_info "Creating user '${SERVICE_DB_USER}'..."
-kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
     psql -U "$ADMIN_USER" -d postgres -c "
     DO \$\$
@@ -142,7 +149,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
 
 # Grant privileges on database
 log_info "Granting privileges on database..."
-kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
     psql -U "$ADMIN_USER" -d postgres -c "
     GRANT ALL PRIVILEGES ON DATABASE ${SERVICE_DB_NAME} TO ${SERVICE_DB_USER};
@@ -150,7 +157,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
 
 # Grant schema privileges
 log_info "Granting schema privileges..."
-kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -- \
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
     psql -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c "
     GRANT ALL ON SCHEMA public TO ${SERVICE_DB_USER};
