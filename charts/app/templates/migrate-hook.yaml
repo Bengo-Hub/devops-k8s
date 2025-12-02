@@ -29,8 +29,10 @@ spec:
       - name: migrate
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
-        # Security context to prevent file descriptor issues
+        # Security context - run as root to allow apt-get and system operations
         securityContext:
+          runAsUser: 0
+          runAsGroup: 0
           capabilities:
             add:
             - SYS_RESOURCE
@@ -60,11 +62,31 @@ spec:
           echo "Image: {{ .Values.image.repository }}:{{ .Values.image.tag }}"
           
           # Install PostgreSQL client for database checking
+          echo "Installing PostgreSQL client..."
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update -qq -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/debian.sources \
-            -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" && \
-          apt-get install -y -qq --no-install-recommends postgresql-client >/dev/null 2>&1 || true
-          apt-get clean && rm -rf /var/lib/apt/lists/* || true
+          apt-get update -qq && \
+          apt-get install -y -qq --no-install-recommends postgresql-client netcat-openbsd && \
+          apt-get clean && rm -rf /var/lib/apt/lists/*
+          echo "✓ PostgreSQL client installed"
+          
+          # Debug: Print database connection parameters (hide password)
+          echo "Database connection parameters:"
+          echo "  DB_HOST: ${DB_HOST}"
+          echo "  DB_PORT: ${DB_PORT}"
+          echo "  DB_NAME: ${DB_NAME}"
+          echo "  DB_USER: ${DB_USER}"
+          echo "  DB_PASSWORD: ${DB_PASSWORD:+***set***}"
+          
+          # First, check if database host is reachable via network
+          echo "Checking network connectivity to database..."
+          if command -v nc >/dev/null 2>&1; then
+            if nc -zv "$DB_HOST" "$DB_PORT" 2>&1; then
+              echo "✓ Database host is reachable on network"
+            else
+              echo "✗ Cannot reach database host $DB_HOST:$DB_PORT"
+              echo "This might be a network policy, firewall, or DNS issue"
+            fi
+          fi
           
           # Wait for database to be ready
           echo "Waiting for database connection..."
@@ -78,14 +100,28 @@ spec:
               DB_READY=true
               echo "✓ Database connection established"
               break
+            else
+              ERROR_MSG=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+                -c "SELECT 1" 2>&1 || true)
+              echo "Waiting for database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+              if [ $RETRY_COUNT -eq 5 ] || [ $RETRY_COUNT -eq 15 ] || [ $RETRY_COUNT -eq 25 ]; then
+                echo "  Connection error: ${ERROR_MSG}"
+              fi
             fi
             RETRY_COUNT=$((RETRY_COUNT + 1))
-            echo "Waiting for database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
             sleep 2
           done
           
           if [ "$DB_READY" = "false" ]; then
             echo "✗ Failed to connect to database after $MAX_RETRIES attempts"
+            echo "Final connection error:"
+            PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" 2>&1 || true
+            echo ""
+            echo "Troubleshooting tips:"
+            echo "1. Verify database service is running: kubectl get pods -n <db-namespace>"
+            echo "2. Check secret values: kubectl get secret erp-api-env -n erp -o yaml"
+            echo "3. Verify network policies allow communication between namespaces"
+            echo "4. Check if database is accepting connections from this pod's IP"
             exit 1
           fi
           
