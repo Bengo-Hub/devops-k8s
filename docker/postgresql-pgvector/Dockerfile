@@ -1,26 +1,22 @@
-# Multi-stage Dockerfile: build pgvector on top of Bitnami PostgreSQL
-# This ensures compatibility with Bitnami Helm charts
+# Multi-stage Dockerfile: build pgvector with official PostgreSQL + Bitnami compatibility wrapper
+# This creates a Bitnami-compatible image using official postgres:16 as base
 
 # ---------------------------
 # Stage 1 — build pgvector
 # ---------------------------
-FROM bitnami/postgresql:16 AS builder
+FROM postgres:16 AS builder
 USER root
 
 # Install build dependencies
-RUN install_packages \
-    git \
-    ca-certificates \
-    build-essential \
-    postgresql-server-dev-16 \
-    || apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     build-essential \
     postgresql-server-dev-16 \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone pgvector
+# Clone and build pgvector
 ENV PGVECTOR_VERSION=v0.7.0
 RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector/pgvector.git /tmp/pgvector \
     && cd /tmp/pgvector \
@@ -28,21 +24,39 @@ RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector
     && make install
 
 # ---------------------------
-# Stage 2 — runtime image (Bitnami base)
+# Stage 2 — Bitnami-compatible runtime
 # ---------------------------
-FROM bitnami/postgresql:16
+FROM postgres:16
 
 USER root
 
-# Copy pgvector extension from builder
-COPY --from=builder /opt/bitnami/postgresql/lib/vector.so /opt/bitnami/postgresql/lib/
-COPY --from=builder /opt/bitnami/postgresql/share/extension/vector* /opt/bitnami/postgresql/share/extension/
+# Copy pgvector extension
+COPY --from=builder /usr/lib/postgresql/16/lib/vector.so /usr/lib/postgresql/16/lib/
+COPY --from=builder /usr/share/postgresql/16/extension/vector* /usr/share/postgresql/16/extension/
 
-# Ensure correct ownership
-RUN chown -R 1001:1001 /opt/bitnami/postgresql/lib/vector.so && \
-    chown -R 1001:1001 /opt/bitnami/postgresql/share/extension/vector* && \
-    chmod 755 /opt/bitnami/postgresql/lib/vector.so
+# Create Bitnami-compatible directory structure
+RUN mkdir -p /bitnami/postgresql/data \
+    /bitnami/postgresql/conf \
+    /opt/bitnami/postgresql/conf \
+    /opt/bitnami/postgresql/tmp \
+    /opt/bitnami/scripts/postgresql \
+    && chown -R postgres:postgres /bitnami \
+    && chown -R postgres:postgres /opt/bitnami \
+    && chmod -R 755 /bitnami /opt/bitnami
 
-USER 1001
+# Create symbolic links for Bitnami compatibility
+RUN ln -s /var/lib/postgresql/data /bitnami/postgresql/data/pgdata || true \
+    && ln -s /var/run/postgresql /bitnami/postgresql/run || true
 
-# Use Bitnami entrypoint (inherited)
+# Create writable /var/run/postgresql for lock files
+RUN mkdir -p /var/run/postgresql \
+    && chown -R postgres:postgres /var/run/postgresql \
+    && chmod 2777 /var/run/postgresql
+
+# Ensure pgvector is properly owned
+RUN chown postgres:postgres /usr/lib/postgresql/16/lib/vector.so \
+    && chown postgres:postgres /usr/share/postgresql/16/extension/vector*
+
+USER postgres
+
+# Default command inherited from postgres:16
