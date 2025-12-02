@@ -112,59 +112,7 @@ else
     kubectl describe pod postgresql-0 -n "${NAMESPACE}" || true
     POSTGRES_DEPLOYED=false
   fi
-fi
-
-# =============================================================================
-# Redis Installation Section  
-# =============================================================================
-
-# Check if cleanup mode is enabled
-if [ "${ENABLE_CLEANUP}" = "true" ]; then
-  log_warning "Cleanup mode: Deleting existing PostgreSQL resources..."
-  kubectl delete -f "${MANIFESTS_DIR}/postgresql-statefulset.yaml" --ignore-not-found=true --wait=true --grace-period=0 2>/dev/null || true
-  kubectl delete pvc -n "${NAMESPACE}" -l app=postgresql --wait=true --grace-period=0 2>/dev/null || true
-  sleep 5
-fi
-
-# Ensure PostgreSQL secret exists
-if ! kubectl get secret postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
-  log_info "Creating PostgreSQL secret with GitHub secrets..."
-  
-  # Use GitHub secrets for passwords
-  POSTGRES_PASS=${POSTGRES_PASSWORD:-$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)}
-  
-  kubectl create secret generic postgresql \
-    -n "${NAMESPACE}" \
-    --from-literal=password="${POSTGRES_PASS}" \
-    --from-literal=postgres-password="${POSTGRES_PASS}" \
-    --from-literal=admin-user-password="${POSTGRES_PASS}"
-  
-  log_success "PostgreSQL secret created"
-else
-  log_info "PostgreSQL secret already exists"
-fi
-
-# Apply PostgreSQL manifests
-log_info "Applying PostgreSQL custom manifests..."
-kubectl apply -f "${MANIFESTS_DIR}/postgresql-statefulset.yaml"
-
-# Wait for PostgreSQL to be ready
-log_info "Waiting for PostgreSQL to be ready..."
-kubectl wait --for=condition=ready pod/postgresql-0 -n "${NAMESPACE}" --timeout=300s || true
-
-# Check if healthy
-if kubectl get pod postgresql-0 -n "${NAMESPACE}" | grep -q "2/2.*Running"; then
-  log_success "PostgreSQL is ready and healthy"
-  POSTGRES_DEPLOYED=true
-else
-  log_error "PostgreSQL deployment may have issues"
-  kubectl describe pod postgresql-0 -n "${NAMESPACE}" || true
-fi
-
-set -e
-
-# PostgreSQL installation complete (using custom manifests)
-# Old Helm verification code removed - using kubectl wait instead
+fi  # End of ONLY_COMPONENT=redis check for PostgreSQL
 
 # =============================================================================
 # Redis Installation (Custom Manifests)
