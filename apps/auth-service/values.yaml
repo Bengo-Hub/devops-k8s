@@ -1,11 +1,49 @@
+# Auth Service Production Configuration
+nameOverride: auth-service
+fullnameOverride: auth-service
+
+# ============================================================================
+# IMAGE CONFIGURATION
+# ============================================================================
 image:
   repository: docker.io/codevertex/auth-service
-  tag: latest
+  tag: latest  # TODO: Pin to specific version for production
+  pullPolicy: IfNotPresent
   pullSecrets:
     - name: registry-credentials
+
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 2  # Start with 2 replicas for high availability
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
 service:
+  type: ClusterIP
   port: 4101
   targetPort: 4101
+
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
 env:
   - name: AUTH_SERVICE_ENV
     value: production
@@ -18,22 +56,58 @@ env:
         key: postgresUrl
   - name: AUTH_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
+  # Add Redis password if needed
+  - name: AUTH_REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: auth-service-secrets
+        key: REDIS_PASSWORD
+        optional: true
+
+# ============================================================================
+# RESOURCE LIMITS AND REQUESTS
+# ============================================================================
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# ============================================================================
+# HEALTH CHECKS
+# ============================================================================
 healthCheck:
   enabled: true
   readiness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 5
+    initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 3
+    timeoutSeconds: 5
+    failureThreshold: 6
   liveness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 10
+    initialDelaySeconds: 30
     periodSeconds: 20
     timeoutSeconds: 5
+    failureThreshold: 5
+  startup:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 15  # 2.5 minutes total (15 * 10s)
+
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -41,6 +115,12 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # Rate limiting for auth endpoints
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
   hosts:
     - host: sso.codevrtexitsolutions.com
       paths:
@@ -50,4 +130,54 @@ ingress:
     - hosts:
         - sso.codevrtexitsolutions.com
       secretName: sso-codevrtexitsolutions-tls
+
+# ============================================================================
+# MONITORING AND OBSERVABILITY
+# ============================================================================
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+serviceMonitor:
+  enabled: true
+  namespace: infra
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+# ============================================================================
+# SECURITY CONFIGURATION
+# ============================================================================
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+
+# ============================================================================
+# POD DISRUPTION BUDGET
+# ============================================================================
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# ============================================================================
+# POD AFFINITY - DISTRIBUTE PODS ACROSS NODES
+# ============================================================================
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - auth-service
+          topologyKey: kubernetes.io/hostname
 
