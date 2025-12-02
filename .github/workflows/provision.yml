@@ -6,14 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       enable_cleanup:
-        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: false (disabled). Set to true to enable cleanup.'
+        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: true (enabled). Set to false to skip cleanup.'
         required: false
-        default: false
+        default: true
         type: boolean
       force_reprovision:
-        description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
+        description: 'Force reprovisioning (cleanup + reinstall). Enabled by default when cleanup is enabled.'
         required: false
-        default: false
+        default: true
         type: boolean
 
 jobs:
@@ -29,15 +29,15 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
-      # Cleanup DISABLED by default to prevent accidental data loss
-      # Can be enabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=true
-      # Priority: workflow input > GitHub secret > default FALSE
+      # Cleanup ENABLED by default for fresh, reproducible deployments with all fixes
+      # Can be disabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=false
+      # Priority: workflow input > GitHub secret > default TRUE
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
+        || (secrets.ENABLE_CLEANUP == 'false' && 'false' || 'true') }}
       FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
-        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
+        || (secrets.FORCE_REPROVISION == 'false' && 'false' || 'true') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
