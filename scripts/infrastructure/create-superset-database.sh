@@ -17,10 +17,15 @@ SUPERSET_READONLY_USER=${SUPERSET_READONLY_USER:-superset_readonly}
 
 log_section "Creating Superset Database and Users"
 
-# Check if PostgreSQL pod is running
-if ! kubectl get pod -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql | grep -q Running; then
+# Check if PostgreSQL pod is running (custom manifests use app=postgresql label)
+if ! kubectl get pod -n "${NAMESPACE}" -l app=postgresql | grep -q Running; then
     log_error "PostgreSQL pod is not running in namespace ${NAMESPACE}"
-    exit 1
+    log_info "Checking alternative label..."
+    # Fallback: check with Helm label
+    if ! kubectl get pod -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql | grep -q Running; then
+        log_error "PostgreSQL is not available. Please ensure PostgreSQL is deployed first."
+        exit 1
+    fi
 fi
 
 # Get PostgreSQL credentials
@@ -95,11 +100,24 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ${SUPERSET_R
 CREATE EXTENSION IF NOT EXISTS vector;
 EOF
 
+# Get PostgreSQL pod name (custom manifests use app=postgresql label)
+PG_POD=$(kubectl get pod -n "${NAMESPACE}" -l app=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+if [[ -z "${PG_POD}" ]]; then
+    # Fallback: try Helm label
+    PG_POD=$(kubectl get pod -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+fi
+
+if [[ -z "${PG_POD}" ]]; then
+    log_error "Could not find PostgreSQL pod in namespace ${NAMESPACE}"
+    exit 1
+fi
+
+log_info "Using PostgreSQL pod: ${PG_POD}"
+
 # Execute SQL script
 log_info "Executing SQL script..."
-PGPASSWORD="${PG_PASSWORD}" kubectl exec -n "${NAMESPACE}" \
-    -it "$(kubectl get pod -n "${NAMESPACE}" -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}')" \
-    -- psql -U postgres -f - < "${SQL_FILE}" || {
+kubectl exec -n "${NAMESPACE}" -c postgresql "${PG_POD}" \
+    -- psql -U admin_user -d postgres -f - < "${SQL_FILE}" || {
     log_error "Failed to execute SQL script"
     rm -f "${SQL_FILE}"
     exit 1
