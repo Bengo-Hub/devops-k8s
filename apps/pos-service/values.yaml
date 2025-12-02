@@ -88,12 +88,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: pos.codevrtexitsolutions.com
+    - host: pos.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - pos.codevrtexitsolutions.com
+        - pos.codevertexitsolutions.com
       secretName: pos-service-tls
 

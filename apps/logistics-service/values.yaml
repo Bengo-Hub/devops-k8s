@@ -88,12 +88,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: logistics.codevrtexitsolutions.com
+    - host: logistics.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - logistics.codevrtexitsolutions.com
+        - logistics.codevertexitsolutions.com
       secretName: logistics-service-tls
 

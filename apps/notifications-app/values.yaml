@@ -110,11 +110,11 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: notifications.codevrtexitsolutions.com
+    - host: notifications.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - notifications.codevrtexitsolutions.com
+        - notifications.codevertexitsolutions.com
       secretName: notifications-app-tls

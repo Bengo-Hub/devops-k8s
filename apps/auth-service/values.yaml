@@ -146,14 +146,14 @@ ingress:
     nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/limit-connections: "100"
   hosts:
-    - host: sso.codevrtexitsolutions.com
+    - host: sso.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - sso.codevrtexitsolutions.com
-      secretName: sso-codevrtexitsolutions-tls
+        - sso.codevertexitsolutions.com
+      secretName: sso-codevertexitsolutions-tls
 
 # ============================================================================
 # MONITORING AND OBSERVABILITY

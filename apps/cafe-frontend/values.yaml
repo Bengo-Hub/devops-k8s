@@ -35,9 +35,9 @@ strategy:
 
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://cafeapi.codevrtexitsolutions.com
+    value: https://cafeapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notificationsapi.codevrtexitsolutions.com
+    value: https://notifications.codevertexitsolutions.com
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
@@ -72,13 +72,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: cafeapp.codevrtexitsolutions.com
+    - host: cafeapp.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - cafeapp.codevrtexitsolutions.com
+        - cafeapp.codevertexitsolutions.com
       secretName: cafe-frontend-tls
 
 monitoring:
