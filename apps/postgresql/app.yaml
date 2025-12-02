@@ -33,6 +33,15 @@ spec:
         fips:
           openssl: false
 
+        ## Volume permissions configuration
+        ## Disable to avoid pulling Bitnami helper images
+        volumePermissions:
+          enabled: false
+        
+        ## Disable shmVolume (uses Bitnami image for init)
+        shmVolume:
+          enabled: false
+        
         ## Primary PostgreSQL configuration
         primary:
           ## Create admin user with superuser privileges for managing all service databases
@@ -64,6 +73,11 @@ spec:
             repository: codevertex/postgresql-pgvector
             tag: latest
             pullPolicy: Always
+          ## Pod security context - run as postgres user (ID 1001 in Bitnami images)
+          podSecurityContext:
+            fsGroup: 1001
+            runAsUser: 1001
+            runAsNonRoot: true
           resources:
             requests:
               memory: "512Mi"
@@ -117,6 +131,11 @@ spec:
             repository: codevertex/postgresql-pgvector
             tag: latest
             pullPolicy: Always
+          ## Pod security context - run as postgres user
+          podSecurityContext:
+            fsGroup: 1001
+            runAsUser: 1001
+            runAsNonRoot: true
           resources:
             requests:
               memory: "512Mi"
@@ -133,6 +152,13 @@ spec:
         ## Metrics for Prometheus
         metrics:
           enabled: true
+          ## Use official Prometheus Community postgres-exporter
+          ## Avoids Bitnami registry dependency
+          image:
+            registry: quay.io
+            repository: prometheuscommunity/postgres-exporter
+            tag: v0.15.0
+            pullPolicy: IfNotPresent
           serviceMonitor:
             enabled: true
             namespace: infra
@@ -143,7 +169,6 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
-          # Leave image config to use chart defaults
 
         ## Backup configuration
         backup:
