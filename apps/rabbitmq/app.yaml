@@ -41,6 +41,22 @@ spec:
 
         networkPolicy:
           enabled: false
+
+        ingress:
+          enabled: true
+          ingressClassName: nginx
+          hostname: rabbitmq.codevertex.co.ke
+          path: /
+          pathType: Prefix
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+            nginx.ingress.kubernetes.io/ssl-redirect: "true"
+            nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+          tls: true
+          extraTls:
+            - hosts:
+                - rabbitmq.codevertex.co.ke
+              secretName: rabbitmq-codevertex-tls
   destination:
     server: https://kubernetes.default.svc
     namespace: infra

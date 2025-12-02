@@ -99,14 +99,14 @@ spec:
             nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
             nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
           hosts:
-            - host: superset.codevertex.local
+            - host: superset.codevertex.co.ke
               paths:
                 - path: /
                   pathType: Prefix
           tls:
             - hosts:
-                - superset.codevertex.local
-              secretName: superset-tls
+                - superset.codevertex.co.ke
+              secretName: superset-codevertex-tls
         
         # Admin user initialization
         init:
