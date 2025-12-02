@@ -132,7 +132,7 @@ Use this checklist to ensure a successful Apache Superset deployment.
   - [ ] Autoscaling settings
 
 - [ ] **Update ingress hostname if needed**
-  - Current: `superset.codevertex.local`
+  - Current: `superset.codevertexitsolutions.co.ke`
   - Updated to: _______________
 
 ### Step 4: Deploy Application
@@ -200,7 +200,7 @@ Use this checklist to ensure a successful Apache Superset deployment.
 ### Step 6: Access and Login
 
 - [ ] **Access Superset UI**
-  - URL: https://superset.codevertex.local (or your configured host)
+  - URL: https://superset.codevertexitsolutions.co.ke
   - Page loads successfully
 
 - [ ] **Login with admin credentials**
