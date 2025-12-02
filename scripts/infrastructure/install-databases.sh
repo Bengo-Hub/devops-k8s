@@ -254,7 +254,7 @@ else
     kubectl describe pod redis-master-0 -n "${NAMESPACE}" || true
     REDIS_DEPLOYED=false
   fi
-fi
+fi  # End of ONLY_COMPONENT check for Redis
 
 # Display credentials
 log_section "Database Credentials"
