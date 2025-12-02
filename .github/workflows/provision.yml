@@ -613,6 +613,55 @@ jobs:
           
           echo "✅ Superset database and secrets created successfully"
           echo "::endgroup::"
+      
+      - name: Generate Service JWT/RSA Keys (Pre-ArgoCD Bootstrap)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        timeout-minutes: 5
+        run: |
+          echo "::group::Generating JWT/RSA Keys for Services"
+          
+          # Function to generate RSA keys for a service
+          generate_service_keys() {
+            local SERVICE=$1
+            local NAMESPACE=$2
+            local SECRET_NAME="${SERVICE}-token-keys"
+            
+            echo "Checking $SERVICE in $NAMESPACE namespace..."
+            
+            # Check if secret already exists
+            if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+              echo "✓ JWT keys for $SERVICE already exist - skipping"
+              return 0
+            fi
+            
+            # Create namespace if it doesn't exist
+            kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
+            
+            echo "🔐 Generating 4096-bit RSA key pair for $SERVICE..."
+            
+            # Generate RSA keys
+            openssl genrsa -out /tmp/${SERVICE}-private.pem 4096 2>/dev/null
+            openssl rsa -in /tmp/${SERVICE}-private.pem -pubout -out /tmp/${SERVICE}-public.pem 2>/dev/null
+            
+            # Create Kubernetes secret
+            kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
+              --from-file=private.pem=/tmp/${SERVICE}-private.pem \
+              --from-file=public.pem=/tmp/${SERVICE}-public.pem
+            
+            # Cleanup temp files
+            rm -f /tmp/${SERVICE}-private.pem /tmp/${SERVICE}-public.pem
+            
+            echo "✅ JWT keys created for $SERVICE in $NAMESPACE namespace"
+          }
+          
+          # Generate keys for services that require JWT authentication
+          generate_service_keys "auth-service" "auth"
+          
+          # Add more services as needed
+          # generate_service_keys "other-service" "other-namespace"
+          
+          echo "✅ All service JWT/RSA keys verified or created"
+          echo "::endgroup::"
 
       - name: Install Argo CD (idempotent)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
