@@ -166,26 +166,6 @@ set -e
 # PostgreSQL installation complete (using custom manifests)
 # Old Helm verification code removed - using kubectl wait instead
 
-# Redis Installation using custom manifests
-log_section "Redis Installation"
-
-# Skip Redis if only installing PostgreSQL
-if [ "${ONLY_COMPONENT}" = "postgres" ]; then
-  log_info "Skipping Redis (ONLY_COMPONENT=postgres)"
-  REDIS_DEPLOYED=false
-else
-  log_info "Using custom StatefulSet manifests with official redis:7-alpine image"
-  
-  # Use POSTGRES_PASSWORD for Redis if REDIS_PASSWORD not set
-  REDIS_PASS="${REDIS_PASSWORD:-${POSTGRES_PASSWORD:-}}"
-  
-  if [[ -z "${REDIS_PASS}" ]]; then
-    log_error "No password provided for Redis"
-    log_error "Please set POSTGRES_PASSWORD (preferred) or REDIS_PASSWORD in GitHub secrets"
-    exit 1
-  fi
-  
-  log_info "Redis will use master password from POSTGRES_PASSWORD GitHub secret"
 # =============================================================================
 # Redis Installation (Custom Manifests)
 # =============================================================================
@@ -254,7 +234,7 @@ else
     kubectl describe pod redis-master-0 -n "${NAMESPACE}" || true
     REDIS_DEPLOYED=false
   fi
-fi  # End of ONLY_COMPONENT check for Redis
+fi  # End of ONLY_COMPONENT=postgres check for Redis
 
 # Display credentials
 log_section "Database Credentials"
