@@ -159,6 +159,11 @@ We'll use Bitnami PostgreSQL Helm chart with a **custom PostgreSQL image** that 
 
 ```bash
 # Add Bitnami repo
+# PostgreSQL Installation (Custom Manifests)
+# Note: PostgreSQL now uses custom Kubernetes manifests, not Helm charts
+# See: manifests/databases/postgresql-statefulset.yaml
+
+# For Redis only
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
 

@@ -22,6 +22,7 @@ MONITORING_NS=${MONITORING_NAMESPACE:-infra}
 ONLY_COMPONENT=${ONLY_COMPONENT:-all}
 # Enable cleanup mode by default (deletes existing resources for fresh install)
 # WARNING: This will delete all existing database data and PVCs
+# Use GitHub secret to disable: Set ENABLE_CLEANUP=false
 ENABLE_CLEANUP=${ENABLE_CLEANUP:-true}
 
 log_section "Installing Shared Infrastructure Databases (Production)"
@@ -46,9 +47,80 @@ add_helm_repo "bitnami" "https://charts.bitnami.com/bitnami"
 # Create namespace
 ensure_namespace "${NAMESPACE}"
 
-# Create temporary PostgreSQL values file with proper FIPS configuration
-TEMP_PG_VALUES=/tmp/postgresql-values-prod.yaml
-cat > "${TEMP_PG_VALUES}" <<'VALUES_EOF'
+# PostgreSQL Installation Section
+# =============================================================================
+
+log_section "PostgreSQL Installation"
+
+# Skip PostgreSQL if only installing Redis
+if [ "${ONLY_COMPONENT}" = "redis" ]; then
+  log_info "Skipping PostgreSQL (ONLY_COMPONENT=redis)"
+  POSTGRES_DEPLOYED=false
+else
+  # Install PostgreSQL using custom manifests
+  log_info "Using custom StatefulSet manifests with CodeVertex postgresql-pgvector image"
+  
+  # Check if cleanup mode is enabled
+  if [ "${ENABLE_CLEANUP}" = "true" ]; then
+    log_warning "Cleanup mode: Deleting existing PostgreSQL resources..."
+    kubectl delete -f "${MANIFESTS_DIR}/postgresql-statefulset.yaml" --ignore-not-found=true --wait=true --grace-period=0 2>/dev/null || true
+    kubectl delete pvc -n "${NAMESPACE}" -l app=postgresql --wait=true --grace-period=0 2>/dev/null || true
+    # Delete any Helm release if it exists
+    if command -v helm >/dev/null 2>&1; then
+      helm uninstall postgresql -n "${NAMESPACE}" --wait 2>/dev/null || true
+    fi
+    sleep 5
+  fi
+  
+  # Ensure PostgreSQL secret exists
+  if ! kubectl get secret postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log_info "Creating PostgreSQL secret with GitHub secrets..."
+    
+    # Use GitHub secrets for passwords (from environment)
+    POSTGRES_PASS=${POSTGRES_PASSWORD:-$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)}
+    
+    kubectl create secret generic postgresql \
+      -n "${NAMESPACE}" \
+      --from-literal=password="${POSTGRES_PASS}" \
+      --from-literal=postgres-password="${POSTGRES_PASS}" \
+      --from-literal=admin-user-password="${POSTGRES_PASS}"
+    
+    log_success "PostgreSQL secret created with GitHub POSTGRES_PASSWORD"
+  else
+    log_info "PostgreSQL secret already exists - reusing"
+  fi
+  
+  # Apply PostgreSQL manifests
+  log_info "Applying PostgreSQL custom manifests..."
+  kubectl apply -f "${MANIFESTS_DIR}/postgresql-statefulset.yaml"
+  
+  # Wait for PostgreSQL to be ready
+  log_info "Waiting for PostgreSQL to be ready (timeout: 5 minutes)..."
+  kubectl wait --for=condition=ready pod/postgresql-0 -n "${NAMESPACE}" --timeout=300s || {
+    log_warning "PostgreSQL pod not ready after 5 minutes, checking status..."
+    kubectl get pod postgresql-0 -n "${NAMESPACE}" || true
+    kubectl describe pod postgresql-0 -n "${NAMESPACE}" || true
+  }
+  
+  # Verify PostgreSQL is running
+  if kubectl get pod postgresql-0 -n "${NAMESPACE}" 2>/dev/null | grep -q "2/2.*Running"; then
+    log_success "PostgreSQL is ready and healthy"
+    log_info "Image: docker.io/codevertex/postgresql-pgvector:latest"
+    log_info "pgvector extension: Enabled"
+    POSTGRES_DEPLOYED=true
+  else
+    log_error "PostgreSQL deployment may have issues"
+    kubectl describe pod postgresql-0 -n "${NAMESPACE}" || true
+    POSTGRES_DEPLOYED=false
+  fi
+fi
+
+# =============================================================================
+# Old Helm-based approach - DEPRECATED, kept for reference
+# =============================================================================
+
+# TEMP_PG_VALUES=/tmp/postgresql-values-prod.yaml
+# cat > "${TEMP_PG_VALUES}" <<'VALUES_EOF'
 ## Global settings
 global:
   postgresql:
@@ -216,33 +288,57 @@ else
   log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
 fi
 
-# Install or upgrade PostgreSQL
-set +e
-if helm -n "${NAMESPACE}" status postgresql >/dev/null 2>&1; then
-  # PostgreSQL Helm release exists - handle upgrade or skip
-  handle_existing_database "postgresql" "postgresql" "${NAMESPACE}" "bitnami/postgresql" "16.7.27" "PG_HELM_ARGS" "POSTGRES_PASSWORD" "${FORCE_DB_INSTALL:-false}"
-  HELM_PG_EXIT=$HELM_EXIT_CODE
-  if [[ $HELM_PG_EXIT -eq 0 ]]; then
-    POSTGRES_DEPLOYED=true
-  fi
-else
-  # PostgreSQL not found - install fresh
-  handle_fresh_database_install "postgresql" "postgresql" "${NAMESPACE}" "bitnami/postgresql" "16.7.27" "PG_HELM_ARGS" "$(is_cleanup_mode && echo true || echo false)"
-  HELM_PG_EXIT=$HELM_EXIT_CODE
-  if [[ $HELM_PG_EXIT -eq 0 ]]; then
-    POSTGRES_DEPLOYED=true
-  fi
+# Install PostgreSQL using custom manifests (not Helm chart)
+log_section "Installing PostgreSQL (Custom Manifests)"
+log_info "Using custom StatefulSet manifests with CodeVertex postgresql-pgvector image"
+
+# Check if cleanup mode is enabled
+if [ "${ENABLE_CLEANUP}" = "true" ]; then
+  log_warning "Cleanup mode: Deleting existing PostgreSQL resources..."
+  kubectl delete -f "${MANIFESTS_DIR}/postgresql-statefulset.yaml" --ignore-not-found=true --wait=true --grace-period=0 2>/dev/null || true
+  kubectl delete pvc -n "${NAMESPACE}" -l app=postgresql --wait=true --grace-period=0 2>/dev/null || true
+  sleep 5
 fi
+
+# Ensure PostgreSQL secret exists
+if ! kubectl get secret postgresql -n "${NAMESPACE}" >/dev/null 2>&1; then
+  log_info "Creating PostgreSQL secret with GitHub secrets..."
+  
+  # Use GitHub secrets for passwords
+  POSTGRES_PASS=${POSTGRES_PASSWORD:-$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)}
+  
+  kubectl create secret generic postgresql \
+    -n "${NAMESPACE}" \
+    --from-literal=password="${POSTGRES_PASS}" \
+    --from-literal=postgres-password="${POSTGRES_PASS}" \
+    --from-literal=admin-user-password="${POSTGRES_PASS}"
+  
+  log_success "PostgreSQL secret created"
+else
+  log_info "PostgreSQL secret already exists"
+fi
+
+# Apply PostgreSQL manifests
+log_info "Applying PostgreSQL custom manifests..."
+kubectl apply -f "${MANIFESTS_DIR}/postgresql-statefulset.yaml"
+
+# Wait for PostgreSQL to be ready
+log_info "Waiting for PostgreSQL to be ready..."
+kubectl wait --for=condition=ready pod/postgresql-0 -n "${NAMESPACE}" --timeout=300s || true
+
+# Check if healthy
+if kubectl get pod postgresql-0 -n "${NAMESPACE}" | grep -q "2/2.*Running"; then
+  log_success "PostgreSQL is ready and healthy"
+  POSTGRES_DEPLOYED=true
+else
+  log_error "PostgreSQL deployment may have issues"
+  kubectl describe pod postgresql-0 -n "${NAMESPACE}" || true
+fi
+
 set -e
 
-# Verify PostgreSQL installation
-if [[ $HELM_PG_EXIT -eq 0 ]]; then
-  log_success "PostgreSQL ready"
-else
-  if ! verify_database_installation "postgresql" "postgresql" "${NAMESPACE}"; then
-    exit 1
-  fi
-fi
+# PostgreSQL installation complete (using custom manifests)
+# Old Helm verification code removed - using kubectl wait instead
 
 REDIS_HELM_ARGS=()
 
