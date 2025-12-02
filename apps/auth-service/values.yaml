@@ -49,6 +49,11 @@ env:
     value: production
   - name: AUTH_SERVICE_PORT
     value: "4101"
+  - name: AUTH_DB_URL
+    valueFrom:
+      secretKeyRef:
+        name: auth-service-secrets
+        key: postgresUrl
   - name: AUTH_POSTGRES_URL
     valueFrom:
       secretKeyRef:
