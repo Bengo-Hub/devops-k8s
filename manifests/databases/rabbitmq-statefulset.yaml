@@ -144,10 +144,10 @@ spec:
               key: erlang-cookie
         - name: RABBITMQ_USE_LONGNAME
           value: "true"
-        - name: RABBITMQ_NODENAME
-          value: rabbit@$(POD_NAME).rabbitmq-headless.infra.svc.cluster.local
         - name: K8S_SERVICE_NAME
           value: rabbitmq-headless
+        - name: K8S_HOSTNAME_SUFFIX
+          value: .rabbitmq-headless.infra.svc.cluster.local
         - name: POD_IP
           valueFrom:
             fieldRef:
