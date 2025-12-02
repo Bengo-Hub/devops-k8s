@@ -67,6 +67,15 @@ global:
 fips:
   openssl: false
 
+## Volume permissions configuration
+## Disable to avoid pulling Bitnami helper images
+volumePermissions:
+  enabled: false
+
+## Disable shmVolume (uses Bitnami image for init)
+shmVolume:
+  enabled: false
+
 ## Primary PostgreSQL configuration
 primary:
   ## Custom PostgreSQL image with pgvector extension
@@ -76,6 +85,12 @@ primary:
     repository: codevertex/postgresql-pgvector
     tag: POSTGRES_IMAGE_TAG_PLACEHOLDER
     pullPolicy: IfNotPresent
+  
+  ## Pod security context - run as postgres user (ID 1001)
+  podSecurityContext:
+    fsGroup: 1001
+    runAsUser: 1001
+    runAsNonRoot: true
   
   ## Enable pgvector extension initialization scripts
   initdb:
@@ -145,6 +160,13 @@ primary:
 ## Metrics for Prometheus
 metrics:
   enabled: true
+  ## Use official Prometheus Community postgres-exporter
+  ## Avoids Bitnami registry dependency
+  image:
+    registry: quay.io
+    repository: prometheuscommunity/postgres-exporter
+    tag: v0.15.0
+    pullPolicy: IfNotPresent
   serviceMonitor:
     enabled: false  # Disabled by default - will be enabled if Prometheus Operator CRDs exist
     namespace: infra
@@ -155,7 +177,6 @@ metrics:
     limits:
       memory: "256Mi"
       cpu: "200m"
-  # Leave image config to use chart defaults
 
 ## Network policy
 networkPolicy:
