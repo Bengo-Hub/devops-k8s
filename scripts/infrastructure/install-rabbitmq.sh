@@ -128,6 +128,24 @@ RABBITMQ_HELM_ARGS+=(--set image.registry="${RABBITMQ_IMAGE_REGISTRY}")
 RABBITMQ_HELM_ARGS+=(--set image.repository="${RABBITMQ_IMAGE_REPO}")
 RABBITMQ_HELM_ARGS+=(--set image.tag="${RABBITMQ_IMAGE_TAG}")
 
+# Check if RabbitMQ is managed by ArgoCD (custom manifests)
+if kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.metadata.labels.argocd\.argoproj\.io/instance}' 2>/dev/null | grep -q "rabbitmq"; then
+    log_info "RabbitMQ is managed by ArgoCD - skipping Helm installation"
+    log_info "Verifying RabbitMQ StatefulSet health..."
+    
+    RABBITMQ_READY=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+    RABBITMQ_REPLICAS=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
+    
+    if [[ "$RABBITMQ_READY" -ge 1 ]]; then
+        log_success "RabbitMQ is healthy and managed by ArgoCD (${RABBITMQ_READY}/${RABBITMQ_REPLICAS} replicas)"
+        exit 0
+    else
+        log_warning "RabbitMQ StatefulSet exists but not ready (${RABBITMQ_READY}/${RABBITMQ_REPLICAS} replicas)"
+        log_info "ArgoCD will handle the deployment - no action needed"
+        exit 0
+    fi
+fi
+
 # Check for orphaned RabbitMQ resources before proceeding
 log_info "Checking for orphaned RabbitMQ resources..."
 fix_orphaned_resources "rabbitmq" "${NAMESPACE}"
