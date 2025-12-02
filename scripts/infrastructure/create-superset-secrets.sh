@@ -26,13 +26,13 @@ generate_secret_key() {
 
 # Check if namespace exists
 if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
-    log_warn "Namespace ${NAMESPACE} does not exist. Creating..."
+    log_warning "Namespace ${NAMESPACE} does not exist. Creating..."
     kubectl create namespace "${NAMESPACE}"
 fi
 
 # Check if secret already exists
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-    log_warn "Secret ${SECRET_NAME} already exists in namespace ${NAMESPACE}"
+    log_warning "Secret ${SECRET_NAME} already exists in namespace ${NAMESPACE}"
     read -p "Do you want to recreate it? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -55,7 +55,7 @@ elif kubectl get secret postgresql -n infra >/dev/null 2>&1; then
     DATABASE_PASSWORD=$(kubectl get secret postgresql -n infra \
         -o jsonpath="{.data.postgres-password}" | base64 -d 2>/dev/null || generate_password 32)
 else
-    log_warn "POSTGRES_PASSWORD not set and PostgreSQL secret not found. Generating random password."
+    log_warning "POSTGRES_PASSWORD not set and PostgreSQL secret not found. Generating random password."
     DATABASE_PASSWORD=$(generate_password 32)
 fi
 
@@ -66,7 +66,7 @@ ADMIN_PASSWORD=$(generate_password 20)
 if command -v python3 >/dev/null 2>&1; then
     SECRET_KEY=$(generate_secret_key)
 else
-    log_warn "Python3 not found. Using OpenSSL for secret key generation."
+    log_warning "Python3 not found. Using OpenSSL for secret key generation."
     SECRET_KEY=$(generate_password 64)
 fi
 
@@ -124,7 +124,7 @@ echo "Secret Name: ${SECRET_NAME}"
 echo "Admin Username: ${ADMIN_USERNAME}"
 echo "Admin Email: ${ADMIN_EMAIL}"
 echo ""
-log_warn "IMPORTANT: Save these credentials securely!"
+log_warning "IMPORTANT: Save these credentials securely!"
 echo "Admin Password: ${ADMIN_PASSWORD}"
 echo ""
 log_info "To view the secret:"
@@ -159,5 +159,5 @@ EOF
 
 chmod 600 "${BACKUP_FILE}"
 log_success "Credentials backed up to: ${BACKUP_FILE}"
-log_warn "Please store this file securely and delete it after backing up elsewhere!"
+log_warning "Please store this file securely and delete it after backing up elsewhere!"
 
