@@ -69,11 +69,14 @@ spec:
             - secretRef:
                 name: {{ .Values.envFromSecret }}
           {{- end }}
-          {{- if .Values.persistence.enabled }}
           volumeMounts:
+            {{- if .Values.persistence.enabled }}
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
-          {{- end }}
+            {{- end }}
+            {{- if .Values.volumeMounts }}
+            {{- toYaml .Values.volumeMounts | nindent 12 }}
+            {{- end }}
           {{- if .Values.healthCheck.enabled }}
           readinessProbe:
             {{- toYaml .Values.healthCheck.readiness | nindent 12 }}
