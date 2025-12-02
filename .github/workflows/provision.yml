@@ -6,14 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       enable_cleanup:
-        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: false (disabled). Set to true to enable cleanup.'
+        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: true (enabled). Set to false to skip cleanup.'
         required: false
-        default: false
+        default: true
         type: boolean
       force_reprovision:
-        description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
+        description: 'Force reprovisioning (cleanup + reinstall). Enabled by default when cleanup is enabled.'
         required: false
-        default: false
+        default: true
         type: boolean
 
 jobs:
@@ -29,15 +29,15 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
-      # Cleanup DISABLED by default to prevent accidental data loss
-      # Can be enabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=true
-      # Priority: workflow input > GitHub secret > default FALSE
+      # Cleanup ENABLED by default for clean, reproducible deployments
+      # Can be disabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=false
+      # Priority: workflow input > GitHub secret > default TRUE
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
+        || (secrets.ENABLE_CLEANUP == 'false' && 'false' || 'true') }}
       FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
-        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
+        || (secrets.FORCE_REPROVISION == 'false' && 'false' || 'true') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -536,29 +536,31 @@ jobs:
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 20
         env:
-          # Priority: GitHub secrets required (no fallback to auto-generated)
-          # Both postgres superuser and admin_user will use POSTGRES_PASSWORD unless POSTGRES_ADMIN_PASSWORD is explicitly set
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || '' }}
-          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD || secrets.POSTGRES_PASSWORD || '' }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
+          # Use GitHub organization secrets for database passwords
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
-          # Docker registry credentials for custom PostgreSQL image build
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || secrets.DOCKER_USERNAME || secrets.DOCKERHUB_USERNAME || 'codevertex' }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || secrets.DOCKER_PASSWORD || secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PASSWORD }}
-          REGISTRY_SERVER: docker.io
+          # Docker registry credentials (not needed for PostgreSQL anymore - using custom manifests)
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL }}
         run: |
           echo "::group::Installing Shared Databases (PostgreSQL & Redis in ${DB_NAMESPACE} namespace)"
           echo "Installing shared infrastructure databases..."
           echo "Namespace: ${DB_NAMESPACE}"
-          echo "PostgreSQL will create admin_user for managing per-service databases"
-          echo "ServiceMonitor will be enabled automatically if Prometheus Operator CRDs are available"
-          echo "This step will skip installation if databases are already installed and healthy"
-          echo "Note: This may take 10-15 minutes for first installation"
+          echo "PostgreSQL: Using custom CodeVertex postgresql-pgvector manifests"
+          echo "Redis: Using Bitnami Helm chart"
+          echo "PostgreSQL admin_user will be created for managing per-service databases"
+          echo "Passwords from GitHub secrets: POSTGRES_PASSWORD, REDIS_PASSWORD"
+          echo "Cleanup mode: ${ENABLE_CLEANUP}"
+          echo "Note: This may take 5-10 minutes for first installation"
           export NAMESPACE=${DB_NAMESPACE}
           export PG_DATABASE=postgres
           ./scripts/infrastructure/install-databases.sh
-          echo "✅ Shared databases check/install complete in ${DB_NAMESPACE} namespace"
+          echo "✅ Shared databases installed in ${DB_NAMESPACE} namespace"
+          echo "✅ PostgreSQL: Custom manifests with pgvector support"
           echo "✅ PostgreSQL admin_user created (can create per-service databases)"
           echo "✅ Each service will create its own database during deployment"
           echo "::endgroup::"
