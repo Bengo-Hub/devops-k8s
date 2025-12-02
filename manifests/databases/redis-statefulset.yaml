@@ -1,0 +1,256 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: infra
+  labels:
+    app: redis
+    component: master
+spec:
+  type: ClusterIP
+  ports:
+    - name: tcp-redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+  selector:
+    app: redis
+    component: master
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: infra
+  labels:
+    app: redis
+    component: master
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: tcp-redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+  selector:
+    app: redis
+    component: master
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-metrics
+  namespace: infra
+  labels:
+    app: redis
+    component: metrics
+spec:
+  type: ClusterIP
+  ports:
+    - name: http-metrics
+      port: 9121
+      targetPort: http-metrics
+      protocol: TCP
+  selector:
+    app: redis
+    component: master
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-configuration
+  namespace: infra
+data:
+  redis.conf: |
+    # Redis Configuration
+    bind 0.0.0.0
+    protected-mode no
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+    
+    # Memory management
+    maxmemory 768mb
+    maxmemory-policy allkeys-lru
+    
+    # Persistence (RDB + AOF)
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    
+    # AOF persistence
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    # Logging
+    loglevel notice
+    logfile ""
+    
+    # Slow log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    
+    # Security
+    # Password will be set via REDIS_PASSWORD env var
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-master
+  namespace: infra
+  labels:
+    app: redis
+    component: master
+spec:
+  serviceName: redis-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      component: master
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: master
+    spec:
+      priorityClassName: db-critical
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Start Redis with password if provided
+          if [ -n "$REDIS_PASSWORD" ]; then
+            redis-server /etc/redis/redis.conf --requirepass "$REDIS_PASSWORD"
+          else
+            redis-server /etc/redis/redis.conf
+          fi
+        ports:
+        - name: redis
+          containerPort: 6379
+          protocol: TCP
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis
+              key: redis-password
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - |
+              if [ -n "$REDIS_PASSWORD" ]; then
+                redis-cli -a "$REDIS_PASSWORD" ping
+              else
+                redis-cli ping
+              fi
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - |
+              if [ -n "$REDIS_PASSWORD" ]; then
+                redis-cli -a "$REDIS_PASSWORD" ping
+              else
+                redis-cli ping
+              fi
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 1
+          failureThreshold: 5
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /etc/redis
+        securityContext:
+          runAsUser: 999
+          runAsNonRoot: true
+      
+      - name: metrics
+        image: oliver006/redis_exporter:v1.62.0-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http-metrics
+          containerPort: 9121
+          protocol: TCP
+        env:
+        - name: REDIS_ADDR
+          value: "redis://localhost:6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis
+              key: redis-password
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: http-metrics
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: http-metrics
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+      
+      volumes:
+      - name: config
+        configMap:
+          name: redis-configuration
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: redis
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 8Gi
+
