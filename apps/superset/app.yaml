@@ -13,37 +13,339 @@ spec:
     chart: superset
     helm:
       values: |
+        # Image configuration with pinned version for stability
+        image:
+          repository: apache/superset
+          tag: "3.1.0"
+          pullPolicy: IfNotPresent
+        
+        # Replicas - starts with 2 for HA
+        replicaCount: 2
+        
+        # Resource limits and requests to prevent OOMKills
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        
+        # Horizontal Pod Autoscaling for handling load variations
+        autoscaling:
+          enabled: true
+          minReplicas: 2
+          maxReplicas: 6
+          targetCPUUtilizationPercentage: 70
+          targetMemoryUtilizationPercentage: 75
+        
+        # Rolling update strategy to ensure zero downtime
+        deploymentStrategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+        
+        # Extended progress deadline for Superset's slow initialization
+        progressDeadlineSeconds: 1200  # 20 minutes
+        
+        # Health checks - critical for proper orchestration
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 120  # Superset takes time to start
+          periodSeconds: 20
+          timeoutSeconds: 10
+          failureThreshold: 5
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        
+        # Startup probe to handle slow initialization
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30  # 5 minutes total (30 * 10s)
+          successThreshold: 1
+        
+        # Service configuration
+        service:
+          type: ClusterIP
+          port: 8088
+          annotations: {}
+        
+        # Ingress configuration
+        ingress:
+          enabled: true
+          ingressClassName: nginx
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+            nginx.ingress.kubernetes.io/ssl-redirect: "true"
+            nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+            nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+            nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+            nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+          hosts:
+            - host: superset.codevertex.local
+              paths:
+                - path: /
+                  pathType: Prefix
+          tls:
+            - hosts:
+                - superset.codevertex.local
+              secretName: superset-tls
+        
+        # Admin user initialization
         init:
+          enabled: true
           adminUser:
             username: admin
             firstname: Admin
             lastname: User
             email: admin@codevertexitsolutions.com
-            password: changeme
+          # Password from secret
+          envFromSecret: superset-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+        
+        # Database initialization job
+        initContainers:
+          - name: wait-for-postgres
+            image: busybox:1.36
+            command: 
+              - sh
+              - -c
+              - |
+                until nc -z postgresql.infra.svc.cluster.local 5432; do
+                  echo "Waiting for PostgreSQL..."
+                  sleep 5
+                done
+                echo "PostgreSQL is ready"
+          - name: wait-for-redis
+            image: busybox:1.36
+            command:
+              - sh
+              - -c
+              - |
+                until nc -z redis-master.infra.svc.cluster.local 6379; do
+                  echo "Waiting for Redis..."
+                  sleep 5
+                done
+                echo "Redis is ready"
+        
+        # Bootstrap script for database migration
+        bootstrapScript: |
+          #!/bin/bash
+          set -e
+          echo "Starting Superset bootstrap..."
+          
+          # Database migration
+          echo "Running database upgrade..."
+          superset db upgrade
+          
+          # Initialize roles and permissions
+          echo "Initializing Superset..."
+          superset init
+          
+          # Create default admin if doesn't exist
+          if [ -n "${ADMIN_USERNAME}" ] && [ -n "${ADMIN_PASSWORD}" ]; then
+            echo "Creating/updating admin user..."
+            superset fab create-admin \
+              --username "${ADMIN_USERNAME}" \
+              --firstname "${ADMIN_FIRSTNAME}" \
+              --lastname "${ADMIN_LASTNAME}" \
+              --email "${ADMIN_EMAIL}" \
+              --password "${ADMIN_PASSWORD}" || true
+          fi
+          
+          echo "Bootstrap completed successfully"
+        
+        # Disable embedded PostgreSQL and Redis (using external instances)
         postgresql:
           enabled: false
+        
         redis:
           enabled: false
+        
+        # External database and cache connections
         supersetNode:
           connections:
             db_host: postgresql.infra.svc.cluster.local
-            db_port: 5432
-            db_user: admin_user
-            db_pass: changeme
+            db_port: "5432"
+            db_user: superset_user
             db_name: superset
             redis_host: redis-master.infra.svc.cluster.local
-            redis_port: 6379
-        # Note: Passwords should be managed via Kubernetes secrets
-        # Create a secret named 'superset-secrets' with keys:
-        # - SUPERSET_ADMIN_PASSWORD
-        # - POSTGRES_PASSWORD
-        # Then reference them in the deployment via envFrom
+            redis_port: "6379"
+            redis_db: "0"
+          
+          # Environment variables from secrets
+          envFromSecret: superset-secrets
+          
+          # Additional environment variables
+          env:
+            SUPERSET_LOAD_EXAMPLES: "no"
+            SUPERSET_PORT: "8088"
+            SUPERSET_SECRET_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: SECRET_KEY
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: DATABASE_PASSWORD
+            ADMIN_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: ADMIN_USERNAME
+            ADMIN_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: ADMIN_PASSWORD
+            ADMIN_FIRSTNAME:
+              value: "Admin"
+            ADMIN_LASTNAME:
+              value: "User"
+            ADMIN_EMAIL:
+              value: "admin@codevertexitsolutions.com"
+        
+        # Superset configuration overrides
+        configOverrides:
+          enable_oauth: |
+            from flask_appbuilder.security.manager import AUTH_DB
+            AUTH_TYPE = AUTH_DB
+          
+          custom_config: |
+            # Cache configuration
+            CACHE_CONFIG = {
+                'CACHE_TYPE': 'RedisCache',
+                'CACHE_DEFAULT_TIMEOUT': 300,
+                'CACHE_KEY_PREFIX': 'superset_',
+                'CACHE_REDIS_HOST': 'redis-master.infra.svc.cluster.local',
+                'CACHE_REDIS_PORT': 6379,
+                'CACHE_REDIS_DB': 0,
+            }
+            
+            # Feature flags
+            FEATURE_FLAGS = {
+                'ENABLE_TEMPLATE_PROCESSING': True,
+                'DASHBOARD_NATIVE_FILTERS': True,
+                'DASHBOARD_CROSS_FILTERS': True,
+                'DASHBOARD_RBAC': True,
+                'EMBEDDED_SUPERSET': True,
+            }
+            
+            # Query settings
+            SQL_MAX_ROW = 100000
+            SQLLAB_ASYNC_TIME_LIMIT_SEC = 300
+            SQLLAB_TIMEOUT = 300
+            SUPERSET_WEBSERVER_TIMEOUT = 300
+            
+            # Security
+            WTF_CSRF_ENABLED = True
+            WTF_CSRF_TIME_LIMIT = None
+            
+            # Row level security
+            ROW_LEVEL_SECURITY_ENABLED = True
+        
+        # Celery workers for async query execution
+        supersetWorker:
+          enabled: true
+          replicaCount: 2
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - celery -A superset.tasks.celery_app:app inspect ping -d celery@$HOSTNAME
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            timeoutSeconds: 60
+            failureThreshold: 3
+          autoscaling:
+            enabled: true
+            minReplicas: 2
+            maxReplicas: 8
+            targetCPUUtilizationPercentage: 70
+        
+        # Celery beat for scheduled tasks
+        supersetCeleryBeat:
+          enabled: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        
+        # Pod Disruption Budget for HA
+        podDisruptionBudget:
+          enabled: true
+          minAvailable: 1
+        
+        # Security context
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+          runAsNonRoot: true
+        
+        # Node affinity and tolerations (optional)
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                      - key: app
+                        operator: In
+                        values:
+                          - superset
+                  topologyKey: kubernetes.io/hostname
+  
   destination:
     server: https://kubernetes.default.svc
     namespace: default
+  
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

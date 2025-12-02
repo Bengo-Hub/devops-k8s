@@ -34,11 +34,14 @@ if [ -z "${PG_PASSWORD}" ]; then
 fi
 
 # Get Superset DB password from secret or generate
-if kubectl get secret apache-superset-secrets -n da >/dev/null 2>&1; then
-    SUPERSET_DB_PASSWORD=$(kubectl get secret apache-superset-secrets -n da \
-        -o jsonpath="{.data.SUPERSET_DB_PASSWORD}" | base64 -d)
+SUPERSET_NAMESPACE=${SUPERSET_NAMESPACE:-default}
+if kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2>&1; then
+    SUPERSET_DB_PASSWORD=$(kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" \
+        -o jsonpath="{.data.DATABASE_PASSWORD}" | base64 -d)
+    log_info "Using password from superset-secrets in namespace ${SUPERSET_NAMESPACE}"
 else
     log_warn "Superset secrets not found. Generating random password..."
+    log_warn "Run ./create-superset-secrets.sh first to create proper secrets"
     SUPERSET_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 fi
 
@@ -108,10 +111,15 @@ log_info "User: ${SUPERSET_USER}"
 log_info "Read-only User: ${SUPERSET_READONLY_USER}"
 
 # Update Superset secrets if they exist
-if kubectl get secret apache-superset-secrets -n da >/dev/null 2>&1; then
+if kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2>&1; then
     log_info "Updating Superset secrets with database password..."
-    kubectl patch secret apache-superset-secrets -n da --type='json' \
-        -p="[{\"op\": \"replace\", \"path\": \"/data/SUPERSET_DB_PASSWORD\", \"value\": \"$(echo -n "${SUPERSET_DB_PASSWORD}" | base64)\"}]" || \
+    kubectl patch secret superset-secrets -n "${SUPERSET_NAMESPACE}" --type='json' \
+        -p="[{\"op\": \"replace\", \"path\": \"/data/DATABASE_PASSWORD\", \"value\": \"$(echo -n "${SUPERSET_DB_PASSWORD}" | base64 -w 0)\"}]" 2>/dev/null || \
+    kubectl patch secret superset-secrets -n "${SUPERSET_NAMESPACE}" --type='json' \
+        -p="[{\"op\": \"replace\", \"path\": \"/data/DATABASE_PASSWORD\", \"value\": \"$(echo -n "${SUPERSET_DB_PASSWORD}" | base64)\"}]" || \
     log_warn "Failed to update Superset secrets. Please update manually."
+else
+    log_warn "Superset secrets not found in namespace ${SUPERSET_NAMESPACE}"
+    log_info "Run ./create-superset-secrets.sh to create the secrets"
 fi
 
