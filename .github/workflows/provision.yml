@@ -47,9 +47,9 @@ jobs:
         with:
           install_trivy: 'false'
 
-      - name: Install PostgreSQL client (psql) [idempotent]
+      - name: Install PostgreSQL client and Python (psql, python3) [idempotent]
         run: |
-          echo "::group::Installing PostgreSQL client"
+          echo "::group::Installing PostgreSQL client and Python"
           # Check if packages are already installed
           MISSING_PKGS=()
           
@@ -59,6 +59,14 @@ jobs:
           else
             echo "✓ PostgreSQL client (psql) already installed"
             psql --version
+          fi
+          
+          # Check for Python3 (required for Superset secret generation)
+          if ! command -v python3 &> /dev/null; then
+            MISSING_PKGS+=("python3")
+          else
+            echo "✓ Python3 already installed"
+            python3 --version
           fi
           
           # Note: jq and curl are already installed by install-devops-tools action
@@ -583,6 +591,27 @@ jobs:
           ./scripts/infrastructure/install-rabbitmq.sh
           echo "✅ RabbitMQ check/install complete in ${RABBITMQ_NAMESPACE} namespace"
           echo "✅ All services can use shared RabbitMQ instance"
+          echo "::endgroup::"
+
+      - name: Create Superset Database and Secrets (Pre-ArgoCD Bootstrap)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        timeout-minutes: 10
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          NAMESPACE: default
+          SUPERSET_NAMESPACE: default
+        run: |
+          echo "::group::Creating Superset Database and Secrets"
+          echo "📊 Creating superset database and user in PostgreSQL..."
+          echo "This ensures Superset dependencies are ready before ArgoCD deploys it"
+          
+          # Create Superset database and user
+          ./scripts/infrastructure/create-superset-database.sh
+          
+          # Create Superset secrets (includes SECRET_KEY, admin password, etc.)
+          ./scripts/infrastructure/create-superset-secrets.sh
+          
+          echo "✅ Superset database and secrets created successfully"
           echo "::endgroup::"
 
       - name: Install Argo CD (idempotent)
