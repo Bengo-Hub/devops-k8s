@@ -46,14 +46,16 @@ fi
 # Generate passwords and keys
 log_info "Generating secure passwords and keys..."
 
-# Database password - get from PostgreSQL or generate
-if kubectl get secret postgresql -n infra >/dev/null 2>&1; then
-    log_info "Using existing PostgreSQL password for superset_user"
-    # This should match the password created by create-superset-database.sh
+# Database password - use POSTGRES_PASSWORD env var (from GitHub secret) or get from cluster
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    log_info "Using POSTGRES_PASSWORD from environment (GitHub secret)"
+    DATABASE_PASSWORD="${POSTGRES_PASSWORD}"
+elif kubectl get secret postgresql -n infra >/dev/null 2>&1; then
+    log_info "Using existing PostgreSQL password from cluster secret"
     DATABASE_PASSWORD=$(kubectl get secret postgresql -n infra \
         -o jsonpath="{.data.postgres-password}" | base64 -d 2>/dev/null || generate_password 32)
 else
-    log_warn "PostgreSQL secret not found. Generating random password."
+    log_warn "POSTGRES_PASSWORD not set and PostgreSQL secret not found. Generating random password."
     DATABASE_PASSWORD=$(generate_password 32)
 fi
 
