@@ -221,25 +221,92 @@ done
 echo -e "${GREEN}✓ Helm releases uninstalled${NC}"
 echo ""
 
-echo -e "${BLUE}Step 2: Deleting all ArgoCD Applications...${NC}"
+echo -e "${BLUE}Step 2: Disabling ArgoCD auto-sync and self-heal...${NC}"
 if kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
-    ARGOCD_APPS=$(kubectl get applications -A -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
-    if [ -n "$ARGOCD_APPS" ]; then
-        for app in $ARGOCD_APPS; do
-            NS=$(kubectl get application "$app" -A -o jsonpath='{.items[0].metadata.namespace}' 2>/dev/null || echo "argocd")
-            echo -e "${YELLOW}  Deleting ArgoCD Application: $app (namespace: $NS)${NC}"
-            kubectl delete application "$app" -n "$NS" --wait=true --grace-period=0 2>/dev/null || true
-        done
+    ARGOCD_APPS=$(kubectl get applications -A -o json 2>/dev/null || echo '{"items":[]}')
+    if [ -n "$ARGOCD_APPS" ] && [ "$ARGOCD_APPS" != '{"items":[]}' ]; then
+        echo "$ARGOCD_APPS" | jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' 2>/dev/null | \
+        while read -r app_full; do
+            if [ -n "$app_full" ]; then
+                NS=$(echo "$app_full" | cut -d'/' -f1)
+                APP=$(echo "$app_full" | cut -d'/' -f2)
+                echo -e "${YELLOW}  Disabling auto-sync for ArgoCD Application: $APP (namespace: $NS)${NC}"
+                
+                # Disable automated sync and selfHeal to prevent recreation
+                kubectl patch application "$APP" -n "$NS" --type=merge -p '{"spec":{"syncPolicy":{"automated":null}}}' 2>/dev/null || true
+                
+                # Remove finalizers to prevent hanging
+                kubectl patch application "$APP" -n "$NS" --type=json -p='[{"op": "remove", "path": "/metadata/finalizers"}]' 2>/dev/null || true
+            fi
+        done || true
+    fi
+fi
+echo -e "${GREEN}✓ ArgoCD auto-sync disabled${NC}"
+echo ""
+
+echo -e "${BLUE}Step 2.1: Deleting all ArgoCD Applications...${NC}"
+if kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
+    ARGOCD_APPS=$(kubectl get applications -A -o json 2>/dev/null || echo '{"items":[]}')
+    if [ -n "$ARGOCD_APPS" ] && [ "$ARGOCD_APPS" != '{"items":[]}' ]; then
+        echo "$ARGOCD_APPS" | jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' 2>/dev/null | \
+        while read -r app_full; do
+            if [ -n "$app_full" ]; then
+                NS=$(echo "$app_full" | cut -d'/' -f1)
+                APP=$(echo "$app_full" | cut -d'/' -f2)
+                echo -e "${YELLOW}  Deleting ArgoCD Application: $APP (namespace: $NS)${NC}"
+                kubectl delete application "$APP" -n "$NS" --wait=false --grace-period=0 2>/dev/null || true
+            fi
+        done || true
+        
+        # Wait a bit for deletions to start
+        sleep 5
+        
+        # Force remove any stuck applications
+        kubectl get applications -A -o json 2>/dev/null | \
+        jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' 2>/dev/null | \
+        while read -r app_full; do
+            if [ -n "$app_full" ]; then
+                NS=$(echo "$app_full" | cut -d'/' -f1)
+                APP=$(echo "$app_full" | cut -d'/' -f2)
+                echo -e "${YELLOW}  Force removing stuck Application: $APP${NC}"
+                kubectl patch application "$APP" -n "$NS" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+                kubectl delete application "$APP" -n "$NS" --force --grace-period=0 2>/dev/null || true
+            fi
+        done || true
     fi
 fi
 echo -e "${GREEN}✓ ArgoCD Applications deleted${NC}"
 echo ""
 
 # Remove ArgoCD CRDs early to avoid finalizer hangs
-echo -e "${BLUE}Step 2.5: Removing ArgoCD CRDs...${NC}"
-kubectl delete crd applications.argoproj.io --wait=true --grace-period=0 2>/dev/null || true
-kubectl delete crd applicationprojects.argoproj.io --wait=true --grace-period=0 2>/dev/null || true
+echo -e "${BLUE}Step 2.2: Removing ArgoCD CRDs...${NC}"
+kubectl delete crd applications.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
+kubectl delete crd applicationprojects.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
+kubectl delete crd appprojects.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
+sleep 3
 echo -e "${GREEN}✓ ArgoCD CRDs removed (if present)${NC}"
+echo ""
+
+echo -e "${BLUE}Step 2.3: Scaling down ArgoCD server to prevent recreation...${NC}"
+if kubectl get deployment -n argocd argocd-server >/dev/null 2>&1; then
+    echo -e "${YELLOW}  Scaling down argocd-server deployment...${NC}"
+    kubectl scale deployment argocd-server -n argocd --replicas=0 2>/dev/null || true
+    kubectl scale deployment argocd-repo-server -n argocd --replicas=0 2>/dev/null || true
+    kubectl scale deployment argocd-application-controller -n argocd --replicas=0 2>/dev/null || true
+    kubectl scale statefulset argocd-application-controller -n argocd --replicas=0 2>/dev/null || true
+    sleep 5
+fi
+echo -e "${GREEN}✓ ArgoCD components scaled down${NC}"
+echo ""
+
+echo -e "${BLUE}Step 2.4: Scaling down monitoring operators...${NC}"
+if kubectl get namespace monitoring >/dev/null 2>&1; then
+    echo -e "${YELLOW}  Scaling down Prometheus Operator and Grafana...${NC}"
+    kubectl scale deployment -n monitoring --all --replicas=0 2>/dev/null || true
+    kubectl scale statefulset -n monitoring --all --replicas=0 2>/dev/null || true
+    sleep 3
+fi
+echo -e "${GREEN}✓ Monitoring operators scaled down${NC}"
 echo ""
 
 echo -e "${BLUE}Step 3: Deleting all application namespaces...${NC}"
@@ -251,6 +318,13 @@ for ns in "${APP_NAMESPACES[@]}"; do
     [ -z "$ns" ] && continue
     
     if kubectl get namespace "$ns" >/dev/null 2>&1; then
+        # Scale down all deployments and statefulsets first to stop recreation
+        echo -e "${BLUE}      Scaling down workloads in $ns...${NC}"
+        kubectl scale deployment -n "$ns" --all --replicas=0 2>/dev/null || true
+        kubectl scale statefulset -n "$ns" --all --replicas=0 2>/dev/null || true
+        kubectl scale replicaset -n "$ns" --all --replicas=0 2>/dev/null || true
+        sleep 2
+        
         # Remove finalizers from all resources in namespace
         echo -e "${BLUE}      Removing finalizers from resources in $ns...${NC}"
         kubectl get all,pvc,configmap,secret,networkpolicy -n "$ns" -o json 2>/dev/null | \
@@ -262,6 +336,10 @@ for ns in "${APP_NAMESPACES[@]}"; do
                     kubectl patch "$KIND" "$NAME" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
                 fi
             done || true
+        
+        # Delete pods forcefully to stop recreation loops
+        echo -e "${BLUE}      Force deleting all pods in $ns...${NC}"
+        kubectl delete pods --all -n "$ns" --force --grace-period=0 2>/dev/null || true
         
         # Remove finalizers from namespace itself
         kubectl patch namespace "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
