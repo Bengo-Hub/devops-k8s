@@ -68,6 +68,25 @@ env:
         name: auth-service-secrets
         key: REDIS_PASSWORD
         optional: true
+  # JWT Token Keys (RSA keys for token signing/verification)
+  - name: AUTH_TOKEN_PRIVATE_KEY_PATH
+    value: /etc/auth-keys/private.pem
+  - name: AUTH_TOKEN_PUBLIC_KEY_PATH
+    value: /etc/auth-keys/public.pem
+
+# ============================================================================
+# VOLUME MOUNTS FOR JWT KEYS
+# ============================================================================
+volumeMounts:
+  - name: auth-token-keys
+    mountPath: /etc/auth-keys
+    readOnly: true
+
+volumes:
+  - name: auth-token-keys
+    secret:
+      secretName: auth-token-keys
+      defaultMode: 0400
 
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
