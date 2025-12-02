@@ -178,13 +178,11 @@ handle_existing_database() {
     
     local current_pass=$(get_secret_password "$secret_name" "$password_key" "$namespace")
     
-    # Only skip Helm upgrade when BOTH:
-    #   - the password matches, and
-    #   - database is already healthy
+    # ALWAYS upgrade to ensure image configuration is applied
+    # Even if password matches and database is healthy, we need to apply image changes
     if [[ "$current_pass" == "$new_password" && "$force_install" != "true" && "$is_healthy" == "true" ]]; then
-      log_success "${release_name} password unchanged and StatefulSet healthy - skipping upgrade"
-      HELM_EXIT_CODE=0
-      return 0
+      log_warning "${release_name} password unchanged and healthy, but checking if upgrade needed for image changes..."
+      # Continue to upgrade check instead of skipping
     fi
     
     # Password mismatch or unhealthy - need to update
@@ -204,18 +202,25 @@ handle_existing_database() {
   log_warning "${release_name} exists but needs update; checking for stuck operation..."
   fix_stuck_helm_operation "$release_name" "$namespace"
   
+  log_info "Forcing ${release_name} upgrade to apply image configuration changes..."
   if [[ -n "$version" ]]; then
     helm upgrade "$release_name" "$chart" \
       --version "$version" \
       -n "$namespace" \
       "${helm_args[@]}" \
-      --timeout=10m \
+      --force \
+      --recreate-pods \
+      --reset-values \
+      --timeout=15m \
       --wait=false 2>&1 | tee "/tmp/helm-${release_name}-install.log"
   else
     helm upgrade "$release_name" "$chart" \
       -n "$namespace" \
       "${helm_args[@]}" \
-      --timeout=10m \
+      --force \
+      --recreate-pods \
+      --reset-values \
+      --timeout=15m \
       --wait=false 2>&1 | tee "/tmp/helm-${release_name}-install.log"
   fi
   HELM_EXIT_CODE=${PIPESTATUS[0]}
@@ -288,24 +293,30 @@ handle_fresh_database_install() {
     
     # If StatefulSet exists but Helm release doesn't, try upgrade
     if kubectl get statefulset "$statefulset_name" -n "$namespace" >/dev/null 2>&1; then
-      log_warning "${release_name} StatefulSet exists but Helm release missing - attempting upgrade..."
+      log_warning "${release_name} StatefulSet exists but Helm release missing - attempting forced upgrade..."
       if [[ -n "$version" ]]; then
         helm upgrade "$release_name" "$chart" \
           --version "$version" \
           -n "$namespace" \
           "${helm_args[@]}" \
-          --timeout=10m \
+          --force \
+          --recreate-pods \
+          --reset-values \
+          --timeout=15m \
           --wait 2>&1 | tee "/tmp/helm-${release_name}-install.log"
       else
         helm upgrade "$release_name" "$chart" \
           -n "$namespace" \
           "${helm_args[@]}" \
-          --timeout=10m \
+          --force \
+          --recreate-pods \
+          --reset-values \
+          --timeout=15m \
           --wait 2>&1 | tee "/tmp/helm-${release_name}-install.log"
       fi
       HELM_EXIT_CODE=${PIPESTATUS[0]}
       if [[ $HELM_EXIT_CODE -eq 0 ]]; then
-        log_success "${release_name} upgraded"
+        log_success "${release_name} upgraded with new configuration"
         return 0
       else
         log_warning "${release_name} upgrade failed. Falling back to fresh install..."
