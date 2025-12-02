@@ -143,7 +143,7 @@ http://auth-service.auth.svc.cluster.local:4101
 ### External (Ingress)
 
 ```
-https://sso.codevrtexitsolutions.com
+https://sso.codevertexitsolutions.com
 ```
 
 ## Monitoring
