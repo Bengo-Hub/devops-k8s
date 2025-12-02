@@ -118,14 +118,17 @@ fi
 # Generate passwords and connection strings
 log_info "Generating secure passwords..."
 
-# Database password - first check if database was already created
+# Database password - Priority: POSTGRES_PASSWORD env > cluster secret > generate
 PG_NAMESPACE=${PG_NAMESPACE:-infra}
 PG_HOST=${PG_HOST:-postgresql.infra.svc.cluster.local}
 PG_PORT=${PG_PORT:-5432}
 
-# Try to get password from database creation
+# Try to get password - use POSTGRES_PASSWORD from GitHub secret if available
 DATABASE_PASSWORD=""
-if kubectl get secret postgresql -n "${PG_NAMESPACE}" >/dev/null 2>&1; then
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    log_info "Using POSTGRES_PASSWORD from environment (GitHub secret)"
+    DATABASE_PASSWORD="${POSTGRES_PASSWORD}"
+elif kubectl get secret postgresql -n "${PG_NAMESPACE}" >/dev/null 2>&1; then
     # Check if service-specific password exists in database
     PG_POD=$(kubectl -n "${PG_NAMESPACE}" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
     

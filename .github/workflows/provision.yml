@@ -6,14 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       enable_cleanup:
-        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: true (enabled). Set to false to skip cleanup.'
+        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: false (disabled). Set to true to enable cleanup.'
         required: false
-        default: true
+        default: false
         type: boolean
       force_reprovision:
-        description: 'Force reprovisioning (cleanup + reinstall). Enabled by default when cleanup is enabled.'
+        description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
         required: false
-        default: true
+        default: false
         type: boolean
 
 jobs:
@@ -29,15 +29,15 @@ jobs:
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
-      # Cleanup ENABLED by default for clean, reproducible deployments
-      # Can be disabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=false
-      # Priority: workflow input > GitHub secret > default TRUE
+      # Cleanup DISABLED by default to prevent accidental data loss
+      # Can be enabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=true
+      # Priority: workflow input > GitHub secret > default FALSE
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || (secrets.ENABLE_CLEANUP == 'false' && 'false' || 'true') }}
+        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
       FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
         && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
-        || (secrets.FORCE_REPROVISION == 'false' && 'false' || 'true') }}
+        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -536,13 +536,14 @@ jobs:
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 20
         env:
-          # Use GitHub organization secrets for database passwords
+          # Master password: POSTGRES_PASSWORD used for all infrastructure by default
+          # Fallback to service-specific secrets if POSTGRES_PASSWORD not set
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || secrets.REDIS_PASSWORD }}
           DB_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
-          # Docker registry credentials (not needed for PostgreSQL anymore - using custom manifests)
+          # Docker registry credentials
           REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
           REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL }}
@@ -569,8 +570,8 @@ jobs:
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
         env:
-          # Priority: GitHub secrets required (no fallback to default)
-          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD || '' }}
+          # Use POSTGRES_PASSWORD as master password, fallback to RABBITMQ_PASSWORD
+          RABBITMQ_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || secrets.RABBITMQ_PASSWORD }}
           RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |

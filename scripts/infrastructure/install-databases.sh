@@ -20,10 +20,9 @@ MONITORING_NS=${MONITORING_NAMESPACE:-infra}
 # - "postgres": PostgreSQL only
 # - "redis"   : Redis only
 ONLY_COMPONENT=${ONLY_COMPONENT:-all}
-# Enable cleanup mode by default (deletes existing resources for fresh install)
-# WARNING: This will delete all existing database data and PVCs
-# Use GitHub secret to disable: Set ENABLE_CLEANUP=false
-ENABLE_CLEANUP=${ENABLE_CLEANUP:-true}
+# Cleanup mode DISABLED by default to prevent accidental data loss
+# Enable with GitHub secret ENABLE_CLEANUP=true or environment variable
+ENABLE_CLEANUP=${ENABLE_CLEANUP:-false}
 
 log_section "Installing Shared Infrastructure Databases (Production)"
 log_info "Namespace: ${NAMESPACE}"

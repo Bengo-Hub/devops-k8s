@@ -33,15 +33,18 @@ if [ -z "${PG_PASSWORD}" ]; then
     exit 1
 fi
 
-# Get Superset DB password from secret or generate
+# Get Superset DB password - Priority: POSTGRES_PASSWORD env > cluster secret > generate
 SUPERSET_NAMESPACE=${SUPERSET_NAMESPACE:-default}
-if kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2>&1; then
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    log_info "Using POSTGRES_PASSWORD from environment (GitHub secret)"
+    SUPERSET_DB_PASSWORD="${POSTGRES_PASSWORD}"
+elif kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2>&1; then
     SUPERSET_DB_PASSWORD=$(kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" \
         -o jsonpath="{.data.DATABASE_PASSWORD}" | base64 -d)
     log_info "Using password from superset-secrets in namespace ${SUPERSET_NAMESPACE}"
 else
-    log_warn "Superset secrets not found. Generating random password..."
-    log_warn "Run ./create-superset-secrets.sh first to create proper secrets"
+    log_warn "POSTGRES_PASSWORD not set and superset-secrets not found. Generating random password..."
+    log_warn "Run ./create-superset-secrets.sh first or set POSTGRES_PASSWORD"
     SUPERSET_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 fi
 
