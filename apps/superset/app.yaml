@@ -94,6 +94,9 @@ spec:
         ingress:
           enabled: true
           ingressClassName: nginx
+          hostname: superset.codevertexitsolutions.co.ke
+          path: /
+          pathType: Prefix
           annotations:
             cert-manager.io/cluster-issuer: letsencrypt-prod
             nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -101,12 +104,8 @@ spec:
             nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
             nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
             nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
-          hosts:
-            - host: superset.codevertexitsolutions.co.ke
-              paths:
-                - path: /
-                  pathType: Prefix
-          tls:
+          tls: true
+          extraTls:
             - hosts:
                 - superset.codevertexitsolutions.co.ke
               secretName: superset-codevertexitsolutions-tls
