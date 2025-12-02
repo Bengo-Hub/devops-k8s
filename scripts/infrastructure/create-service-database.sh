@@ -132,15 +132,18 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     log_warning "Database '${SERVICE_DB_NAME}' may already exist"
 }
 
-# Create user if not exists
-log_info "Creating user '${SERVICE_DB_USER}'..."
+# Create user if not exists (using master password for consistency)
+log_info "Creating user '${SERVICE_DB_USER}' with master password..."
 kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
     psql -U "$ADMIN_USER" -d postgres -c "
     DO \$\$
     BEGIN
         IF NOT EXISTS (SELECT FROM pg_user WHERE usename = '${SERVICE_DB_USER}') THEN
-            CREATE USER ${SERVICE_DB_USER} WITH PASSWORD '${SERVICE_DB_USER}_temp_password_change_me';
+            CREATE USER ${SERVICE_DB_USER} WITH PASSWORD '${ADMIN_PASSWORD}';
+        ELSE
+            -- Update password to match master password if user exists
+            ALTER USER ${SERVICE_DB_USER} WITH PASSWORD '${ADMIN_PASSWORD}';
         END IF;
     END
     \$\$;" || {
@@ -165,6 +168,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${SERVICE_DB_USER};" || true
 
 log_success "Database '${SERVICE_DB_NAME}' and user '${SERVICE_DB_USER}' created successfully"
-log_info "Connection string: postgresql://${SERVICE_DB_USER}:PASSWORD@${PG_HOST}:${PG_PORT}/${SERVICE_DB_NAME}"
-log_warning "Note: The user password is set to '${SERVICE_DB_USER}_temp_password_change_me'. Update it via your service's secret management."
+log_info "Connection string: postgresql://${SERVICE_DB_USER}:<POSTGRES_PASSWORD>@${PG_HOST}:${PG_PORT}/${SERVICE_DB_NAME}"
+log_info "User password: Uses POSTGRES_PASSWORD (master password) for consistency"
+log_info "All service database users share the master password for simplified management"
 
