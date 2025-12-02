@@ -98,21 +98,20 @@ generate_password() {
 
 # Check if namespace exists
 if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
-    log_warn "Namespace ${NAMESPACE} does not exist. Creating..."
+    log_warning "Namespace ${NAMESPACE} does not exist. Creating..."
     kubectl create namespace "${NAMESPACE}"
 fi
 
 # Check if secret already exists
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-    log_warn "Secret ${SECRET_NAME} already exists in namespace ${NAMESPACE}"
-    read -p "Do you want to recreate it? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Keeping existing secret"
+    log_warning "Secret ${SECRET_NAME} already exists in namespace ${NAMESPACE}"
+    if [[ "${ENABLE_CLEANUP:-false}" == "true" ]]; then
+        log_info "Cleanup mode active: Deleting existing secret..."
+        kubectl delete secret "${SECRET_NAME}" -n "${NAMESPACE}"
+    else
+        log_info "Cleanup mode inactive: Keeping existing secret. No changes will be applied."
         exit 0
     fi
-    log_info "Deleting existing secret..."
-    kubectl delete secret "${SECRET_NAME}" -n "${NAMESPACE}"
 fi
 
 # Generate passwords and connection strings
@@ -123,46 +122,50 @@ PG_NAMESPACE=${PG_NAMESPACE:-infra}
 PG_HOST=${PG_HOST:-postgresql.infra.svc.cluster.local}
 PG_PORT=${PG_PORT:-5432}
 
-# Try to get password - use POSTGRES_PASSWORD from GitHub secret if available
+# Try to get password - Priority: POSTGRES_PASSWORD env > admin-user-password secret > postgres-password secret
+# CRITICAL: Service users now use POSTGRES_PASSWORD (master password) for consistency
 DATABASE_PASSWORD=""
 if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-    log_info "Using POSTGRES_PASSWORD from environment (GitHub secret)"
+    log_info "Using POSTGRES_PASSWORD from environment (GitHub secret - master password)"
     DATABASE_PASSWORD="${POSTGRES_PASSWORD}"
 elif kubectl get secret postgresql -n "${PG_NAMESPACE}" >/dev/null 2>&1; then
-    # Check if service-specific password exists in database
-    PG_POD=$(kubectl -n "${PG_NAMESPACE}" get pod -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+    # Get master password from admin-user-password (used for all service users)
+    DATABASE_PASSWORD=$(kubectl get secret postgresql -n "${PG_NAMESPACE}" -o jsonpath="{.data.admin-user-password}" 2>/dev/null | base64 -d || echo "")
     
-    if [[ -n "$PG_POD" ]]; then
-        PG_PASSWORD=$(kubectl get secret postgresql -n "${PG_NAMESPACE}" -o jsonpath="{.data.postgres-password}" | base64 -d 2>/dev/null || echo "")
-        
-        if [[ -n "$PG_PASSWORD" ]]; then
-            # Check if user exists in database
-            USER_EXISTS=$(kubectl -n "${PG_NAMESPACE}" exec "${PG_POD}" -- \
-                env PGPASSWORD="${PG_PASSWORD}" \
-                psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_user WHERE usename = '${DB_USER}'" 2>/dev/null || echo "")
-            
-            if [[ "$USER_EXISTS" == "1" ]]; then
-                log_info "Database user ${DB_USER} exists. You should use the existing password."
-                log_warn "If you don't have the password, you need to reset it in the database."
-                DATABASE_PASSWORD="${DB_USER}_existing_password_change_if_needed"
-            fi
-        fi
+    if [[ -z "$DATABASE_PASSWORD" ]]; then
+        # Fallback to postgres-password if admin-user-password not found
+        DATABASE_PASSWORD=$(kubectl get secret postgresql -n "${PG_NAMESPACE}" -o jsonpath="{.data.postgres-password}" 2>/dev/null | base64 -d || echo "")
+    fi
+    
+    if [[ -n "$DATABASE_PASSWORD" ]]; then
+        log_info "Retrieved master password from PostgreSQL secret (used for all service users)"
     fi
 fi
 
-# Generate new password if not found
+# Generate new password if not found (should not happen in production)
 if [[ -z "$DATABASE_PASSWORD" ]]; then
     DATABASE_PASSWORD=$(generate_password 32)
-    log_warn "Generated new password. Run create-service-database.sh to create the database with this password."
+    log_warning "Generated new password. This should not happen in production!"
+    log_warning "Ensure POSTGRES_PASSWORD is set or PostgreSQL secret exists."
 fi
 
-# Redis password (if Redis uses password)
+# Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
+# CRITICAL: Redis now uses POSTGRES_PASSWORD (master password) for consistency
 REDIS_PASSWORD=""
 REDIS_HOST="redis-master.infra.svc.cluster.local"
 REDIS_PORT="6379"
-if kubectl get secret redis -n infra >/dev/null 2>&1; then
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    log_info "Using POSTGRES_PASSWORD for Redis (master password)"
+    REDIS_PASSWORD="${POSTGRES_PASSWORD}"
+elif [[ -n "${REDIS_PASSWORD:-}" ]]; then
+    log_info "Using REDIS_PASSWORD from environment"
+    REDIS_PASSWORD="${REDIS_PASSWORD}"
+elif kubectl get secret redis -n infra >/dev/null 2>&1; then
     REDIS_PASSWORD=$(kubectl get secret redis -n infra \
         -o jsonpath="{.data.redis-password}" | base64 -d 2>/dev/null || echo "")
+    if [[ -n "$REDIS_PASSWORD" ]]; then
+        log_info "Retrieved Redis password from secret"
+    fi
 fi
 
 # Construct PostgreSQL URL
@@ -217,7 +220,7 @@ echo "Secret Name: ${SECRET_NAME}"
 echo "Database: ${DB_NAME}"
 echo "Database User: ${DB_USER}"
 echo ""
-log_warn "IMPORTANT: Save these credentials securely!"
+log_warning "IMPORTANT: Save these credentials securely!"
 echo "Database Password: ${DATABASE_PASSWORD}"
 echo ""
 echo "PostgreSQL URL: ${POSTGRES_URL}"
@@ -256,7 +259,7 @@ EOF
 
 chmod 600 "${BACKUP_FILE}"
 log_success "Credentials backed up to: ${BACKUP_FILE}"
-log_warn "Please store this file securely and delete it after backing up elsewhere!"
+log_warning "Please store this file securely and delete it after backing up elsewhere!"
 
 echo ""
 log_info "Next Steps:"
