@@ -28,6 +28,10 @@ spec:
         prometheus.io/path: "{{ .Values.monitoring.prometheus.path }}"
         {{- end }}
     spec:
+      {{- if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
       {{- if .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml .Values.image.pullSecrets | nindent 8 }}
