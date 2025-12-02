@@ -33,6 +33,15 @@ fi
 # Check if secret already exists
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     log_warning "Secret ${SECRET_NAME} already exists in namespace ${NAMESPACE}"
+    
+    # Check if running in CI/CD (non-interactive)
+    if [[ -n "${CI:-}${GITHUB_ACTIONS:-}${GITLAB_CI:-}" ]] || [[ ! -t 0 ]]; then
+        log_info "Running in non-interactive mode - keeping existing secret"
+        log_success "Secret ${SECRET_NAME} already configured"
+        exit 0
+    fi
+    
+    # Interactive mode - prompt user
     read -p "Do you want to recreate it? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
