@@ -115,181 +115,8 @@ else
 fi
 
 # =============================================================================
-# Old Helm-based approach - DEPRECATED, kept for reference
+# Redis Installation Section  
 # =============================================================================
-
-# TEMP_PG_VALUES=/tmp/postgresql-values-prod.yaml
-# cat > "${TEMP_PG_VALUES}" <<'VALUES_EOF'
-## Global settings
-global:
-  postgresql:
-    auth:
-      postgresPassword: "" # Leave empty, will be auto-generated
-      username: "admin_user"
-      password: ""         # Leave empty, will be auto-generated
-      database: "postgres"
-  # FIPS compliance settings (required for newer chart versions)
-  defaultFips: false
-  # Allow custom images (required for codevertex/postgresql-pgvector)
-  security:
-    allowInsecureImages: true
-
-# FIPS OpenSSL configuration
-fips:
-  openssl: false
-
-## Volume permissions configuration
-## Disable to avoid pulling Bitnami helper images
-volumePermissions:
-  enabled: false
-
-## Disable shmVolume (uses Bitnami image for init)
-shmVolume:
-  enabled: false
-
-## Primary PostgreSQL configuration
-primary:
-  ## Custom PostgreSQL image with pgvector extension
-  ## Uses custom image built via GitHub Actions workflow
-  image:
-    registry: docker.io
-    repository: codevertex/postgresql-pgvector
-    tag: POSTGRES_IMAGE_TAG_PLACEHOLDER
-    pullPolicy: IfNotPresent
-  
-  ## Pod security context - run as postgres user (ID 1001)
-  podSecurityContext:
-    fsGroup: 1001
-    runAsUser: 1001
-    runAsNonRoot: true
-  
-  ## Enable pgvector extension initialization scripts
-  initdb:
-    scripts:
-      create-admin-user.sql: |
-        -- Ensure admin_user has superuser privileges for managing all service databases
-        -- The user is created by the chart's auth.username setting, but we ensure proper privileges
-        DO $$
-        BEGIN
-          IF EXISTS (SELECT FROM pg_user WHERE usename = 'admin_user') THEN
-            ALTER USER admin_user WITH SUPERUSER CREATEDB;
-          END IF;
-        END
-        $$;
-      enable-pgvector.sql: |
-        -- Enable pgvector extension in postgres database
-        -- Services can enable it in their own databases during initialization
-        CREATE EXTENSION IF NOT EXISTS vector;
-        
-        -- Grant usage on vector extension to admin_user
-        GRANT USAGE ON SCHEMA public TO admin_user;
-  
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-  priorityClassName: db-critical
-  
-  persistence:
-    enabled: true
-    size: 20Gi
-    storageClass: ""
-  
-  ## PostgreSQL tuning
-  extendedConfiguration: |
-    max_connections = 200
-    shared_buffers = 512MB
-    effective_cache_size = 1536MB
-    work_mem = 2621kB
-    maintenance_work_mem = 128MB
-    checkpoint_completion_target = 0.9
-    wal_buffers = 16MB
-    default_statistics_target = 100
-    random_page_cost = 1.1
-    effective_io_concurrency = 200
-    min_wal_size = 1GB
-    max_wal_size = 4GB
-  
-  ## Health checks
-  livenessProbe:
-    enabled: true
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 6
-  
-  readinessProbe:
-    enabled: true
-    initialDelaySeconds: 5
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 6
-
-## Metrics for Prometheus
-metrics:
-  enabled: true
-  ## Use official Prometheus Community postgres-exporter
-  ## Avoids Bitnami registry dependency
-  image:
-    registry: quay.io
-    repository: prometheuscommunity/postgres-exporter
-    tag: v0.15.0
-    pullPolicy: IfNotPresent
-  serviceMonitor:
-    enabled: false  # Disabled by default - will be enabled if Prometheus Operator CRDs exist
-    namespace: infra
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
-      memory: "256Mi"
-      cpu: "200m"
-
-## Network policy
-networkPolicy:
-  enabled: true
-  allowExternal: false
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: "*"
-      ports:
-        - port: 5432
-          protocol: TCP
-VALUES_EOF
-
-# Update database name if different from default
-if [[ "$PG_DATABASE" != "postgres" ]]; then
-  sed -i "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
-    sed -i '' "s|database: \"postgres\"|database: \"${PG_DATABASE}\"|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
-fi
-
-# Update image tag (default to latest if not set)
-POSTGRES_IMAGE_TAG=${POSTGRES_IMAGE_TAG:-latest}
-sed -i "s|tag: POSTGRES_IMAGE_TAG_PLACEHOLDER|tag: ${POSTGRES_IMAGE_TAG}|g" "${TEMP_PG_VALUES}" 2>/dev/null || \
-  sed -i '' "s|tag: POSTGRES_IMAGE_TAG_PLACEHOLDER|tag: ${POSTGRES_IMAGE_TAG}|g" "${TEMP_PG_VALUES}" 2>/dev/null || true
-
-# Build PostgreSQL Helm arguments
-PG_HELM_ARGS=()
-PG_HELM_ARGS+=(-f "${TEMP_PG_VALUES}")
-
-# Check if Prometheus Operator CRDs exist (for ServiceMonitor)
-if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
-  log_info "Prometheus Operator CRDs detected - ServiceMonitor will be enabled"
-  PG_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true --set metrics.serviceMonitor.namespace="${MONITORING_NS}")
-else
-  log_info "Prometheus Operator CRDs not found - ServiceMonitor disabled (will be enabled after monitoring stack installation)"
-  log_info "To enable ServiceMonitor later, run: helm upgrade postgresql bitnami/postgresql -n ${NAMESPACE} --set metrics.serviceMonitor.enabled=true --reuse-values"
-fi
-
-# Install PostgreSQL using custom manifests (not Helm chart)
-log_section "Installing PostgreSQL (Custom Manifests)"
-log_info "Using custom StatefulSet manifests with CodeVertex postgresql-pgvector image"
 
 # Check if cleanup mode is enabled
 if [ "${ENABLE_CLEANUP}" = "true" ]; then
@@ -339,39 +166,26 @@ set -e
 # PostgreSQL installation complete (using custom manifests)
 # Old Helm verification code removed - using kubectl wait instead
 
-REDIS_HELM_ARGS=()
+# Redis Installation using custom manifests
+log_section "Redis Installation"
 
-# Redis now uses custom manifests (not Helm)
-# Old Helm approach commented out below for reference
-
-# Check if ServiceMonitor CRD exists (Prometheus Operator)
-if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
-  log_info "ServiceMonitor enabled for Redis metrics (namespace: ${MONITORING_NS})"
-  REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=true --set metrics.serviceMonitor.namespace="${MONITORING_NS}")
+# Skip Redis if only installing PostgreSQL
+if [ "${ONLY_COMPONENT}" = "postgres" ]; then
+  log_info "Skipping Redis (ONLY_COMPONENT=postgres)"
+  REDIS_DEPLOYED=false
 else
-  log_info "ServiceMonitor CRD not found - disabling Redis metrics ServiceMonitor"
-  REDIS_HELM_ARGS+=(--set metrics.serviceMonitor.enabled=false)
-fi
-
-# Set Redis password via Helm args (required by Bitnami chart)
-if [[ -n "${REDIS_PASSWORD:-}" ]]; then
-  REDIS_HELM_ARGS+=(--set global.redis.password="${REDIS_PASSWORD}")
-  log_info "Redis password configured via Helm values"
-fi
-
-# Shared password policy:
-# - POSTGRES_PASSWORD (GitHub secret) is the canonical infra password
-# - Redis reuses the same password unless explicitly overridden (and we strongly recommend keeping them identical)
-if [[ -z "${REDIS_PASSWORD:-}" ]]; then
-  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
-    REDIS_PASSWORD="$POSTGRES_PASSWORD"
-    log_info "REDIS_PASSWORD not set - reusing POSTGRES_PASSWORD for Redis (shared infra password)"
-  else
-    log_error "REDIS_PASSWORD is required but not set, and POSTGRES_PASSWORD is also empty"
-    log_error "Please set POSTGRES_PASSWORD (preferred) or REDIS_PASSWORD in GitHub organization secrets"
-  exit 1
+  log_info "Using custom StatefulSet manifests with official redis:7-alpine image"
+  
+  # Use POSTGRES_PASSWORD for Redis if REDIS_PASSWORD not set
+  REDIS_PASS="${REDIS_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+  
+  if [[ -z "${REDIS_PASS}" ]]; then
+    log_error "No password provided for Redis"
+    log_error "Please set POSTGRES_PASSWORD (preferred) or REDIS_PASSWORD in GitHub secrets"
+    exit 1
   fi
-fi
+  
+  log_info "Redis will use master password from POSTGRES_PASSWORD GitHub secret"
 # =============================================================================
 # Redis Installation (Custom Manifests)
 # =============================================================================
