@@ -3,6 +3,9 @@ kind: Application
 metadata:
   name: superset
   namespace: argocd
+  annotations:
+    # Deploy after databases are ready (higher sync wave = later deployment)
+    argocd.argoproj.io/sync-wave: "10"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

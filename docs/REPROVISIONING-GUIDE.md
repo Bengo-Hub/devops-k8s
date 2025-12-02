@@ -45,7 +45,9 @@ This guide provides step-by-step instructions for completely cleaning and reprov
 Use the consolidated script to handle cleanup **and** provisioning end-to-end:
 
 ```bash
-# Cleanup enabled by default (set ENABLE_CLEANUP=false to skip)
+# Cleanup is DISABLED by default (opt-in for safety)
+# To enable cleanup:
+export ENABLE_CLEANUP=true
 ./scripts/reprovision-cluster.sh
 
 # To force cleanup without confirmation:
@@ -60,7 +62,9 @@ This script will:
 3. Bootstrap ArgoCD applications
 4. Verify installation at the end
 
-### Option A: Cleanup Only
+### Option A: Automated Cleanup Script (Recommended)
+
+The automated cleanup script uses a **multi-stage process** to prevent stuck deletions:
 
 ```bash
 # Cleanup is opt-in only - must explicitly enable
@@ -73,39 +77,137 @@ export FORCE_CLEANUP=true
 ./scripts/cluster/cleanup-cluster.sh
 ```
 
-The cleanup script will:
-1. Uninstall all Helm releases
-2. Delete all ArgoCD applications
-3. Delete all application namespaces
-4. Clean up PVCs, CRDs, and Helm secrets
-5. Verify cleanup completion
+**Multi-Stage Cleanup Process:**
 
-### Option B: Manual Cleanup
+1. **Stage 1**: Uninstall all Helm releases
+2. **Stage 2**: Disable ArgoCD auto-sync and self-heal (prevents recreation)
+3. **Stage 2.1**: Delete all ArgoCD Applications
+4. **Stage 2.2**: Remove ArgoCD CRDs
+5. **Stage 2.3**: Scale down ArgoCD components (stops resource management)
+6. **Stage 2.4**: Scale down monitoring operators (stops recreation loops)
+7. **Stage 3**: Enhanced namespace deletion:
+   - Scale down all workloads to 0 replicas
+   - Remove finalizers from all resources
+   - Force delete all pods
+   - Remove namespace finalizers
+   - Force delete namespaces
+8. **Stage 4**: Clean up remaining PVCs, CRDs, and Helm secrets
+9. **Stage 5**: Force delete any stuck resources
 
-If you prefer manual control:
+### Option B: Manual Cleanup (Mirrors Automated Process)
+
+If you prefer manual control, follow this **enhanced cleanup process** to avoid getting stuck:
 
 ```bash
-# 1. List all namespaces
-kubectl get namespaces
-
-# 2. Uninstall Helm releases in each namespace
-for ns in erp infra argocd monitoring; do
-  helm list -n "$ns" -q | xargs -I {} helm uninstall {} -n "$ns" --wait || true
+# STAGE 1: Uninstall Helm releases
+echo "Stage 1: Uninstalling Helm releases..."
+for ns in erp infra argocd monitoring cafe treasury notifications truload auth; do
+  helm list -n "$ns" -q 2>/dev/null | xargs -I {} helm uninstall {} -n "$ns" --wait 2>/dev/null || true
 done
 
-# 3. Delete ArgoCD applications
-kubectl delete applications --all -A --wait=true --grace-period=0 || true
+# STAGE 2: Disable ArgoCD auto-sync (prevents recreation)
+echo "Stage 2: Disabling ArgoCD auto-sync..."
+kubectl get applications -A -o json 2>/dev/null | \
+  jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' | \
+  while read -r app; do
+    NS=$(echo "$app" | cut -d'/' -f1)
+    APP=$(echo "$app" | cut -d'/' -f2)
+    echo "  Disabling auto-sync for: $APP"
+    kubectl patch application "$APP" -n "$NS" --type=merge \
+      -p '{"spec":{"syncPolicy":{"automated":null}}}' 2>/dev/null || true
+    kubectl patch application "$APP" -n "$NS" --type=json \
+      -p='[{"op": "remove", "path": "/metadata/finalizers"}]' 2>/dev/null || true
+  done
 
-# 4. Delete application namespaces
-for ns in erp infra argocd monitoring cafe treasury notifications truload; do
-  kubectl delete namespace "$ns" --wait=true --grace-period=0 || true
+# STAGE 2.1: Delete ArgoCD Applications
+echo "Stage 2.1: Deleting ArgoCD Applications..."
+kubectl get applications -A -o json 2>/dev/null | \
+  jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' | \
+  while read -r app; do
+    NS=$(echo "$app" | cut -d'/' -f1)
+    APP=$(echo "$app" | cut -d'/' -f2)
+    echo "  Deleting: $APP"
+    kubectl delete application "$APP" -n "$NS" --wait=false --grace-period=0 2>/dev/null || true
+  done
+
+sleep 5
+
+# STAGE 2.2: Remove ArgoCD CRDs
+echo "Stage 2.2: Removing ArgoCD CRDs..."
+kubectl delete crd applications.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
+kubectl delete crd applicationprojects.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
+kubectl delete crd appprojects.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
+
+# STAGE 2.3: Scale down ArgoCD components
+echo "Stage 2.3: Scaling down ArgoCD components..."
+kubectl scale deployment argocd-server -n argocd --replicas=0 2>/dev/null || true
+kubectl scale deployment argocd-repo-server -n argocd --replicas=0 2>/dev/null || true
+kubectl scale deployment argocd-application-controller -n argocd --replicas=0 2>/dev/null || true
+kubectl scale statefulset argocd-application-controller -n argocd --replicas=0 2>/dev/null || true
+
+# STAGE 2.4: Scale down monitoring operators
+echo "Stage 2.4: Scaling down monitoring operators..."
+kubectl scale deployment -n monitoring --all --replicas=0 2>/dev/null || true
+kubectl scale statefulset -n monitoring --all --replicas=0 2>/dev/null || true
+
+sleep 5
+
+# STAGE 3: Enhanced namespace deletion
+echo "Stage 3: Deleting namespaces with enhanced process..."
+for ns in erp infra argocd monitoring cafe treasury notifications truload auth inventory logistics pos; do
+  if kubectl get namespace "$ns" >/dev/null 2>&1; then
+    echo "  Processing namespace: $ns"
+    
+    # Scale down all workloads first
+    echo "    Scaling down workloads..."
+    kubectl scale deployment -n "$ns" --all --replicas=0 2>/dev/null || true
+    kubectl scale statefulset -n "$ns" --all --replicas=0 2>/dev/null || true
+    kubectl scale replicaset -n "$ns" --all --replicas=0 2>/dev/null || true
+    
+    sleep 2
+    
+    # Remove finalizers from resources
+    echo "    Removing finalizers..."
+    kubectl get all,pvc,configmap,secret -n "$ns" -o json 2>/dev/null | \
+      jq -r '.items[] | select(.metadata.finalizers != null) | "\(.kind)/\(.metadata.name)"' 2>/dev/null | \
+      while read -r resource; do
+        KIND=$(echo "$resource" | cut -d'/' -f1)
+        NAME=$(echo "$resource" | cut -d'/' -f2)
+        kubectl patch "$KIND" "$NAME" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+      done || true
+    
+    # Force delete all pods
+    echo "    Force deleting pods..."
+    kubectl delete pods --all -n "$ns" --force --grace-period=0 2>/dev/null || true
+    
+    # Remove namespace finalizers
+    kubectl patch namespace "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+    
+    # Delete namespace
+    echo "    Deleting namespace..."
+    kubectl delete namespace "$ns" --wait=false --grace-period=0 2>/dev/null || true
+  fi
 done
 
-# 5. Clean up stuck resources
-kubectl get pvc -A | grep -v NAME | awk '{print $1, $2}' | while read ns name; do
-  kubectl delete pvc "$name" -n "$ns" --wait=true --grace-period=0 || true
-done
+# STAGE 4: Clean up remaining resources
+echo "Stage 4: Cleaning up remaining resources..."
+kubectl get pvc -A -o json 2>/dev/null | \
+  jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' | \
+  while read -r pvc; do
+    NS=$(echo "$pvc" | cut -d'/' -f1)
+    NAME=$(echo "$pvc" | cut -d'/' -f2)
+    kubectl delete pvc "$NAME" -n "$NS" --wait=false --grace-period=0 2>/dev/null || true
+  done || true
+
+echo "✓ Cleanup complete!"
 ```
+
+**Why This Enhanced Process?**
+
+- **Prevents stuck deletions**: ArgoCD and operators can't recreate resources
+- **No infinite loops**: Scaling to 0 stops recreation before deletion
+- **Faster cleanup**: No waiting for graceful shutdowns
+- **More reliable**: Handles finalizers and stuck resources properly
 
 ---
 
