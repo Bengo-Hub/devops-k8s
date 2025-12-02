@@ -5,8 +5,8 @@ set -euo pipefail
 # Installs PostgreSQL and Redis with production configurations
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# MANIFESTS_DIR is at repo root, not under scripts
-MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
+# MANIFESTS_DIR is at repo root/manifests/databases
+MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests/databases"
 source "${SCRIPT_DIR}/../tools/common.sh"
 source "${SCRIPT_DIR}/../tools/helm-utils.sh"
 source "${SCRIPT_DIR}/../tools/database-utils.sh"
@@ -341,8 +341,8 @@ set -e
 
 REDIS_HELM_ARGS=()
 
-# Always use values file as base
-REDIS_HELM_ARGS+=(-f "${MANIFESTS_DIR}/databases/redis-values.yaml")
+# Redis now uses custom manifests (not Helm)
+# Old Helm approach commented out below for reference
 
 # Check if ServiceMonitor CRD exists (Prometheus Operator)
 if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
@@ -372,47 +372,73 @@ if [[ -z "${REDIS_PASSWORD:-}" ]]; then
   exit 1
   fi
 fi
-# Install or upgrade Redis
-set +e
-if helm -n "${NAMESPACE}" status redis >/dev/null 2>&1; then
-  # Redis Helm release exists - ensure password matches GitHub secrets
-  if [[ -n "${REDIS_PASSWORD:-}" ]]; then
-    CURRENT_REDIS_PASS=$(get_secret_password "redis" "redis-password" "${NAMESPACE}")
-    
-    # Always update secret to match GitHub secrets (source of truth)
-    if [[ "$CURRENT_REDIS_PASS" != "$REDIS_PASSWORD" ]]; then
-      log_warning "Updating Redis secret to match GitHub secrets password..."
-      kubectl create secret generic redis \
-        --from-literal=redis-password="$REDIS_PASSWORD" \
-        -n "${NAMESPACE}" \
-        --dry-run=client -o yaml | kubectl apply -f -
-      log_success "Redis secret updated to match GitHub secrets password"
-    fi
+# =============================================================================
+# Redis Installation (Custom Manifests)
+# =============================================================================
+
+log_section "Redis Installation"
+
+# Skip Redis if only installing PostgreSQL
+if [ "${ONLY_COMPONENT}" = "postgres" ]; then
+  log_info "Skipping Redis (ONLY_COMPONENT=postgres)"
+  REDIS_DEPLOYED=false
+else
+  log_info "Using custom StatefulSet manifests with official redis:7-alpine image"
+  
+  # Use POSTGRES_PASSWORD for Redis if REDIS_PASSWORD not set
+  REDIS_PASS="${REDIS_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+  
+  if [[ -z "${REDIS_PASS}" ]]; then
+    log_error "No password provided for Redis"
+    log_error "Please set POSTGRES_PASSWORD (preferred) or REDIS_PASSWORD in GitHub secrets"
+    exit 1
   fi
   
-  # Handle upgrade or skip
-  handle_existing_database "redis" "redis-master" "${NAMESPACE}" "bitnami/redis" "" "REDIS_HELM_ARGS" "REDIS_PASSWORD" "${FORCE_DB_INSTALL:-false}"
-  HELM_REDIS_EXIT=$HELM_EXIT_CODE
-else
-  # Redis not found - install fresh
-  handle_fresh_database_install "redis" "redis-master" "${NAMESPACE}" "bitnami/redis" "" "REDIS_HELM_ARGS" "$(is_cleanup_mode && echo true || echo false)"
-  HELM_REDIS_EXIT=$HELM_EXIT_CODE
-fi
-set -e
-
-# Verify Redis installation
-if [[ $HELM_REDIS_EXIT -eq 0 ]]; then
-  log_success "Redis Helm operation completed"
-  # Check if Redis is actually ready
-  REDIS_READY=$(kubectl get statefulset redis-master -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  if [[ "$REDIS_READY" =~ ^[0-9]+$ ]] && [ "$REDIS_READY" -ge 1 ]; then
-    log_success "Redis is ready"
-  else
-    log_info "Redis installation initiated. Pods will start in background."
+  # Check if cleanup mode is enabled
+  if [ "${ENABLE_CLEANUP}" = "true" ]; then
+    log_warning "Cleanup mode: Deleting existing Redis resources..."
+    kubectl delete -f "${MANIFESTS_DIR}/redis-statefulset.yaml" --ignore-not-found=true --wait=true --grace-period=0 2>/dev/null || true
+    kubectl delete pvc -n "${NAMESPACE}" -l app=redis --wait=true --grace-period=0 2>/dev/null || true
+    # Delete any Helm release if it exists
+    if command -v helm >/dev/null 2>&1; then
+      helm uninstall redis -n "${NAMESPACE}" --wait 2>/dev/null || true
+    fi
+    sleep 5
   fi
-else
-  if ! verify_database_installation "redis" "redis-master" "${NAMESPACE}"; then
-    exit 1
+  
+  # Ensure Redis secret exists
+  if ! kubectl get secret redis -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log_info "Creating Redis secret with POSTGRES_PASSWORD..."
+    kubectl create secret generic redis \
+      -n "${NAMESPACE}" \
+      --from-literal=redis-password="${REDIS_PASS}"
+    log_success "Redis secret created with GitHub POSTGRES_PASSWORD"
+  else
+    log_info "Redis secret already exists - reusing"
+  fi
+  
+  # Apply Redis manifests
+  log_info "Applying Redis custom manifests..."
+  kubectl apply -f "${MANIFESTS_DIR}/redis-statefulset.yaml"
+  
+  # Wait for Redis to be ready
+  log_info "Waiting for Redis to be ready (timeout: 5 minutes)..."
+  kubectl wait --for=condition=ready pod/redis-master-0 -n "${NAMESPACE}" --timeout=300s || {
+    log_warning "Redis pod not ready after 5 minutes, checking status..."
+    kubectl get pod redis-master-0 -n "${NAMESPACE}" || true
+    kubectl describe pod redis-master-0 -n "${NAMESPACE}" || true
+  }
+  
+  # Verify Redis is running
+  if kubectl get pod redis-master-0 -n "${NAMESPACE}" 2>/dev/null | grep -q "2/2.*Running"; then
+    log_success "Redis is ready and healthy"
+    log_info "Image: redis:7-alpine"
+    log_info "Metrics: oliver006/redis_exporter:v1.62.0-alpine"
+    REDIS_DEPLOYED=true
+  else
+    log_error "Redis deployment may have issues"
+    kubectl describe pod redis-master-0 -n "${NAMESPACE}" || true
+    REDIS_DEPLOYED=false
   fi
 fi
 
