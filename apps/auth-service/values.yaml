@@ -86,7 +86,7 @@ volumes:
   - name: auth-token-keys
     secret:
       secretName: auth-token-keys
-      defaultMode: 0440  # Readable by owner (root) and group (1000 via fsGroup)
+      defaultMode: 288  # 0440 in octal = 288 decimal: readable by owner (root) and group (1000 via fsGroup)
 
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
