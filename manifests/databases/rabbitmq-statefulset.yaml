@@ -1,0 +1,257 @@
+---
+# RabbitMQ StatefulSet with official RabbitMQ image
+# Uses official docker.io/rabbitmq:4.2-management-alpine for minimal footprint
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: infra
+  labels:
+    app: rabbitmq
+spec:
+  type: ClusterIP
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+    - name: management
+      port: 15672
+      targetPort: 15672
+    - name: prometheus
+      port: 15692
+      targetPort: 15692
+  selector:
+    app: rabbitmq
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  namespace: infra
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+    - name: epmd
+      port: 4369
+      targetPort: 4369
+    - name: dist
+      port: 25672
+      targetPort: 25672
+  selector:
+    app: rabbitmq
+---
+# ConfigMap for RabbitMQ configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: infra
+data:
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_prometheus,rabbitmq_peer_discovery_k8s].
+  rabbitmq.conf: |
+    # Clustering
+    cluster_formation.peer_discovery_backend = rabbit_peer_discovery_k8s
+    cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+    cluster_formation.k8s.address_type = hostname
+    cluster_formation.k8s.service_name = rabbitmq-headless
+    cluster_formation.k8s.hostname_suffix = .rabbitmq-headless.infra.svc.cluster.local
+    
+    # Prometheus metrics
+    prometheus.return_per_object_metrics = true
+    
+    # Memory and disk thresholds
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.relative = 1.0
+    
+    # Logging
+    log.console = true
+    log.console.level = info
+    
+    # Management plugin
+    management.tcp.port = 15672
+---
+# StatefulSet for RabbitMQ
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: infra
+  labels:
+    app: rabbitmq
+spec:
+  serviceName: rabbitmq-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15692"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: rabbitmq
+      priorityClassName: db-critical
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:4.2-management-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: amqp
+          containerPort: 5672
+          protocol: TCP
+        - name: management
+          containerPort: 15672
+          protocol: TCP
+        - name: prometheus
+          containerPort: 15692
+          protocol: TCP
+        - name: epmd
+          containerPort: 4369
+          protocol: TCP
+        - name: dist
+          containerPort: 25672
+          protocol: TCP
+        env:
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq
+              key: username
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq
+              key: password
+        - name: RABBITMQ_ERLANG_COOKIE
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq
+              key: erlang-cookie
+        - name: RABBITMQ_USE_LONGNAME
+          value: "true"
+        - name: RABBITMQ_NODENAME
+          value: rabbit@$(HOSTNAME).rabbitmq-headless.infra.svc.cluster.local
+        - name: K8S_SERVICE_NAME
+          value: rabbitmq-headless
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/rabbitmq
+        - name: data
+          mountPath: /var/lib/rabbitmq
+        livenessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - -q
+            - ping
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 20
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - -q
+            - check_port_connectivity
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 20
+          failureThreshold: 3
+        startupProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - -q
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 20
+          failureThreshold: 30
+      volumes:
+      - name: config
+        configMap:
+          name: rabbitmq-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+---
+# ServiceAccount for RabbitMQ
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq
+  namespace: infra
+---
+# Role for RabbitMQ peer discovery
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rabbitmq
+  namespace: infra
+rules:
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+---
+# RoleBinding for RabbitMQ
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rabbitmq
+  namespace: infra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rabbitmq
+subjects:
+- kind: ServiceAccount
+  name: rabbitmq
+  namespace: infra
+
