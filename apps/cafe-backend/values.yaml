@@ -93,11 +93,11 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: cafeapi.codevrtexitsolutions.com
+    - host: cafeapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - cafeapi.codevrtexitsolutions.com
+        - cafeapi.codevertexitsolutions.com
       secretName: cafe-backend-tls

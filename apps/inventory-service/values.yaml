@@ -88,12 +88,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: inventory.codevrtexitsolutions.com
+    - host: inventory.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - inventory.codevrtexitsolutions.com
+        - inventory.codevertexitsolutions.com
       secretName: inventory-service-tls
 
