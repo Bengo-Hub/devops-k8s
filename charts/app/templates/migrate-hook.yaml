@@ -1,0 +1,181 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app.fullname" . }}-migrate-{{ .Values.image.tag | trunc 8 }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "app.fullname" . }}
+    component: migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: {{ include "app.fullname" . }}
+        component: migration
+    spec:
+      restartPolicy: Never
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: migrate
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+        # Security context to prevent file descriptor issues
+        securityContext:
+          capabilities:
+            add:
+            - SYS_RESOURCE
+          allowPrivilegeEscalation: true
+        resources:
+          requests:
+            memory: {{ .Values.migrations.resources.requests.memory | default "512Mi" }}
+            cpu: {{ .Values.migrations.resources.requests.cpu | default "250m" }}
+          limits:
+            memory: {{ .Values.migrations.resources.limits.memory | default "2Gi" }}
+            cpu: {{ .Values.migrations.resources.limits.cpu | default "1000m" }}
+        command:
+        - bash
+        - -c
+        - |
+          set -e
+          
+          # Increase file descriptor limits to prevent "too many open files" errors
+          ulimit -n 65535 || echo "⚠️  Could not increase file descriptor limit"
+          
+          echo "==================================="
+          echo "Django Migrations - Helm Hook"
+          echo "==================================="
+          echo "File descriptor limit: $(ulimit -n)"
+          echo "Namespace: {{ .Release.Namespace }}"
+          echo "Release: {{ .Release.Name }}"
+          echo "Image: {{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          
+          # Install PostgreSQL client for database checking
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/debian.sources \
+            -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0" && \
+          apt-get install -y -qq --no-install-recommends postgresql-client >/dev/null 2>&1 || true
+          apt-get clean && rm -rf /var/lib/apt/lists/* || true
+          
+          # Wait for database to be ready
+          echo "Waiting for database connection..."
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+          DB_READY=false
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+              -c "SELECT 1" >/dev/null 2>&1; then
+              DB_READY=true
+              echo "✓ Database connection established"
+              break
+            fi
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "Waiting for database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+            sleep 2
+          done
+          
+          if [ "$DB_READY" = "false" ]; then
+            echo "✗ Failed to connect to database after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          
+          # Give database a moment to stabilize
+          sleep 3
+          
+          # Check database state
+          echo "Checking database state..."
+          TABLE_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t \
+            -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | xargs || echo "0")
+          
+          echo "Database has $TABLE_COUNT tables"
+          
+          # Check if critical core tables exist
+          CORE_TABLES_EXIST=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t \
+            -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('auth_user', 'django_migrations', 'core_businessdetail', 'core_department', 'core_region');" \
+            2>/dev/null | xargs || echo "0")
+          
+          echo "Core tables found: $CORE_TABLES_EXIST/5"
+          
+          # Migration strategy based on database state
+          if [[ "$TABLE_COUNT" -eq "0" ]]; then
+            echo "✓ Fresh database (0 tables) - running normal migrations"
+            python manage.py migrate --noinput
+            
+          elif [[ "$CORE_TABLES_EXIST" -ge "4" ]]; then
+            echo "✓ Well-established database ($CORE_TABLES_EXIST/5 core tables) - using --fake-initial"
+            python manage.py migrate --fake-initial --noinput || {
+              echo "⚠️  --fake-initial failed, trying regular migrate..."
+              python manage.py migrate --noinput
+            }
+            
+          else
+            echo "⚠️  Partial database ($TABLE_COUNT tables but only $CORE_TABLES_EXIST/5 core) - using regular migrations"
+            python manage.py migrate --noinput || {
+              echo "⚠️  Regular migrate failed - trying --fake-initial..."
+              python manage.py migrate --fake-initial --noinput || {
+                echo "✗ Both migration strategies failed"
+                exit 1
+              }
+            }
+          fi
+          
+          echo "✅ Migrations completed successfully"
+          
+          # Verify critical tables
+          echo "Verifying critical tables..."
+          EXPECTED_TABLES="('auth_user', 'django_migrations', 'core_businessdetail', 'attendance_timesheet')"
+          FOUND_TABLES=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t \
+            -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN $EXPECTED_TABLES;" \
+            2>/dev/null | xargs || echo "0")
+          
+          if [[ "$FOUND_TABLES" -lt "4" ]]; then
+            echo "⚠️  WARNING: Found $FOUND_TABLES/4 critical tables"
+          else
+            echo "✓ All critical tables verified ($FOUND_TABLES/4)"
+          fi
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.envFromSecret }}
+              key: DATABASE_URL
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.envFromSecret }}
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.envFromSecret }}
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.envFromSecret }}
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.envFromSecret }}
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.envFromSecret }}
+              key: DB_PASSWORD
+        envFrom:
+        - secretRef:
+            name: {{ .Values.envFromSecret }}
+{{- end }}
+

@@ -61,6 +61,16 @@ ingress:
         - erpapi.masterspace.co.ke
       secretName: erpapi-masterspace-tls
 envFromSecret: erp-api-env
+# Database migrations configuration
+migrations:
+  enabled: true
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
 # Persistent storage for media uploads
 persistence:
   enabled: true
