@@ -75,53 +75,33 @@ env:
     value: /etc/auth-keys/public.pem
 
 # ============================================================================
-# INIT CONTAINERS FOR MIGRATIONS AND SEEDING
+# MIGRATIONS AND SEEDING (Helm Hooks - Automated)
 # ============================================================================
-initContainers:
-  - name: migrate-schema
-    image: "docker.io/codevertex/auth-service:latest"
-    imagePullPolicy: IfNotPresent
-    command: ["/usr/local/bin/auth-migrate"]
-    env:
-      - name: AUTH_DB_URL
-        valueFrom:
-          secretKeyRef:
-            name: auth-service-secrets
-            key: postgresUrl
-      - name: AUTH_POSTGRES_URL
-        valueFrom:
-          secretKeyRef:
-            name: auth-service-secrets
-            key: postgresUrl
-    volumeMounts:
-      - name: auth-token-keys
-        mountPath: /etc/auth-keys
-        readOnly: true
-  - name: seed-data
-    image: "docker.io/codevertex/auth-service:latest"
-    imagePullPolicy: IfNotPresent
-    command: ["/usr/local/bin/auth-seed"]
-    env:
-      - name: AUTH_DB_URL
-        valueFrom:
-          secretKeyRef:
-            name: auth-service-secrets
-            key: postgresUrl
-      - name: AUTH_POSTGRES_URL
-        valueFrom:
-          secretKeyRef:
-            name: auth-service-secrets
-            key: postgresUrl
-      - name: SEED_ADMIN_PASSWORD
-        value: "ChangeMe123!"
-      - name: AUTH_TOKEN_PRIVATE_KEY_PATH
-        value: /etc/auth-keys/private.pem
-      - name: AUTH_TOKEN_PUBLIC_KEY_PATH
-        value: /etc/auth-keys/public.pem
-    volumeMounts:
-      - name: auth-token-keys
-        mountPath: /etc/auth-keys
-        readOnly: true
+# Migrations run automatically via migrate-hook.yaml (pre-install/pre-upgrade)
+migrations:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Seeding runs automatically via seed-hook.yaml (post-install/post-upgrade)
+seed:
+  enabled: true
+  binaryName: auth-seed
+  env:
+    - name: SEED_ADMIN_PASSWORD
+      value: "ChangeMe123!"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 # ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS
