@@ -1,29 +1,25 @@
 # Auth Service Production Configuration
 nameOverride: auth-service
 fullnameOverride: auth-service
-
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-service
-  tag: f8700ca4  # Updated with tenant slug fixes and health endpoint in OpenAPI
-  pullPolicy: Always  # Force pull to get latest changes
+  tag: a5d1dc16 # Updated with tenant slug fixes and health endpoint in OpenAPI
+  pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 2  # Start with 2 replicas for high availability
-
+replicaCount: 2 # Start with 2 replicas for high availability
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
-
 # ============================================================================
 # SERVICE CONFIGURATION
 # ============================================================================
@@ -31,7 +27,6 @@ service:
   type: ClusterIP
   port: 4101
   targetPort: 4101
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -40,7 +35,6 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
@@ -73,10 +67,10 @@ env:
     value: /etc/auth-keys/private.pem
   - name: AUTH_TOKEN_PUBLIC_KEY_PATH
     value: /etc/auth-keys/public.pem
-
 # ============================================================================
 # MIGRATIONS AND SEEDING (Helm Hooks - Automated)
 # ============================================================================
+<<<<<<< HEAD
 # Migrations run automatically via migrate-hook.yaml (pre-install/pre-upgrade)
 migrations:
   enabled: true
@@ -103,6 +97,53 @@ seed:
       cpu: 500m
       memory: 512Mi
 
+=======
+initContainers:
+  - name: migrate-schema
+    image: "docker.io/codevertex/auth-service:latest"
+    imagePullPolicy: IfNotPresent
+    command: ["/usr/local/bin/auth-migrate"]
+    env:
+      - name: AUTH_DB_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+      - name: AUTH_POSTGRES_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+    volumeMounts:
+      - name: auth-token-keys
+        mountPath: /etc/auth-keys
+        readOnly: true
+  - name: seed-data
+    image: "docker.io/codevertex/auth-service:latest"
+    imagePullPolicy: IfNotPresent
+    command: ["/usr/local/bin/auth-seed"]
+    env:
+      - name: AUTH_DB_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+      - name: AUTH_POSTGRES_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+      - name: SEED_ADMIN_PASSWORD
+        value: "ChangeMe123!"
+      - name: AUTH_TOKEN_PRIVATE_KEY_PATH
+        value: /etc/auth-keys/private.pem
+      - name: AUTH_TOKEN_PUBLIC_KEY_PATH
+        value: /etc/auth-keys/public.pem
+    volumeMounts:
+      - name: auth-token-keys
+        mountPath: /etc/auth-keys
+        readOnly: true
+>>>>>>> 4b95808865cd9db9dc45169be7e2742ad47eb7cb
 # ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS
 # ============================================================================
@@ -110,13 +151,11 @@ volumeMounts:
   - name: auth-token-keys
     mountPath: /etc/auth-keys
     readOnly: true
-
 volumes:
   - name: auth-token-keys
     secret:
       secretName: auth-token-keys
-      defaultMode: 288  # 0440 in octal = 288 decimal: readable by owner (root) and group (1000 via fsGroup)
-
+      defaultMode: 288 # 0440 in octal = 288 decimal: readable by owner (root) and group (1000 via fsGroup)
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
@@ -127,7 +166,6 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
-
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
@@ -156,8 +194,7 @@ healthCheck:
     initialDelaySeconds: 5
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 15  # 2.5 minutes total (15 * 10s)
-
+    failureThreshold: 15 # 2.5 minutes total (15 * 10s)
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
@@ -183,7 +220,6 @@ ingress:
     - hosts:
         - sso.codevertexitsolutions.com
       secretName: sso-codevertexitsolutions-tls
-
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
@@ -193,7 +229,6 @@ monitoring:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -201,7 +236,6 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 # ============================================================================
 # SECURITY CONFIGURATION
 # ============================================================================
@@ -210,14 +244,12 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   runAsNonRoot: true
-
 # ============================================================================
 # POD DISRUPTION BUDGET
 # ============================================================================
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
-
 # ============================================================================
 # POD AFFINITY - DISTRIBUTE PODS ACROSS NODES
 # ============================================================================
@@ -233,4 +265,3 @@ affinity:
                 values:
                   - auth-service
           topologyKey: kubernetes.io/hostname
-
