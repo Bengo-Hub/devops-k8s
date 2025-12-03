@@ -48,8 +48,8 @@ elif kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2
         -o jsonpath="{.data.DATABASE_PASSWORD}" | base64 -d)
     log_info "Using password from superset-secrets in namespace ${SUPERSET_NAMESPACE}"
 else
-    log_warn "POSTGRES_PASSWORD not set and superset-secrets not found. Generating random password..."
-    log_warn "Run ./create-superset-secrets.sh first or set POSTGRES_PASSWORD"
+    log_warning "POSTGRES_PASSWORD not set and superset-secrets not found. Generating random password..."
+    log_warning "Run ./create-superset-secrets.sh first or set POSTGRES_PASSWORD"
     SUPERSET_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 fi
 
@@ -141,9 +141,9 @@ if kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2>&
         -p="[{\"op\": \"replace\", \"path\": \"/data/DATABASE_PASSWORD\", \"value\": \"$(echo -n "${SUPERSET_DB_PASSWORD}" | base64 -w 0)\"}]" 2>/dev/null || \
     kubectl patch secret superset-secrets -n "${SUPERSET_NAMESPACE}" --type='json' \
         -p="[{\"op\": \"replace\", \"path\": \"/data/DATABASE_PASSWORD\", \"value\": \"$(echo -n "${SUPERSET_DB_PASSWORD}" | base64)\"}]" || \
-    log_warn "Failed to update Superset secrets. Please update manually."
+    log_warning "Failed to update Superset secrets. Please update manually."
 else
-    log_warn "Superset secrets not found in namespace ${SUPERSET_NAMESPACE}"
+    log_warning "Superset secrets not found in namespace ${SUPERSET_NAMESPACE}"
     log_info "Run ./create-superset-secrets.sh to create the secrets"
 fi
 
