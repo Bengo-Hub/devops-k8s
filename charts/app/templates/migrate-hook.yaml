@@ -96,7 +96,7 @@ spec:
           
           # Wait for database to be ready
           echo "Waiting for database connection..."
-          MAX_RETRIES=30
+          MAX_RETRIES=3
           RETRY_COUNT=0
           DB_READY=false
           
@@ -110,9 +110,8 @@ spec:
               ERROR_MSG=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
                 -c "SELECT 1" 2>&1 || true)
               echo "Waiting for database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
-              if [ $RETRY_COUNT -eq 5 ] || [ $RETRY_COUNT -eq 15 ] || [ $RETRY_COUNT -eq 25 ]; then
-                echo "  Connection error: ${ERROR_MSG}"
-              fi
+              # Show error on every attempt since we only try 3 times
+              echo "  Connection error: ${ERROR_MSG}"
             fi
             RETRY_COUNT=$((RETRY_COUNT + 1))
             sleep 2
