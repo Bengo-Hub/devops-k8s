@@ -75,6 +75,55 @@ env:
     value: /etc/auth-keys/public.pem
 
 # ============================================================================
+# INIT CONTAINERS FOR MIGRATIONS AND SEEDING
+# ============================================================================
+initContainers:
+  - name: migrate-schema
+    image: "docker.io/codevertex/auth-service:latest"
+    imagePullPolicy: IfNotPresent
+    command: ["/usr/local/bin/auth-migrate"]
+    env:
+      - name: AUTH_DB_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+      - name: AUTH_POSTGRES_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+    volumeMounts:
+      - name: auth-token-keys
+        mountPath: /etc/auth-keys
+        readOnly: true
+  - name: seed-data
+    image: "docker.io/codevertex/auth-service:latest"
+    imagePullPolicy: IfNotPresent
+    command: ["/usr/local/bin/auth-seed"]
+    env:
+      - name: AUTH_DB_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+      - name: AUTH_POSTGRES_URL
+        valueFrom:
+          secretKeyRef:
+            name: auth-service-secrets
+            key: postgresUrl
+      - name: SEED_ADMIN_PASSWORD
+        value: "ChangeMe123!"
+      - name: AUTH_TOKEN_PRIVATE_KEY_PATH
+        value: /etc/auth-keys/private.pem
+      - name: AUTH_TOKEN_PUBLIC_KEY_PATH
+        value: /etc/auth-keys/public.pem
+    volumeMounts:
+      - name: auth-token-keys
+        mountPath: /etc/auth-keys
+        readOnly: true
+
+# ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS
 # ============================================================================
 volumeMounts:
