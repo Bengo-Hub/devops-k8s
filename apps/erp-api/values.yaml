@@ -70,8 +70,8 @@ envFromSecret: erp-api-env
 # Migrations run as pre-install/pre-upgrade Jobs (see migrate-hook.yaml template)
 # This is the standard Django deployment pattern
 migrations:
-  enabled: true  # Django migrations run via Helm pre-install/pre-upgrade hooks
-  runOnStartup: true  # Also run migrations on every pod startup (idempotent initContainer)
+  enabled: true # Django migrations run via Helm pre-install/pre-upgrade hooks
+  runOnStartup: true # Also run migrations on every pod startup (idempotent initContainer)
   resources:
     requests:
       cpu: 250m
