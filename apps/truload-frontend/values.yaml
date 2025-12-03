@@ -77,3 +77,8 @@ celeryWorker:
   enabled: false
 celeryBeat:
   enabled: false
+# Monitoring configuration - disable for frontend (no metrics endpoint)
+monitoring:
+  enabled: false
+serviceMonitor:
+  enabled: false
