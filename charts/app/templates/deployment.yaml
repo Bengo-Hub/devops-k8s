@@ -57,7 +57,7 @@ spec:
               mountPath: {{ .Values.persistence.mountPath }}
         {{- end }}
         {{- if and .Values.migrations .Values.migrations.runOnStartup }}
-        - name: run-migrations
+        - name: wait-for-db
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           securityContext:
@@ -81,50 +81,35 @@ spec:
           - |
             set -e
             echo "=========================================="
-            echo "🔄 Auto-Migration (InitContainer)"
+            echo "🔌 Pre-Startup Database Check"
             echo "=========================================="
             echo "Pod: $HOSTNAME"
-            echo "Namespace: {{ .Release.Namespace }}"
             
-            # Wait for database using Django's check
-            echo "⏳ Waiting for database..."
-            MAX_RETRIES=60
+            # Quick database check - just verify connectivity
+            MAX_RETRIES=3
             RETRY_COUNT=0
             
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               if python manage.py check --database default > /dev/null 2>&1; then
-                echo "✅ Database connected (attempt $RETRY_COUNT)"
-                break
+                echo "✅ Database is ready (attempt $RETRY_COUNT)"
+                exit 0
               fi
               
               RETRY_COUNT=$((RETRY_COUNT + 1))
-              
-              if [ $((RETRY_COUNT % 10)) -eq 0 ]; then
-                echo "  ⏳ Waiting... (attempt $RETRY_COUNT/$MAX_RETRIES)"
-              fi
-              
-              sleep 2
+              echo "⏳ Checking database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+              sleep 3
             done
             
-            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-              echo "❌ Database connection timeout"
-              python manage.py check --database default 2>&1 || true
-              exit 1
-            fi
-            
-            # Run migrations (idempotent)
-            echo "🔄 Running migrations..."
-            python manage.py migrate --fake-initial --noinput 2>&1 || python manage.py migrate --noinput 2>&1
-            
-            echo "✅ Migrations complete"
-            echo "=========================================="
+            echo "⚠️ Database not responding after $MAX_RETRIES checks"
+            echo "ℹ️ Container will start anyway - migrations will run via entrypoint.sh"
+            exit 0
           resources:
             requests:
-              memory: {{ .Values.migrations.resources.requests.memory | default "512Mi" }}
-              cpu: {{ .Values.migrations.resources.requests.cpu | default "250m" }}
+              memory: 128Mi
+              cpu: 50m
             limits:
-              memory: {{ .Values.migrations.resources.limits.memory | default "1Gi" }}
-              cpu: {{ .Values.migrations.resources.limits.cpu | default "500m" }}
+              memory: 256Mi
+              cpu: 200m
         {{- end }}
       {{- end }}
       containers:
