@@ -80,7 +80,6 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
-
 # Seeding runs automatically via seed-hook.yaml (post-install/post-upgrade)
 seed:
   enabled: true
@@ -95,12 +94,10 @@ seed:
     limits:
       cpu: 500m
       memory: 512Mi
-
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
 envFromSecret: auth-service-secrets
-
 # ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS
 # ============================================================================
