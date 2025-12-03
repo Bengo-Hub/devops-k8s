@@ -7,8 +7,8 @@ fullnameOverride: auth-service
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-service
-  tag: latest  # TODO: Pin to specific version for production
-  pullPolicy: IfNotPresent
+  tag: f8700ca4  # Updated with tenant slug fixes and health endpoint in OpenAPI
+  pullPolicy: Always  # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
 
