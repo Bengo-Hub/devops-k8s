@@ -87,6 +87,10 @@ spec:
             {{- toYaml .Values.volumeMounts | nindent 12 }}
             {{- end }}
           {{- if .Values.healthCheck.enabled }}
+          {{- if .Values.healthCheck.startup }}
+          startupProbe:
+            {{- toYaml .Values.healthCheck.startup | nindent 12 }}
+          {{- end }}
           readinessProbe:
             {{- toYaml .Values.healthCheck.readiness | nindent 12 }}
           livenessProbe:

@@ -1,28 +1,6 @@
 nameOverride: cafe-backend
 fullnameOverride: cafe-backend
 
-# ============================================================================
-# MIGRATIONS HANDLED ON STARTUP
-# ============================================================================
-# Cafe-backend runs Ent migrations automatically on startup (app.go:89)
-# No Helm migration hooks needed
-
-# ============================================================================
-# AUTOMATED SEEDING
-# ============================================================================
-# Seeding runs via Helm post-install/post-upgrade hook
-seed:
-  enabled: true
-  command:
-    - /app/seed
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
 replicaCount: 2
 
 image:
@@ -36,6 +14,31 @@ service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
+
+# ============================================================================
+# MIGRATIONS AND SEEDING
+# ============================================================================
+# Cafe-backend uses Ent ORM which automatically creates/updates schema on startup
+# See internal/app/app.go line 89: ormClient.Schema.Create(ctx)
+# Seeding runs automatically via Helm post-install/post-upgrade hook (idempotent)
+migrations:
+  enabled: false  # Disabled - Ent handles schema automatically on startup
+
+seed:
+  enabled: true  # Automated seeding via Helm hook (idempotent)
+  binaryName: seed
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ============================================================================
+# SECRET REFERENCE FOR HOOKS
+# ============================================================================
+envFromSecret: cafe-backend-secrets
 
 healthCheck:
   enabled: true
