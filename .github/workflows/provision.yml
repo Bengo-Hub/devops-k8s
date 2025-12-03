@@ -274,9 +274,9 @@ jobs:
       - name: Create registry-credentials secrets in all namespaces
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         env:
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || secrets.DOCKER_USERNAME || secrets.DOCKERHUB_USERNAME || 'codevertex' }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD || secrets.DOCKER_PASSWORD || secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PASSWORD }}
-          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL || secrets.DOCKER_EMAIL || 'codevertexitsolutions@gmail.com' }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME || 'codevertex' }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_EMAIL: ${{ secrets.REGISTRY_EMAIL || 'codevertexitsolutions@gmail.com' }}
           REGISTRY_SERVER: docker.io
         run: |
           echo "::group::Creating registry-credentials secrets"
