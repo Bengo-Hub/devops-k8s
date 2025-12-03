@@ -6,7 +6,7 @@ fullnameOverride: auth-service
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-service
-  tag: e53aa55f # Updated with tenant slug fixes and health endpoint in OpenAPI
+  tag: a5d1dc16 # Updated with tenant slug fixes and health endpoint in OpenAPI
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
@@ -75,20 +75,17 @@ env:
   - name: SEED_ADMIN_PASSWORD
     value: "ChangeMe123!"
 # ============================================================================
-# MIGRATIONS AND SEEDING (Automatic on Startup)
+# MIGRATIONS AND SEEDING (Automatic on Startup + Helm Hooks)
 # ============================================================================
-# Auth-service handles migrations and seeding internally on startup
+# Auth-service handles migrations automatically on startup
 # - AUTH_DB_RUN_MIGRATIONS=true (default) - runs migrations automatically
-# - Seed binary can be called: /usr/local/bin/auth-seed (idempotent)
-#
-# NOTE: Unlike Django services, Go services typically migrate on startup
-# Helm hooks are disabled for this service to avoid complexity
+# Seeding runs via Helm post-install/post-upgrade hook (idempotent)
+# - Seed binary: /usr/local/bin/auth-seed (safe to run multiple times)
 migrations:
   enabled: false  # Disabled - auth-service migrates on startup
 
-# Automated seeding via Helm post-install/post-upgrade hook
 seed:
-  enabled: true  # Runs automatically after deployment
+  enabled: true  # Automated seeding via Helm hook (idempotent)
   binaryName: auth-seed
   env:
     - name: SEED_ADMIN_PASSWORD
@@ -104,6 +101,11 @@ seed:
     limits:
       cpu: 500m
       memory: 512Mi
+
+# ============================================================================
+# SECRET REFERENCE FOR HOOKS
+# ============================================================================
+envFromSecret: auth-service-secrets
 
 # ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS

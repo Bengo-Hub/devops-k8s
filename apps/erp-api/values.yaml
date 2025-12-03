@@ -61,10 +61,24 @@ ingress:
         - erpapi.masterspace.co.ke
       secretName: erpapi-masterspace-tls
 envFromSecret: erp-api-env
-# Database migrations configuration
-# DISABLED - Django now runs migrations on startup automatically (see Dockerfile CMD)
+# ============================================================================
+# MIGRATIONS AND SEEDING
+# ============================================================================
+# ERP-API is a Django application that uses Helm hooks for migrations
+# Migrations run as pre-install/pre-upgrade Jobs (see migrate-hook.yaml template)
+# This is the standard Django deployment pattern
 migrations:
-  enabled: false
+  enabled: true  # Django migrations run via Helm pre-install/pre-upgrade hooks
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+seed:
+  enabled: false  # Seeding handled through Django management commands if needed
 # Persistent storage for media uploads
 persistence:
   enabled: true

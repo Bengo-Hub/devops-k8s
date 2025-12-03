@@ -1,12 +1,6 @@
 nameOverride: logistics-service
 fullnameOverride: logistics-service
 
-# ============================================================================
-# MIGRATIONS
-# ============================================================================
-# This service currently has no database schema/migrations
-# Future: Add Ent schema and run migrations on startup like other Go services
-
 replicaCount: 2
 
 image:
@@ -20,6 +14,17 @@ service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
+
+# ============================================================================
+# MIGRATIONS AND SEEDING
+# ============================================================================
+# Logistics-service currently does not have database migrations
+# Schema management will be added in future releases
+migrations:
+  enabled: false  # No migration support yet
+
+seed:
+  enabled: false  # No seed support yet
 
 healthCheck:
   enabled: true

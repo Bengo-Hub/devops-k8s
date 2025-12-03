@@ -1,28 +1,6 @@
 nameOverride: notifications-app
 fullnameOverride: notifications-app
 
-# ============================================================================
-# MIGRATIONS HANDLED ON STARTUP
-# ============================================================================
-# Notifications-app runs Ent migrations automatically on startup (app.go)
-# No Helm migration hooks needed
-
-# ============================================================================
-# AUTOMATED SEEDING
-# ============================================================================
-# Seeding runs via Helm post-install/post-upgrade hook
-seed:
-  enabled: true
-  command:
-    - /app/seed
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
 replicaCount: 2
 
 image:
@@ -36,6 +14,31 @@ service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
+
+# ============================================================================
+# MIGRATIONS AND SEEDING
+# ============================================================================
+# Notifications-app uses separate migrate/seed binaries in the Docker image
+# Migrations should be run manually before deployment to avoid race conditions
+# Seeding runs automatically via Helm post-install/post-upgrade hook (idempotent)
+migrations:
+  enabled: false  # Disabled - run manually before deployment to avoid startup delays
+
+seed:
+  enabled: true  # Automated seeding via Helm hook (idempotent)
+  binaryName: seed
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ============================================================================
+# SECRET REFERENCE FOR HOOKS
+# ============================================================================
+envFromSecret: notifications-app-secrets
 
 healthCheck:
   enabled: true

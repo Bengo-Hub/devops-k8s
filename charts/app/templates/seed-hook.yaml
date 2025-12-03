@@ -9,7 +9,7 @@ metadata:
     component: seed
   annotations:
     "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "5"  # Run after deployment (migrations happen on app startup)
+    "helm.sh/hook-weight": "5"  # Run after migrations (weight 0)
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   ttlSecondsAfterFinished: 600
