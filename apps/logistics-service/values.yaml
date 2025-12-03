@@ -1,6 +1,12 @@
 nameOverride: logistics-service
 fullnameOverride: logistics-service
 
+# ============================================================================
+# MIGRATIONS
+# ============================================================================
+# This service currently has no database schema/migrations
+# Future: Add Ent schema and run migrations on startup like other Go services
+
 replicaCount: 2
 
 image:
