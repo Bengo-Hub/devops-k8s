@@ -71,8 +71,8 @@ data:
     timeout 0
     tcp-keepalive 300
     
-    # Memory management
-    maxmemory 3gb  # Increased for 12-core server with 47GB RAM
+    # Memory management - increased for 12-core server with 47GB RAM
+    maxmemory 3gb
     maxmemory-policy allkeys-lru
     
     # Persistence (RDB + AOF)
