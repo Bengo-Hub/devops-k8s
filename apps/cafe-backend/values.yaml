@@ -1,6 +1,12 @@
 nameOverride: cafe-backend
 fullnameOverride: cafe-backend
 
+# ============================================================================
+# MIGRATIONS HANDLED ON STARTUP
+# ============================================================================
+# Cafe-backend runs Ent migrations automatically on startup (app.go:89)
+# No Helm migration hooks needed
+
 replicaCount: 2
 
 image:

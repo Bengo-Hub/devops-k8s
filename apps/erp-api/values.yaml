@@ -62,15 +62,9 @@ ingress:
       secretName: erpapi-masterspace-tls
 envFromSecret: erp-api-env
 # Database migrations configuration
+# DISABLED - Django now runs migrations on startup automatically (see Dockerfile CMD)
 migrations:
-  enabled: true
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
+  enabled: false
 # Persistent storage for media uploads
 persistence:
   enabled: true
