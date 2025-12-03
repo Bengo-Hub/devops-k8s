@@ -81,6 +81,14 @@ migrations:
       memory: 2Gi
 seed:
   enabled: false # Seeding handled through Django management commands if needed
+# ServiceMonitor configuration (requires Prometheus Operator)
+serviceMonitor:
+  enabled: false  # Disabled - Prometheus Operator CRDs not installed
+  namespace: infra
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
 # Persistent storage for media uploads
 persistence:
   enabled: true
