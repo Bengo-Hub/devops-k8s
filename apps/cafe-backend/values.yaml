@@ -1,7 +1,7 @@
 nameOverride: cafe-backend
 fullnameOverride: cafe-backend
 
-replicaCount: 2
+replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
   repository: docker.io/codevertex/cafe-backend
@@ -85,13 +85,15 @@ resources:
     cpu: 1000m
     memory: 1Gi
   requests:
-    cpu: 250m
-    memory: 256Mi
+    cpu: 200m  # Balanced for 12-core server
+    memory: 512Mi
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 6
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
 

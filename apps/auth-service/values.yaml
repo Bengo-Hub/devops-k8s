@@ -13,11 +13,11 @@ image:
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 2 # Start with 2 replicas for high availability
+replicaCount: 1
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 6
+  minReplicas: 1
+  maxReplicas: 4  # Can scale higher - critical service
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 # ============================================================================
@@ -120,7 +120,7 @@ volumes:
 # ============================================================================
 resources:
   requests:
-    cpu: 200m
+    cpu: 150m  # Balanced for 12-core server - critical service
     memory: 256Mi
   limits:
     cpu: 1000m

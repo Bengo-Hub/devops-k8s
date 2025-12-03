@@ -65,10 +65,10 @@ data:
   override.conf: |
     # PostgreSQL Performance Tuning
     max_connections = 200
-    shared_buffers = 512MB
-    effective_cache_size = 1536MB
-    work_mem = 2621kB
-    maintenance_work_mem = 128MB
+    shared_buffers = 2GB  # 25% of max memory (8GB limit)
+    effective_cache_size = 6GB  # 75% of max memory (8GB limit)
+    work_mem = 16MB  # Increased for complex queries
+    maintenance_work_mem = 512MB  # Increased for maintenance operations
     checkpoint_completion_target = 0.9
     wal_buffers = 16MB
     default_statistics_target = 100
@@ -159,11 +159,11 @@ spec:
               key: postgres-password
         resources:
           requests:
-            cpu: 250m
-            memory: 512Mi
+            cpu: 500m  # Increased - priority storage service on 12-core server
+            memory: 2Gi  # Increased for better query caching
           limits:
-            cpu: 1000m
-            memory: 2Gi
+            cpu: 2000m  # Can burst to 2 cores
+            memory: 8Gi  # Ample RAM for PostgreSQL caching
         livenessProbe:
           exec:
             command:
