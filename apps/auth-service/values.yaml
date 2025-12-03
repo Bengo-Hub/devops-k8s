@@ -43,6 +43,7 @@ env:
     value: production
   - name: AUTH_SERVICE_PORT
     value: "4101"
+  # Database connection (auth-service expects AUTH_DB_URL)
   - name: AUTH_DB_URL
     valueFrom:
       secretKeyRef:
@@ -53,9 +54,12 @@ env:
       secretKeyRef:
         name: auth-service-secrets
         key: postgresUrl
+  # Auto-run migrations on startup (default: true)
+  - name: AUTH_DB_RUN_MIGRATIONS
+    value: "true"
+  # Redis connection
   - name: AUTH_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  # Add Redis password if needed
   - name: AUTH_REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
@@ -67,37 +71,24 @@ env:
     value: /etc/auth-keys/private.pem
   - name: AUTH_TOKEN_PUBLIC_KEY_PATH
     value: /etc/auth-keys/public.pem
+  # Seed admin password (for manual seeding if needed)
+  - name: SEED_ADMIN_PASSWORD
+    value: "ChangeMe123!"
 # ============================================================================
-# MIGRATIONS AND SEEDING (Helm Hooks - Automated)
+# MIGRATIONS AND SEEDING (Automatic on Startup)
 # ============================================================================
-# Migrations run automatically via migrate-hook.yaml (pre-install/pre-upgrade)
+# Auth-service handles migrations and seeding internally on startup
+# - AUTH_DB_RUN_MIGRATIONS=true (default) - runs migrations automatically
+# - Seed binary can be called: /usr/local/bin/auth-seed (idempotent)
+#
+# NOTE: Unlike Django services, Go services typically migrate on startup
+# Helm hooks are disabled for this service to avoid complexity
 migrations:
-  enabled: true
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-# Seeding runs automatically via seed-hook.yaml (post-install/post-upgrade)
+  enabled: false  # Disabled - auth-service migrates on startup
+
 seed:
-  enabled: true
-  binaryName: auth-seed
-  env:
-    - name: SEED_ADMIN_PASSWORD
-      value: "ChangeMe123!"
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-# ============================================================================
-# SECRET REFERENCE FOR HOOKS
-# ============================================================================
-envFromSecret: auth-service-secrets
+  enabled: false  # Disabled - manual seeding via Kubernetes Job if needed
+
 # ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS
 # ============================================================================
