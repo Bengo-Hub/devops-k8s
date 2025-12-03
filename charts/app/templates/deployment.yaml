@@ -36,7 +36,7 @@ spec:
       imagePullSecrets:
         {{- toYaml .Values.image.pullSecrets | nindent 8 }}
       {{- end }}
-      {{- if or .Values.initContainers .Values.persistence.enabled }}
+      {{- if or .Values.initContainers .Values.persistence.enabled .Values.migrations.runOnStartup }}
       initContainers:
         {{- if .Values.initContainers }}
         {{- toYaml .Values.initContainers | nindent 8 }}
@@ -55,6 +55,76 @@ spec:
           volumeMounts:
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
+        {{- end }}
+        {{- if and .Values.migrations .Values.migrations.runOnStartup }}
+        - name: run-migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          {{- if .Values.envFromSecret }}
+          envFrom:
+          - secretRef:
+              name: {{ .Values.envFromSecret }}
+          {{- end }}
+          {{- if .Values.env }}
+          env:
+            {{- toYaml .Values.env | nindent 12 }}
+          {{- end }}
+          command:
+          - bash
+          - -c
+          - |
+            set -e
+            echo "=========================================="
+            echo "🔄 Auto-Migration (InitContainer)"
+            echo "=========================================="
+            echo "Pod: $HOSTNAME"
+            echo "Namespace: {{ .Release.Namespace }}"
+            
+            # Wait for database using Django's check
+            echo "⏳ Waiting for database..."
+            MAX_RETRIES=60
+            RETRY_COUNT=0
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if python manage.py check --database default > /dev/null 2>&1; then
+                echo "✅ Database connected (attempt $RETRY_COUNT)"
+                break
+              fi
+              
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              
+              if [ $((RETRY_COUNT % 10)) -eq 0 ]; then
+                echo "  ⏳ Waiting... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+              fi
+              
+              sleep 2
+            done
+            
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+              echo "❌ Database connection timeout"
+              python manage.py check --database default 2>&1 || true
+              exit 1
+            fi
+            
+            # Run migrations (idempotent)
+            echo "🔄 Running migrations..."
+            python manage.py migrate --fake-initial --noinput 2>&1 || python manage.py migrate --noinput 2>&1
+            
+            echo "✅ Migrations complete"
+            echo "=========================================="
+          resources:
+            requests:
+              memory: {{ .Values.migrations.resources.requests.memory | default "512Mi" }}
+              cpu: {{ .Values.migrations.resources.requests.cpu | default "250m" }}
+            limits:
+              memory: {{ .Values.migrations.resources.limits.memory | default "1Gi" }}
+              cpu: {{ .Values.migrations.resources.limits.cpu | default "500m" }}
         {{- end }}
       {{- end }}
       containers:
