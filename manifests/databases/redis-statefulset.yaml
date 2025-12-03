@@ -72,7 +72,7 @@ data:
     tcp-keepalive 300
     
     # Memory management
-    maxmemory 768mb
+    maxmemory 3gb  # Increased for 12-core server with 47GB RAM
     maxmemory-policy allkeys-lru
     
     # Persistence (RDB + AOF)
@@ -155,11 +155,11 @@ spec:
               key: redis-password
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
+            cpu: 200m  # Increased - priority cache service
+            memory: 1Gi  # Increased for better caching capacity
           limits:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 1000m  # Can burst to 1 core
+            memory: 4Gi  # Ample RAM for Redis operations
         livenessProbe:
           exec:
             command:

@@ -1,7 +1,7 @@
 nameOverride: logistics-service
 fullnameOverride: logistics-service
 
-replicaCount: 2
+replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
   repository: docker.io/codevertex/logistics-service
@@ -63,16 +63,16 @@ env:
 
 resources:
   limits:
-    cpu: 1000m
-    memory: 1.5Gi
-  requests:
-    cpu: 300m
+    cpu: 500m
     memory: 512Mi
+  requests:
+    cpu: 50m  # Minimal - service not actively used
+    memory: 128Mi
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
 

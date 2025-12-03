@@ -28,16 +28,18 @@ healthCheck:
 # Production resource limits for Django API
 resources:
   requests:
-    cpu: 250m
-    memory: 512Mi
+    cpu: 300m  # Increased - priority service on 12-core server
+    memory: 1Gi
   limits:
     cpu: 2000m
-    memory: 2Gi
+    memory: 3Gi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 6  # Can scale higher with 12 cores available
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
 ingress:
@@ -117,18 +119,18 @@ verticalPodAutoscaling:
 # Celery Worker configuration for async task processing
 celeryWorker:
   enabled: true
-  replicaCount: 2
+  replicaCount: 1
   app: ProcureProKEAPI
   logLevel: info
-  concurrency: 4
+  concurrency: 4  # Increased for 12-core server
   maxTasksPerChild: 100
   resources:
     requests:
-      cpu: 200m
-      memory: 512Mi
+      cpu: 200m  # Increased for better performance
+      memory: 768Mi
     limits:
       cpu: 1000m
-      memory: 1Gi
+      memory: 2Gi
   livenessProbe:
     enabled: true
     initialDelaySeconds: 30
