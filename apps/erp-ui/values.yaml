@@ -64,3 +64,8 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: false
+# Monitoring configuration - disable for frontend UI (no metrics endpoint)
+monitoring:
+  enabled: false
+serviceMonitor:
+  enabled: false
