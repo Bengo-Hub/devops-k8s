@@ -1,6 +1,12 @@
 nameOverride: notifications-app
 fullnameOverride: notifications-app
 
+# ============================================================================
+# MIGRATIONS HANDLED ON STARTUP
+# ============================================================================
+# Notifications-app runs Ent migrations automatically on startup (app.go)
+# No Helm migration hooks needed
+
 replicaCount: 2
 
 image:
