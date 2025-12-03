@@ -58,6 +58,16 @@ ingress:
         - truloadapitest.masterspace.co.ke
       secretName: truload-api-tls # Will use existing cert-manager certificate
 envFromSecret: truload-backend-env
+# ============================================================================
+# MIGRATIONS AND SEEDING
+# ============================================================================
+# TruLoad-backend is a .NET application
+# EF Core migrations are typically handled in application startup code
+migrations:
+  enabled: false  # .NET EF Core handles migrations on startup
+
+seed:
+  enabled: false  # Seeding handled in application code if needed
 # Persistent storage for file uploads
 persistence:
   enabled: true
