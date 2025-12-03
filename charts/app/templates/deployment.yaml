@@ -36,8 +36,12 @@ spec:
       imagePullSecrets:
         {{- toYaml .Values.image.pullSecrets | nindent 8 }}
       {{- end }}
-      {{- if .Values.persistence.enabled }}
+      {{- if or .Values.initContainers .Values.persistence.enabled }}
       initContainers:
+        {{- if .Values.initContainers }}
+        {{- toYaml .Values.initContainers | nindent 8 }}
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
         - name: init-media
           image: busybox:1.36
           command: ['sh', '-c']
@@ -51,6 +55,7 @@ spec:
           volumeMounts:
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
+        {{- end }}
       {{- end }}
       containers:
         - name: {{ include "app.name" . }}
