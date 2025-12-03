@@ -146,8 +146,8 @@ else
       helm uninstall redis -n "${NAMESPACE}" --wait 2>/dev/null || true
     fi
     sleep 5
-  fi
-  
+fi
+
   # Ensure Redis secret exists
   if ! kubectl get secret redis -n "${NAMESPACE}" >/dev/null 2>&1; then
     log_info "Creating Redis secret with POSTGRES_PASSWORD..."
