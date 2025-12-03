@@ -4,33 +4,40 @@ Django-based ERP backend service with automated database migrations.
 
 ## Auto-Migration Configuration
 
-The ERP-API service is configured with **dual migration strategies** for maximum reliability:
+The ERP-API service is **fully independent** and handles migrations on its own startup:
 
-### 1. Helm Hook Migrations (Pre-Install/Pre-Upgrade)
-- Runs as a Kubernetes Job before deployment
-- Executes during `helm install` or `helm upgrade`
-- Defined in: `charts/app/templates/migrate-hook.yaml`
-- **Hook annotations:** `pre-install`, `pre-upgrade`
-- **Hook weight:** 0 (runs before deployment)
+### Application-Level Migrations (Entrypoint Script)
+- Migrations run inside the main container via `entrypoint.sh`
+- Executes on **every container start** (pod restart, scaling, deployment)
+- **Maximum reliability:** Each instance is self-contained
+- **Defined in:** `erp/erp-api/scripts/entrypoint.sh`
+- **Dockerfile:** Uses `CMD ["/usr/local/bin/entrypoint.sh"]`
 
-### 2. InitContainer Migrations (Every Pod Startup)
-- Runs automatically when each pod starts
-- Makes the service **independent and self-healing**
+### InitContainer (Database Readiness Check)
+- Quick 3-attempt database connectivity check
+- Non-blocking: Allows container to start even if check fails
 - Defined in: `charts/app/templates/deployment.yaml`
 - **Enabled via:** `migrations.runOnStartup: true`
 
+### Helm Hook Migrations (Disabled)
+- **Status:** Disabled (`migrations.enabled: false`)
+- **Reason:** App handles migrations independently
+- External hooks create unnecessary complexity and failure points
+
 ## Migration Behavior
 
-Both migration methods use Django's `manage.py migrate` with:
+The `entrypoint.sh` script handles migrations with:
 - `--fake-initial`: Safe for existing databases
-- `--noinput`: Non-interactive execution
+- `--noinput`: Non-interactive execution  
 - Fallback to regular `migrate` if fake-initial fails
+- **Only 3 connection attempts** with 3-second intervals (9 seconds total)
+- Non-blocking: Server starts even if migrations fail
 
 **Database Connection:**
 - Uses Django's built-in `manage.py check --database default`
-- No external dependencies (no apt-get, no psql installation)
-- Runs as non-root user (secure)
-- 60 retry attempts with 2-second intervals (2 minutes total)
+- No external dependencies (no apt-get, no psql)
+- Runs as app user (non-root, secure)
+- Fast startup with minimal wait time
 
 ## Configuration
 
@@ -38,8 +45,8 @@ In `values.yaml`:
 
 ```yaml
 migrations:
-  enabled: true          # Enable Helm hook migrations
-  runOnStartup: true     # Enable initContainer migrations
+  enabled: false         # Helm hooks disabled (app is independent)
+  runOnStartup: true     # Enable initContainer DB check
   resources:
     requests:
       cpu: 250m
@@ -49,6 +56,8 @@ migrations:
       memory: 2Gi
 ```
 
+**Note:** Migrations are handled by the application's entrypoint script, not external jobs.
+
 ## Database Credentials
 
 All database credentials are loaded from Kubernetes secret:
@@ -57,12 +66,24 @@ All database credentials are loaded from Kubernetes secret:
 
 The service uses `envFromSecret` to load all environment variables automatically.
 
-## Why Dual Migration Strategy?
+## Why Application-Level Migrations?
 
-1. **Helm Hook:** Runs migrations during deployment changes
-2. **InitContainer:** Ensures migrations run on pod restarts, scaling events, and node failures
+**Advantages:**
+1. **True Independence:** No external job dependencies
+2. **Self-Healing:** Each pod migrates on its own
+3. **Faster Deployments:** No waiting for Helm hooks
+4. **Simpler Architecture:** One migration path, not three
+5. **Better for Autoscaling:** New pods handle their own setup
 
-This makes the service **truly independent** - each pod can start without relying on external migration jobs.
+**How It Works:**
+- Container starts → `entrypoint.sh` runs
+- Checks database (3 attempts, 9 seconds)
+- Runs migrations (idempotent)
+- Collects static files
+- Starts Daphne server
+
+**Idempotency:**
+Django's `migrate` command is idempotent - safe to run multiple times. Each pod running migrations won't cause conflicts.
 
 ## Troubleshooting
 
