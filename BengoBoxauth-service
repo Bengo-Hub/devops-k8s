@@ -1,0 +1,5 @@
+[33m67bb6b0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m docs(auth): Add audit findings and reusable seed hook template - Auth service fully operational, issue was wrong tenant slug (bengobox vs codevertex) - Created reusable seed-hook.yaml for all services - Added comprehensive seed hook usage documentation
+[33mdf4a2f6[m fix(auth-service): Add init containers for migrations and seeding + comprehensive docs
+[33mfe76ccc[m erp-api:e897fffa released
+[33m186fe56[m fix: docker credentials mismatch
+[33m8ce8a80[m refactor: Remove ERP-specific files (moved to erp-api repo)
