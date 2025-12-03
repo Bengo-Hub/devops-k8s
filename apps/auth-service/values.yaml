@@ -84,9 +84,27 @@ env:
 # NOTE: Unlike Django services, Go services typically migrate on startup
 # Helm hooks are disabled for this service to avoid complexity
 migrations:
-  enabled: false # Disabled - auth-service migrates on startup
+  enabled: false  # Disabled - auth-service migrates on startup
+
+# Automated seeding via Helm post-install/post-upgrade hook
 seed:
-  enabled: false # Disabled - manual seeding via Kubernetes Job if needed
+  enabled: true  # Runs automatically after deployment
+  binaryName: auth-seed
+  env:
+    - name: SEED_ADMIN_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: auth-service-secrets
+          key: SEED_ADMIN_PASSWORD
+          optional: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
 # ============================================================================
 # VOLUME MOUNTS FOR JWT KEYS
 # ============================================================================
