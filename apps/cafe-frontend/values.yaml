@@ -1,7 +1,7 @@
 nameOverride: cafe-frontend
 fullnameOverride: cafe-frontend
 
-replicaCount: 3
+replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
   repository: docker.io/codevertex/cafe-frontend
@@ -54,13 +54,15 @@ resources:
     cpu: 500m
     memory: 768Mi
   requests:
-    cpu: 200m
+    cpu: 100m  # Balanced for 12-core server
     memory: 256Mi
 
 autoscaling:
   enabled: true
-  minReplicas: 3
-  maxReplicas: 12
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 65
   targetMemoryUtilizationPercentage: 75
 

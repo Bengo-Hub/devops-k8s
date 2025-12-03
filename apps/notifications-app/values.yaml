@@ -1,7 +1,7 @@
 nameOverride: notifications-app
 fullnameOverride: notifications-app
 
-replicaCount: 2
+replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
   repository: docker.io/codevertex/notifications-app
@@ -100,15 +100,17 @@ env:
 resources:
   limits:
     cpu: 1000m
-    memory: 1.5Gi
+    memory: 1Gi
   requests:
-    cpu: 300m
+    cpu: 150m  # Balanced for 12-core server
     memory: 512Mi
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 55
   targetMemoryUtilizationPercentage: 70
 
