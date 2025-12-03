@@ -37,6 +37,12 @@ spec:
             add:
             - SYS_RESOURCE
           allowPrivilegeEscalation: true
+        # Load environment variables from the same secret as the main app
+        {{- if .Values.envFromSecret }}
+        envFrom:
+        - secretRef:
+            name: {{ .Values.envFromSecret }}
+        {{- end }}
         resources:
           requests:
             memory: {{ .Values.migrations.resources.requests.memory | default "512Mi" }}
