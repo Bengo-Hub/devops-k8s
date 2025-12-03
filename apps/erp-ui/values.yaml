@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-ui
-  tag: ef131340
+  tag: da0aec2e
   pullSecrets:
     - name: registry-credentials
 service:
@@ -28,7 +28,7 @@ healthCheck:
 # Production resource limits for Vue UI
 resources:
   requests:
-    cpu: 100m  # Balanced for 12-core server
+    cpu: 100m # Balanced for 12-core server
     memory: 256Mi
   limits:
     cpu: 500m
