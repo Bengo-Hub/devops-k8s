@@ -53,6 +53,20 @@ ingress:
     nginx.ingress.kubernetes.io/websocket-services: erp-api-app
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Serve media files directly from Django (for production media serving)
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      location /media/ {
+        proxy_pass http://erp-api-app.erp.svc.cluster.local:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+      location /static/ {
+        proxy_pass http://erp-api-app.erp.svc.cluster.local:80;
+        proxy_set_header Host $host;
+      }
   hosts:
     - host: erpapi.masterspace.co.ke
       paths:
