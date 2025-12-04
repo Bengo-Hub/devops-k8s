@@ -47,14 +47,46 @@ spec:
           command: ['sh', '-c']
           args:
             - |
-              echo "Initializing media directory with proper permissions..."
-              mkdir -p {{ .Values.persistence.mountPath }}/business {{ .Values.persistence.mountPath }}/products {{ .Values.persistence.mountPath }}/employees {{ .Values.persistence.mountPath }}/documents {{ .Values.persistence.mountPath }}/avatars {{ .Values.persistence.mountPath }}/invoices {{ .Values.persistence.mountPath }}/receipts
-              chmod -R 777 {{ .Values.persistence.mountPath }}
-              echo "✓ Media directory initialized"
-              ls -la {{ .Values.persistence.mountPath }}
+              echo "📁 Initializing media directory: {{ .Values.persistence.mountPath }}"
+              
+              # Create subdirectories
+              mkdir -p {{ .Values.persistence.mountPath }}/business \
+                       {{ .Values.persistence.mountPath }}/products \
+                       {{ .Values.persistence.mountPath }}/employees \
+                       {{ .Values.persistence.mountPath }}/documents \
+                       {{ .Values.persistence.mountPath }}/avatars \
+                       {{ .Values.persistence.mountPath }}/invoices \
+                       {{ .Values.persistence.mountPath }}/receipts \
+                       {{ .Values.persistence.mountPath }}/userprofiles
+              
+              # Set permissions for app user (UID 1000)
+              # Use 775 for directories (owner+group can write, others can read)
+              chmod -R 775 {{ .Values.persistence.mountPath }} 2>/dev/null || {
+                echo "   ⚠️ Could not set 775 permissions, trying 755..."
+                chmod -R 755 {{ .Values.persistence.mountPath }} 2>/dev/null || {
+                  echo "   ⚠️ Permission setting failed (PVC may be read-only or owned by root)"
+                  echo "   ℹ️ Checking current permissions..."
+                  ls -la {{ .Values.persistence.mountPath }} || true
+                }
+              }
+              
+              # Verify directory is accessible
+              if [ -w "{{ .Values.persistence.mountPath }}" ]; then
+                echo "   ✅ Media directory is writable"
+              else
+                echo "   ⚠️ Media directory may not be writable by app user"
+                echo "   Current owner: $(ls -ld {{ .Values.persistence.mountPath }} | awk '{print $3":"$4}')"
+              fi
+              
+              echo "   ✅ Media directory initialized"
+              ls -la {{ .Values.persistence.mountPath }} | head -15
           volumeMounts:
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
         {{- end }}
         {{- if and .Values.migrations .Values.migrations.runOnStartup }}
         - name: wait-for-db
