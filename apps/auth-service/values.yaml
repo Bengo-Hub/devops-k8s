@@ -6,7 +6,7 @@ fullnameOverride: auth-service
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-service
-  tag: 75f1ed87 # Updated with tenant slug fixes and health endpoint in OpenAPI
+  tag: a88c5cca # Updated with tenant slug fixes and health endpoint in OpenAPI
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
@@ -17,7 +17,7 @@ replicaCount: 1
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 4  # Can scale higher - critical service
+  maxReplicas: 4 # Can scale higher - critical service
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 # ============================================================================
@@ -120,7 +120,7 @@ volumes:
 # ============================================================================
 resources:
   requests:
-    cpu: 150m  # Balanced for 12-core server - critical service
+    cpu: 150m # Balanced for 12-core server - critical service
     memory: 256Mi
   limits:
     cpu: 1000m
