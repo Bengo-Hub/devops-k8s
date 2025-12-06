@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: notifications-app
+  name: auth-api
   namespace: argocd
 spec:
   project: default
@@ -11,14 +11,14 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/notifications-app/values.yaml
+        - ../../apps/auth-api/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: notifications
+    namespace: auth
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - RespectIgnoreDifferences=true
+

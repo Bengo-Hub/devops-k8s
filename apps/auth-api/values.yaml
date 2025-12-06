@@ -1,11 +1,11 @@
 # Auth Service Production Configuration
-nameOverride: auth-service
-fullnameOverride: auth-service
+nameOverride: auth-api
+fullnameOverride: auth-api
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 image:
-  repository: docker.io/codevertex/auth-service
+  repository: docker.io/codevertex/auth-api
   tag: 7bb670e8 # Updated with tenant slug fixes and health endpoint in OpenAPI
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
@@ -222,5 +222,5 @@ affinity:
               - key: app
                 operator: In
                 values:
-                  - auth-service
+                  - auth-api
           topologyKey: kubernetes.io/hostname

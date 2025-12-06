@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: inventory-service
+  name: notifications-service
   namespace: argocd
 spec:
   project: default
@@ -11,14 +11,14 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/inventory-service/values.yaml
+        - ../../apps/notifications-service/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: inventory
+    namespace: notifications
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
+      - RespectIgnoreDifferences=true

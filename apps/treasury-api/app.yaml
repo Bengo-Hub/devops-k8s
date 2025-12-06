@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: auth-service
+  name: treasury-api
   namespace: argocd
 spec:
   project: default
@@ -11,14 +11,14 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/auth-service/values.yaml
+        - ../../apps/treasury-api/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: auth
+    namespace: treasury
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
+      - RespectIgnoreDifferences=true
