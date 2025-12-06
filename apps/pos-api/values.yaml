@@ -1,10 +1,10 @@
-nameOverride: treasury-app
-fullnameOverride: treasury-app
+nameOverride: pos-api
+fullnameOverride: pos-api
 
 replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
-  repository: docker.io/codevertex/treasury-app
+  repository: docker.io/codevertex/pos-api
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -18,7 +18,7 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# Treasury-app currently does not have database migrations
+# POS-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
   enabled: false  # No migration support yet
@@ -39,46 +39,40 @@ healthCheck:
       path: /healthz
       port: http
     initialDelaySeconds: 30
-    periodSeconds: 15
+    periodSeconds: 20
 
 strategy:
   type: RollingUpdate
 
 env:
-  - name: TREASURY_APP_ENV
+  - name: POS_APP_ENV
     value: production
-  - name: TREASURY_HTTP_PORT
+  - name: POS_HTTP_PORT
     value: "4000"
-  - name: TREASURY_POSTGRES_URL
+  - name: POS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: treasury-app-secrets
+        name: pos-api-secrets
         key: postgresUrl
-  - name: TREASURY_REDIS_ADDR
+  - name: POS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: TREASURY_NATS_URL
+  - name: POS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: TREASURY_STORAGE_ENDPOINT
-    value: http://minio.storage.svc.cluster.local:9000
-  - name: TREASURY_STORAGE_BUCKET
-    value: treasury-artifacts
-  - name: TREASURY_OTLP_ENDPOINT
+  - name: POS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
 
 resources:
   limits:
-    cpu: 1000m
-    memory: 1Gi
-  requests:
-    cpu: 150m  # Balanced for 12-core server
+    cpu: 500m
     memory: 512Mi
+  requests:
+    cpu: 50m  # Minimal - service not actively used
+    memory: 128Mi
 
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 75
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
 
@@ -105,11 +99,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: accounts.codevertexitsolutions.com
+    - host: posapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - accounts.codevertexitsolutions.com
-      secretName: treasury-app-tls
+        - posapi.codevertexitsolutions.com
+      secretName: posapi-tls
+

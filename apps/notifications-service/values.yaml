@@ -1,10 +1,10 @@
-nameOverride: notifications-app
-fullnameOverride: notifications-app
+nameOverride: notifications-service
+fullnameOverride: notifications-service
 
 replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
-  repository: docker.io/codevertex/notifications-app
+  repository: docker.io/codevertex/notifications-service
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -18,7 +18,7 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# Notifications-app uses separate migrate/seed binaries in the Docker image
+# Notifications-service uses separate migrate/seed binaries in the Docker image
 # Migrations should be run manually before deployment to avoid race conditions
 # Seeding runs automatically via Helm post-install/post-upgrade hook (idempotent)
 migrations:
@@ -38,7 +38,7 @@ seed:
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
-envFromSecret: notifications-app-secrets
+envFromSecret: notifications-service-secrets
 
 healthCheck:
   enabled: true
@@ -66,7 +66,7 @@ env:
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: notifications-app-secrets
+        name: notifications-service-secrets
         key: postgresUrl
   - name: NOTIFICATIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
@@ -93,7 +93,7 @@ env:
         name: notifications-provider-secrets
         key: fcmServiceAccount
   - name: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
-    value: Urban Cafe <hello@bengobox.com>
+    value: Urban Cafe <hello@codevertexitsolutions.com>
   - name: NOTIFICATIONS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
 
@@ -144,4 +144,4 @@ ingress:
   tls:
     - hosts:
         - notifications.codevertexitsolutions.com
-      secretName: notifications-app-tls
+      secretName: notifications-service-tls

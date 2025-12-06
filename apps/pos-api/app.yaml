@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: pos-service
+  name: pos-api
   namespace: argocd
 spec:
   project: default
@@ -11,7 +11,7 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/pos-service/values.yaml
+        - ../../apps/pos-api/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: pos
