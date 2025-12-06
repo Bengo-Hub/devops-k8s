@@ -1,14 +1,14 @@
-# Treasury Service
+# Treasury API
 
 ArgoCD application deploying the Treasury Go service responsible for payments, settlements, and ledgering.
 
 ## Highlights
 
 - Namespace: `treasury`
-- Image: `ghcr.io/bengobox/treasury-app`
+- Image: `ghcr.io/bengobox/treasury-api`
 - Health endpoint: `/healthz`
 - Metrics endpoint: `/metrics`
-- Secrets: `treasury-app-secrets` should expose `postgresUrl`
+- Secrets: `treasury-api-secrets` should expose `postgresUrl`
 - External dependencies:
   - PostgreSQL instance reachable via `postgresUrl`
   - Redis: `redis-master.infra.svc.cluster.local:6379`

@@ -1,10 +1,10 @@
-nameOverride: pos-service
-fullnameOverride: pos-service
+nameOverride: logistics-api
+fullnameOverride: logistics-api
 
 replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
-  repository: docker.io/codevertex/pos-service
+  repository: docker.io/codevertex/logistics-api
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -18,7 +18,7 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# POS-service currently does not have database migrations
+# Logistics-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
   enabled: false  # No migration support yet
@@ -45,20 +45,20 @@ strategy:
   type: RollingUpdate
 
 env:
-  - name: POS_APP_ENV
+  - name: LOGISTICS_APP_ENV
     value: production
-  - name: POS_HTTP_PORT
+  - name: LOGISTICS_HTTP_PORT
     value: "4000"
-  - name: POS_POSTGRES_URL
+  - name: LOGISTICS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: pos-service-secrets
+        name: logistics-api-secrets
         key: postgresUrl
-  - name: POS_REDIS_ADDR
+  - name: LOGISTICS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: POS_NATS_URL
+  - name: LOGISTICS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: POS_OTLP_ENDPOINT
+  - name: LOGISTICS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
 
 resources:
@@ -99,12 +99,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: pos.codevertexitsolutions.com
+    - host: logisticsapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - pos.codevertexitsolutions.com
-      secretName: pos-service-tls
+        - logisticsapi.codevertexitsolutions.com
+      secretName: logisticsapi-tls
 

@@ -1,4 +1,4 @@
-# Auth Service Deployment
+# Auth API Deployment
 
 SSO and Authentication service for BengoBox platform.
 
@@ -30,7 +30,7 @@ SERVICE_DB_NAME=auth SERVICE_DB_USER=auth_user ./create-service-database.sh
 
 ```bash
 # Create auth service secrets
-SERVICE_NAME=auth-service NAMESPACE=auth ./create-service-secrets.sh
+SERVICE_NAME=auth-api NAMESPACE=auth ./create-service-secrets.sh
 
 # Save the displayed credentials securely!
 ```
@@ -39,13 +39,13 @@ SERVICE_NAME=auth-service NAMESPACE=auth ./create-service-secrets.sh
 
 ```bash
 # Apply ArgoCD Application
-kubectl apply -f devops-k8s/apps/auth-service/app.yaml
+kubectl apply -f devops-k8s/apps/auth-api/app.yaml
 
 # Sync the application
-argocd app sync auth-service
+argocd app sync auth-api
 
 # Monitor deployment
-argocd app get auth-service --watch
+argocd app get auth-api --watch
 ```
 
 ### Step 4: Verify Deployment
@@ -55,16 +55,16 @@ argocd app get auth-service --watch
 kubectl get pods -n auth
 
 # Check deployment
-kubectl get deployment -n auth auth-service
+kubectl get deployment -n auth auth-api
 
 # Check service
-kubectl get svc -n auth auth-service
+kubectl get svc -n auth auth-api
 
 # Check ingress
-kubectl get ingress -n auth auth-service
+kubectl get ingress -n auth auth-api
 
 # Check logs
-kubectl logs -n auth -l app=auth-service --tail=100 -f
+kubectl logs -n auth -l app=auth-api --tail=100 -f
 ```
 
 ## Configuration
@@ -73,8 +73,8 @@ kubectl logs -n auth -l app=auth-service --tail=100 -f
 
 The service requires the following environment variables (managed via secrets):
 
-- `AUTH_SERVICE_ENV` - Environment (production)
-- `AUTH_SERVICE_PORT` - Service port (4101)
+- `AUTH_API_ENV` - Environment (production)
+- `AUTH_API_PORT` - Service port (4101)
 - `AUTH_POSTGRES_URL` - PostgreSQL connection string
 - `AUTH_REDIS_ADDR` - Redis address
 - `AUTH_REDIS_PASSWORD` - Redis password (optional)
@@ -93,7 +93,7 @@ The service requires the following environment variables (managed via secrets):
 
 ## Scaling
 
-The Auth Service is configured with Horizontal Pod Autoscaling:
+The Auth API is configured with Horizontal Pod Autoscaling:
 
 - **Min Replicas**: 2
 - **Max Replicas**: 6
@@ -104,7 +104,7 @@ The Auth Service is configured with Horizontal Pod Autoscaling:
 
 ```bash
 # Scale to specific replica count
-kubectl scale deployment auth-service -n auth --replicas=4
+kubectl scale deployment auth-api -n auth --replicas=4
 
 # Check HPA status
 kubectl get hpa -n auth
@@ -159,7 +159,7 @@ The service exposes Prometheus metrics:
 
 ```bash
 # View logs
-kubectl logs -n auth -l app=auth-service --tail=100 -f
+kubectl logs -n auth -l app=auth-api --tail=100 -f
 
 # View logs from specific pod
 kubectl logs -n auth <pod-name> -f
@@ -246,10 +246,10 @@ If the service requires database migrations:
 
 ```bash
 # Run migration job (if service supports it)
-kubectl exec -n auth <auth-service-pod> -- /app/migrate
+kubectl exec -n auth <auth-api-pod> -- /app/migrate
 
 # Or create a migration job
-kubectl create job auth-migrate --image=docker.io/codevertex/auth-service:latest \
+kubectl create job auth-migrate --image=docker.io/codevertex/auth-api:latest \
   -n auth -- /app/migrate
 ```
 
@@ -269,12 +269,12 @@ Consider adding network policies to restrict traffic:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: auth-service-netpol
+  name: auth-api-netpol
   namespace: auth
 spec:
   podSelector:
     matchLabels:
-      app: auth-service
+      app: auth-api
   policyTypes:
     - Ingress
     - Egress
