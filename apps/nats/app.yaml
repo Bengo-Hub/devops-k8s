@@ -18,7 +18,7 @@ spec:
         config:
           cluster:
             enabled: true
-            replicas: 3
+            replicas: 2
           jetstream:
             enabled: true
             fileStore:
@@ -42,6 +42,12 @@ spec:
               limits:
                 cpu: 500m
                 memory: 1Gi
+        
+        # Disable reloader sidecar to fix "too many open files" error
+        # Config reload can be done manually via kubectl rollout restart
+        nats:
+          reloader:
+            enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: messaging
