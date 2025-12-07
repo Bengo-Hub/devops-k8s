@@ -1,10 +1,10 @@
-nameOverride: cafe-frontend
-fullnameOverride: cafe-frontend
+nameOverride: ordering-frontend
+fullnameOverride: ordering-frontend
 
 replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
-  repository: docker.io/codevertex/cafe-frontend
+  repository: docker.io/codevertex/ordering-frontend
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -35,18 +35,18 @@ strategy:
 
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://cafeapi.codevertexitsolutions.com
+    value: https://orderapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
-        name: cafe-frontend-secrets
+        name: ordering-frontend-secrets
         key: mapboxToken
   - name: NEXT_PUBLIC_SENTRY_DSN
     valueFrom:
       secretKeyRef:
-        name: cafe-frontend-secrets
+        name: ordering-frontend-secrets
         key: sentryDsn
 
 resources:
@@ -74,14 +74,14 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: cafeapp.codevertexitsolutions.com
+    - host: ordersapp.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - cafeapp.codevertexitsolutions.com
-      secretName: cafe-frontend-tls
+        - ordersapp.codevertexitsolutions.com
+      secretName: ordering-frontend-tls
 
 monitoring:
   enabled: true

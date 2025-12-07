@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cafe-website
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: charts/app
+    helm:
+      valueFiles:
+        - ../../apps/cafe-website/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cafe
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+

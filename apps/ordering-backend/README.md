@@ -1,14 +1,15 @@
-# Cafe Backend
+# Ordering Backend
 
-ArgoCD application for deploying the Go backend that powers ordering, logistics, and integrations for the Cafe platform.
+ArgoCD application for deploying the Go backend that powers ordering, logistics, and integrations for the Ordering service.
 
 ## Configuration Highlights
 
-- Namespace: `cafe`
-- Image: `ghcr.io/bengobox/cafe-backend`
+- Namespace: `ordering`
+- Domain: `orderapi.codevertexitsolutions.com`
+- Image: `docker.io/codevertex/ordering-backend`
 - Health endpoint: `/healthz`
 - Metrics endpoint: `/metrics`
-- Secrets: `cafe-backend-secrets` should expose `postgresUrl`
+- Secrets: `ordering-backend-secrets` should expose `postgresUrl`
 - External dependencies
   - PostgreSQL: `postgres://...` (managed secret)
   - Redis: `redis-master.infra.svc.cluster.local:6379`

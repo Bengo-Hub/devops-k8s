@@ -1,0 +1,115 @@
+nameOverride: subscription-api
+fullnameOverride: subscription-api
+
+replicaCount: 1
+
+image:
+  repository: docker.io/codevertex/subscription-api
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - name: registry-credentials
+
+service:
+  type: ClusterIP
+  port: 4000
+  targetPort: 4005
+
+migrations:
+  enabled: false
+
+seed:
+  enabled: true
+  binaryName: seed
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+envFromSecret: subscription-api-secrets
+
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /api/v1/healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /api/v1/healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+strategy:
+  type: RollingUpdate
+
+env:
+  - name: SUBSCRIPTION_APP_ENV
+    value: production
+  - name: SUBSCRIPTION_HTTP_PORT
+    value: "4005"
+  - name: SUBSCRIPTION_POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: subscription-api-secrets
+        key: postgresUrl
+  - name: SUBSCRIPTION_REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
+  - name: SUBSCRIPTION_NATS_URL
+    value: nats://nats.messaging.svc.cluster.local:4222
+  - name: SUBSCRIPTION_OTLP_ENDPOINT
+    value: http://otel-collector.infra.svc.cluster.local:4317
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+serviceMonitor:
+  enabled: true
+  namespace: infra
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: pricingapi.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - pricingapi.codevertexitsolutions.com
+      secretName: subscription-api-tls
+

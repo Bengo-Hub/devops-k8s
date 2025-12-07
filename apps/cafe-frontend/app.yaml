@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cafe-frontend
+  name: ordering-frontend
   namespace: argocd
 spec:
   project: default
@@ -11,10 +11,10 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/cafe-frontend/values.yaml
+        - ../../apps/ordering-frontend/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: cafe
+    namespace: ordering
   syncPolicy:
     automated:
       prune: true

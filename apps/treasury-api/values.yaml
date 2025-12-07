@@ -105,11 +105,11 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: treasuryapi.codevertexitsolutions.com
+    - host: booksapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - treasuryapi.codevertexitsolutions.com
+        - booksapi.codevertexitsolutions.com
       secretName: treasury-api-tls
