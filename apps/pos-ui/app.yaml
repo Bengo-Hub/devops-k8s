@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ordering-frontend
+  name: pos-ui
   namespace: argocd
 spec:
   project: default
@@ -11,14 +11,14 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/ordering-frontend/values.yaml
+        - ../../apps/pos-ui/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: ordering
+    namespace: pos
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - RespectIgnoreDifferences=true
+

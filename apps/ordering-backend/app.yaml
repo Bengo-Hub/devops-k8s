@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ordering-frontend
+  name: ordering-backend
   namespace: argocd
 spec:
   project: default
@@ -11,7 +11,7 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/ordering-frontend/values.yaml
+        - ../../apps/ordering-backend/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: ordering

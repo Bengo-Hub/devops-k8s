@@ -1,10 +1,10 @@
-nameOverride: ordering-frontend
-fullnameOverride: ordering-frontend
+nameOverride: cafe-website
+fullnameOverride: cafe-website
 
-replicaCount: 1  # Optimized for resource-constrained environment
+replicaCount: 1
 
 image:
-  repository: docker.io/codevertex/ordering-frontend
+  repository: docker.io/codevertex/cafe-website
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -34,19 +34,23 @@ strategy:
   type: RollingUpdate
 
 env:
-  - name: NEXT_PUBLIC_API_URL
+  - name: NEXT_PUBLIC_ORDERING_API_URL
     value: https://orderapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_AUTH_URL
+    value: https://sso.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_AUTH_UI_URL
+    value: https://accounts.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
-        name: ordering-frontend-secrets
+        name: cafe-website-secrets
         key: mapboxToken
   - name: NEXT_PUBLIC_SENTRY_DSN
     valueFrom:
       secretKeyRef:
-        name: ordering-frontend-secrets
+        name: cafe-website-secrets
         key: sentryDsn
 
 resources:
@@ -54,15 +58,13 @@ resources:
     cpu: 500m
     memory: 768Mi
   requests:
-    cpu: 100m  # Balanced for 12-core server
+    cpu: 100m
     memory: 256Mi
 
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 4
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 65
   targetMemoryUtilizationPercentage: 75
 
@@ -74,14 +76,14 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: ordersapp.codevertexitsolutions.com
+    - host: cafe.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - ordersapp.codevertexitsolutions.com
-      secretName: ordering-frontend-tls
+        - cafe.codevertexitsolutions.com
+      secretName: cafe-website-tls
 
 monitoring:
   enabled: true
@@ -90,4 +92,5 @@ monitoring:
 
 serviceMonitor:
   enabled: false
-  namespace: infra  # Set namespace even if disabled for consistency
+  namespace: infra
+

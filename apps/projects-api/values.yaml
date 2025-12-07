@@ -1,10 +1,10 @@
-nameOverride: treasury-api
-fullnameOverride: treasury-api
+nameOverride: projects-api
+fullnameOverride: projects-api
 
-replicaCount: 1  # Optimized for resource-constrained environment
+replicaCount: 1
 
 image:
-  repository: docker.io/codevertex/treasury-api
+  repository: docker.io/codevertex/projects-api
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets:
@@ -13,74 +13,65 @@ image:
 service:
   type: ClusterIP
   port: 4000
-  targetPort: 4000
+  targetPort: 4005
 
-# ============================================================================
-# MIGRATIONS AND SEEDING
-# ============================================================================
-# Treasury-api currently does not have database migrations
-# Schema management will be added in future releases
 migrations:
-  enabled: false  # No migration support yet
+  enabled: false
 
 seed:
-  enabled: false  # No seed support yet
+  enabled: false
+
+envFromSecret: projects-api-secrets
 
 healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /healthz
+      path: /api/v1/healthz
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
-      path: /healthz
+      path: /api/v1/healthz
       port: http
     initialDelaySeconds: 30
-    periodSeconds: 15
+    periodSeconds: 20
 
 strategy:
   type: RollingUpdate
 
 env:
-  - name: TREASURY_API_ENV
+  - name: PROJECTS_APP_ENV
     value: production
-  - name: TREASURY_HTTP_PORT
-    value: "4000"
-  - name: TREASURY_POSTGRES_URL
+  - name: PROJECTS_HTTP_PORT
+    value: "4005"
+  - name: PROJECTS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: treasury-api-secrets
+        name: projects-api-secrets
         key: postgresUrl
-  - name: TREASURY_REDIS_ADDR
+  - name: PROJECTS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: TREASURY_NATS_URL
+  - name: PROJECTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: TREASURY_STORAGE_ENDPOINT
-    value: http://minio.storage.svc.cluster.local:9000
-  - name: TREASURY_STORAGE_BUCKET
-    value: treasury-artifacts
-  - name: TREASURY_OTLP_ENDPOINT
+  - name: PROJECTS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
 
 resources:
   limits:
-    cpu: 1000m
-    memory: 1Gi
-  requests:
-    cpu: 150m  # Balanced for 12-core server
+    cpu: 500m
     memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
 
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 4
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
-  targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 70
 
 monitoring:
   enabled: true
@@ -105,11 +96,12 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: booksapi.codevertexitsolutions.com
+    - host: projectsapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - booksapi.codevertexitsolutions.com
-      secretName: treasury-api-tls
+        - projectsapi.codevertexitsolutions.com
+      secretName: projects-api-tls
+
