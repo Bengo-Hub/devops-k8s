@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: ordering-frontend
+  name: iot-api
   namespace: argocd
 spec:
   project: default
@@ -11,10 +11,10 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/ordering-frontend/values.yaml
+        - ../../apps/iot-api/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: ordering
+    namespace: iot
   syncPolicy:
     automated:
       prune: true
@@ -22,3 +22,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
+
