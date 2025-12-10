@@ -73,11 +73,11 @@ resources:
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 1  # Default to 1 to prevent pod limit overflow (override in app values.yaml if needed)
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-  # Advanced scaling policies
+  # Advanced scaling policies (only active if maxReplicas > minReplicas)
   scaleDown:
     stabilizationWindowSeconds: 300
     policies:
@@ -138,6 +138,11 @@ ingress:
     # cert-manager.io/cluster-issuer: letsencrypt-staging
     # nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # nginx.ingress.kubernetes.io/rate-limit: "100"
+
+# Pre-deploy cleanup hook (prevents duplicate pods from failed deployments)
+cleanup:
+  enabled: true  # Set to false to disable cleanup hook
+
   hosts:
     - host: example.com
       paths:
