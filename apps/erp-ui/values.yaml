@@ -35,11 +35,9 @@ resources:
     memory: 768Mi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 75
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 ingress:

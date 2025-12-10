@@ -35,9 +35,9 @@ resources:
     memory: 192Mi
 # Horizontal autoscaling
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
-  maxReplicas: 2
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 ingress:

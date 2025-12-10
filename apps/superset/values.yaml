@@ -13,12 +13,12 @@ image:
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 2  # Start with 2 replicas for high availability
+replicaCount: 1  # Reduced to save pod slots
 
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 6
+  maxReplicas: 2
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 
@@ -281,7 +281,7 @@ supersetWorker:
   autoscaling:
     enabled: true
     minReplicas: 2
-    maxReplicas: 8
+    maxReplicas: 2
     targetCPUUtilizationPercentage: 70
 
 # ============================================================================

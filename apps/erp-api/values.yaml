@@ -37,7 +37,7 @@ resources:
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 3 # Reduced to prevent pod limit overflow
+  maxReplicas: 2 # Reduced to prevent pod limit overflow
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 ingress:
