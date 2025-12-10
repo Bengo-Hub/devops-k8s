@@ -75,10 +75,10 @@ persistence:
   mountPath: /app/uploads
   accessMode: ReadWriteOnce
   storageClass: local-path
-# VPA configuration
+# VPA configuration - DISABLED due to metrics-server issues causing eviction loop
 verticalPodAutoscaling:
-  enabled: true
-  updateMode: "Auto"
+  enabled: false
+  updateMode: "Off"
   minCPU: 200m
   maxCPU: 1000m
   minMemory: 256Mi
