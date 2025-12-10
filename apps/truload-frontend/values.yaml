@@ -64,10 +64,10 @@ migrations:
 # No persistence needed for frontend
 persistence:
   enabled: false
-# VPA configuration
+# VPA configuration - DISABLED due to metrics-server issues causing eviction loop
 verticalPodAutoscaling:
-  enabled: true
-  updateMode: "Auto"
+  enabled: false
+  updateMode: "Off"
   minCPU: 100m
   maxCPU: 500m
   minMemory: 128Mi
