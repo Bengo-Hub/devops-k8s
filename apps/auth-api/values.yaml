@@ -43,16 +43,16 @@ env:
     value: production
   - name: AUTH_SERVICE_PORT
     value: "4101"
-  # Database connection (auth-service expects AUTH_DB_URL)
+  # Database connection (auth-api expects AUTH_DB_URL)
   - name: AUTH_DB_URL
     valueFrom:
       secretKeyRef:
-        name: auth-service-secrets
+        name: auth-api-secrets
         key: postgresUrl
   - name: AUTH_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: auth-service-secrets
+        name: auth-api-secrets
         key: postgresUrl
   # Auto-run migrations on startup (default: true)
   - name: AUTH_DB_RUN_MIGRATIONS
@@ -63,7 +63,7 @@ env:
   - name: AUTH_REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: auth-service-secrets
+        name: auth-api-secrets
         key: REDIS_PASSWORD
         optional: true
   # JWT Token Keys (RSA keys for token signing/verification)
@@ -77,14 +77,14 @@ env:
 # ============================================================================
 # MIGRATIONS AND SEEDING (Automatic on Startup)
 # ============================================================================
-# Auth-service handles migrations and seeding internally on startup
+# Auth-api handles migrations and seeding internally on startup
 # - AUTH_DB_RUN_MIGRATIONS=true (default) - runs migrations automatically
 # - Seed binary can be called: /usr/local/bin/auth-seed (idempotent)
 #
 # NOTE: Unlike Django services, Go services typically migrate on startup
 # Helm hooks are disabled for this service to avoid complexity
 migrations:
-  enabled: false # Disabled - auth-service migrates on startup
+  enabled: false # Disabled - auth-api migrates on startup
 # Automated seeding via Helm post-install/post-upgrade hook
 seed:
   enabled: true # Runs automatically after deployment
@@ -93,7 +93,7 @@ seed:
     - name: SEED_ADMIN_PASSWORD
       valueFrom:
         secretKeyRef:
-          name: auth-service-secrets
+          name: auth-api-secrets
           key: SEED_ADMIN_PASSWORD
           optional: true
   resources:
