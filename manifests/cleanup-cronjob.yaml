@@ -67,24 +67,34 @@ spec:
                   echo "🧹 Starting automated pod cleanup at $(date)"
                   
                   # Define namespaces to scan (exclude kube-system, kube-public, kube-node-lease)
-                  EXCLUDE_NS="kube-system|kube-public|kube-node-lease|calico-system|calico-apiserver"
+                  EXCLUDE_NS="kube-system|kube-public|kube-node-lease|calico-system|calico-apiserver|argocd"
                   NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep -vE "^($EXCLUDE_NS)$" || true)
                   
                   TOTAL_DELETED=0
                   
-                  # Function to delete pods by status phase
+                  # Function to delete pods by status phase with optional age threshold
                   cleanup_by_phase() {
                     local PHASE=$1
-                    echo "🔍 Scanning for pods in $PHASE state..."
+                    local AGE_THRESHOLD=${2:-0}  # Age threshold in seconds (0 = delete immediately)
+                    echo "🔍 Scanning for pods in $PHASE state (threshold: ${AGE_THRESHOLD}s)..."
                     
                     for NS in $NAMESPACES; do
-                      PODS=$(kubectl get pods -n "$NS" --field-selector=status.phase="$PHASE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+                      if [ $AGE_THRESHOLD -eq 0 ]; then
+                        # Delete all pods in this phase immediately
+                        PODS=$(kubectl get pods -n "$NS" --field-selector=status.phase="$PHASE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+                      else
+                        # Only delete pods older than threshold using jq
+                        PODS=$(kubectl get pods -n "$NS" --field-selector=status.phase="$PHASE" -o json 2>/dev/null | \
+                          jq -r --arg threshold "$AGE_THRESHOLD" '.items[] | select((.metadata.creationTimestamp | fromdateiso8601) < (now - ($threshold | tonumber))) | .metadata.name' 2>/dev/null || echo "")
+                      fi
                       
                       if [ -n "$PODS" ]; then
-                        echo "  📦 Deleting $PHASE pods in namespace $NS: $PODS"
-                        kubectl delete pods -n "$NS" --field-selector=status.phase="$PHASE" --grace-period=0 --force 2>/dev/null || true
-                        COUNT=$(echo "$PODS" | wc -w)
-                        TOTAL_DELETED=$((TOTAL_DELETED + COUNT))
+                        echo "  📦 Deleting $PHASE pods in namespace $NS"
+                        for POD in $PODS; do
+                          echo "    ✓ Deleting: $POD"
+                          kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+                          TOTAL_DELETED=$((TOTAL_DELETED + 1))
+                        done
                       fi
                     done
                   }
@@ -94,24 +104,23 @@ spec:
                     echo "🔍 Scanning for deployments with repeated pod failures..."
                     
                     for NS in $NAMESPACES; do
-                      # Find deployments where all pods are failing (0 ready)
+                      # Find deployments where all pods are failing (0 ready replicas)
                       FAILED_DEPLOYS=$(kubectl get deployments -n "$NS" -o json 2>/dev/null | \
-                        jq -r '.items[] | select(.status.replicas > 0 and .status.readyReplicas == 0 and .status.replicas == .status.unavailableReplicas) | .metadata.name' || echo "")
+                        jq -r '.items[] | select(.status.replicas > 0 and .status.readyReplicas == 0 and .status.replicas == .status.unavailableReplicas) | .metadata.name' 2>/dev/null || echo "")
                       
                       if [ -n "$FAILED_DEPLOYS" ]; then
-                        for DEPLOY in $FAILED_DEPLOYS; then
-                          # Check if deployment has been failing for >10 minutes
-                          AGE_SECONDS=$(kubectl get deployment -n "$NS" "$DEPLOY" -o jsonpath='{.metadata.creationTimestamp}' | xargs -I {} date -d {} +%s 2>/dev/null || echo "0")
-                          NOW_SECONDS=$(date +%s)
-                          AGE=$((NOW_SECONDS - AGE_SECONDS))
+                        for DEPLOY in $FAILED_DEPLOYS; do
+                          # Check if deployment has been failing for >10 minutes using jq date math
+                          STATUS=$(kubectl get deployment -n "$NS" "$DEPLOY" -o json 2>/dev/null | \
+                            jq -r 'if (.metadata.creationTimestamp | fromdateiso8601) < (now - 600) then "old" else "new" end' 2>/dev/null || echo "unknown")
                           
-                          if [ $AGE -gt 600 ]; then
-                            echo "  ⏸️  Scaling down failed deployment $NS/$DEPLOY (failing for ${AGE}s)"
+                          if [ "$STATUS" = "old" ]; then
+                            echo "  ⏸️  Scaling down failed deployment $NS/$DEPLOY (failing >10min)"
                             kubectl scale deployment -n "$NS" "$DEPLOY" --replicas=0 2>/dev/null || true
                             kubectl annotate deployment -n "$NS" "$DEPLOY" \
                               "bengobox.dev/auto-disabled=true" \
                               "bengobox.dev/disabled-reason=repeated-pod-failures" \
-                              "bengobox.dev/disabled-at=$(date -Iseconds)" \
+                              "bengobox.dev/disabled-at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
                               --overwrite 2>/dev/null || true
                           fi
                         done
@@ -119,23 +128,11 @@ spec:
                     done
                   }
                   
-                  # Cleanup Failed pods
-                  cleanup_by_phase "Failed"
+                  # Cleanup immediately: Failed pods (stuck or crashed)
+                  cleanup_by_phase "Failed" 0
                   
-                  # Cleanup Pending pods (older than 5 minutes)
-                  echo "🔍 Scanning for stale Pending pods..."
-                  for NS in $NAMESPACES; do
-                    STALE_PENDING=$(kubectl get pods -n "$NS" --field-selector=status.phase=Pending -o json 2>/dev/null | \
-                      jq -r --arg now "$(date +%s)" '.items[] | select((($now | tonumber) - (.metadata.creationTimestamp | fromdateiso8601)) > 300) | .metadata.name' || echo "")
-                    
-                    if [ -n "$STALE_PENDING" ]; then
-                      echo "  📦 Deleting stale Pending pods in $NS: $STALE_PENDING"
-                      for POD in $STALE_PENDING; do
-                        kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
-                        TOTAL_DELETED=$((TOTAL_DELETED + 1))
-                      done
-                    fi
-                  done
+                  # Cleanup with delay: Pending pods older than 5 minutes (300 seconds)
+                  cleanup_by_phase "Pending" 300
                   
                   # Disable deployments with repeated failures
                   disable_failed_deployments
@@ -144,11 +141,12 @@ spec:
                   echo "🔍 Cleaning up old completed jobs..."
                   for NS in $NAMESPACES; do
                     OLD_JOBS=$(kubectl get jobs -n "$NS" -o json 2>/dev/null | \
-                      jq -r --arg now "$(date +%s)" '.items[] | select(.status.succeeded == 1 and (($now | tonumber) - (.status.completionTime | fromdateiso8601)) > 3600) | .metadata.name' || echo "")
+                      jq -r '.items[] | select(.status.succeeded == 1 and (.status.completionTime | fromdateiso8601) < (now - 3600)) | .metadata.name' 2>/dev/null || echo "")
                     
                     if [ -n "$OLD_JOBS" ]; then
                       for JOB in $OLD_JOBS; do
-                        kubectl delete job -n "$NS" "$JOB" --cascade=foreground 2>/dev/null || true
+                        echo "  🗑️  Deleting completed job: $NS/$JOB"
+                        kubectl delete job -n "$NS" "$JOB" --cascade=background 2>/dev/null || true
                       done
                     fi
                   done
@@ -157,11 +155,12 @@ spec:
                   echo "   Total pods deleted: $TOTAL_DELETED"
                   
                   # Check current pod count
-                  RUNNING_PODS=$(kubectl get pods --all-namespaces --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
-                  echo "   Current running pods: $RUNNING_PODS/110"
+                  RUNNING_PODS=$(kubectl get pods --all-namespaces --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
+                  TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+                  echo "   Current pod status: $RUNNING_PODS Running / $TOTAL_PODS Total (limit: 110)"
                   
-                  if [ $RUNNING_PODS -ge 100 ]; then
-                    echo "⚠️  WARNING: Cluster approaching pod limit ($RUNNING_PODS/110)"
+                  if [ "$TOTAL_PODS" -ge 100 ]; then
+                    echo "⚠️  WARNING: Cluster approaching pod limit ($TOTAL_PODS/110)"
                   fi
               resources:
                 requests:
