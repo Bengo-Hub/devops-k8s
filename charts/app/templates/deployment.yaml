@@ -36,7 +36,7 @@ spec:
       imagePullSecrets:
         {{- toYaml .Values.image.pullSecrets | nindent 8 }}
       {{- end }}
-      {{- if or .Values.initContainers .Values.persistence.enabled .Values.migrations.runOnStartup }}
+      {{- if or .Values.initContainers .Values.persistence.enabled (and .Values.migrations .Values.migrations.runOnStartup) }}
       initContainers:
         {{- if .Values.initContainers }}
         {{- toYaml .Values.initContainers | nindent 8 }}

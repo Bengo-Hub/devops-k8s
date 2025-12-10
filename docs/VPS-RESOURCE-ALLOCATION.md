@@ -1,10 +1,15 @@
 # VPS Resource Allocation - Optimized for 12-Core Server
 
+> **⚠️ CRITICAL:** Maximum 110 pods per node. Monitor pod count to prevent scheduling failures.  
+> **Last Updated:** December 10, 2025 - Post-optimization audit
+
 ## Server Specifications (Actual)
 - **CPU:** 12 cores (AMD EPYC)
-- **RAM:** 47GB total
+- **RAM:** 47GB total (~48GB allocatable)
 - **Disk:** 242GB (158GB free)
-- **Current Usage:** 87% CPU, 28% RAM
+- **Pod Limit:** 110 pods/node (hard limit)
+- **Current Usage:** 95% CPU requested, 60% memory requested
+- **Current Pods:** ~99 active (90% of limit)
 
 ## Optimization Strategy
 
@@ -40,8 +45,10 @@
 | **pos-service** | 50m | 128Mi | 2 | Not actively used |
 | **inventory-service** | 50m | 128Mi | 2 | Not actively used |
 | **logistics-service** | 50m | 128Mi | 2 | Not actively used |
-| **truload-backend** | 50m | 128Mi | 2 | Not actively used |
-| **truload-frontend** | 50m | 128Mi | 2 | Not actively used |
+| **truload-backend** | 30m | 96Mi | 1-2 | Not actively used, VPA disabled |
+| **truload-frontend** | 30m | 96Mi | 1-2 | Not actively used, VPA disabled |
+
+**⚠️ TruLoad VPA Disabled:** VPA caused pod eviction loops when metrics-server unavailable. Keep disabled until metrics-server is stable.
 
 ## Auto-Scaling Configuration
 
@@ -98,6 +105,65 @@ resources:
 - **Reserve:** ~20GB (43%) for bursting & system
 
 **Total Baseline:** ~27GB (57%)
+
+---
+
+## 🚨 Critical Limits & Monitoring
+
+### Pod Count Management
+**Hard Limit:** 110 pods per node (kubelet default)
+
+**Current Distribution (Dec 10, 2025):**
+```
+infra:          ~18 pods (after cleanup from 25)
+erp:            ~11 pods
+kube-system:    ~11 pods
+truload:        ~3 pods (reduced from 9)
+Other services: ~56 pods
+```
+
+**Pod Count Thresholds:**
+- ✅ **<85 pods (75%):** Healthy
+- ⚠️ **85-95 pods (75-85%):** Monitor closely
+- 🚨 **95-105 pods (85-95%):** Scale down non-critical
+- 🔴 **>105 pods (>95%):** Critical - immediate action required
+
+**Monitoring Commands:**
+```bash
+# Check current pod count
+kubectl get pods --all-namespaces --no-headers | wc -l
+
+# Run resource audit
+./scripts/audit-resources.sh
+```
+
+### VPA Safety Guidelines
+
+**When to Disable VPA:**
+- ❌ metrics-server unavailable
+- ❌ Low-priority services
+- ❌ When pod count >95
+
+**Current Status:**
+- TruLoad services: VPA **DISABLED** (metrics-server issues)
+
+---
+
+## 📊 Resource Optimization History
+
+### December 10, 2025 - Major Optimization
+**Issues:** Pod overflow (114/110), VPA loops, duplicate monitoring
+
+**Actions:**
+1. ✅ Cleaned duplicate Prometheus/Grafana (freed ~15 pods)
+2. ✅ Disabled VPA for TruLoad
+3. ✅ Increased PostgreSQL (500m/2Gi → 2000m/4Gi)
+4. ✅ Increased ERP API, reduced max replicas
+5. ✅ Fixed Helm template bugs
+
+**Results:** Pod count 114 → 99, deployments stable
+
+---
 
 ## Benefits of This Configuration
 
