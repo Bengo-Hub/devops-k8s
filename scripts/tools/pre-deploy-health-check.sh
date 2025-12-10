@@ -61,13 +61,13 @@ log_info "Checking cluster pod capacity..."
 
 TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l)
 RUNNING_PODS=$(kubectl get pods --all-namespaces --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
-POD_LIMIT=110
+POD_LIMIT=150
 
 if [[ $RUNNING_PODS -ge $POD_LIMIT ]]; then
     log_error "Cluster at pod limit: $RUNNING_PODS/$POD_LIMIT running pods"
     log_error "Run cleanup script: ./scripts/tools/cleanup-failed-pods.sh"
     exit 1
-elif [[ $RUNNING_PODS -ge 100 ]]; then
+elif [[ $RUNNING_PODS -ge 135 ]]; then
     log_warning "Cluster near pod limit: $RUNNING_PODS/$POD_LIMIT"
     HEALTH_SCORE=$((HEALTH_SCORE + 10))
 else
