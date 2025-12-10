@@ -100,13 +100,13 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
   hosts:
-    - host: superset.codevertexitsolutions.co.ke
+    - host: superset.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - superset.codevertexitsolutions.co.ke
+        - superset.codevertexitsolutions.com
       secretName: superset-codevertexitsolutions-tls
 
 # ============================================================================
