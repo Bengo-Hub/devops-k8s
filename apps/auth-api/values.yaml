@@ -17,7 +17,7 @@ replicaCount: 1
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 4 # Can scale higher - critical service
+  maxReplicas: 2 # Critical service - reduced to prevent pod limit overflow
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 # ============================================================================
