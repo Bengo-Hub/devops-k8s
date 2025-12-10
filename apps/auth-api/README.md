@@ -137,7 +137,7 @@ The service exposes a health endpoint:
 ### Internal (Cluster)
 
 ```
-http://auth-service.auth.svc.cluster.local:4101
+http://auth-api.auth.svc.cluster.local:4101
 ```
 
 ### External (Ingress)
@@ -191,11 +191,11 @@ kubectl get events -n auth
 
 ```bash
 # Verify secret exists
-kubectl get secret auth-service-secrets -n auth
+kubectl get secret auth-api-secrets -n auth
 
 # If missing, recreate:
 cd devops-k8s/scripts/infrastructure
-SERVICE_NAME=auth-service NAMESPACE=auth ./create-service-secrets.sh
+SERVICE_NAME=auth-api NAMESPACE=auth ./create-service-secrets.sh
 ```
 
 ### Database Connection Issues
@@ -224,20 +224,20 @@ kubectl run -it --rm debug --image=redis:7 --restart=Never -- \
 ```bash
 # Edit values.yaml and change the tag
 # Then sync with ArgoCD
-argocd app sync auth-service
+argocd app sync auth-api
 
 # Or restart deployment
-kubectl rollout restart deployment auth-service -n auth
+kubectl rollout restart deployment auth-api -n auth
 ```
 
 ### Rollback
 
 ```bash
 # Check rollout history
-kubectl rollout history deployment auth-service -n auth
+kubectl rollout history deployment auth-api -n auth
 
 # Rollback to previous version
-kubectl rollout undo deployment auth-service -n auth
+kubectl rollout undo deployment auth-api -n auth
 ```
 
 ### Database Migrations
