@@ -57,7 +57,7 @@ kubectl get vpa -n infra
 
 Validates before deployment:
 - ✅ Namespace capacity
-- ✅ Cluster pod limit (110 max)
+- ✅ Cluster pod limit (150 max)
 - ✅ No existing failed pods
 - ✅ Database connectivity
 - ✅ Required secrets exist
