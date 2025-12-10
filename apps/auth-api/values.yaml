@@ -57,6 +57,13 @@ env:
   # Auto-run migrations on startup (default: true)
   - name: AUTH_DB_RUN_MIGRATIONS
     value: "true"
+  # Database connection pool settings (prevent connection exhaustion)
+  - name: AUTH_DB_MAX_OPEN_CONNS
+    value: "10" # Reduced from default 20 to prevent pool exhaustion
+  - name: AUTH_DB_MAX_IDLE_CONNS
+    value: "3"  # Reduced from default 5
+  - name: AUTH_DB_CONN_MAX_LIFETIME
+    value: "15m"
   # Redis connection
   - name: AUTH_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
