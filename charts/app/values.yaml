@@ -139,9 +139,11 @@ ingress:
     # nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # nginx.ingress.kubernetes.io/rate-limit: "100"
 
-# Pre-deploy cleanup hook (prevents duplicate pods from failed deployments)
+# Pre-deploy cleanup hook (DISABLED by default - use cluster-wide cleanup-cronjob instead)
+# This creates Jobs that consume pods during deployment, wasting cluster resources
+# The cluster has a centralized cleanup-cronjob running every 30 minutes
 cleanup:
-  enabled: true  # Set to false to disable cleanup hook
+  enabled: false  # Set to true only if app requires pre-deploy cleanup
 
   hosts:
     - host: example.com
