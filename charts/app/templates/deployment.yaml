@@ -5,11 +5,22 @@ metadata:
   labels:
     app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
+  annotations:
+    # Prevent duplicate pods by enforcing cleanup hook
+    helm.sh/hook: pre-upgrade,pre-install
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
 spec:
   replicas: {{ .Values.replicaCount }}
   {{- if .Values.strategy }}
   strategy:
     {{- toYaml .Values.strategy | nindent 4 }}
+  {{- else }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0 # Prevent pod limit overflow during rollout
   {{- end }}
   selector:
     matchLabels:
