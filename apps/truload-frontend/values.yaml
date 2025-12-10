@@ -58,6 +58,9 @@ ingress:
         - truloadtest.masterspace.co.ke
       secretName: truload-frontend-tls # Will use existing cert-manager certificate
 envFromSecret: truload-frontend-env
+# No migrations needed for Next.js frontend
+migrations:
+  enabled: false
 # No persistence needed for frontend
 persistence:
   enabled: false
