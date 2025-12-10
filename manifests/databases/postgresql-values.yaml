@@ -30,11 +30,11 @@ primary:
     pullPolicy: IfNotPresent
   resources:
     requests:
-      memory: "512Mi"
-      cpu: "250m"
+      memory: "2Gi"  # Increased - priority database for all services
+      cpu: "500m"
     limits:
-      memory: "2Gi"
-      cpu: "1000m"
+      memory: "4Gi"
+      cpu: "2000m"
   priorityClassName: db-critical
   
   persistence:
