@@ -28,20 +28,18 @@ healthCheck:
 # Production resource limits for Django API
 resources:
   requests:
-    cpu: 300m # Increased - priority service on 12-core server
-    memory: 1Gi
+    cpu: 400m # Increased - priority business application
+    memory: 1.5Gi
   limits:
-    cpu: 2000m
-    memory: 3Gi
+    cpu: 2500m
+    memory: 4Gi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 6 # Can scale higher with 12 cores available
+  maxReplicas: 3 # Reduced to prevent pod limit overflow
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
-  targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 70
 ingress:
   enabled: true
   ingressClassName: nginx
