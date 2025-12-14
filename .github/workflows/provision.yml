@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       enable_cleanup:
-        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: false (disabled). Set to true to enable cleanup.'
+        description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: true (enabled). Set to false to disable cleanup.'
         required: false
-        default: false
+        default: true
         type: boolean
       force_reprovision:
         description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
