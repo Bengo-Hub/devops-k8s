@@ -7,7 +7,7 @@
 - **CPU:** 12 cores (AMD EPYC)
 - **RAM:** 47GB total (~48GB allocatable)
 - **Disk:** 242GB (158GB free)
-- **Pod Limit:** 110 pods/node (hard limit)
+- **Pod Limit:** 150 pods/node (hard limit)
 - **Current Usage:** 95% CPU requested, 60% memory requested
 - **Current Pods:** ~99 active (90% of limit)
 

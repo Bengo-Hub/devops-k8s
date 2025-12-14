@@ -13,14 +13,26 @@ image:
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 1  # Reduced to save pod slots
+replicaCount: 1  # Default single replica
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 2
+  minReplicas: 1  # Start with 1 replica
+  maxReplicas: 2  # Scale to 2 under load
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
+  scaleDown:
+    stabilizationWindowSeconds: 300
+    policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 120
+  scaleUp:
+    stabilizationWindowSeconds: 60
+    policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60
 
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
