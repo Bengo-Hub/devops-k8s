@@ -33,11 +33,11 @@ jobs:
       # Can be enabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=true
       # Priority: workflow input > GitHub secret > default FALSE
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
-        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
+        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'true')
+        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'true') }}
       FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
-        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
+        && (github.event.inputs.force_reprovision == 'true' && 'true' || 'true')
+        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'true') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
