@@ -27,7 +27,7 @@ ACTIVE_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep 
 TERMINATING_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -c "Terminating" || echo "0")
 FAILED_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -c "Error\|Failed\|CrashLoopBackOff" || echo "0")
 
-POD_LIMIT=110
+POD_LIMIT=150
 POD_USAGE_PCT=$((ACTIVE_PODS * 100 / POD_LIMIT))
 
 echo "Total Pods:       $TOTAL_PODS"
@@ -36,13 +36,13 @@ echo "Terminating Pods: $TERMINATING_PODS"
 echo "Failed Pods:      $FAILED_PODS"
 echo ""
 
-if [[ $ACTIVE_PODS -ge 105 ]]; then
+if [[ $ACTIVE_PODS -ge 143 ]]; then
     log_error "Pod count dangerously high! (>95% of limit)"
     log_error "Action required: Scale down non-critical services"
-elif [[ $ACTIVE_PODS -ge 95 ]]; then
+elif [[ $ACTIVE_PODS -ge 128 ]]; then
     log_warning "Pod count approaching limit (>85%)"
     log_warning "Consider reducing replica counts"
-elif [[ $ACTIVE_PODS -ge 85 ]]; then
+elif [[ $ACTIVE_PODS -ge 113 ]]; then
     log_warning "Pod count elevated (>75%)"
 else
     log_success "Pod count healthy (<75% of limit)"

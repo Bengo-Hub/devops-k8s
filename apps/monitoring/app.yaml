@@ -84,6 +84,14 @@ spec:
 
         kubeStateMetrics:
           enabled: true
+
+        # Disable admission webhooks to prevent RBAC conflicts
+        # These webhooks cause "already exists" errors during sync
+        prometheusOperator:
+          admissionWebhooks:
+            enabled: false
+            patch:
+              enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: infra

@@ -87,7 +87,7 @@ git commit -m "fix: disable VPA to stop eviction loop"
 
 ---
 
-### 3. Pod Limit Exhaustion (110 pods/node)
+### 3. Pod Limit Exhaustion (150 pods/node)
 
 **Issue:** Node refuses to schedule new pods when limit reached.
 
@@ -98,7 +98,7 @@ preemption: 0/1 nodes are available: 1 No preemption victims found
 ```
 
 **Root Cause:**
-- Default kubelet `maxPods: 110` per node
+- Default kubelet `maxPods: 150` per node
 - Monitoring duplicates (multiple Prometheus/Grafana stacks)
 - High replica counts on HPA
 - Services stuck in `Terminating` state

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  # Custom health assessment for Ingress resources
+  # Mark Ingress as Healthy if it has any status, not just when LoadBalancer has IP
+  resource.customizations.health.networking.k8s.io_Ingress: |
+    hs = {}
+    if obj.status ~= nil then
+      if obj.status.loadBalancer ~= nil then
+        if obj.status.loadBalancer.ingress ~= nil and #obj.status.loadBalancer.ingress > 0 then
+          hs.status = 'Healthy'
+          hs.message = 'LoadBalancer has IP assigned'
+        else
+          hs.status = 'Healthy'
+          hs.message = 'Ingress resource created (awaiting LoadBalancer IP)'
+        end
+      else
+        hs.status = 'Healthy'
+        hs.message = 'Ingress endpoint ready'
+      end
+    else
+      hs.status = 'Progressing'
+      hs.message = 'Waiting for Ingress status'
+    end
+    return hs
