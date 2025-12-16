@@ -68,8 +68,8 @@ data:
     port = 5432
     max_connections = 200
     
-    # Include additional configuration files
-    include_dir = '/etc/postgresql/conf.d'
+    # Include additional configuration files (exclude postgresql.conf to avoid recursion)
+    include '/etc/postgresql/conf.d/override.conf'
   override.conf: |
     # PostgreSQL Performance Tuning
     max_connections = 200
