@@ -77,9 +77,33 @@ log_info "Installing/upgrading kube-prometheus-stack..."
 log_info "This may take 10-15 minutes. Logs will be streamed below..."
 
 # Note: Monitoring uses helm upgrade --install which is idempotent
-# Only cleanup orphaned resources if cleanup mode is active
+# Clean up orphaned resources that may block Helm adoption
+# This runs ALWAYS (not just in cleanup mode) to prevent "cannot be imported" errors
+log_info "Checking for orphaned monitoring resources that may block Helm adoption..."
+
+# Check and clean orphaned ServiceAccount (common issue)
+if kubectl get serviceaccount prometheus-grafana -n "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
+  HELM_MANAGED=$(kubectl get serviceaccount prometheus-grafana -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
+  if [ "$HELM_MANAGED" != "Helm" ]; then
+    log_warning "Found orphaned ServiceAccount prometheus-grafana (not managed by Helm) - deleting to allow Helm adoption"
+    kubectl delete serviceaccount prometheus-grafana -n "${MONITORING_NAMESPACE}" || true
+  fi
+fi
+
+# Check and clean other common orphaned resources
+for resource_type in configmap secret deployment; do
+  if kubectl get "$resource_type" prometheus-grafana -n "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
+    HELM_MANAGED=$(kubectl get "$resource_type" prometheus-grafana -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
+    if [ "$HELM_MANAGED" != "Helm" ]; then
+      log_warning "Found orphaned $resource_type/prometheus-grafana - deleting to allow Helm adoption"
+      kubectl delete "$resource_type" prometheus-grafana -n "${MONITORING_NAMESPACE}" || true
+    fi
+  fi
+done
+
+# Full cleanup mode: more aggressive resource removal
 if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
-  log_info "Cleanup mode active - checking for orphaned monitoring resources..."
+  log_info "Cleanup mode active - performing full monitoring resource cleanup..."
   
   # Clean up any orphaned ingresses first (prevents webhook validation errors)
   echo -e "${YELLOW}Cleaning up orphaned monitoring ingresses...${NC}"
