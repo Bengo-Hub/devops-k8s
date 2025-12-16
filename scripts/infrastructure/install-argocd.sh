@@ -73,6 +73,12 @@ fi
 # Wait for pods to be ready
 wait_for_pods "argocd" "app.kubernetes.io/name=argocd-server" 300
 
+# Apply ArgoCD health customizations for better app health assessment
+log_info "Applying ArgoCD health customizations..."
+kubectl apply -f "${MANIFESTS_DIR}/argocd-cm.yaml" || {
+  log_warning "Failed to apply health customizations - continuing without them"
+}
+
 # Deploy production ingress with TLS
 log_info "Configuring production ingress with TLS..."
 cat > /tmp/argocd-ingress-prod.yaml <<EOF
