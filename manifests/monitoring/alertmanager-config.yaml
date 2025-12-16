@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: alertmanager-prometheus-kube-prometheus-alertmanager
-  namespace: monitoring
+  namespace: infra
 type: Opaque
 stringData:
   alertmanager.yaml: |

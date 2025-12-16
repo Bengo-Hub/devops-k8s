@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: infra-db-queue-alerts
-  namespace: monitoring
+  namespace: infra
   labels:
     prometheus: kube-prometheus
 spec:

@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -uo pipefail  # Removed -e so script continues on errors
 
 # Comprehensive Cluster Cleanup Script
@@ -64,7 +64,7 @@ if ! command -v kubectl &> /dev/null; then
 fi
 
 if ! command -v jq &> /dev/null; then
-    echo -e "${YELLOW}⚠ jq command not found. Attempting to install...${NC}"
+    echo -e "${YELLOW}âš  jq command not found. Attempting to install...${NC}"
     if command -v apt-get &> /dev/null; then
         apt-get update -y >/dev/null 2>&1 && apt-get install -y jq >/dev/null 2>&1 || \
         sudo apt-get update -y >/dev/null 2>&1 && sudo apt-get install -y jq >/dev/null 2>&1 || \
@@ -80,8 +80,8 @@ if ! kubectl cluster-info >/dev/null 2>&1; then
     exit 1
 fi
 
-echo -e "${GREEN}✓ Connected to cluster${NC}"
-echo -e "${GREEN}✓ jq is available: $(jq --version 2>&1)${NC}"
+echo -e "${GREEN}âœ“ Connected to cluster${NC}"
+echo -e "${GREEN}âœ“ jq is available: $(jq --version 2>&1)${NC}"
 echo ""
 
 # System namespaces to preserve
@@ -132,7 +132,7 @@ force_delete_namespace() {
     for attempt in {1..10}; do
         # Check if namespace still exists
         if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
-            echo -e "${GREEN}    ✓ Namespace ${ns} deleted${NC}"
+            echo -e "${GREEN}    âœ“ Namespace ${ns} deleted${NC}"
             return 0
         fi
 
@@ -162,7 +162,7 @@ force_delete_namespace() {
                         if [ $FINALIZE_EXIT -ne 0 ]; then
                             echo -e "${YELLOW}        Finalize failed: ${FINALIZE_OUTPUT}${NC}" | head -n 3
                         else
-                            echo -e "${GREEN}        ✓ Finalize applied${NC}"
+                            echo -e "${GREEN}        âœ“ Finalize applied${NC}"
                         fi
                     else
                         echo -e "${YELLOW}        jq processing failed or produced empty output${NC}"
@@ -185,7 +185,7 @@ force_delete_namespace() {
         sleep 1
     done
 
-    echo -e "${YELLOW}      ⚠ Namespace ${ns} still present after forced cleanup - will continue with other namespaces${NC}"
+    echo -e "${YELLOW}      âš  Namespace ${ns} still present after forced cleanup - will continue with other namespaces${NC}"
     return 0  # Don't fail the script, just warn
 }
 
@@ -218,7 +218,7 @@ for ns in $ALL_NAMESPACES; do
         done
     fi
 done
-echo -e "${GREEN}✓ Helm releases uninstalled${NC}"
+echo -e "${GREEN}âœ“ Helm releases uninstalled${NC}"
 echo ""
 
 echo -e "${BLUE}Step 2: Disabling ArgoCD auto-sync and self-heal...${NC}"
@@ -241,7 +241,7 @@ if kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
         done || true
     fi
 fi
-echo -e "${GREEN}✓ ArgoCD auto-sync disabled${NC}"
+echo -e "${GREEN}âœ“ ArgoCD auto-sync disabled${NC}"
 echo ""
 
 echo -e "${BLUE}Step 2.1: Deleting all ArgoCD Applications...${NC}"
@@ -275,7 +275,7 @@ if kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
         done || true
     fi
 fi
-echo -e "${GREEN}✓ ArgoCD Applications deleted${NC}"
+echo -e "${GREEN}âœ“ ArgoCD Applications deleted${NC}"
 echo ""
 
 # Remove ArgoCD CRDs early to avoid finalizer hangs
@@ -284,7 +284,7 @@ kubectl delete crd applications.argoproj.io --wait=false --grace-period=0 2>/dev
 kubectl delete crd applicationprojects.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
 kubectl delete crd appprojects.argoproj.io --wait=false --grace-period=0 2>/dev/null || true
 sleep 3
-echo -e "${GREEN}✓ ArgoCD CRDs removed (if present)${NC}"
+echo -e "${GREEN}âœ“ ArgoCD CRDs removed (if present)${NC}"
 echo ""
 
 echo -e "${BLUE}Step 2.3: Scaling down ArgoCD server to prevent recreation...${NC}"
@@ -296,17 +296,27 @@ if kubectl get deployment -n argocd argocd-server >/dev/null 2>&1; then
     kubectl scale statefulset argocd-application-controller -n argocd --replicas=0 2>/dev/null || true
     sleep 5
 fi
-echo -e "${GREEN}✓ ArgoCD components scaled down${NC}"
+echo -e "${GREEN}âœ“ ArgoCD components scaled down${NC}"
 echo ""
 
 echo -e "${BLUE}Step 2.4: Scaling down monitoring operators...${NC}"
-if kubectl get namespace monitoring >/dev/null 2>&1; then
-    echo -e "${YELLOW}  Scaling down Prometheus Operator and Grafana...${NC}"
-    kubectl scale deployment -n monitoring --all --replicas=0 2>/dev/null || true
-    kubectl scale statefulset -n monitoring --all --replicas=0 2>/dev/null || true
+MONITORING_NS=${MONITORING_NAMESPACE:-infra}
+if kubectl get namespace "${MONITORING_NS}" >/dev/null 2>&1; then
+    echo -e "${YELLOW}  Scaling down monitoring workloads in ${MONITORING_NS}...${NC}"
+    kubectl scale deployment -n "${MONITORING_NS}" --all --replicas=0 2>/dev/null || true
+    kubectl scale statefulset -n "${MONITORING_NS}" --all --replicas=0 2>/dev/null || true
     sleep 3
 fi
-echo -e "${GREEN}✓ Monitoring operators scaled down${NC}"
+
+# Backward compatibility: clean up obsolete monitoring namespace
+if [ "${MONITORING_NS}" != "monitoring" ] && kubectl get namespace monitoring >/dev/null 2>&1; then
+    echo -e "${YELLOW}  Obsolete namespace 'monitoring' detected - scaling down and deleting...${NC}"
+    kubectl scale deployment -n monitoring --all --replicas=0 2>/dev/null || true
+    kubectl scale statefulset -n monitoring --all --replicas=0 2>/dev/null || true
+    kubectl delete namespace monitoring --wait=false 2>/dev/null || true
+    sleep 3
+fi
+echo -e "${GREEN}âœ“ Monitoring operators scaled down${NC}"
 echo ""
 
 echo -e "${BLUE}Step 3: Deleting all application namespaces...${NC}"
@@ -403,7 +413,7 @@ for ns in $ALL_NAMESPACES; do
         force_delete_namespace "$ns"
     fi
 done
-echo -e "${GREEN}✓ Application namespaces deleted${NC}"
+echo -e "${GREEN}âœ“ Application namespaces deleted${NC}"
 echo ""
 
 echo -e "${BLUE}Step 4: Cleaning up remaining resources...${NC}"
@@ -452,7 +462,7 @@ kubectl get secrets -A -l owner=helm -o json 2>/dev/null | \
         fi
     done || true
 
-echo -e "${GREEN}✓ Remaining resources cleaned up${NC}"
+echo -e "${GREEN}âœ“ Remaining resources cleaned up${NC}"
 echo ""
 
 echo -e "${BLUE}Step 5: Force deleting stuck resources...${NC}"
@@ -506,13 +516,13 @@ for ns in $REMAINING_NAMESPACES; do
 done
 
 if [ -n "$APP_NAMESPACES" ]; then
-    echo -e "${YELLOW}⚠️  Remaining application namespaces:${NC}"
+    echo -e "${YELLOW}âš ï¸  Remaining application namespaces:${NC}"
     for ns in $APP_NAMESPACES; do
         echo -e "${YELLOW}    - $ns${NC}"
     done
     echo -e "${YELLOW}  These may need manual cleanup.${NC}"
 else
-    echo -e "${GREEN}✓ All application namespaces cleaned up${NC}"
+    echo -e "${GREEN}âœ“ All application namespaces cleaned up${NC}"
 fi
 
 echo ""
@@ -559,7 +569,7 @@ stop_kubernetes_runtime() {
         kubeadm reset --force 2>/dev/null || true
     fi
     
-    echo -e "${GREEN}  ✓ Kubernetes runtime stopped${NC}"
+    echo -e "${GREEN}  âœ“ Kubernetes runtime stopped${NC}"
 }
 
 # Function to stop Docker runtime
@@ -600,7 +610,7 @@ stop_docker_runtime() {
     rm -rf /var/lib/cni/* 2>/dev/null || true
     rm -rf /etc/cni/net.d/* 2>/dev/null || true
     
-    echo -e "${GREEN}  ✓ Docker/containerd runtime stopped and cleaned${NC}"
+    echo -e "${GREEN}  âœ“ Docker/containerd runtime stopped and cleaned${NC}"
 }
 
 # Function to clean Kubernetes data
@@ -627,7 +637,7 @@ clean_kubernetes_data() {
     rm -rf /etc/cni/net.d/* 2>/dev/null || true
     rm -rf /opt/cni/bin/* 2>/dev/null || true
     
-    echo -e "${GREEN}  ✓ Kubernetes data cleaned${NC}"
+    echo -e "${GREEN}  âœ“ Kubernetes data cleaned${NC}"
 }
 
 # Check if we're running on the cluster node (not from CI/CD)
@@ -643,7 +653,7 @@ if [ -f "/etc/kubernetes/admin.conf" ] || systemctl is-active --quiet kubelet 2>
     # Clean Kubernetes data
     clean_kubernetes_data
     
-    echo -e "${GREEN}✓ Runtime cleanup complete${NC}"
+    echo -e "${GREEN}âœ“ Runtime cleanup complete${NC}"
 else
     echo -e "${BLUE}  Running from remote (CI/CD) - skipping runtime cleanup${NC}"
     echo -e "${BLUE}  Runtime cleanup must be run directly on the cluster node${NC}"
