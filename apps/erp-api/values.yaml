@@ -7,37 +7,43 @@ service:
   port: 80
   targetPort: 4000
 # Health check configuration for Django API
+# Adjusted for migration execution time (can take 5-10 minutes on first deploy)
 healthCheck:
   enabled: true
   readiness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 30
+    initialDelaySeconds: 120 # Increased - migrations take time
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 6
+    failureThreshold: 10 # Increased - allow time for migrations
   liveness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 60
-    periodSeconds: 20
-    timeoutSeconds: 5
+    initialDelaySeconds: 180 # Increased - migrations can take 5-10 min
+    periodSeconds: 30
+    timeoutSeconds: 10
     failureThreshold: 5
-# Production resource limits for Django API
+# Production resource limits for Django API with large ERP schema
+# This app requires high memory due to:
+# - 30+ Django apps with complex models
+# - Heavy migrations (300+ tables)
+# - Real-time WebSocket connections
+# - Async task processing
 resources:
   requests:
-    cpu: 400m # Increased - priority business application
-    memory: 6Gi # Massive memory for migrations - run Django migrations
+    cpu: 500m # Priority business application
+    memory: 3Gi # Required for Django ORM with large schema + migrations
   limits:
-    cpu: 2500m
-    memory: 10Gi # Massive memory for migrations - run Django migrations
+    cpu: 3000m
+    memory: 6Gi # Peak memory for migrations and heavy queries
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
-  minReplicas: 1
-  maxReplicas: 2 # Heavy app - limited to 2 replicas
+  minReplicas: 2 # Minimum 2 for high availability
+  maxReplicas: 4 # Scale up to 4 replicas under load
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
   scaleDown:
@@ -90,21 +96,33 @@ envFromSecret: erp-api-env
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# ERP-API is a Django application that uses Helm hooks for migrations
-# Migrations run as pre-install/pre-upgrade Jobs (see migrate-hook.yaml template)
-# This is the standard Django deployment pattern
+# ERP-API Django migrations strategy:
+# 1. Database check runs in initContainer (wait-for-db)
+# 2. Migrations run automatically in entrypoint.sh on first pod startup
+# 3. Subsequent pods skip migrations if already applied (idempotent)
+# 4. Heavy migrations (300+ tables) require 3-6Gi memory
 migrations:
-  enabled: false # DISABLED - Let erp-api handle migrations on its own startup (independent)
-  runOnStartup: true # Enable initContainer migrations (app is independent)
+  enabled: false # Use app's built-in migration handling via entrypoint.sh
+  runOnStartup: true # Enable initContainer for database connectivity check
   resources:
     requests:
-      cpu: 250m
+      cpu: 500m # Migrations are CPU-intensive
+      memory: 3Gi # Required for Django migration executor with large schema
+    limits:
+      cpu: 2000m
+      memory: 6Gi # Peak memory during migration execution
+# Seeding configuration
+seed:
+  enabled: true # Enable seed data creation via Django management command
+  command: "python manage.py seed_data" # Custom management command for initial data
+  runAfterMigrations: true # Run seeds only after migrations complete
+  resources:
+    requests:
+      cpu: 200m
       memory: 512Mi
     limits:
       cpu: 1000m
-      memory: 2Gi
-seed:
-  enabled: false # Seeding handled through Django management commands if needed
+      memory: 1Gi
 # ServiceMonitor configuration (requires Prometheus Operator)
 serviceMonitor:
   enabled: false # Disabled - Prometheus Operator CRDs not installed
@@ -122,7 +140,7 @@ persistence:
   storageClass: local-path
 # Enhanced HPA with custom metrics
 autoscalingCustomMetrics:
-  enabled: true
+  enabled: false # Disabled - using basic HPA for now
   # Custom metrics for intelligent scaling (requires metrics adapter)
   customMetrics:
     - type: Pods
@@ -137,14 +155,14 @@ autoscalingCustomMetrics:
       metricName: bengoerp_api_active_users
       targetType: AverageValue
       targetAverageValue: 100
-# Production-ready VPA configuration
+# Production-ready VPA configuration (DISABLED to prevent pod evictions during migrations)
 verticalPodAutoscaling:
-  enabled: true
-  updateMode: "Recreate"
-  minCPU: 200m
-  maxCPU: 2000m
-  minMemory: 256Mi
-  maxMemory: 4096Mi
+  enabled: false # DISABLED - VPA was causing pod evictions during migrations
+  updateMode: "Off" # Off to prevent disruption
+  minCPU: 500m
+  maxCPU: 3000m
+  minMemory: 3Gi
+  maxMemory: 6Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: false # Apply recommendations automatically in production
@@ -154,14 +172,14 @@ celeryWorker:
   replicaCount: 1
   app: ProcureProKEAPI
   logLevel: info
-  concurrency: 4 # Increased for 12-core server
+  concurrency: 4 # Optimized for 12-core server
   maxTasksPerChild: 100
   resources:
     requests:
-      cpu: 200m # Increased for better performance
-      memory: 768Mi
+      cpu: 300m # Increased for better task processing
+      memory: 1Gi # Increased - workers load Django models
     limits:
-      cpu: 1000m
+      cpu: 1500m
       memory: 2Gi
   livenessProbe:
     enabled: true
