@@ -544,6 +544,14 @@ jobs:
           
           echo "Checking for orphaned monitoring resources in namespace: $MONITORING_NS"
           echo "This includes resources with Helm labels but missing release annotations"
+
+          # Clean up failed/orphaned pods across ALL namespaces first to avoid adoption conflicts
+          if [ -f ./scripts/tools/cleanup-failed-pods.sh ]; then
+            chmod +x ./scripts/tools/cleanup-failed-pods.sh
+            ./scripts/tools/cleanup-failed-pods.sh || echo "⚠️  Pod cleanup completed with warnings"
+          else
+            echo "⚠️  cleanup-failed-pods.sh not found, skipping pod cleanup"
+          fi
           
           # Function to check if resource has proper Helm release annotation
           check_and_clean_resource() {
