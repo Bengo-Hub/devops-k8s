@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -uo pipefail  # Removed -e so script continues on errors
 
 # Comprehensive Cluster Cleanup Script
