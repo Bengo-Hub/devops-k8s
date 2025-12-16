@@ -160,8 +160,26 @@ ensure_helm_metadata() {
   return 0
 }
 
-# Patch common PVCs before Helm install to avoid adoption failures
+# Patch common resources before Helm install to avoid adoption failures
+# PVCs (namespaced)
 ensure_helm_metadata pvc prometheus-grafana prometheus "${MONITORING_NAMESPACE}"
+
+# Cluster-scoped resources (ClusterRole, ClusterRoleBinding)
+for cluster_resource_type in clusterrole clusterrolebinding; do
+  for res_name in $(kubectl get "$cluster_resource_type" -o name 2>/dev/null | grep "prometheus-grafana" | sed "s|$cluster_resource_type/||" || echo ""); do
+    if [ -n "$res_name" ]; then
+      # For cluster resources, pass empty namespace (not used for cluster-scoped)
+      managed=$(kubectl get "$cluster_resource_type" "$res_name" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
+      rel=$(kubectl get "$cluster_resource_type" "$res_name" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+      relns=$(kubectl get "$cluster_resource_type" "$res_name" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+      if [ "$managed" != "Helm" ] || [ "$rel" != "prometheus" ] || [ "$relns" != "${MONITORING_NAMESPACE}" ]; then
+        log_warning "Patching cluster-scoped $cluster_resource_type/$res_name with Helm metadata"
+        kubectl label "$cluster_resource_type" "$res_name" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
+        kubectl annotate "$cluster_resource_type" "$res_name" meta.helm.sh/release-name=prometheus meta.helm.sh/release-namespace="${MONITORING_NAMESPACE}" --overwrite >/dev/null 2>&1 || true
+      fi
+    fi
+  done
+done
 
 # Full cleanup mode: more aggressive resource removal
 if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
