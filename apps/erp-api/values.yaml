@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-api
-  tag: eee041e4
+  tag: 588fe16b
   pullSecrets:
     - name: registry-credentials
 service:
@@ -15,7 +15,7 @@ healthCheck:
       path: /api/v1/core/health/
       port: http
     # Allow plenty of time for cold starts, migrations, cache warmup
-    initialDelaySeconds: 300  # Increased to 5 minutes
+    initialDelaySeconds: 300 # Increased to 5 minutes
     periodSeconds: 30
     timeoutSeconds: 10
     failureThreshold: 30
@@ -23,15 +23,15 @@ healthCheck:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 600  # Increased to 10 minutes - migrations take time
+    initialDelaySeconds: 600 # Increased to 10 minutes - migrations take time
     periodSeconds: 30
     timeoutSeconds: 10
-    failureThreshold: 10  # Increased - allow time for migrations
+    failureThreshold: 10 # Increased - allow time for migrations
   liveness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 900  # Increased to 15 minutes - migrations can take 5-10 min
+    initialDelaySeconds: 900 # Increased to 15 minutes - migrations can take 5-10 min
     periodSeconds: 60
     timeoutSeconds: 15
     failureThreshold: 5
