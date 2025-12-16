@@ -1,0 +1,8 @@
+# Enforce LF line endings for files executed in Linux CI runners
+*.sh text eol=lf
+*.bash text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Keep PowerShell scripts as CRLF on Windows (optional)
+*.ps1 text eol=crlf
