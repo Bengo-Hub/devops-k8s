@@ -542,34 +542,52 @@ jobs:
           
           MONITORING_NS="${MONITORING_NAMESPACE:-infra}"
           
-          echo "Checking for orphaned Grafana resources in namespace: $MONITORING_NS"
+          echo "Checking for orphaned monitoring resources in namespace: $MONITORING_NS"
+          echo "This includes resources with Helm labels but missing release annotations"
           
-          # Delete orphaned ServiceAccounts (missing Helm labels)
-          if kubectl get serviceaccount prometheus-grafana -n "$MONITORING_NS" >/dev/null 2>&1; then
-            # Check if it has proper Helm labels
-            HELM_MANAGED=$(kubectl get serviceaccount prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
-            if [ "$HELM_MANAGED" != "Helm" ]; then
-              echo "⚠️  Found orphaned ServiceAccount prometheus-grafana (not managed by Helm)"
-              kubectl delete serviceaccount prometheus-grafana -n "$MONITORING_NS" || true
-              echo "✓ Deleted orphaned ServiceAccount"
-            else
-              echo "✓ ServiceAccount prometheus-grafana is properly managed by Helm"
+          # Function to check if resource has proper Helm release annotation
+          check_and_clean_resource() {
+            local resource_type=$1
+            local resource_name=$2
+            
+            if kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" >/dev/null 2>&1; then
+              # Check for release-name annotation (required for Helm adoption)
+              RELEASE_NAME=$(kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+              
+              if [ -z "$RELEASE_NAME" ]; then
+                echo "⚠️  Found orphaned $resource_type/$resource_name (missing release annotation)"
+                kubectl delete "$resource_type" "$resource_name" -n "$MONITORING_NS" --ignore-not-found=true || true
+                echo "✓ Deleted orphaned $resource_type/$resource_name"
+                return 0
+              fi
             fi
-          fi
+            return 1
+          }
+          
+          # Clean up ALL prometheus-* ServiceAccounts (common issue with kube-state-metrics, node-exporter, etc.)
+          echo "Scanning for orphaned prometheus-* ServiceAccounts..."
+          ORPHANED_COUNT=0
+          for sa_name in $(kubectl get serviceaccounts -n "$MONITORING_NS" -o name 2>/dev/null | grep "prometheus-" | sed 's|serviceaccount/||'); do
+            if check_and_clean_resource serviceaccount "$sa_name"; then
+              ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
+            fi
+          done
           
           # Clean up other common orphaned resources
+          echo "Scanning for orphaned prometheus-* ConfigMaps, Secrets, and Deployments..."
           for resource_type in configmap secret deployment; do
-            for resource_name in prometheus-grafana; do
-              if kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" >/dev/null 2>&1; then
-                HELM_MANAGED=$(kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
-                if [ "$HELM_MANAGED" != "Helm" ]; then
-                  echo "⚠️  Found orphaned $resource_type/$resource_name"
-                  kubectl delete "$resource_type" "$resource_name" -n "$MONITORING_NS" || true
-                  echo "✓ Deleted orphaned $resource_type/$resource_name"
-                fi
+            for resource_name in $(kubectl get "$resource_type" -n "$MONITORING_NS" -o name 2>/dev/null | grep "prometheus-" | sed "s|$resource_type/||"); do
+              if check_and_clean_resource "$resource_type" "$resource_name"; then
+                ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
               fi
             done
           done
+          
+          if [ $ORPHANED_COUNT -gt 0 ]; then
+            echo "✓ Cleaned up $ORPHANED_COUNT orphaned resource(s)"
+          else
+            echo "✓ No orphaned resources found"
+          fi
           
           echo "✅ Orphaned resource cleanup complete"
           echo "::endgroup::"
