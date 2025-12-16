@@ -532,71 +532,80 @@ jobs:
           echo "✅ cert-manager check/install complete"
           echo "::endgroup::"
 
-      - name: Clean up orphaned monitoring resources (if any)
+      - name: Clean up orphaned monitoring resources (aggressive)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
           echo "::group::Cleaning orphaned monitoring resources"
-          
-          # Clean up ServiceAccount and other resources that may not have Helm labels
-          # This prevents "cannot be imported into the current release" errors
-          
           MONITORING_NS="${MONITORING_NAMESPACE:-infra}"
-          
-          echo "Checking for orphaned monitoring resources in namespace: $MONITORING_NS"
-          echo "This includes resources with Helm labels but missing release annotations"
 
-          # Clean up failed/orphaned pods across ALL namespaces first to avoid adoption conflicts
+          # 1) Clean up failed/orphaned pods cluster-wide (forced)
           if [ -f ./scripts/tools/cleanup-failed-pods.sh ]; then
             chmod +x ./scripts/tools/cleanup-failed-pods.sh
             ./scripts/tools/cleanup-failed-pods.sh || echo "⚠️  Pod cleanup completed with warnings"
           else
             echo "⚠️  cleanup-failed-pods.sh not found, skipping pod cleanup"
           fi
-          
-          # Function to check if resource has proper Helm release annotation
+
+          # Helper: force delete resource, scale to zero if needed to unblock deletion
+          force_delete_resource() {
+            local type=$1
+            local name=$2
+            local ns=$3
+
+            # For deployments/statefulsets, scale to zero first to release pods
+            if [ "$type" = "deployment" ] || [ "$type" = "statefulset" ]; then
+              kubectl scale "$type" "$name" -n "$ns" --replicas=0 2>/dev/null || true
+              # Patch to remove finalizers if any
+              kubectl patch "$type" "$name" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            fi
+
+            # Patch finalizers generically, then force delete
+            kubectl patch "$type" "$name" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            kubectl delete "$type" "$name" -n "$ns" --grace-period=0 --force --ignore-not-found=true 2>/dev/null || true
+          }
+
+          # Helper: check release annotation; if missing, force delete
           check_and_clean_resource() {
             local resource_type=$1
             local resource_name=$2
-            
+
             if kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" >/dev/null 2>&1; then
-              # Check for release-name annotation (required for Helm adoption)
-              RELEASE_NAME=$(kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-              
-              if [ -z "$RELEASE_NAME" ]; then
-                echo "⚠️  Found orphaned $resource_type/$resource_name (missing release annotation)"
-                kubectl delete "$resource_type" "$resource_name" -n "$MONITORING_NS" --ignore-not-found=true || true
-                echo "✓ Deleted orphaned $resource_type/$resource_name"
+              local release_name
+              release_name=$(kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+              if [ -z "$release_name" ]; then
+                echo "⚠️  Orphaned $resource_type/$resource_name (missing release annotation) - force deleting"
+                force_delete_resource "$resource_type" "$resource_name" "$MONITORING_NS"
                 return 0
               fi
             fi
             return 1
           }
-          
-          # Clean up ALL prometheus-* ServiceAccounts (common issue with kube-state-metrics, node-exporter, etc.)
-          echo "Scanning for orphaned prometheus-* ServiceAccounts..."
+
+          echo "Checking for orphaned monitoring resources in namespace: $MONITORING_NS"
           ORPHANED_COUNT=0
+
+          # 2) ServiceAccounts (common offenders: kube-state-metrics, node-exporter, grafana, etc.)
           for sa_name in $(kubectl get serviceaccounts -n "$MONITORING_NS" -o name 2>/dev/null | grep "prometheus-" | sed 's|serviceaccount/||'); do
             if check_and_clean_resource serviceaccount "$sa_name"; then
               ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
             fi
           done
-          
-          # Clean up other common orphaned resources
-          echo "Scanning for orphaned prometheus-* ConfigMaps, Secrets, and Deployments..."
-          for resource_type in configmap secret deployment; do
+
+          # 3) ConfigMaps, Secrets, Deployments, StatefulSets
+          for resource_type in configmap secret deployment statefulset; do
             for resource_name in $(kubectl get "$resource_type" -n "$MONITORING_NS" -o name 2>/dev/null | grep "prometheus-" | sed "s|$resource_type/||"); do
               if check_and_clean_resource "$resource_type" "$resource_name"; then
                 ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
               fi
             done
           done
-          
+
           if [ $ORPHANED_COUNT -gt 0 ]; then
-            echo "✓ Cleaned up $ORPHANED_COUNT orphaned resource(s)"
+            echo "✓ Cleaned up $ORPHANED_COUNT orphaned monitoring resource(s)"
           else
-            echo "✓ No orphaned resources found"
+            echo "✓ No orphaned monitoring resources found"
           fi
-          
+
           echo "✅ Orphaned resource cleanup complete"
           echo "::endgroup::"
 

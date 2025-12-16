@@ -12,19 +12,28 @@ NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[?(@.metadata.name!="kub
 # Track cleanup statistics
 TOTAL_DELETED=0
 
-# Function to delete pods by status phase
+# Function to delete pods by status phase with optional min age (in seconds)
 cleanup_by_phase() {
   local PHASE=$1
-  echo "🔍 Scanning for pods in $PHASE state..."
-  
+  local MIN_AGE=${2:-0}
+  echo "🔍 Scanning for pods in $PHASE state (min age ${MIN_AGE}s)..."
+
   for NS in $NAMESPACES; do
-    PODS=$(kubectl get pods -n "$NS" --field-selector=status.phase="$PHASE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-    
+    PODS_JSON=$(kubectl get pods -n "$NS" --field-selector=status.phase="$PHASE" -o json 2>/dev/null || true)
+    [ -z "${PODS_JSON}" ] && continue
+
+    if [ "$MIN_AGE" -gt 0 ]; then
+      PODS=$(echo "$PODS_JSON" | jq -r --argjson min_age "$MIN_AGE" '.items[] | select(.metadata.creationTimestamp != null and ((now - (.metadata.creationTimestamp | fromdateiso8601)) > $min_age)) | .metadata.name' 2>/dev/null || true)
+    else
+      PODS=$(echo "$PODS_JSON" | jq -r '.items[].metadata.name' 2>/dev/null || true)
+    fi
+
     if [ -n "$PODS" ]; then
       echo "  📦 Deleting $PHASE pods in namespace $NS: $PODS"
-      kubectl delete pods -n "$NS" --field-selector=status.phase="$PHASE" --grace-period=0 --force 2>/dev/null || true
-      COUNT=$(echo "$PODS" | wc -w)
-      TOTAL_DELETED=$((TOTAL_DELETED + COUNT))
+      for POD in $PODS; do
+        kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+        TOTAL_DELETED=$((TOTAL_DELETED + 1))
+      done
     fi
   done
 }
@@ -107,13 +116,34 @@ cleanup_duplicates() {
   done
 }
 
+# Handle pods stuck Terminating by clearing finalizers then force deleting
+cleanup_stuck_terminating() {
+  echo "🔍 Scanning for pods stuck terminating (>300s)..."
+  STUCK_PODS=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(.metadata.deletionTimestamp != null and ((now - (.metadata.deletionTimestamp | fromdateiso8601)) > 300)) | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null || true)
+
+  if [ -z "$STUCK_PODS" ]; then
+    return
+  fi
+
+  while read -r POD_LINE; do
+    [ -z "$POD_LINE" ] && continue
+    NS=$(echo "$POD_LINE" | awk '{print $1}')
+    POD=$(echo "$POD_LINE" | awk '{print $2}')
+    echo "  📦 Force deleting stuck pod $NS/$POD (clearing finalizers)"
+    kubectl patch pod "$POD" -n "$NS" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+    kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+    TOTAL_DELETED=$((TOTAL_DELETED + 1))
+  done <<< "$STUCK_PODS"
+}
+
 # Run cleanup phases
 cleanup_by_phase "Failed"
 cleanup_by_phase "Unknown"
-cleanup_by_phase "Pending" # Only if older than 10 minutes (handled by kubectl timeout)
+cleanup_by_phase "Pending" 600
 cleanup_image_errors
 cleanup_acme_solvers
 cleanup_duplicates
+cleanup_stuck_terminating
 
 # Show final pod count
 TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l)
