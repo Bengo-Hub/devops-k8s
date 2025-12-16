@@ -600,6 +600,20 @@ jobs:
             done
           done
 
+          # 4) Patch Grafana PVC metadata so Helm can adopt without failing
+          if kubectl get pvc prometheus-grafana -n "$MONITORING_NS" >/dev/null 2>&1; then
+            managed=$(kubectl get pvc prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
+            rel=$(kubectl get pvc prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+            relns=$(kubectl get pvc prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
+            if [ "$managed" != "Helm" ] || [ "$rel" != "prometheus" ] || [ "$relns" != "$MONITORING_NS" ]; then
+              echo "⚠️  Patching prometheus-grafana PVC with Helm metadata for adoption (preserves data)"
+              kubectl label pvc prometheus-grafana -n "$MONITORING_NS" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
+              kubectl annotate pvc prometheus-grafana -n "$MONITORING_NS" meta.helm.sh/release-name=prometheus meta.helm.sh/release-namespace="$MONITORING_NS" --overwrite >/dev/null 2>&1 || true
+            else
+              echo "✓ prometheus-grafana PVC already has Helm metadata"
+            fi
+          fi
+
           if [ $ORPHANED_COUNT -gt 0 ]; then
             echo "✓ Cleaned up $ORPHANED_COUNT orphaned monitoring resource(s)"
           else
