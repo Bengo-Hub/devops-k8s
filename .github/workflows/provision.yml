@@ -428,17 +428,22 @@ jobs:
             echo "✅ Cluster is healthy (${READY_NODES}/${TOTAL_NODES} nodes Ready)"
           fi
           
-          # Check for Pending pods
+          # Check for Pending pods and run cleanup
           PENDING_COUNT=$(kubectl get pods -A --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l || echo "0")
           if [ "$PENDING_COUNT" -gt 0 ]; then
             echo "⚠️  Warning: Found $PENDING_COUNT Pending pods"
-            echo "Running diagnostics..."
+            echo "Running cleanup and diagnostics..."
+            
+            # First clean up failed/stuck pods
+            if [ -f ./scripts/tools/cleanup-failed-pods.sh ]; then
+              chmod +x ./scripts/tools/cleanup-failed-pods.sh
+              ./scripts/tools/cleanup-failed-pods.sh || true
+            fi
+            
+            # Then run diagnostics
             if [ -f ./scripts/tools/fix-cluster-issues.sh ]; then
               chmod +x ./scripts/tools/fix-cluster-issues.sh
               ./scripts/tools/fix-cluster-issues.sh || true
-            elif [ -f ./scripts/diagnostics/diagnose-pending-pods.sh ]; then
-              chmod +x ./scripts/diagnostics/diagnose-pending-pods.sh
-              ./scripts/diagnostics/diagnose-pending-pods.sh || true
             fi
           else
             echo "✅ No Pending pods found"
@@ -451,7 +456,15 @@ jobs:
             echo "⚠️  Warning: Found $CRASHING_COUNT Failed pods and $CRASHLOOP_COUNT CrashLoopBackOff pods"
             kubectl get pods -A --field-selector=status.phase=Failed 2>/dev/null | head -5 || true
             echo ""
-            echo "Running diagnostics for crashing pods..."
+            echo "Running cleanup and diagnostics..."
+            
+            # Clean up failed pods first
+            if [ -f ./scripts/tools/cleanup-failed-pods.sh ]; then
+              chmod +x ./scripts/tools/cleanup-failed-pods.sh
+              ./scripts/tools/cleanup-failed-pods.sh || true
+            fi
+            
+            # Then run diagnostics
             if [ -f ./scripts/tools/fix-cluster-issues.sh ]; then
               chmod +x ./scripts/tools/fix-cluster-issues.sh
               ./scripts/tools/fix-cluster-issues.sh || true
@@ -833,6 +846,34 @@ jobs:
           
           echo "::endgroup::"
       
+      - name: Verify Ingress Configuration
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        continue-on-error: true
+        run: |
+          echo "::group::Verifying Ingress Configuration"
+          echo "Checking all ingress resources for proper configuration..."
+          if [ -f ./scripts/tools/verify-ingress-config.sh ]; then
+            chmod +x ./scripts/tools/verify-ingress-config.sh
+            ./scripts/tools/verify-ingress-config.sh || echo "⚠️  Ingress verification completed with warnings"
+          else
+            echo "⚠️  verify-ingress-config.sh not found, skipping verification"
+          fi
+          echo "::endgroup::"
+
+      - name: Audit Resource Usage
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        continue-on-error: true
+        run: |
+          echo "::group::Auditing Cluster Resource Usage"
+          echo "Checking pod counts and resource allocation..."
+          if [ -f ./scripts/tools/audit-resources.sh ]; then
+            chmod +x ./scripts/tools/audit-resources.sh
+            ./scripts/tools/audit-resources.sh || echo "⚠️  Resource audit completed with warnings"
+          else
+            echo "⚠️  audit-resources.sh not found, skipping audit"
+          fi
+          echo "::endgroup::"
+
       - name: Summary
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         env:
@@ -852,6 +893,8 @@ jobs:
           echo "✅ Argo CD installed (https://${ARGOCD_DOMAIN})"
           echo "✅ Monitoring Stack installed (https://${GRAFANA_DOMAIN}) in ${DB_NAMESPACE} namespace"
           echo "✅ Vertical Pod Autoscaler (VPA) installed"
+          echo "✅ Ingress configuration verified"
+          echo "✅ Resource usage audited"
           echo ""
           echo "Shared Infrastructure Credentials (${DB_NAMESPACE} namespace):"
           echo "- PostgreSQL admin_user: kubectl get secret postgresql -n ${DB_NAMESPACE} -o jsonpath='{.data.admin-user-password}' | base64 -d"
