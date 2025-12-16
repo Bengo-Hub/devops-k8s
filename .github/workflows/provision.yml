@@ -538,6 +538,8 @@ jobs:
           echo "::group::Cleaning orphaned monitoring resources"
           MONITORING_NS="${MONITORING_NAMESPACE:-infra}"
 
+          echo "Target monitoring namespace: ${MONITORING_NS}"
+
           # 1) Clean up failed/orphaned pods cluster-wide (forced)
           if [ -f ./scripts/tools/cleanup-failed-pods.sh ]; then
             chmod +x ./scripts/tools/cleanup-failed-pods.sh
@@ -546,92 +548,10 @@ jobs:
             echo "⚠️  cleanup-failed-pods.sh not found, skipping pod cleanup"
           fi
 
-          # Helper: force delete resource, scale to zero if needed to unblock deletion
-          force_delete_resource() {
-            local type=$1
-            local name=$2
-            local ns=$3
-
-            # For deployments/statefulsets, scale to zero first to release pods
-            if [ "$type" = "deployment" ] || [ "$type" = "statefulset" ]; then
-              kubectl scale "$type" "$name" -n "$ns" --replicas=0 2>/dev/null || true
-              # Patch to remove finalizers if any
-              kubectl patch "$type" "$name" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            fi
-
-            # Patch finalizers generically, then force delete
-            kubectl patch "$type" "$name" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
-            kubectl delete "$type" "$name" -n "$ns" --grace-period=0 --force --ignore-not-found=true 2>/dev/null || true
-          }
-
-          # Helper: check release annotation; if missing, force delete
-          check_and_clean_resource() {
-            local resource_type=$1
-            local resource_name=$2
-
-            if kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" >/dev/null 2>&1; then
-              local release_name
-              release_name=$(kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-              if [ -z "$release_name" ]; then
-                echo "⚠️  Orphaned $resource_type/$resource_name (missing release annotation) - force deleting"
-                force_delete_resource "$resource_type" "$resource_name" "$MONITORING_NS"
-                return 0
-              fi
-            fi
-            return 1
-          }
-
-          echo "Checking for orphaned monitoring resources in namespace: $MONITORING_NS"
-          ORPHANED_COUNT=0
-
-          # 2) ServiceAccounts (common offenders: kube-state-metrics, node-exporter, grafana, etc.)
-          for sa_name in $(kubectl get serviceaccounts -n "$MONITORING_NS" -o name 2>/dev/null | grep "prometheus-" | sed 's|serviceaccount/||'); do
-            if check_and_clean_resource serviceaccount "$sa_name"; then
-              ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
-            fi
-          done
-
-          # 3) ConfigMaps, Secrets, Deployments, StatefulSets
-          for resource_type in configmap secret deployment statefulset; do
-            for resource_name in $(kubectl get "$resource_type" -n "$MONITORING_NS" -o name 2>/dev/null | grep "prometheus-" | sed "s|$resource_type/||"); do
-              if check_and_clean_resource "$resource_type" "$resource_name"; then
-                ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
-              fi
-            done
-          done
-
-          # 4) Patch Grafana PVC metadata so Helm can adopt without failing
-          if kubectl get pvc prometheus-grafana -n "$MONITORING_NS" >/dev/null 2>&1; then
-            managed=$(kubectl get pvc prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
-            rel=$(kubectl get pvc prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-            relns=$(kubectl get pvc prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-            if [ "$managed" != "Helm" ] || [ "$rel" != "prometheus" ] || [ "$relns" != "$MONITORING_NS" ]; then
-              echo "⚠️  Patching prometheus-grafana PVC with Helm metadata for adoption (preserves data)"
-              kubectl label pvc prometheus-grafana -n "$MONITORING_NS" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
-              kubectl annotate pvc prometheus-grafana -n "$MONITORING_NS" meta.helm.sh/release-name=prometheus meta.helm.sh/release-namespace="$MONITORING_NS" --overwrite >/dev/null 2>&1 || true
-            else
-              echo "✓ prometheus-grafana PVC already has Helm metadata"
-            fi
-          fi
-
-          # 5) Patch cluster-scoped resources (ClusterRole, ClusterRoleBinding)
-          for cluster_resource in clusterrole clusterrolebinding; do
-            for res_name in $(kubectl get "$cluster_resource" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep "prometheus-grafana" || echo ""); do
-              managed=$(kubectl get "$cluster_resource" "$res_name" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
-              rel=$(kubectl get "$cluster_resource" "$res_name" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-              relns=$(kubectl get "$cluster_resource" "$res_name" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
-              if [ "$managed" != "Helm" ] || [ "$rel" != "prometheus" ] || [ "$relns" != "$MONITORING_NS" ]; then
-                echo "⚠️  Patching $cluster_resource/$res_name with Helm metadata for adoption"
-                kubectl label "$cluster_resource" "$res_name" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
-                kubectl annotate "$cluster_resource" "$res_name" meta.helm.sh/release-name=prometheus meta.helm.sh/release-namespace="$MONITORING_NS" --overwrite >/dev/null 2>&1 || true
-              fi
-            done
-          done
-
-          if [ $ORPHANED_COUNT -gt 0 ]; then
-            echo "✓ Cleaned up $ORPHANED_COUNT orphaned monitoring resource(s)"
-          else
-            echo "✓ No orphaned monitoring resources found"
+          # 2) Remove obsolete monitoring namespace if present (monitoring stack is deployed to infra)
+          if [ "${MONITORING_NS}" != "monitoring" ] && kubectl get ns monitoring >/dev/null 2>&1; then
+            echo "⚠️  Obsolete namespace 'monitoring' detected - deleting to prevent stale resources"
+            kubectl delete ns monitoring --wait=false 2>/dev/null || true
           fi
 
           echo "✅ Orphaned resource cleanup complete"
@@ -646,9 +566,9 @@ jobs:
           ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
         run: |
           echo "::group::Installing Monitoring Stack"
-          echo "Installing Prometheus + Grafana monitoring stack"
-          echo "This installs Prometheus Operator CRDs (ServiceMonitor, etc.) required by databases"
-          echo "This step uses helm upgrade --install (idempotent) and will skip if already installed"
+          echo "Installing Prometheus + Grafana monitoring stack (infra namespace)"
+          echo "This step ensures Prometheus Operator CRDs (ServiceMonitor, etc.) exist before databases install"
+          echo "Primary deploy mode is ArgoCD Application (apps/monitoring/app.yaml); Helm CLI is fallback if ArgoCD is unavailable"
           echo "Note: This may take 10-15 minutes for first installation"
           
           # Run monitoring installation script
@@ -656,15 +576,16 @@ jobs:
           ./scripts/monitoring/install-monitoring.sh || {
             echo "⚠️  Monitoring installation encountered issues"
             echo "Checking for common problems..."
-            
-            # Check for stuck Helm operations
-            if helm status prometheus -n "${MONITORING_NAMESPACE}" 2>/dev/null | grep -q "STATUS: pending"; then
-              echo "⚠️  Detected stuck Helm operation. Attempting fix..."
-              if [ -f ./scripts/monitoring/fix-stuck-helm-monitoring.sh ]; then
-                chmod +x ./scripts/monitoring/fix-stuck-helm-monitoring.sh
-                ./scripts/monitoring/fix-stuck-helm-monitoring.sh || true
-              fi
+
+            # Surface ArgoCD application status (if ArgoCD is installed)
+            if kubectl get ns argocd >/dev/null 2>&1; then
+              echo "ArgoCD Application status:"
+              kubectl get application -n argocd prometheus -o wide 2>/dev/null || true
+              kubectl describe application -n argocd prometheus 2>/dev/null | tail -120 || true
             fi
+
+            echo "Workload status in ${MONITORING_NAMESPACE}:"
+            kubectl get pods,svc,ingress -n "${MONITORING_NAMESPACE}" 2>/dev/null || true
             
             # Run cluster diagnostics
             if [ -f ./scripts/tools/fix-cluster-issues.sh ]; then

@@ -1,10 +1,12 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -euo pipefail
 
 # Production-ready Monitoring Stack Installation
 # Installs Prometheus, Grafana, Alertmanager with production defaults
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Repo root
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 # MANIFESTS_DIR is at repo root, not under scripts
 MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
@@ -12,6 +14,18 @@ source "${SCRIPT_DIR}/../tools/common.sh"
 # Default production configuration
 GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-infra}
+
+# Deployment strategy:
+# - auto (default): if ArgoCD is available, deploy via `apps/monitoring/app.yaml` (GitOps-safe); otherwise use Helm CLI.
+# - argocd: force ArgoCD Application deployment
+# - helm: force Helm CLI deployment
+MONITORING_DEPLOY_MODE=${MONITORING_DEPLOY_MODE:-auto}
+
+# When using ArgoCD mode, we pre-apply CRDs from the same chart version to ensure CRDs exist before other installs.
+KUBE_PROM_STACK_VERSION=${KUBE_PROM_STACK_VERSION:-79.10.0}
+
+# Cleanup: if the old `monitoring` namespace exists but infra is used, delete it.
+DELETE_OBSOLETE_MONITORING_NAMESPACE=${DELETE_OBSOLETE_MONITORING_NAMESPACE:-true}
 
 log_section "Installing Prometheus + Grafana monitoring stack (Production)"
 log_info "Grafana Domain: ${GRAFANA_DOMAIN}"
@@ -36,6 +50,83 @@ add_helm_repo "prometheus-community" "https://prometheus-community.github.io/hel
 
 # Create infra namespace (monitoring is deployed here as shared infrastructure)
 ensure_namespace "${MONITORING_NAMESPACE}"
+
+argocd_available() {
+  kubectl get ns argocd >/dev/null 2>&1 && kubectl get crd applications.argoproj.io >/dev/null 2>&1
+}
+
+cleanup_obsolete_monitoring_namespace() {
+  if [ "${DELETE_OBSOLETE_MONITORING_NAMESPACE}" != "true" ]; then
+    return 0
+  fi
+
+  if [ "${MONITORING_NAMESPACE}" = "monitoring" ]; then
+    return 0
+  fi
+
+  if kubectl get ns monitoring >/dev/null 2>&1; then
+    log_warning "Obsolete namespace 'monitoring' exists; deleting it (monitoring stack is now in '${MONITORING_NAMESPACE}')"
+    kubectl delete ns monitoring --wait=false >/dev/null 2>&1 || true
+  fi
+}
+
+apply_kube_prometheus_crds() {
+  log_info "Ensuring Prometheus Operator CRDs are installed (chart ${KUBE_PROM_STACK_VERSION})"
+  # Use ArgoCD's field manager to avoid server-side apply conflicts with argocd-application-controller.
+  helm show crds prometheus-community/kube-prometheus-stack --version "${KUBE_PROM_STACK_VERSION}" | \
+    kubectl apply --server-side --force-conflicts --field-manager=argocd-application-controller -f - >/dev/null
+}
+
+deploy_via_argocd_app() {
+  local app_manifest="${REPO_ROOT}/apps/monitoring/app.yaml"
+  if [ ! -f "${app_manifest}" ]; then
+    log_error "ArgoCD monitoring app manifest not found: ${app_manifest}"
+    return 1
+  fi
+
+  log_info "Applying ArgoCD monitoring Application: ${app_manifest}"
+  kubectl apply -f "${app_manifest}" >/dev/null
+
+  # Wait for key workloads to appear and become ready in the target namespace.
+  local ns="${MONITORING_NAMESPACE}"
+  local deadline=$((SECONDS + 900))
+
+  log_info "Waiting for Prometheus Operator deployment to appear in ${ns}..."
+  until kubectl -n "${ns}" get deployment prometheus-kube-prometheus-operator >/dev/null 2>&1; do
+    if [ $SECONDS -gt $deadline ]; then
+      log_error "Timed out waiting for prometheus-kube-prometheus-operator deployment to be created in ${ns}"
+      return 1
+    fi
+    sleep 5
+  done
+
+  log_info "Waiting for Prometheus Operator deployment rollout in ${ns}..."
+  kubectl -n "${ns}" rollout status deployment/prometheus-kube-prometheus-operator --timeout=10m
+
+  log_info "Waiting for Grafana deployment rollout in ${ns} (if enabled)..."
+  if kubectl -n "${ns}" get deployment prometheus-grafana >/dev/null 2>&1; then
+    kubectl -n "${ns}" rollout status deployment/prometheus-grafana --timeout=10m
+  fi
+
+  log_success "Monitoring stack applied via ArgoCD in ${ns}"
+  return 0
+}
+
+if [ "${MONITORING_DEPLOY_MODE}" = "auto" ]; then
+  if argocd_available; then
+    MONITORING_DEPLOY_MODE="argocd"
+  else
+    MONITORING_DEPLOY_MODE="helm"
+  fi
+fi
+
+if [ "${MONITORING_DEPLOY_MODE}" = "argocd" ]; then
+  log_info "Deploy mode: ArgoCD (apps/monitoring/app.yaml)"
+  cleanup_obsolete_monitoring_namespace
+  apply_kube_prometheus_crds
+  deploy_via_argocd_app
+  exit $?
+fi
 
 # Idempotency/force flags
 FORCE_MONITORING_INSTALL=${FORCE_MONITORING_INSTALL:-${FORCE_INSTALL:-false}}
@@ -226,16 +317,16 @@ fix_stuck_helm() {
     local release_name=${1:-prometheus}
     local namespace=${2:-${MONITORING_NAMESPACE}}
 
-    echo -e "${YELLOW}🔧 Attempting to fix stuck Helm operation for ${release_name}...${NC}"
+    echo -e "${YELLOW}ðŸ”§ Attempting to fix stuck Helm operation for ${release_name}...${NC}"
 
     # Check for stuck operations
     local status=$(helm status ${release_name} -n ${namespace} 2>/dev/null | grep "STATUS:" | awk '{print $2}')
     
     if [[ "$status" == "pending-upgrade" || "$status" == "pending-install" || "$status" == "pending-rollback" ]]; then
-        echo -e "${YELLOW}📊 Found stuck operation (status: $status), attempting cleanup...${NC}"
+        echo -e "${YELLOW}ðŸ“Š Found stuck operation (status: $status), attempting cleanup...${NC}"
 
         # CRITICAL: Delete the Helm secret that's locking the operation
-        echo -e "${YELLOW}🔓 Unlocking Helm release by removing pending secret...${NC}"
+        echo -e "${YELLOW}ðŸ”“ Unlocking Helm release by removing pending secret...${NC}"
         
         # Find and delete the pending-upgrade secret
         PENDING_SECRETS=$(kubectl -n ${namespace} get secrets -l "owner=helm,status=pending-upgrade,name=${release_name}" -o name 2>/dev/null || true)
@@ -255,32 +346,32 @@ fix_stuck_helm() {
         fi
 
         # Force delete problematic pods
-        echo -e "${YELLOW}🗑️  Force deleting stuck pods...${NC}"
+        echo -e "${YELLOW}ðŸ—‘ï¸  Force deleting stuck pods...${NC}"
         kubectl delete pods -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --force --grace-period=0 2>/dev/null || true
         
         # Wait for cleanup
         sleep 10
 
         # Find the last successfully deployed revision
-        echo -e "${YELLOW}📜 Checking Helm history...${NC}"
+        echo -e "${YELLOW}ðŸ“œ Checking Helm history...${NC}"
         if helm history ${release_name} -n ${namespace} >/dev/null 2>&1; then
             # Get last deployed (successful) revision
             LAST_DEPLOYED=$(helm history ${release_name} -n ${namespace} --max 100 -o json 2>/dev/null | jq -r '.[] | select(.status == "deployed") | .revision' | tail -1)
             
             if [ -n "$LAST_DEPLOYED" ] && [ "$LAST_DEPLOYED" != "null" ]; then
-                echo -e "${YELLOW}📉 Rolling back to last deployed revision: $LAST_DEPLOYED...${NC}"
+                echo -e "${YELLOW}ðŸ“‰ Rolling back to last deployed revision: $LAST_DEPLOYED...${NC}"
                 helm rollback ${release_name} $LAST_DEPLOYED -n ${namespace} --force --wait --timeout=5m 2>/dev/null || {
-                    echo -e "${YELLOW}⚠️  Rollback command failed, but lock is removed. Proceeding...${NC}"
+                    echo -e "${YELLOW}âš ï¸  Rollback command failed, but lock is removed. Proceeding...${NC}"
                 }
                 sleep 15
                 return 0
             fi
         fi
 
-        echo -e "${GREEN}✅ Helm lock removed. Ready for fresh install/upgrade${NC}"
+        echo -e "${GREEN}âœ… Helm lock removed. Ready for fresh install/upgrade${NC}"
         return 0
     else
-        echo -e "${GREEN}✓ No stuck operation detected (status: ${status})${NC}"
+        echo -e "${GREEN}âœ“ No stuck operation detected (status: ${status})${NC}"
         return 0
     fi
 }
@@ -301,7 +392,7 @@ if [ -n "$ALL_INGRESSES" ]; then
   for ingress_name in $ALL_INGRESSES; do
     # Skip cert-manager ACME solver ingresses (they're temporary and should be ignored)
     if echo "$ingress_name" | grep -q "^cm-acme-http-solver-"; then
-      echo -e "${BLUE}ℹ️  Ignoring cert-manager ACME solver ingress: $ingress_name (temporary, used for TLS validation)${NC}"
+      echo -e "${BLUE}â„¹ï¸  Ignoring cert-manager ACME solver ingress: $ingress_name (temporary, used for TLS validation)${NC}"
       continue
     fi
     
@@ -312,18 +403,18 @@ if [ -n "$ALL_INGRESSES" ]; then
     # Check if it's managed by the prometheus Helm release
     if echo "$INGRESS_LABELS" | grep -q "app.kubernetes.io/instance=prometheus\|app.kubernetes.io/managed-by=Helm"; then
       if helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Ingress $ingress_name is managed by Helm release 'prometheus' - keeping it${NC}"
+        echo -e "${GREEN}âœ“ Ingress $ingress_name is managed by Helm release 'prometheus' - keeping it${NC}"
         continue
       else
-        echo -e "${YELLOW}⚠️  Ingress $ingress_name has Helm labels but release doesn't exist - will delete${NC}"
+        echo -e "${YELLOW}âš ï¸  Ingress $ingress_name has Helm labels but release doesn't exist - will delete${NC}"
         CONFLICTING_INGRESSES="$CONFLICTING_INGRESSES $ingress_name"
       fi
     # Check if it's from monitoring/grafana but not managed by Helm
     elif echo "$INGRESS_LABELS" | grep -q "grafana\|prometheus\|monitoring"; then
-      echo -e "${YELLOW}⚠️  Found orphaned monitoring ingress: $ingress_name (not managed by Helm)${NC}"
+      echo -e "${YELLOW}âš ï¸  Found orphaned monitoring ingress: $ingress_name (not managed by Helm)${NC}"
       CONFLICTING_INGRESSES="$CONFLICTING_INGRESSES $ingress_name"
     else
-      echo -e "${YELLOW}⚠️  Warning: Ingress $ingress_name exists but doesn't appear to be from monitoring stack${NC}"
+      echo -e "${YELLOW}âš ï¸  Warning: Ingress $ingress_name exists but doesn't appear to be from monitoring stack${NC}"
       echo -e "${YELLOW}    Skipping deletion - may be managed by another service${NC}"
     fi
   done
@@ -336,15 +427,15 @@ if [ -n "$ALL_INGRESSES" ]; then
       kubectl delete ingress "$ingress_name" -n "${MONITORING_NAMESPACE}" --wait=false 2>/dev/null || true
     done
     sleep 5
-    echo -e "${GREEN}✓ Conflicting ingresses cleaned up${NC}"
+    echo -e "${GREEN}âœ“ Conflicting ingresses cleaned up${NC}"
   else
-    echo -e "${GREEN}✓ No conflicting ingresses found (cert-manager solver ingresses ignored)${NC}"
+    echo -e "${GREEN}âœ“ No conflicting ingresses found (cert-manager solver ingresses ignored)${NC}"
   fi
 fi
 
 # Check for stuck operations first
 if helm status prometheus -n "${MONITORING_NAMESPACE}" 2>/dev/null | grep -q "STATUS: pending-upgrade"; then
-    echo -e "${YELLOW}⚠️  Detected stuck Helm operation. Running fix...${NC}"
+    echo -e "${YELLOW}âš ï¸  Detected stuck Helm operation. Running fix...${NC}"
     fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
 fi
 
@@ -365,18 +456,18 @@ set -e
 
 # Check if Helm succeeded
 if [ $HELM_EXIT_CODE -eq 0 ]; then
-  echo -e "${GREEN}✓ kube-prometheus-stack installed successfully${NC}"
+  echo -e "${GREEN}âœ“ kube-prometheus-stack installed successfully${NC}"
   
   # Verify ingress was created (wait a bit for resources to settle)
   echo -e "${BLUE}Verifying Grafana ingress was created...${NC}"
   sleep 5
   if ! kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
-    echo -e "${YELLOW}⚠️  Grafana ingress not found after Helm upgrade. Checking Helm values...${NC}"
+    echo -e "${YELLOW}âš ï¸  Grafana ingress not found after Helm upgrade. Checking Helm values...${NC}"
     
     # Check if ingress is enabled in Helm values
     INGRESS_ENABLED=$(helm -n "${MONITORING_NAMESPACE}" get values prometheus -o json 2>/dev/null | jq -r '.grafana.ingress.enabled // "true"' || echo "true")
     if [ "$INGRESS_ENABLED" != "true" ]; then
-      echo -e "${YELLOW}⚠️  Ingress is disabled in Helm values. Enabling it...${NC}"
+      echo -e "${YELLOW}âš ï¸  Ingress is disabled in Helm values. Enabling it...${NC}"
       helm upgrade prometheus prometheus-community/kube-prometheus-stack \
         -n "${MONITORING_NAMESPACE}" \
         -f "${TEMP_VALUES}" \
@@ -391,13 +482,13 @@ if [ $HELM_EXIT_CODE -eq 0 ]; then
       echo -e "${BLUE}Ingress is enabled in values. Waiting for it to be created...${NC}"
       sleep 10
       if kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Grafana ingress now exists${NC}"
+        echo -e "${GREEN}âœ“ Grafana ingress now exists${NC}"
       else
-        echo -e "${YELLOW}⚠️  Ingress still not found. This may be normal if Grafana service is not ready yet.${NC}"
+        echo -e "${YELLOW}âš ï¸  Ingress still not found. This may be normal if Grafana service is not ready yet.${NC}"
       fi
     fi
   else
-    echo -e "${GREEN}✓ Grafana ingress exists${NC}"
+    echo -e "${GREEN}âœ“ Grafana ingress exists${NC}"
   fi
 else
   echo -e "${RED}Installation failed with exit code $HELM_EXIT_CODE${NC}"
@@ -414,11 +505,11 @@ else
 
   # Check for common failure patterns and attempt fixes
   if grep -q "another operation.*in progress" /tmp/helm-monitoring-install.log 2>/dev/null; then
-    echo -e "${YELLOW}🔧 Stuck operation detected during installation. Running fix...${NC}"
+    echo -e "${YELLOW}ðŸ”§ Stuck operation detected during installation. Running fix...${NC}"
     fix_stuck_helm prometheus "${MONITORING_NAMESPACE}"
-    echo -e "${BLUE}🔄 Please retry the installation after cleanup completes${NC}"
+    echo -e "${BLUE}ðŸ”„ Please retry the installation after cleanup completes${NC}"
   elif grep -q "host.*is already defined in ingress" /tmp/helm-monitoring-install.log 2>/dev/null; then
-    echo -e "${YELLOW}🔧 Ingress conflict detected. Cleaning up conflicting ingresses...${NC}"
+    echo -e "${YELLOW}ðŸ”§ Ingress conflict detected. Cleaning up conflicting ingresses...${NC}"
     
     # Extract the conflicting ingress name from the error
     CONFLICTING_INGRESS=$(grep "is already defined in ingress" /tmp/helm-monitoring-install.log | sed -n 's/.*ingress \([^ ]*\).*/\1/p' | head -1)
@@ -437,7 +528,7 @@ else
       
       sleep 10
       
-      echo -e "${BLUE}🔄 Retrying installation after ingress cleanup...${NC}"
+      echo -e "${BLUE}ðŸ”„ Retrying installation after ingress cleanup...${NC}"
       helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
         -n "${MONITORING_NAMESPACE}" \
         -f "${TEMP_VALUES}" \
@@ -447,7 +538,7 @@ else
       
       RETRY_EXIT=$?
       if [ $RETRY_EXIT -eq 0 ]; then
-        echo -e "${GREEN}✓ Installation succeeded after ingress cleanup!${NC}"
+        echo -e "${GREEN}âœ“ Installation succeeded after ingress cleanup!${NC}"
         exit 0
       else
         echo -e "${RED}Installation still failed after retry. Check logs.${NC}"
@@ -466,7 +557,7 @@ echo -e "${YELLOW}Applying ERP-specific alerts...${NC}"
 # Replace namespace in manifest before applying
 if [ -f "${MANIFESTS_DIR}/monitoring/erp-alerts.yaml" ]; then
   sed "s/namespace: monitoring/namespace: ${MONITORING_NAMESPACE}/g" "${MANIFESTS_DIR}/monitoring/erp-alerts.yaml" | kubectl apply -f -
-  echo -e "${GREEN}✓ ERP alerts configured in ${MONITORING_NAMESPACE} namespace${NC}"
+  echo -e "${GREEN}âœ“ ERP alerts configured in ${MONITORING_NAMESPACE} namespace${NC}"
 else
   log_warning "erp-alerts.yaml not found, skipping..."
 fi
@@ -478,20 +569,20 @@ CERT_READY=$(kubectl get certificate -n "${MONITORING_NAMESPACE}" grafana-tls -o
 CERT_SECRET=$(kubectl get secret -n "${MONITORING_NAMESPACE}" grafana-tls -o jsonpath='{.data.tls\.crt}' 2>/dev/null || echo "")
 
 if [ "$CERT_READY" = "True" ] && [ -n "$CERT_SECRET" ]; then
-  echo -e "${GREEN}✓ TLS certificate is ready${NC}"
+  echo -e "${GREEN}âœ“ TLS certificate is ready${NC}"
   CERT_EXPIRY=$(kubectl get certificate -n "${MONITORING_NAMESPACE}" grafana-tls -o jsonpath='{.status.notAfter}' 2>/dev/null || echo "")
   if [ -n "$CERT_EXPIRY" ]; then
     echo -e "${BLUE}  Certificate expires: ${CERT_EXPIRY}${NC}"
   fi
 elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
-  echo -e "${YELLOW}⚠️  TLS certificate not ready yet${NC}"
+  echo -e "${YELLOW}âš ï¸  TLS certificate not ready yet${NC}"
   echo -e "${BLUE}Checking cert-manager status...${NC}"
   
   # Check cert-manager ClusterIssuer
   if kubectl get clusterissuer letsencrypt-prod >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ cert-manager ClusterIssuer 'letsencrypt-prod' exists${NC}"
+    echo -e "${GREEN}âœ“ cert-manager ClusterIssuer 'letsencrypt-prod' exists${NC}"
   else
-    echo -e "${RED}✗ cert-manager ClusterIssuer 'letsencrypt-prod' not found${NC}"
+    echo -e "${RED}âœ— cert-manager ClusterIssuer 'letsencrypt-prod' not found${NC}"
     echo -e "${YELLOW}  Run: ./scripts/infrastructure/install-cert-manager.sh${NC}"
   fi
   
@@ -500,7 +591,7 @@ elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
     echo -e "${BLUE}Certificate resource exists. Checking status...${NC}"
     kubectl describe certificate -n "${MONITORING_NAMESPACE}" grafana-tls | grep -A 5 "Status\|Events" || true
   else
-    echo -e "${YELLOW}⚠️  Certificate resource 'grafana-tls' not found in ${MONITORING_NAMESPACE} namespace${NC}"
+    echo -e "${YELLOW}âš ï¸  Certificate resource 'grafana-tls' not found in ${MONITORING_NAMESPACE} namespace${NC}"
     echo -e "${BLUE}  This should be created automatically by cert-manager when the ingress is created${NC}"
   fi
   
@@ -513,44 +604,44 @@ elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
   VPS_IP=${VPS_IP:-$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "UNKNOWN")}
   DNS_RESOLVED=$(dig +short "${GRAFANA_DOMAIN}" 2>/dev/null | head -1 || echo "")
   if [ -n "$DNS_RESOLVED" ]; then
-    echo -e "${GREEN}✓ DNS resolves to: ${DNS_RESOLVED}${NC}"
+    echo -e "${GREEN}âœ“ DNS resolves to: ${DNS_RESOLVED}${NC}"
     if [ "$DNS_RESOLVED" != "$VPS_IP" ] && [ "$VPS_IP" != "UNKNOWN" ]; then
-      echo -e "${RED}✗ DNS points to ${DNS_RESOLVED}, but VPS IP is ${VPS_IP}${NC}"
-      echo -e "${YELLOW}  Action: Update DNS A record to point ${GRAFANA_DOMAIN} → ${VPS_IP}${NC}"
+      echo -e "${RED}âœ— DNS points to ${DNS_RESOLVED}, but VPS IP is ${VPS_IP}${NC}"
+      echo -e "${YELLOW}  Action: Update DNS A record to point ${GRAFANA_DOMAIN} â†’ ${VPS_IP}${NC}"
     fi
   else
-    echo -e "${RED}✗ DNS does not resolve for ${GRAFANA_DOMAIN}${NC}"
-    echo -e "${YELLOW}  Action: Create DNS A record: ${GRAFANA_DOMAIN} → ${VPS_IP}${NC}"
+    echo -e "${RED}âœ— DNS does not resolve for ${GRAFANA_DOMAIN}${NC}"
+    echo -e "${YELLOW}  Action: Create DNS A record: ${GRAFANA_DOMAIN} â†’ ${VPS_IP}${NC}"
   fi
   
   # Check ingress controller
   echo -e "${BLUE}2. Checking ingress controller...${NC}"
   INGRESS_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
   if [ "$INGRESS_PODS" -ge 1 ]; then
-    echo -e "${GREEN}✓ Ingress controller is running (${INGRESS_PODS} pod(s))${NC}"
+    echo -e "${GREEN}âœ“ Ingress controller is running (${INGRESS_PODS} pod(s))${NC}"
     INGRESS_HOSTNET=$(kubectl get pod -n ingress-nginx -l app.kubernetes.io/component=controller -o jsonpath='{.items[0].spec.hostNetwork}' 2>/dev/null || echo "false")
     if [ "$INGRESS_HOSTNET" = "true" ]; then
-      echo -e "${GREEN}✓ Ingress controller using hostNetwork (ports 80/443 bound to node)${NC}"
+      echo -e "${GREEN}âœ“ Ingress controller using hostNetwork (ports 80/443 bound to node)${NC}"
     else
-      echo -e "${YELLOW}⚠️  Ingress controller not using hostNetwork - may need NodePort/LoadBalancer${NC}"
+      echo -e "${YELLOW}âš ï¸  Ingress controller not using hostNetwork - may need NodePort/LoadBalancer${NC}"
     fi
   else
-    echo -e "${RED}✗ Ingress controller not running${NC}"
+    echo -e "${RED}âœ— Ingress controller not running${NC}"
   fi
   
   # Check ingress resource
   echo -e "${BLUE}3. Checking Grafana ingress...${NC}"
   if kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ Grafana ingress exists${NC}"
+    echo -e "${GREEN}âœ“ Grafana ingress exists${NC}"
     INGRESS_HOST=$(kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || echo "")
     if [ "$INGRESS_HOST" = "${GRAFANA_DOMAIN}" ]; then
-      echo -e "${GREEN}✓ Ingress host matches: ${INGRESS_HOST}${NC}"
+      echo -e "${GREEN}âœ“ Ingress host matches: ${INGRESS_HOST}${NC}"
     else
-      echo -e "${YELLOW}⚠️  Ingress host mismatch: ${INGRESS_HOST} (expected: ${GRAFANA_DOMAIN})${NC}"
+      echo -e "${YELLOW}âš ï¸  Ingress host mismatch: ${INGRESS_HOST} (expected: ${GRAFANA_DOMAIN})${NC}"
     fi
   else
-    echo -e "${RED}✗ Grafana ingress not found${NC}"
-    echo -e "${YELLOW}⚠️  Ingress was deleted but Helm didn't recreate it. Checking Helm release...${NC}"
+    echo -e "${RED}âœ— Grafana ingress not found${NC}"
+    echo -e "${YELLOW}âš ï¸  Ingress was deleted but Helm didn't recreate it. Checking Helm release...${NC}"
     
     # Check if Helm release exists and try to recreate ingress
     if helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
@@ -560,14 +651,14 @@ elif [ "$CERT_READY" = "False" ] || [ "$CERT_READY" = "Unknown" ]; then
       
       # Check again
       if kubectl get ingress -n "${MONITORING_NAMESPACE}" prometheus-grafana >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Grafana ingress now exists${NC}"
+        echo -e "${GREEN}âœ“ Grafana ingress now exists${NC}"
       else
-        echo -e "${YELLOW}⚠️  Ingress still not found. This may indicate a Helm values issue.${NC}"
+        echo -e "${YELLOW}âš ï¸  Ingress still not found. This may indicate a Helm values issue.${NC}"
         echo -e "${BLUE}Checking Helm values for ingress configuration...${NC}"
         helm -n "${MONITORING_NAMESPACE}" get values prometheus | grep -A 10 "ingress:" || true
       fi
     else
-      echo -e "${RED}✗ Helm release 'prometheus' not found${NC}"
+      echo -e "${RED}âœ— Helm release 'prometheus' not found${NC}"
     fi
   fi
   
@@ -631,12 +722,12 @@ fi
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 VPS_IP=${VPS_IP:-YOUR_VPS_IP}
-echo "1. Ensure DNS: ${GRAFANA_DOMAIN} → Your VPS IP (${VPS_IP})"
+echo "1. Ensure DNS: ${GRAFANA_DOMAIN} â†’ Your VPS IP (${VPS_IP})"
 if [ "$CERT_READY" != "True" ]; then
-  echo "2. ⚠️  Wait for cert-manager to provision TLS certificate (check status above)"
+  echo "2. âš ï¸  Wait for cert-manager to provision TLS certificate (check status above)"
   echo "   Monitor: kubectl get certificate -n ${MONITORING_NAMESPACE} grafana-tls -w"
 else
-  echo "2. ✓ TLS certificate is ready"
+  echo "2. âœ“ TLS certificate is ready"
 fi
 echo "3. Visit https://${GRAFANA_DOMAIN} and login"
 echo "4. Import dashboards (315, 6417, 1860) - see docs/monitoring.md"

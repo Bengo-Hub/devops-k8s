@@ -99,7 +99,7 @@ metrics:
   enabled: true
   serviceMonitor:
     enabled: true
-    namespace: monitoring
+    namespace: infra
   resources:
     requests:
       memory: "128Mi"

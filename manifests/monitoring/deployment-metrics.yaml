@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: deployment-metrics-servicemonitor
-  namespace: monitoring
+  namespace: infra
 spec:
   selector:
     matchLabels:
@@ -12,12 +12,11 @@ spec:
     path: /metrics
     interval: 30s
     scrapeTimeout: 10s
----
 apiVersion: v1
 kind: Service
 metadata:
   name: deployment-metrics-service
-  namespace: monitoring
+  namespace: infra
   labels:
     app: deployment-metrics
 spec:
@@ -28,12 +27,11 @@ spec:
   - name: metrics
     port: 9091
     targetPort: 9091
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: deployment-metrics-collector
-  namespace: monitoring
+  namespace: infra
 spec:
   replicas: 1
   selector:
