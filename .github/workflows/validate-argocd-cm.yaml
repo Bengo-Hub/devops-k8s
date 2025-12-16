@@ -1,0 +1,20 @@
+name: Validate argocd-cm
+
+on:
+  pull_request:
+    paths:
+      - 'apps/argocd/**'
+
+jobs:
+  validate-argocd-cm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install requirements
+        run: pip install pyyaml
+      - name: Validate argocd-cm keys
+        run: python scripts/validate_argocd_cm.py apps/argocd/argocd-cm.yaml
