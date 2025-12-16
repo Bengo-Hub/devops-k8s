@@ -8,7 +8,7 @@ on:
       enable_cleanup:
         description: 'Enable cluster cleanup (DANGEROUS - deletes all data). Default: true (enabled). Set to false to disable cleanup.'
         required: false
-        default: true
+        default: false
         type: boolean
       force_reprovision:
         description: 'Force reprovisioning (cleanup + reinstall). Requires enable_cleanup=true.'
@@ -33,11 +33,11 @@ jobs:
       # Can be enabled via workflow_dispatch input or GitHub secret ENABLE_CLEANUP=true
       # Priority: workflow input > GitHub secret > default FALSE
       ENABLE_CLEANUP: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'true')
-        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'true') }}
+        && (github.event.inputs.enable_cleanup == 'true' && 'true' || 'false')
+        || (secrets.ENABLE_CLEANUP == 'true' && 'true' || 'false') }}
       FORCE_REPROVISION: ${{ github.event_name == 'workflow_dispatch'
-        && (github.event.inputs.force_reprovision == 'true' && 'true' || 'true')
-        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'true') }}
+        && (github.event.inputs.force_reprovision == 'true' && 'true' || 'false')
+        || (secrets.FORCE_REPROVISION == 'true' && 'true' || 'false') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
