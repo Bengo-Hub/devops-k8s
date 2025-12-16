@@ -10,6 +10,15 @@ service:
 # Adjusted for migration execution time (can take 5-10 minutes on first deploy)
 healthCheck:
   enabled: true
+  startup:
+    httpGet:
+      path: /api/v1/core/health/
+      port: http
+    # Allow plenty of time for cold starts, migrations, cache warmup
+    initialDelaySeconds: 90
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
   readiness:
     httpGet:
       path: /api/v1/core/health/

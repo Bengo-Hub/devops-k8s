@@ -41,6 +41,13 @@ if [ -n "$IMAGE_PULL_ERRORS" ]; then
       echo "  - $pod (image: $IMAGE)"
     fi
   done
+  
+  # Clean up these failed pods using centralized script
+  log_info "Running centralized cleanup for image pull errors..."
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+    "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
+  fi
 fi
 
 # 3. Check for missing registry-credentials secrets

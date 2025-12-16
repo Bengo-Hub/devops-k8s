@@ -43,29 +43,19 @@ if [ "$POD_HOSTNET" = "true" ]; then
     sleep 5
   fi
   
-  # Check for duplicate/crashing pods and clean them up
+  # Check for duplicate/crashing pods and clean them up using centralized script
   ALL_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | wc -l || echo "0")
   RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l || echo "0")
   CRASHING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded --no-headers 2>/dev/null | wc -l || echo "0")
   
   if [ "$ALL_PODS" -gt 1 ] || [ "$CRASHING_PODS" -gt 0 ]; then
     log_warning "Found ${ALL_PODS} total pods (${RUNNING_PODS} running, ${CRASHING_PODS} crashing)"
-    log_info "Cleaning up duplicate/crashing pods..."
+    log_info "Running centralized cleanup for ingress-nginx namespace..."
     
-    # Delete all non-running pods
-    NON_RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null || true)
-    if [ -n "$NON_RUNNING_PODS" ]; then
-      echo "$NON_RUNNING_PODS" | xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
-    fi
-    
-    # If we have multiple running pods, keep only the newest one
-    if [ "$RUNNING_PODS" -gt 1 ]; then
-      log_info "Multiple running pods detected, keeping only the newest one..."
-      OLDEST_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-      if [ -n "$OLDEST_POD" ]; then
-        log_info "Deleting older pod: $OLDEST_POD"
-        kubectl delete pod "$OLDEST_POD" -n ingress-nginx --wait=false || true
-      fi
+    # Use centralized cleanup script
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools" && pwd)"
+    if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+      "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
     fi
     
     sleep 5
@@ -119,18 +109,11 @@ kubectl patch deployment ingress-nginx-controller \
   --type='merge' \
   -p='{"spec":{"template":{"spec":{"dnsPolicy":"ClusterFirstWithHostNet"}}}}'
 
-# Clean up any duplicate pods before waiting for rollout
+# Clean up any duplicate pods before waiting for rollout using centralized script
 log_info "Cleaning up any duplicate pods..."
-# Delete all non-running pods first
-NON_RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null || true)
-if [ -n "$NON_RUNNING_PODS" ]; then
-  echo "$NON_RUNNING_PODS" | xargs -r kubectl delete -n ingress-nginx --wait=false 2>/dev/null || true
-fi
-# Also delete any duplicate replicasets that might exist
-ORPHANED_RS=$(kubectl get replicasets -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | \
-  awk '{if ($2 != $3 || $2 != $4) print $1}' || true)
-if [ -n "$ORPHANED_RS" ]; then
-  echo "$ORPHANED_RS" | xargs -r -I {} kubectl delete replicaset {} -n ingress-nginx --wait=false 2>/dev/null || true
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools" && pwd)"
+if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+  "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
 fi
 
 log_info "Waiting for ingress controller to restart..."
@@ -140,16 +123,10 @@ kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --ti
 sleep 5
 FINAL_POD_COUNT=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --no-headers 2>/dev/null | wc -l || echo "0")
 if [ "$FINAL_POD_COUNT" -gt 1 ]; then
-  log_warning "Multiple pods still exist after rollout, cleaning up duplicates..."
-  # Keep only the newest running pod
-  RUNNING_PODS=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller --field-selector=status.phase=Running --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-  if [ -n "$RUNNING_PODS" ]; then
-    POD_ARRAY=($RUNNING_PODS)
-    # Delete all but the last (newest) pod
-    for i in $(seq 0 $((${#POD_ARRAY[@]} - 2))); do
-      log_info "Deleting duplicate pod: ${POD_ARRAY[$i]}"
-      kubectl delete pod "${POD_ARRAY[$i]}" -n ingress-nginx --wait=false || true
-    done
+  log_warning "Multiple pods still exist after rollout, running centralized cleanup..."
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools" && pwd)"
+  if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+    "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
   fi
 fi
 
