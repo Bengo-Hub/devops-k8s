@@ -80,26 +80,53 @@ log_info "This may take 10-15 minutes. Logs will be streamed below..."
 # Clean up orphaned resources that may block Helm adoption
 # This runs ALWAYS (not just in cleanup mode) to prevent "cannot be imported" errors
 log_info "Checking for orphaned monitoring resources that may block Helm adoption..."
+log_info "Scanning for resources with Helm labels but missing release annotations..."
 
-# Check and clean orphaned ServiceAccount (common issue)
-if kubectl get serviceaccount prometheus-grafana -n "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
-  HELM_MANAGED=$(kubectl get serviceaccount prometheus-grafana -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
-  if [ "$HELM_MANAGED" != "Helm" ]; then
-    log_warning "Found orphaned ServiceAccount prometheus-grafana (not managed by Helm) - deleting to allow Helm adoption"
-    kubectl delete serviceaccount prometheus-grafana -n "${MONITORING_NAMESPACE}" || true
+# Function to check if resource has proper Helm release annotation
+check_and_clean_orphaned() {
+  local resource_type=$1
+  local resource_name=$2
+  
+  if kubectl get "$resource_type" "$resource_name" -n "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
+    # Check for release-name annotation (required for Helm adoption)
+    RELEASE_NAME=$(kubectl get "$resource_type" "$resource_name" -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
+    
+    if [ -z "$RELEASE_NAME" ]; then
+      log_warning "Found orphaned $resource_type/$resource_name (missing release annotation) - deleting to allow Helm adoption"
+      kubectl delete "$resource_type" "$resource_name" -n "${MONITORING_NAMESPACE}" --ignore-not-found=true || true
+      return 0
+    fi
   fi
-fi
+  return 1
+}
 
-# Check and clean other common orphaned resources
-for resource_type in configmap secret deployment; do
-  if kubectl get "$resource_type" prometheus-grafana -n "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
-    HELM_MANAGED=$(kubectl get "$resource_type" prometheus-grafana -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
-    if [ "$HELM_MANAGED" != "Helm" ]; then
-      log_warning "Found orphaned $resource_type/prometheus-grafana - deleting to allow Helm adoption"
-      kubectl delete "$resource_type" prometheus-grafana -n "${MONITORING_NAMESPACE}" || true
+ORPHANED_COUNT=0
+
+# Clean up ALL prometheus-* ServiceAccounts (kube-state-metrics, node-exporter, grafana, etc.)
+for sa_name in $(kubectl get serviceaccounts -n "${MONITORING_NAMESPACE}" -o name 2>/dev/null | grep "prometheus-" | sed 's|serviceaccount/||' || echo ""); do
+  if [ -n "$sa_name" ]; then
+    if check_and_clean_orphaned serviceaccount "$sa_name"; then
+      ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
     fi
   fi
 done
+
+# Clean up other common orphaned resources (configmaps, secrets, deployments)
+for resource_type in configmap secret deployment; do
+  for resource_name in $(kubectl get "$resource_type" -n "${MONITORING_NAMESPACE}" -o name 2>/dev/null | grep "prometheus-" | sed "s|$resource_type/||" || echo ""); do
+    if [ -n "$resource_name" ]; then
+      if check_and_clean_orphaned "$resource_type" "$resource_name"; then
+        ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
+      fi
+    fi
+  done
+done
+
+if [ $ORPHANED_COUNT -gt 0 ]; then
+  log_success "Cleaned up $ORPHANED_COUNT orphaned resource(s)"
+else
+  log_info "No orphaned resources found requiring cleanup"
+fi
 
 # Full cleanup mode: more aggressive resource removal
 if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
