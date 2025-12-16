@@ -15,25 +15,25 @@ healthCheck:
       path: /api/v1/core/health/
       port: http
     # Allow plenty of time for cold starts, migrations, cache warmup
-    initialDelaySeconds: 90
-    periodSeconds: 10
-    timeoutSeconds: 5
+    initialDelaySeconds: 300  # Increased to 5 minutes
+    periodSeconds: 30
+    timeoutSeconds: 10
     failureThreshold: 30
   readiness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 120 # Increased - migrations take time
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 10 # Increased - allow time for migrations
+    initialDelaySeconds: 600  # Increased to 10 minutes - migrations take time
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 10  # Increased - allow time for migrations
   liveness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 180 # Increased - migrations can take 5-10 min
-    periodSeconds: 30
-    timeoutSeconds: 10
+    initialDelaySeconds: 900  # Increased to 15 minutes - migrations can take 5-10 min
+    periodSeconds: 60
+    timeoutSeconds: 15
     failureThreshold: 5
 # Production resource limits for Django API with large ERP schema
 # This app requires high memory due to:
