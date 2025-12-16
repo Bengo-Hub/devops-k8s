@@ -5,11 +5,6 @@ metadata:
   labels:
     app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
-  annotations:
-    # Prevent duplicate pods by enforcing cleanup hook
-    helm.sh/hook: pre-upgrade,pre-install
-    helm.sh/hook-weight: "-5"
-    helm.sh/hook-delete-policy: before-hook-creation
 spec:
   replicas: {{ .Values.replicaCount }}
   {{- if .Values.strategy }}
