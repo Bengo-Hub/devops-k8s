@@ -120,7 +120,7 @@ kubectl cp "${SQL_FILE}" "${NAMESPACE}/${PG_POD}:/tmp/superset-setup.sql" -c pos
 
 log_info "Executing SQL script..."
 kubectl exec -n "${NAMESPACE}" -c postgresql "${PG_POD}" \
-    -- psql -U admin_user -d postgres -f /tmp/superset-setup.sql || {
+    -- psql -U admin_user -d postgres -h localhost -f /tmp/superset-setup.sql || {
     log_error "Failed to execute SQL script"
     rm -f "${SQL_FILE}"
     exit 1
