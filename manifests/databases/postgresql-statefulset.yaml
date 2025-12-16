@@ -84,6 +84,9 @@ data:
     log_timezone = 'UTC'
     log_statement = 'none'
     log_duration = off
+    
+    # Include additional configuration files
+    include_dir = '/etc/postgresql/conf.d'
 ---
 apiVersion: v1
 kind: ConfigMap
