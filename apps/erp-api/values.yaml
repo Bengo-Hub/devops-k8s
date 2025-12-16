@@ -29,10 +29,10 @@ healthCheck:
 resources:
   requests:
     cpu: 400m # Increased - priority business application
-    memory: 4Gi # Increased for migrations - run Django migrations
+    memory: 6Gi # Massive memory for migrations - run Django migrations
   limits:
     cpu: 2500m
-    memory: 8Gi # Increased for migrations - run Django migrations
+    memory: 10Gi # Massive memory for migrations - run Django migrations
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
