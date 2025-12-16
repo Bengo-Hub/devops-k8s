@@ -138,16 +138,22 @@ ensure_helm_metadata() {
   local release_name=$3
   local ns=$4
 
-  if ! kubectl get "$resource_type" "$resource_name" -n "$ns" >/dev/null 2>&1; then
+  # For cluster-scoped resources, do not use -n
+  local ns_arg=""
+  if [ -n "$ns" ] && [[ "$resource_type" != "clusterrole" && "$resource_type" != "clusterrolebinding" ]]; then
+    ns_arg="-n $ns"
+  fi
+
+  if ! kubectl get "$resource_type" "$resource_name" $ns_arg >/dev/null 2>&1; then
     return 0
   fi
 
   local managed_by
   local ann_release
   local ann_ns
-  managed_by=$(kubectl get "$resource_type" "$resource_name" -n "$ns" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || true)
-  ann_release=$(kubectl get "$resource_type" "$resource_name" -n "$ns" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
-  ann_ns=$(kubectl get "$resource_type" "$resource_name" -n "$ns" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || true)
+  managed_by=$(kubectl get "$resource_type" "$resource_name" $ns_arg -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || true)
+  ann_release=$(kubectl get "$resource_type" "$resource_name" $ns_arg -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
+  ann_ns=$(kubectl get "$resource_type" "$resource_name" $ns_arg -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || true)
 
   if [ "$managed_by" = "Helm" ] && [ "$ann_release" = "$release_name" ] && [ "$ann_ns" = "$ns" ]; then
     log_info "Existing $resource_type/$resource_name already has Helm metadata"
@@ -155,8 +161,8 @@ ensure_helm_metadata() {
   fi
 
   log_warning "Existing $resource_type/$resource_name missing Helm metadata - patching for Helm adoption (preserves data)"
-  kubectl label "$resource_type" "$resource_name" -n "$ns" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
-  kubectl annotate "$resource_type" "$resource_name" -n "$ns" meta.helm.sh/release-name="$release_name" meta.helm.sh/release-namespace="$ns" --overwrite >/dev/null 2>&1 || true
+  kubectl label "$resource_type" "$resource_name" $ns_arg app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
+  kubectl annotate "$resource_type" "$resource_name" $ns_arg meta.helm.sh/release-name="$release_name" meta.helm.sh/release-namespace="$ns" --overwrite >/dev/null 2>&1 || true
   return 0
 }
 
