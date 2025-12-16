@@ -128,6 +128,41 @@ else
   log_info "No orphaned resources found requiring cleanup"
 fi
 
+########################
+# PVC Helm adoption fix #
+########################
+# Helm fails if an existing PVC is missing Helm ownership metadata; patch instead of delete to preserve data
+ensure_helm_metadata() {
+  local resource_type=$1
+  local resource_name=$2
+  local release_name=$3
+  local ns=$4
+
+  if ! kubectl get "$resource_type" "$resource_name" -n "$ns" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local managed_by
+  local ann_release
+  local ann_ns
+  managed_by=$(kubectl get "$resource_type" "$resource_name" -n "$ns" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || true)
+  ann_release=$(kubectl get "$resource_type" "$resource_name" -n "$ns" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
+  ann_ns=$(kubectl get "$resource_type" "$resource_name" -n "$ns" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || true)
+
+  if [ "$managed_by" = "Helm" ] && [ "$ann_release" = "$release_name" ] && [ "$ann_ns" = "$ns" ]; then
+    log_info "Existing $resource_type/$resource_name already has Helm metadata"
+    return 0
+  fi
+
+  log_warning "Existing $resource_type/$resource_name missing Helm metadata - patching for Helm adoption (preserves data)"
+  kubectl label "$resource_type" "$resource_name" -n "$ns" app.kubernetes.io/managed-by=Helm --overwrite >/dev/null 2>&1 || true
+  kubectl annotate "$resource_type" "$resource_name" -n "$ns" meta.helm.sh/release-name="$release_name" meta.helm.sh/release-namespace="$ns" --overwrite >/dev/null 2>&1 || true
+  return 0
+}
+
+# Patch common PVCs before Helm install to avoid adoption failures
+ensure_helm_metadata pvc prometheus-grafana prometheus "${MONITORING_NAMESPACE}"
+
 # Full cleanup mode: more aggressive resource removal
 if is_cleanup_mode && ! helm -n "${MONITORING_NAMESPACE}" status prometheus >/dev/null 2>&1; then
   log_info "Cleanup mode active - performing full monitoring resource cleanup..."
