@@ -49,14 +49,25 @@ Scripts for installing and managing the monitoring stack.
 
 ### `tools/` - Utility Scripts
 
-Helper scripts and utilities used by other scripts.
+Helper scripts and utilities used by other scripts. Core scripts are automatically integrated into provision.yml workflow.
 
-- **`common.sh`** - Common functions and utilities (sourced by other scripts)
-- **`check-services.sh`** - Check service health
-- **`deployment-metrics.sh`** - Deployment metrics collection
-- **`deployment-rollback.sh`** - Rollback deployments
-- **`find-existing-infra.sh`** - Find existing infrastructure
-- **`vps-verification-script.sh`** - VPS verification
+**Core Library (Sourced by other scripts):**
+- **`common.sh`** - Common functions and utilities (sourced by infrastructure scripts)
+- **`database-utils.sh`** - Database setup/migration utilities (sourced by install-databases.sh)
+- **`helm-utils.sh`** - Helm release management utilities (sourced by install-nats.sh, install-databases.sh)
+- **`contabo-api.sh`** - Contabo VPS API integration (sourced by provision.yml)
+
+**Integrated into Provision Workflow:**
+- **`fix-cluster-issues.sh`** - Diagnose and fix common cluster issues (auto-run in provision.yml)
+- **`cleanup-failed-pods.sh`** - Clean up failed/stuck pods (auto-run when issues detected)
+- **`verify-ingress-config.sh`** - Verify ingress configurations (auto-run after ArgoCD install)
+- **`audit-resources.sh`** - Audit cluster resource usage and pod counts (auto-run at end of provision)
+
+**Manual/Operational Scripts:**
+- **`check-services.sh`** - Manual service health check (run ad-hoc)
+- **`deployment-metrics.sh`** - Deployment metrics collection (for manual monitoring)
+- **`deployment-rollback.sh`** - Manual rollback deployments (run when needed)
+- **`pre-deploy-health-check.sh`** - Pre-deployment health validation (for CI/CD integration)
 
 ### `diagnostics/` - Diagnostic Scripts
 
