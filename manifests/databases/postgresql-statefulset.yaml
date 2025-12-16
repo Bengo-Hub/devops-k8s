@@ -62,6 +62,14 @@ metadata:
   name: postgresql-configuration
   namespace: infra
 data:
+  postgresql.conf: |
+    # Basic PostgreSQL configuration
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # Include additional configuration files
+    include_dir = '/etc/postgresql/conf.d'
   override.conf: |
     # PostgreSQL Performance Tuning
     max_connections = 200
@@ -84,9 +92,6 @@ data:
     log_timezone = 'UTC'
     log_statement = 'none'
     log_duration = off
-    
-    # Include additional configuration files
-    include_dir = '/etc/postgresql/conf.d'
 ---
 apiVersion: v1
 kind: ConfigMap
