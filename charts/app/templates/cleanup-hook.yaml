@@ -16,12 +16,17 @@ data:
     
     echo "🧹 Running pre-deploy cleanup for {{ include "app.fullname" . }}..."
     
-    # Namespace for this app
+    # Call centralized cleanup script for this specific app
+    # Download and execute from cluster (assumes cleanup script is in a known location)
     NAMESPACE="{{ .Release.Namespace }}"
     APP_NAME="{{ include "app.fullname" . }}"
     
-    # Delete failed/error pods for this app
-    echo "🔍 Deleting failed pods in namespace $NAMESPACE for app $APP_NAME..."
+    # Inline minimal cleanup (centralized script handles cluster-wide cleanup)
+    # This hook only cleans up pods for THIS specific app to avoid permission issues
+    
+    echo "🔍 Cleaning up failed/error pods for app=$APP_NAME in namespace=$NAMESPACE..."
+    
+    # Delete failed/unknown pods
     kubectl delete pods -n "$NAMESPACE" -l "app=$APP_NAME" \
       --field-selector="status.phase=Failed" \
       --grace-period=0 --force 2>/dev/null || true
@@ -30,51 +35,24 @@ data:
       --field-selector="status.phase=Unknown" \
       --grace-period=0 --force 2>/dev/null || true
     
-    # Delete ImagePullBackOff/ErrImagePull pods for this app
-    echo "🔍 Deleting image pull error pods..."
-    PULL_ERROR_PODS=$(kubectl get pods -n "$NAMESPACE" -l "app=$APP_NAME" \
-      -o jsonpath='{.items[?(@.status.containerStatuses[*].state.waiting.reason=="ImagePullBackOff")].metadata.name}' 2>/dev/null || echo "")
+    # Delete image pull error pods
+    for REASON in ImagePullBackOff ErrImagePull; do
+      PODS=$(kubectl get pods -n "$NAMESPACE" -l "app=$APP_NAME" \
+        -o jsonpath="{.items[?(@.status.containerStatuses[*].state.waiting.reason==\"$REASON\")].metadata.name}" 2>/dev/null || echo "")
+      [ -n "$PODS" ] && kubectl delete pod -n "$NAMESPACE" $PODS --grace-period=0 --force 2>/dev/null || true
+    done
     
-    if [ -n "$PULL_ERROR_PODS" ]; then
-      for POD in $PULL_ERROR_PODS; do
-        echo "  📦 Deleting ImagePullBackOff pod: $POD"
-        kubectl delete pod -n "$NAMESPACE" "$POD" --grace-period=0 --force 2>/dev/null || true
-      done
-    fi
-    
-    ERR_IMAGE_PODS=$(kubectl get pods -n "$NAMESPACE" -l "app=$APP_NAME" \
-      -o jsonpath='{.items[?(@.status.containerStatuses[*].state.waiting.reason=="ErrImagePull")].metadata.name}' 2>/dev/null || echo "")
-    
-    if [ -n "$ERR_IMAGE_PODS" ]; then
-      for POD in $ERR_IMAGE_PODS; do
-        echo "  📦 Deleting ErrImagePull pod: $POD"
-        kubectl delete pod -n "$NAMESPACE" "$POD" --grace-period=0 --force 2>/dev/null || true
-      done
-    fi
-    
-    # Delete old replicaset pods (keep only latest RS)
-    echo "🔍 Cleaning up old replicaset pods..."
-    OLD_RS=$(kubectl get rs -n "$NAMESPACE" -l "app=$APP_NAME" \
-      --sort-by=.metadata.creationTimestamp \
+    # Delete old replicaset pods
+    OLD_RS=$(kubectl get rs -n "$NAMESPACE" -l "app=$APP_NAME" --sort-by=.metadata.creationTimestamp \
       -o jsonpath='{.items[:-1].metadata.name}' 2>/dev/null || echo "")
     
-    if [ -n "$OLD_RS" ]; then
-      for RS in $OLD_RS; do
-        PODS=$(kubectl get pods -n "$NAMESPACE" -l "app=$APP_NAME" \
-          -o jsonpath="{.items[?(@.metadata.ownerReferences[0].name==\"$RS\")].metadata.name}" 2>/dev/null || echo "")
-        
-        if [ -n "$PODS" ]; then
-          for POD in $PODS; do
-            echo "  📦 Deleting old replicaset pod: $POD"
-            kubectl delete pod -n "$NAMESPACE" "$POD" --grace-period=0 --force 2>/dev/null || true
-          done
-        fi
-      done
-    fi
+    for RS in $OLD_RS; do
+      PODS=$(kubectl get pods -n "$NAMESPACE" -o jsonpath="{.items[?(@.metadata.ownerReferences[0].name==\"$RS\")].metadata.name}" 2>/dev/null || echo "")
+      [ -n "$PODS" ] && kubectl delete pod -n "$NAMESPACE" $PODS --grace-period=0 --force 2>/dev/null || true
+    done
     
     echo "✅ Cleanup complete for {{ include "app.fullname" . }}"
     
-    # Check current pod count
     TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l)
     echo "  📊 Total cluster pods: $TOTAL_PODS"
 ---

@@ -86,11 +86,7 @@ FAILED_PODS=$(kubectl get pods -n "$NAMESPACE" -l "app=$APP_NAME" \
 
 if [[ $FAILED_PODS -gt 0 ]]; then
     log_warning "Found $FAILED_PODS failed/pending pods for $APP_NAME"
-    log_info "Cleaning up failed pods..."
-    kubectl delete pods -n "$NAMESPACE" -l "app=$APP_NAME" \
-        --field-selector=status.phase!=Running,status.phase!=Succeeded \
-        --grace-period=0 --force 2>/dev/null || true
-    sleep 5
+    log_info "Failed pods detected - cleanup should be handled by dedicated cleanup step"
     HEALTH_SCORE=$((HEALTH_SCORE + 10))
 else
     log_success "No failed pods found for $APP_NAME"
