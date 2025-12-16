@@ -168,55 +168,13 @@ log_info "Installing/upgrading kube-prometheus-stack..."
 log_info "This may take 10-15 minutes. Logs will be streamed below..."
 
 # Note: Monitoring uses helm upgrade --install which is idempotent
-# Clean up orphaned resources that may block Helm adoption
-# This runs ALWAYS (not just in cleanup mode) to prevent "cannot be imported" errors
-log_info "Checking for orphaned monitoring resources that may block Helm adoption..."
-log_info "Scanning for resources with Helm labels but missing release annotations..."
-
-# Function to check if resource has proper Helm release annotation
-check_and_clean_orphaned() {
-  local resource_type=$1
-  local resource_name=$2
-  
-  if kubectl get "$resource_type" "$resource_name" -n "${MONITORING_NAMESPACE}" >/dev/null 2>&1; then
-    # Check for release-name annotation (required for Helm adoption)
-    RELEASE_NAME=$(kubectl get "$resource_type" "$resource_name" -n "${MONITORING_NAMESPACE}" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
-    
-    if [ -z "$RELEASE_NAME" ]; then
-      log_warning "Found orphaned $resource_type/$resource_name (missing release annotation) - deleting to allow Helm adoption"
-      kubectl delete "$resource_type" "$resource_name" -n "${MONITORING_NAMESPACE}" --ignore-not-found=true || true
-      return 0
-    fi
-  fi
-  return 1
-}
-
-ORPHANED_COUNT=0
-
-# Clean up ALL prometheus-* ServiceAccounts (kube-state-metrics, node-exporter, grafana, etc.)
-for sa_name in $(kubectl get serviceaccounts -n "${MONITORING_NAMESPACE}" -o name 2>/dev/null | grep "prometheus-" | sed 's|serviceaccount/||' || echo ""); do
-  if [ -n "$sa_name" ]; then
-    if check_and_clean_orphaned serviceaccount "$sa_name"; then
-      ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
-    fi
-  fi
-done
-
-# Clean up other common orphaned resources (configmaps, secrets, deployments)
-for resource_type in configmap secret deployment; do
-  for resource_name in $(kubectl get "$resource_type" -n "${MONITORING_NAMESPACE}" -o name 2>/dev/null | grep "prometheus-" | sed "s|$resource_type/||" || echo ""); do
-    if [ -n "$resource_name" ]; then
-      if check_and_clean_orphaned "$resource_type" "$resource_name"; then
-        ORPHANED_COUNT=$((ORPHANED_COUNT + 1))
-      fi
-    fi
-  done
-done
-
-if [ $ORPHANED_COUNT -gt 0 ]; then
-  log_success "Cleaned up $ORPHANED_COUNT orphaned resource(s)"
+# Run centralized cleanup before Helm operations (handles failed pods, orphaned resources, etc.)
+log_info "Running centralized cluster cleanup..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools" && pwd)"
+if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+  "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
 else
-  log_info "No orphaned resources found requiring cleanup"
+  log_warning "Centralized cleanup script not found"
 fi
 
 ########################
@@ -345,9 +303,12 @@ fix_stuck_helm() {
             echo "$PENDING_ROLLBACK" | xargs -r kubectl -n ${namespace} delete 2>/dev/null || true
         fi
 
-        # Force delete problematic pods
-        echo -e "${YELLOW}ðŸ—‘ï¸  Force deleting stuck pods...${NC}"
-        kubectl delete pods -n ${namespace} -l "app.kubernetes.io/instance=${release_name}" --force --grace-period=0 2>/dev/null || true
+        # Force delete problematic pods using centralized cleanup
+        echo -e "${YELLOW}🗑️  Running centralized cleanup...${NC}"
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools" && pwd)"
+        if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+          "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
+        fi
         
         # Wait for cleanup
         sleep 10

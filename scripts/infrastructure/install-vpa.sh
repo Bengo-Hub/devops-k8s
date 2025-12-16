@@ -54,7 +54,13 @@ if kubectl get deployment -n kube-system vpa-recommender >/dev/null 2>&1; then
       
       if [ -n "$CRASH_LOOP_PODS" ]; then
         log_warning "Found unhealthy VPA pods: $CRASH_LOOP_PODS"
-        log_info "Attempting to restart VPA deployments to recover..."
+        log_info "Running centralized cleanup before restart..."
+        
+        # Clean up failed pods using centralized script
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tools" && pwd)"
+        if [ -f "$SCRIPT_DIR/cleanup-failed-pods.sh" ]; then
+          "$SCRIPT_DIR/cleanup-failed-pods.sh" 2>/dev/null || true
+        fi
         
         # Restart deployments to trigger pod recreation
         kubectl rollout restart deployment/vpa-recommender -n kube-system 2>/dev/null || true
