@@ -84,6 +84,9 @@ data:
     log_timezone = 'UTC'
     log_statement = 'none'
     log_duration = off
+  postgresql.conf: |
+    # Include custom configuration
+    include_dir = '/etc/postgresql/conf.d'
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -189,6 +192,9 @@ spec:
           mountPath: /var/lib/postgresql/data
         - name: config
           mountPath: /etc/postgresql/conf.d
+        - name: config
+          mountPath: /var/lib/postgresql/data/postgresql.conf
+          subPath: postgresql.conf
         - name: init-scripts
           mountPath: /docker-entrypoint-initdb.d
         securityContext:
