@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  resource.customizations.health.networking.k8s.io_Ingress: |
+    hs = {}
+    if obj.status ~= nil then
+      if obj.status.loadBalancer ~= nil then
+        if obj.status.loadBalancer.ingress ~= nil and #obj.status.loadBalancer.ingress > 0 then
+          hs.status = 'Healthy'
+          hs.message = 'LoadBalancer has IP assigned'
+        else
+          hs.status = 'Healthy'
+          hs.message = 'Ingress resource created (awaiting LoadBalancer IP)'
+        end
+      else
+        hs.status = 'Healthy'
+        hs.message = 'Ingress endpoint ready'
+      end
+    else
+      hs.status = 'Progressing'
+      hs.message = 'Waiting for Ingress status'
+    end
+    return hs
+  resource.customizations.health.apps_Deployment: |
+    hs = {}
+    if obj.status ~= nil then
+      if obj.status.observedGeneration ~= nil and obj.metadata.generation ~= nil and
+         obj.status.observedGeneration < obj.metadata.generation then
+        hs.status = 'Progressing'
+        hs.message = 'Waiting for rollout to finish: observed generation ' ..
+          obj.status.observedGeneration .. ' < desired generation ' .. obj.metadata.generation
+        return hs
+      end
+      if obj.status.replicas ~= nil and obj.status.updatedReplicas ~= nil and
+         obj.status.replicas > obj.status.updatedReplicas then
+        hs.status = 'Progressing'
+        hs.message = 'Waiting for rollout to finish: ' .. obj.status.updatedReplicas ..
+          ' out of ' .. obj.status.replicas .. ' new replicas have been updated'
+        return hs
+      end
+      if obj.status.replicas ~= nil and obj.status.availableReplicas ~= nil and
+         obj.status.replicas > obj.status.availableReplicas then
+        hs.status = 'Progressing'
+        hs.message = 'Waiting for rollout to finish: ' .. obj.status.availableReplicas ..
+          ' out of ' .. obj.status.replicas .. ' new replicas are available'
+        return hs
+      end
+      if obj.status.replicas ~= nil and obj.status.readyReplicas ~= nil and
+         obj.status.replicas > obj.status.readyReplicas then
+        hs.status = 'Progressing'
+        hs.message = 'Waiting for rollout to finish: ' .. obj.status.readyReplicas ..
+          ' out of ' .. obj.status.replicas .. ' new replicas are ready'
+        return hs
+      end
+    end
+    hs.status = 'Healthy'
+    return hs
+  resource.exclusions: |
+    - apiGroups:
+      - ''
+      - discovery.k8s.io
+      kinds:
+      - Endpoints
+      - EndpointSlice
+    - apiGroups:
+      - coordination.k8s.io
+      kinds:
+      - Lease
+    - apiGroups:
+      - authentication.k8s.io
+      - authorization.k8s.io
+      kinds:
+      - SelfSubjectReview
+      - TokenReview
+      - LocalSubjectAccessReview
+      - SelfSubjectAccessReview
+      - SelfSubjectRulesReview
+      - SubjectAccessReview
+    - apiGroups:
+      - certificates.k8s.io
+      kinds:
+      - CertificateSigningRequest
+    - apiGroups:
+      - cert-manager.io
+      kinds:
+      - CertificateRequest
+    - apiGroups:
+      - cilium.io
+      kinds:
+      - CiliumIdentity
+      - CiliumEndpoint
+      - CiliumEndpointSlice
+    - apiGroups:
+      - kyverno.io
+      - reports.kyverno.io
+      - wgpolicyk8s.io
+      kinds:
+      - PolicyReport
+      - ClusterPolicyReport
+      - EphemeralReport
+      - ClusterEphemeralReport
+      - AdmissionReport
+      - ClusterAdmissionReport
+      - BackgroundScanReport
+      - ClusterBackgroundScanReport
+      - UpdateRequest
