@@ -271,6 +271,27 @@ jobs:
           echo "✅ Cleanup complete"
           echo "::endgroup::"
 
+      - name: Create required namespaces
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        run: |
+          echo "::group::Creating required namespaces"
+          
+          # List of namespaces required by the cluster
+          # Create these FIRST, independent of registry credentials
+          NAMESPACES="infra argocd erp truload cafe treasury notifications auth inventory logistics pos iot isp-billing ordering projects subscription ticketing"
+          
+          for ns in $NAMESPACES; do
+            if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+              kubectl create namespace "$ns" >/dev/null 2>&1 || true
+              echo "✓ Created namespace: $ns"
+            else
+              echo "✓ Namespace already exists: $ns"
+            fi
+          done
+          
+          echo "✅ All required namespaces ensured"
+          echo "::endgroup::"
+
       - name: Create registry-credentials secrets in all namespaces
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         env:
@@ -285,6 +306,7 @@ jobs:
             echo "⚠️  REGISTRY_PASSWORD not set - skipping registry secret creation"
             echo "⚠️  Pods may fail with ImagePullBackOff if Docker Hub rate limit is exceeded"
             echo "⚠️  Set REGISTRY_PASSWORD GitHub secret to enable Docker Hub authentication"
+            echo "⚠️  Note: Namespaces were already created in previous step"
             echo "::endgroup::"
             exit 0
           fi
@@ -317,13 +339,13 @@ jobs:
           
           # List of namespaces that need registry-credentials
           # These are application namespaces that pull images from Docker Hub
-          NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos argocd"
+          NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos argocd iot isp-billing ordering projects subscription ticketing"
           
           for ns in $NAMESPACES; do
-            # Ensure namespace exists (to avoid race conditions with ArgoCD)
+            # Namespace should already exist from previous step
             if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+              echo "⚠️  Warning: namespace $ns does not exist (should have been created earlier)"
               kubectl create namespace "$ns" >/dev/null 2>&1 || true
-              echo "✓ Created namespace: $ns"
             fi
             # Create or update secret
             if kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
@@ -495,6 +517,48 @@ jobs:
           echo "This step will skip if cert-manager is already installed and healthy"
           ./scripts/infrastructure/install-cert-manager.sh
           echo "✅ cert-manager check/install complete"
+          echo "::endgroup::"
+
+      - name: Clean up orphaned monitoring resources (if any)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        run: |
+          echo "::group::Cleaning orphaned monitoring resources"
+          
+          # Clean up ServiceAccount and other resources that may not have Helm labels
+          # This prevents "cannot be imported into the current release" errors
+          
+          MONITORING_NS="${MONITORING_NAMESPACE:-infra}"
+          
+          echo "Checking for orphaned Grafana resources in namespace: $MONITORING_NS"
+          
+          # Delete orphaned ServiceAccounts (missing Helm labels)
+          if kubectl get serviceaccount prometheus-grafana -n "$MONITORING_NS" >/dev/null 2>&1; then
+            # Check if it has proper Helm labels
+            HELM_MANAGED=$(kubectl get serviceaccount prometheus-grafana -n "$MONITORING_NS" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
+            if [ "$HELM_MANAGED" != "Helm" ]; then
+              echo "⚠️  Found orphaned ServiceAccount prometheus-grafana (not managed by Helm)"
+              kubectl delete serviceaccount prometheus-grafana -n "$MONITORING_NS" || true
+              echo "✓ Deleted orphaned ServiceAccount"
+            else
+              echo "✓ ServiceAccount prometheus-grafana is properly managed by Helm"
+            fi
+          fi
+          
+          # Clean up other common orphaned resources
+          for resource_type in configmap secret deployment; do
+            for resource_name in prometheus-grafana; do
+              if kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" >/dev/null 2>&1; then
+                HELM_MANAGED=$(kubectl get "$resource_type" "$resource_name" -n "$MONITORING_NS" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
+                if [ "$HELM_MANAGED" != "Helm" ]; then
+                  echo "⚠️  Found orphaned $resource_type/$resource_name"
+                  kubectl delete "$resource_type" "$resource_name" -n "$MONITORING_NS" || true
+                  echo "✓ Deleted orphaned $resource_type/$resource_name"
+                fi
+              fi
+            done
+          done
+          
+          echo "✅ Orphaned resource cleanup complete"
           echo "::endgroup::"
 
       - name: Install Monitoring (idempotent)
