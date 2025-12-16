@@ -172,7 +172,7 @@ ensure_helm_metadata pvc prometheus-grafana prometheus "${MONITORING_NAMESPACE}"
 
 # Cluster-scoped resources (ClusterRole, ClusterRoleBinding)
 for cluster_resource_type in clusterrole clusterrolebinding; do
-  for res_name in $(kubectl get "$cluster_resource_type" -o name 2>/dev/null | grep "prometheus-grafana" | sed "s|$cluster_resource_type/||" || echo ""); do
+  for res_name in $(kubectl get "$cluster_resource_type" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep "prometheus-grafana" || echo ""); do
     if [ -n "$res_name" ]; then
       # For cluster resources, pass empty namespace (not used for cluster-scoped)
       managed=$(kubectl get "$cluster_resource_type" "$res_name" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")

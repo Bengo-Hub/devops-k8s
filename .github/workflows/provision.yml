@@ -616,7 +616,7 @@ jobs:
 
           # 5) Patch cluster-scoped resources (ClusterRole, ClusterRoleBinding)
           for cluster_resource in clusterrole clusterrolebinding; do
-            for res_name in $(kubectl get "$cluster_resource" -o name 2>/dev/null | grep "prometheus-grafana" | sed "s|$cluster_resource/||" || echo ""); do
+            for res_name in $(kubectl get "$cluster_resource" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep "prometheus-grafana" || echo ""); do
               managed=$(kubectl get "$cluster_resource" "$res_name" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || echo "")
               rel=$(kubectl get "$cluster_resource" "$res_name" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || echo "")
               relns=$(kubectl get "$cluster_resource" "$res_name" -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || echo "")
