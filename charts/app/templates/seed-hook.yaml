@@ -35,10 +35,15 @@ spec:
         - secretRef:
             name: {{ .Values.envFromSecret }}
         {{- end }}
-        # Additional seed-specific environment variables
-        {{- if .Values.seed.env }}
+        # Main app environment variables + seed-specific environment variables
+        {{- if or .Values.env .Values.seed.env }}
         env:
+          {{- if .Values.env }}
+          {{- toYaml .Values.env | nindent 10 }}
+          {{- end }}
+          {{- if .Values.seed.env }}
           {{- toYaml .Values.seed.env | nindent 10 }}
+          {{- end }}
         {{- end }}
         resources:
           requests:

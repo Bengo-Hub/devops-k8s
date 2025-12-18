@@ -35,6 +35,11 @@ spec:
         - secretRef:
             name: {{ .Values.envFromSecret }}
         {{- end }}
+        # Main app environment variables needed for database setup
+        {{- if .Values.env }}
+        env:
+          {{- toYaml .Values.env | nindent 10 }}
+        {{- end }}
         resources:
           requests:
             memory: {{ .Values.setupDB.resources.requests.memory | default "128Mi" }}
