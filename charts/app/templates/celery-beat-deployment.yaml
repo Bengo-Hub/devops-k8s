@@ -9,6 +9,12 @@ metadata:
     component: celery-beat
 spec:
   replicas: 1  # Beat scheduler should only run once
+  minReadySeconds: {{ .Values.celeryBeat.minReadySeconds | default 30 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: {{ include "app.fullname" . }}-celery-beat
@@ -49,6 +55,14 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.celeryBeat.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "ps aux | grep 'celery' | grep 'beat' | grep -v 'grep'"
+            initialDelaySeconds: 15
+            periodSeconds: 30
           {{- if .Values.celeryBeat.persistence.enabled }}
           volumeMounts:
             - name: celerybeat-schedule
