@@ -124,11 +124,11 @@ log_info "Found PostgreSQL pod: ${PG_POD}"
 log_info "Creating database '${SERVICE_DB_NAME}'..."
 kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
-    psql -U "$ADMIN_USER" -d postgres -tc "
+    psql -h localhost -U "$ADMIN_USER" -d postgres -tc "
     SELECT 1 FROM pg_database WHERE datname = '${SERVICE_DB_NAME}'" | grep -q 1 || \
 kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
-    psql -U "$ADMIN_USER" -d postgres -c "CREATE DATABASE ${SERVICE_DB_NAME};" || {
+    psql -h localhost -U "$ADMIN_USER" -d postgres -c "CREATE DATABASE ${SERVICE_DB_NAME};" || {
     log_warning "Database '${SERVICE_DB_NAME}' may already exist"
 }
 
@@ -136,7 +136,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
 log_info "Creating user '${SERVICE_DB_USER}' with master password..."
 kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
-    psql -U "$ADMIN_USER" -d postgres -c "
+    psql -h localhost -U "$ADMIN_USER" -d postgres -c "
     DO \$\$
     BEGIN
         IF NOT EXISTS (SELECT FROM pg_user WHERE usename = '${SERVICE_DB_USER}') THEN
@@ -154,7 +154,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
 log_info "Granting privileges on database..."
 kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
-    psql -U "$ADMIN_USER" -d postgres -c "
+    psql -h localhost -U "$ADMIN_USER" -d postgres -c "
     GRANT ALL PRIVILEGES ON DATABASE ${SERVICE_DB_NAME} TO ${SERVICE_DB_USER};
     ALTER DATABASE ${SERVICE_DB_NAME} OWNER TO ${SERVICE_DB_USER};" || true
 
@@ -162,7 +162,7 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
 log_info "Granting schema privileges..."
 kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     env PGPASSWORD="$ADMIN_PASSWORD" \
-    psql -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c "
+    psql -h localhost -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c "
     GRANT ALL ON SCHEMA public TO ${SERVICE_DB_USER};
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${SERVICE_DB_USER};
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${SERVICE_DB_USER};" || true
