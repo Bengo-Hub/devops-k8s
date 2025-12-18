@@ -56,9 +56,9 @@ env:
       secretKeyRef:
         name: auth-api-secrets
         key: postgresUrl
-  # Auto-run migrations on startup (default: true)
+  # Disable auto-run migrations on startup (handled by pre-install hook)
   - name: AUTH_DB_RUN_MIGRATIONS
-    value: "true"
+    value: "false"
   # Database connection pool settings (prevent connection exhaustion)
   - name: AUTH_DB_MAX_OPEN_CONNS
     value: "10" # Reduced from default 20 to prevent pool exhaustion
@@ -84,19 +84,41 @@ env:
   - name: SEED_ADMIN_PASSWORD
     value: "ChangeMe123!"
 # ============================================================================
-# MIGRATIONS AND SEEDING (Automatic on Startup)
+# DATABASE SETUP, MIGRATIONS AND SEEDING
 # ============================================================================
-# Auth-api handles migrations and seeding internally on startup
-# - AUTH_DB_RUN_MIGRATIONS=true (default) - runs migrations automatically
-# - Seed binary can be called: /usr/local/bin/auth-seed (idempotent)
-#
-# NOTE: Unlike Django services, Go services typically migrate on startup
-# Helm hooks are disabled for this service to avoid complexity
+# For Go services:
+#   1. setupDB: Creates the database if missing (runs as Job before migrations)
+#   2. migrations: Runs Ent schema.Create() to create tables (pre-install/pre-upgrade hook)
+#   3. seed: Populates initial data (post-install/post-upgrade hook)
+# All are idempotent and safe to run multiple times
+
+# Setup database if it doesn't exist (must run before migrations)
+setupDB:
+  enabled: true
+  binaryName: auth-setup-db
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Create database schema via Ent migrations
 migrations:
-  enabled: false # Disabled - auth-api migrates on startup
-# Automated seeding via Helm post-install/post-upgrade hook
+  enabled: true # Enabled for Go services
+  binaryName: auth-migrate
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Seed initial data (tenants, admin user)
 seed:
-  enabled: true # Runs automatically after deployment
+  enabled: true # Runs automatically after migrations
   binaryName: auth-seed
   env:
     - name: SEED_ADMIN_PASSWORD
