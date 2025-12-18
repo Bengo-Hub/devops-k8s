@@ -28,6 +28,10 @@ if kubectl get namespace cert-manager >/dev/null 2>&1 && kubectl get deployment 
   READY_REPLICAS=$(kubectl get deployment cert-manager -n cert-manager -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   DESIRED_REPLICAS=$(kubectl get deployment cert-manager -n cert-manager -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
   
+  # Ensure we have integers for comparison
+  READY_REPLICAS=${READY_REPLICAS:-0}
+  DESIRED_REPLICAS=${DESIRED_REPLICAS:-0}
+  
   if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" -eq "$DESIRED_REPLICAS" ]; then
     log_success "cert-manager already installed and healthy - skipping upgrade"
     log_info "To force upgrade, set FORCE_UPGRADE=true or delete the deployment"
@@ -41,7 +45,7 @@ else
 fi
 
 # Wait for pods
-wait_for_pods "cert-manager" "app.kubernetes.io/instance=cert-manager" 120
+wait_for_pods "cert-manager" "app.kubernetes.io/instance=cert-manager" 600
 
 # Create ClusterIssuers with dynamic email
 echo -e "${YELLOW}Creating Let's Encrypt ClusterIssuers...${NC}"

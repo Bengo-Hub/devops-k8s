@@ -74,6 +74,10 @@ if kubectl get statefulset rabbitmq -n "${NAMESPACE}" >/dev/null 2>&1; then
   READY_REPLICAS=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   DESIRED_REPLICAS=$(kubectl get statefulset rabbitmq -n "${NAMESPACE}" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
   
+  # Ensure we have integers for comparison
+  READY_REPLICAS=${READY_REPLICAS:-0}
+  DESIRED_REPLICAS=${DESIRED_REPLICAS:-0}
+  
   if [[ "$READY_REPLICAS" -ge 1 ]]; then
     log_success "RabbitMQ is healthy and running (${READY_REPLICAS}/${DESIRED_REPLICAS} replicas)"
     
