@@ -1,0 +1,71 @@
+{{- if and .Values.setupDB .Values.setupDB.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app.fullname" . }}-setupdb-{{ .Values.image.tag | trunc 8 }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "app.fullname" . }}
+    component: setupdb
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"  # Run before migrations (weight 0)
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: {{ include "app.fullname" . }}
+        component: setupdb
+    spec:
+      restartPolicy: Never
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: setupdb
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+        # Load environment variables from the same secret as the main app
+        {{- if .Values.envFromSecret }}
+        envFrom:
+        - secretRef:
+            name: {{ .Values.envFromSecret }}
+        {{- end }}
+        resources:
+          requests:
+            memory: {{ .Values.setupDB.resources.requests.memory | default "128Mi" }}
+            cpu: {{ .Values.setupDB.resources.requests.cpu | default "50m" }}
+          limits:
+            memory: {{ .Values.setupDB.resources.limits.memory | default "256Mi" }}
+            cpu: {{ .Values.setupDB.resources.limits.cpu | default "200m" }}
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "========================================="
+          echo "{{ include "app.fullname" . }} - Database Setup"
+          echo "========================================="
+          echo "Namespace: {{ .Release.Namespace }}"
+          echo "Release: {{ .Release.Name }}"
+          echo "Image: {{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          
+          # Try common setupdb binary locations
+          if [ -x "/usr/local/bin/{{ .Values.setupDB.binaryName | default (printf "%s-setup-db" (include "app.name" .)) }}" ]; then
+            echo "✓ Running setup-db binary: /usr/local/bin/{{ .Values.setupDB.binaryName | default (printf "%s-setup-db" (include "app.name" .)) }}"
+            /usr/local/bin/{{ .Values.setupDB.binaryName | default (printf "%s-setup-db" (include "app.name" .)) }}
+          elif [ -x "/app/setup-db" ]; then
+            echo "✓ Running setup-db binary: /app/setup-db"
+            /app/setup-db
+          else
+            echo "⚠️ No setup-db binary found, skipping..."
+            # This is not fatal - migrations will handle schema creation
+            exit 0
+          fi
+          
+          echo "✅ Database setup completed"
+{{- end }}
