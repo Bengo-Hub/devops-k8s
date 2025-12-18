@@ -150,29 +150,18 @@ healthCheck:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 60
+    initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 10
+    failureThreshold: 5
   liveness:
     httpGet:
       path: /healthz
       port: http
     initialDelaySeconds: 120
     periodSeconds: 30
-      port: http
-    initialDelaySeconds: 30
-    periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 5
-  startup:
-    httpGet:
-      path: /healthz
-      port: http
-    initialDelaySeconds: 5
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 15 # 2.5 minutes total (15 * 10s)
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
