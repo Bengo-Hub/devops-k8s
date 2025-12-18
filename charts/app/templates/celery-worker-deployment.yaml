@@ -9,6 +9,12 @@ metadata:
     component: celery-worker
 spec:
   replicas: {{ .Values.celeryWorker.replicaCount }}
+  minReadySeconds: {{ .Values.celeryWorker.minReadySeconds | default 30 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: {{ include "app.fullname" . }}-celery-worker
@@ -66,5 +72,19 @@ spec:
             timeoutSeconds: {{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 10 }}
             failureThreshold: {{ .Values.celeryWorker.livenessProbe.failureThreshold | default 3 }}
           {{- end }}
+          readinessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - "{{ .Values.celeryWorker.app | default "ProcureProKEAPI" }}"
+                - inspect
+                - ping
+                - -d
+                - celery@$HOSTNAME
+            initialDelaySeconds: {{ .Values.celeryWorker.readinessProbe.initialDelaySeconds | default 30 }}
+            periodSeconds: {{ .Values.celeryWorker.readinessProbe.periodSeconds | default 30 }}
+            timeoutSeconds: {{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 10 }}
+            failureThreshold: {{ .Values.celeryWorker.readinessProbe.failureThreshold | default 3 }}
 {{- end }}
 

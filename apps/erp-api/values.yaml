@@ -6,6 +6,7 @@ image:
 service:
   port: 80
   targetPort: 4000
+minReadySeconds: 60
 # Health check configuration for Django API
 # Adjusted for migration execution time (can take 5-10 minutes on first deploy)
 healthCheck:
@@ -179,6 +180,7 @@ verticalPodAutoscaling:
 celeryWorker:
   enabled: true
   replicaCount: 1
+  minReadySeconds: 30
   app: ProcureProKEAPI
   logLevel: info
   concurrency: 4 # Optimized for 12-core server
@@ -196,9 +198,16 @@ celeryWorker:
     periodSeconds: 60
     timeoutSeconds: 10
     failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
 # Celery Beat scheduler for periodic tasks
 celeryBeat:
   enabled: true
+  minReadySeconds: 30
   app: ProcureProKEAPI
   logLevel: info
   scheduler: django_celery_beat.schedulers:DatabaseScheduler
