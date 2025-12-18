@@ -6,7 +6,7 @@ fullnameOverride: auth-api
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-api
-  tag: 788d777a
+  tag: a8823fad
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
@@ -103,7 +103,6 @@ setupDB:
     limits:
       cpu: 200m
       memory: 256Mi
-
 # Create database schema via Ent migrations
 migrations:
   enabled: true # Enabled for Go services
@@ -115,7 +114,6 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
-
 # Seed initial data (tenants, admin user)
 seed:
   enabled: true # Runs automatically after migrations
