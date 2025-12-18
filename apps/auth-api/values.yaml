@@ -6,7 +6,7 @@ fullnameOverride: auth-api
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-api
-  tag: latest
+  tag: 74f1b665
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
@@ -61,7 +61,7 @@ env:
   - name: AUTH_DB_MAX_OPEN_CONNS
     value: "10" # Reduced from default 20 to prevent pool exhaustion
   - name: AUTH_DB_MAX_IDLE_CONNS
-    value: "3"  # Reduced from default 5
+    value: "3" # Reduced from default 5
   - name: AUTH_DB_CONN_MAX_LIFETIME
     value: "15m"
   # Redis connection
