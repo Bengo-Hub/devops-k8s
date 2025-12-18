@@ -32,6 +32,10 @@ if kubectl -n argocd get deploy argocd-server >/dev/null 2>&1; then
   READY_REPLICAS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   DESIRED_REPLICAS=$(kubectl get deployment argocd-server -n argocd -o jsonpath='{.status.replicas}' 2>/dev/null || echo "0")
   
+  # Ensure we have integers for comparison
+  READY_REPLICAS=${READY_REPLICAS:-0}
+  DESIRED_REPLICAS=${DESIRED_REPLICAS:-0}
+  
   if [ "$READY_REPLICAS" -ge 1 ] && [ "$READY_REPLICAS" -eq "$DESIRED_REPLICAS" ] && [ "$FORCE_UPGRADE" != "true" ]; then
     log_success "Argo CD already installed and healthy - skipping upgrade"
     log_info "To force upgrade, set FORCE_UPGRADE=true"
@@ -71,7 +75,7 @@ else
 fi
 
 # Wait for pods to be ready
-wait_for_pods "argocd" "app.kubernetes.io/name=argocd-server" 300
+wait_for_pods "argocd" "app.kubernetes.io/name=argocd-server" 1200
 
 # Apply ArgoCD health customizations for better app health assessment
 log_info "Applying ArgoCD health customizations..."

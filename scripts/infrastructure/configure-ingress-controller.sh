@@ -20,7 +20,7 @@ if ! kubectl get deployment ingress-nginx-controller -n ingress-nginx >/dev/null
   log_info "NGINX Ingress Controller not found. Installing..."
   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/cloud/deploy.yaml
   
-  wait_for_pods "ingress-nginx" "app.kubernetes.io/component=controller" 120
+  wait_for_pods "ingress-nginx" "app.kubernetes.io/component=controller" 600
 fi
 
 # Check current hostNetwork status
