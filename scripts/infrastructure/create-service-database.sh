@@ -88,6 +88,7 @@ RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     if kubectl -n "$PG_NAMESPACE" get statefulset postgresql >/dev/null 2>&1; then
         READY_REPLICAS=$(kubectl -n "$PG_NAMESPACE" get statefulset postgresql -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+        READY_REPLICAS=${READY_REPLICAS:-0}
         if [[ "$READY_REPLICAS" == "1" ]]; then
             log_success "PostgreSQL is ready"
             break
