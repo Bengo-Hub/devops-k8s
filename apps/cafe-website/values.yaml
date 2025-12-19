@@ -54,14 +54,8 @@ env:
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
 
-# Optional secrets - only referenced if they exist
-envSecrets:
-  - name: NEXT_PUBLIC_MAPBOX_TOKEN
-    secretKey: mapboxToken
-    secretName: cafe-website-secrets
-  - name: NEXT_PUBLIC_SENTRY_DSN
-    secretKey: sentryDsn
-    secretName: cafe-website-secrets
+# Environment secrets from K8s secret
+envFromSecret: cafe-website-env
 
 # Resource constraints optimized for Next.js app
 resources:
