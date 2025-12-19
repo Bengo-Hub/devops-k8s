@@ -54,7 +54,7 @@ env:
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
 
-# Environment secrets from K8s secret
+# Use envFromSecret for all other environment variables (consistent with erp-ui)
 envFromSecret: cafe-website-env
 
 # Resource constraints optimized for Next.js app
