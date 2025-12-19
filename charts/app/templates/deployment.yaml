@@ -166,6 +166,28 @@ spec:
           {{- if .Values.env }}
           env:
             {{- toYaml .Values.env | nindent 12 }}
+            {{- if .Values.envSecrets }}
+            # Optional secret environment variables
+            {{- range .Values.envSecrets }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+                  optional: true
+            {{- end }}
+            {{- end }}
+          {{- else if .Values.envSecrets }}
+          env:
+            # Optional secret environment variables
+            {{- range .Values.envSecrets }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+                  optional: true
+            {{- end }}
           {{- end }}
           {{- if .Values.envFromSecret }}
           envFrom:
