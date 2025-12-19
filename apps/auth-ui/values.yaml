@@ -1,20 +1,16 @@
 nameOverride: auth-ui
 fullnameOverride: auth-ui
-
-replicaCount: 1  # Optimized for resource-constrained environment
-
+replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/auth-ui
-  tag: "latest"
+  tag: "cd3fdb0c"
   pullPolicy: IfNotPresent
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 healthCheck:
   enabled: true
   readiness:
@@ -29,10 +25,8 @@ healthCheck:
       port: http
     initialDelaySeconds: 20
     periodSeconds: 15
-
 strategy:
   type: RollingUpdate
-
 env:
   - name: NEXT_PUBLIC_API_URL
     value: https://sso.codevertexitsolutions.com
@@ -48,15 +42,13 @@ env:
       secretKeyRef:
         name: auth-ui-secrets
         key: sentryDsn
-
 resources:
   limits:
     cpu: 500m
     memory: 768Mi
   requests:
-    cpu: 100m  # Balanced for 12-core server
+    cpu: 100m # Balanced for 12-core server
     memory: 256Mi
-
 autoscaling:
   enabled: true
   minReplicas: 1
@@ -65,7 +57,6 @@ autoscaling:
   targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 65
   targetMemoryUtilizationPercentage: 75
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -82,12 +73,10 @@ ingress:
     - hosts:
         - accounts.codevertexitsolutions.com
       secretName: auth-ui-tls
-
 monitoring:
   enabled: true
   prometheus:
     enabled: false
-
 serviceMonitor:
   enabled: false
-  namespace: infra  # Set namespace even if disabled for consistency
+  namespace: infra # Set namespace even if disabled for consistency
