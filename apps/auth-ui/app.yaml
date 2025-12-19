@@ -11,7 +11,7 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/auth-ui/values.yml
+        - ../../apps/auth-ui/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: auth
