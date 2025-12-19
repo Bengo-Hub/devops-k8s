@@ -15,25 +15,36 @@ service:
   port: 80
   targetPort: 3000
 
+# Simplified health checks for Next.js app
 healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /healthz
+      path: /
       port: http
-    initialDelaySeconds: 5
+    initialDelaySeconds: 10
     periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   liveness:
     httpGet:
-      path: /healthz
+      path: /
       port: http
-    initialDelaySeconds: 20
+    initialDelaySeconds: 30
     periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
 
 strategy:
   type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
 
+# Environment variables - secrets are optional
 env:
+  - name: NODE_ENV
+    value: "production"
   - name: NEXT_PUBLIC_ORDERING_API_URL
     value: https://orderapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_AUTH_URL
@@ -42,27 +53,28 @@ env:
     value: https://accounts.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
-  - name: NEXT_PUBLIC_MAPBOX_TOKEN
-    valueFrom:
-      secretKeyRef:
-        name: cafe-website-secrets
-        key: mapboxToken
-  - name: NEXT_PUBLIC_SENTRY_DSN
-    valueFrom:
-      secretKeyRef:
-        name: cafe-website-secrets
-        key: sentryDsn
 
+# Optional secrets - only referenced if they exist
+envSecrets:
+  - name: NEXT_PUBLIC_MAPBOX_TOKEN
+    secretKey: mapboxToken
+    secretName: cafe-website-secrets
+  - name: NEXT_PUBLIC_SENTRY_DSN
+    secretKey: sentryDsn
+    secretName: cafe-website-secrets
+
+# Resource constraints optimized for Next.js app
 resources:
   limits:
-    cpu: 500m
-    memory: 768Mi
+    cpu: 1000m
+    memory: 512Mi
   requests:
-    cpu: 100m
-    memory: 256Mi
+    cpu: 50m
+    memory: 128Mi
 
+# Disable autoscaling for single instance
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 65
@@ -86,7 +98,7 @@ ingress:
       secretName: cafe-website-tls
 
 monitoring:
-  enabled: true
+  enabled: false
   prometheus:
     enabled: false
 
