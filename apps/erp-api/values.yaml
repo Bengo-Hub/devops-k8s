@@ -9,31 +9,32 @@ service:
 minReadySeconds: 60
 # Health check configuration for Django API
 # Adjusted for migration execution time (can take 5-10 minutes on first deploy)
+# REDUCED TIMING: With increased resources, startup should be faster
 healthCheck:
   enabled: true
   startup:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    # Allow plenty of time for cold starts, migrations, cache warmup
-    initialDelaySeconds: 300 # Increased to 5 minutes
-    periodSeconds: 30
+    # Allow time for cold starts, migrations, cache warmup
+    initialDelaySeconds: 180 # REDUCED: From 300s (5 min) - faster with more CPU
+    periodSeconds: 20 # REDUCED: From 30s - more frequent checks
     timeoutSeconds: 10
-    failureThreshold: 30
+    failureThreshold: 20 # REDUCED: From 30 - faster failure detection
   readiness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 600 # Increased to 10 minutes - migrations take time
-    periodSeconds: 30
+    initialDelaySeconds: 300 # REDUCED: From 600s (10 min) - faster startup expected
+    periodSeconds: 20 # REDUCED: From 30s - more frequent checks
     timeoutSeconds: 10
-    failureThreshold: 10 # Increased - allow time for migrations
+    failureThreshold: 8 # REDUCED: From 10 - faster failure detection
   liveness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 900 # Increased to 15 minutes - migrations can take 5-10 min
-    periodSeconds: 60
+    initialDelaySeconds: 600 # REDUCED: From 900s (15 min) - faster startup expected
+    periodSeconds: 45 # REDUCED: From 60s - more frequent checks
     timeoutSeconds: 15
     failureThreshold: 5
 # Production resource limits for Django API with large ERP schema
@@ -42,18 +43,19 @@ healthCheck:
 # - Heavy migrations (300+ tables)
 # - Real-time WebSocket connections
 # - Async task processing
+# INCREASED RESOURCES: 20-30min rollout indicates insufficient CPU for migrations
 resources:
   requests:
-    cpu: 500m # Priority business application
-    memory: 3Gi # Required for Django ORM with large schema + migrations
+    cpu: 1500m # INCREASED: From 500m - heavy migrations need more CPU
+    memory: 4Gi # INCREASED: From 3Gi - better for concurrent migrations + app startup
   limits:
-    cpu: 3000m
-    memory: 6Gi # Peak memory for migrations and heavy queries
+    cpu: 4000m # INCREASED: From 3000m - allow more CPU during peak migration load
+    memory: 8Gi # INCREASED: From 6Gi - prevent OOM during heavy migrations
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
   minReplicas: 2 # Minimum 2 for high availability
-  maxReplicas: 4 # Scale up to 4 replicas under load
+  maxReplicas: 6 # INCREASED: From 4 - allow more scaling with higher resource baseline
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
   scaleDown:
@@ -116,11 +118,11 @@ migrations:
   runOnStartup: true # Enable initContainer for database connectivity check
   resources:
     requests:
-      cpu: 500m # Migrations are CPU-intensive
-      memory: 3Gi # Required for Django migration executor with large schema
+      cpu: 1000m # INCREASED: From 500m - migrations are very CPU-intensive
+      memory: 4Gi # INCREASED: From 3Gi - better for large schema migrations
     limits:
-      cpu: 2000m
-      memory: 6Gi # Peak memory during migration execution
+      cpu: 3000m # INCREASED: From 2000m - allow more CPU for parallel migration operations
+      memory: 8Gi # INCREASED: From 6Gi - prevent OOM during complex migrations
 # Seeding configuration
 seed:
   enabled: true # Enable seed data creation via Django management command
@@ -187,11 +189,11 @@ celeryWorker:
   maxTasksPerChild: 100
   resources:
     requests:
-      cpu: 300m # Increased for better task processing
-      memory: 1Gi # Increased - workers load Django models
+      cpu: 500m # INCREASED: From 300m - better task processing performance
+      memory: 1.5Gi # INCREASED: From 1Gi - workers load Django models
     limits:
-      cpu: 1500m
-      memory: 2Gi
+      cpu: 2000m # INCREASED: From 1500m - allow more CPU for heavy tasks
+      memory: 3Gi # INCREASED: From 2Gi - prevent OOM during heavy processing
   livenessProbe:
     enabled: true
     initialDelaySeconds: 30
