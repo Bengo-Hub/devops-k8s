@@ -23,32 +23,35 @@ service:
 minReadySeconds: 60
 # Health check configuration for Django API
 # Adjusted for migration execution time (can take 5-10 minutes on first deploy)
-# REDUCED TIMING: With increased resources, startup should be faster
+# INCREASED STARTUP TIME: Migrations can take 5-10 minutes even with better resources
+# REDUCED READINESS: If app is ready, health checks should be quick (< 1 minute)
 healthCheck:
   enabled: true
   startup:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    # Allow time for cold starts, migrations, cache warmup
-    initialDelaySeconds: 180 # REDUCED: From 300s (5 min) - faster with more CPU
-    periodSeconds: 20 # REDUCED: From 30s - more frequent checks
+    # Allow time for migrations + cold starts
+    # With idle db: ~30s, with migrations: 5-10min (first pod only)
+    initialDelaySeconds: 60 # Reduced: migrations run in init container, not in app
+    periodSeconds: 20
     timeoutSeconds: 10
-    failureThreshold: 20 # REDUCED: From 30 - faster failure detection
+    failureThreshold: 25 # Allow ~500s total (60 + 20*25) for slow migrations
   readiness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 300 # REDUCED: From 600s (10 min) - faster startup expected
-    periodSeconds: 20 # REDUCED: From 30s - more frequent checks
+    # Once migrations are done, readiness should be fast
+    initialDelaySeconds: 120 # Give app time to initialize after migrations complete
+    periodSeconds: 15 # More frequent checks for faster responsiveness
     timeoutSeconds: 10
-    failureThreshold: 8 # REDUCED: From 10 - faster failure detection
+    failureThreshold: 4 # Fail after ~180s (120 + 15*4) if still not ready
   liveness:
     httpGet:
       path: /api/v1/core/health/
       port: http
-    initialDelaySeconds: 600 # REDUCED: From 900s (15 min) - faster startup expected
-    periodSeconds: 45 # REDUCED: From 60s - more frequent checks
+    initialDelaySeconds: 180 # App should be stable by now
+    periodSeconds: 30
     timeoutSeconds: 15
     failureThreshold: 5
 # Production resource limits for Django API with large ERP schema
@@ -123,13 +126,14 @@ envFromSecret: erp-api-env
 # MIGRATIONS AND SEEDING
 # ============================================================================
 # ERP-API Django migrations strategy:
-# 1. Database check runs in initContainer (wait-for-db)
-# 2. Migrations run automatically in entrypoint.sh on first pod startup
-# 3. Subsequent pods skip migrations if already applied (idempotent)
+# 1. Migrations run in init container BEFORE main app starts
+# 2. Uses idempotent `migrate --noinput` (safe to run multiple times)
+# 3. Each pod waits for migrations to complete before starting app
 # 4. Heavy migrations (300+ tables) require 3-6Gi memory
+# 5. Fixed: Migration failures were causing pods to fail health checks
 migrations:
-  enabled: false # Use app's built-in migration handling via entrypoint.sh
-  runOnStartup: true # Enable initContainer for database connectivity check
+  enabled: true # Enable init container for reliable migrations
+  runOnStartup: true # Wait for migrations to complete before app starts
   resources:
     requests:
       cpu: 1000m # INCREASED: From 500m - migrations are very CPU-intensive

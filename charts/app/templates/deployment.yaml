@@ -120,35 +120,49 @@ spec:
           - |
             set -e
             echo "=========================================="
-            echo "🔌 Pre-Startup Database Check"
+            echo "🔌 Pre-Startup Database Check & Migrations"
             echo "=========================================="
             echo "Pod: $HOSTNAME"
             
-            # Quick database check - just verify connectivity
-            MAX_RETRIES=3
+            # Wait for database connectivity
+            MAX_RETRIES=30
             RETRY_COUNT=0
             
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               if python manage.py check --database default > /dev/null 2>&1; then
-                echo "✅ Database is ready (attempt $RETRY_COUNT)"
-                exit 0
+                echo "✅ Database is ready"
+                break
               fi
               
               RETRY_COUNT=$((RETRY_COUNT + 1))
-              echo "⏳ Checking database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
-              sleep 3
+              echo "⏳ Waiting for database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+              sleep 2
             done
             
-            echo "⚠️ Database not responding after $MAX_RETRIES checks"
-            echo "ℹ️ Container will start anyway - migrations will run via entrypoint.sh"
-            exit 0
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "❌ Database not responding after $MAX_RETRIES checks"
+              exit 1
+            fi
+            
+            # Run migrations (safe to run multiple times - idempotent)
+            {{- if .Values.migrations.enabled }}
+            echo "🔄 Running database migrations..."
+            python manage.py migrate --noinput --run-syncdb
+            echo "✅ Migrations completed successfully"
+            {{- else }}
+            echo "⚠️ Migrations disabled in init container - will run via app entrypoint"
+            {{- end }}
+            
+            echo "=========================================="
+            echo "✅ Init container completed"
+            echo "=========================================="
           resources:
             requests:
-              memory: 128Mi
-              cpu: 50m
+              memory: {{ .Values.migrations.resources.requests.memory | default "1Gi" }}
+              cpu: {{ .Values.migrations.resources.requests.cpu | default "500m" }}
             limits:
-              memory: 256Mi
-              cpu: 200m
+              memory: {{ .Values.migrations.resources.limits.memory | default "4Gi" }}
+              cpu: {{ .Values.migrations.resources.limits.cpu | default "2000m" }}
         {{- end }}
       {{- end }}
       containers:
