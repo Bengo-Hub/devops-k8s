@@ -3,6 +3,15 @@ image:
   tag: e337e643
   pullSecrets:
     - name: registry-credentials
+# Deployment strategy for zero-downtime updates
+# maxUnavailable: 0 ensures old pods stay until new ones are ready
+replicaCount: 1
+minReadySeconds: 30
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
 service:
   port: 80
   targetPort: 3000
@@ -54,16 +63,18 @@ ingress:
       secretName: erp-masterspace-tls
 envFromSecret: erp-ui-env
 # VPA configuration for UI
+# CRITICAL: Use "Off" mode to prevent VPA from recreating pods and causing downtime
+# VPA will still provide recommendations via kubectl describe vpa but won't act on them
 verticalPodAutoscaling:
   enabled: true
-  updateMode: "Recreate"
+  updateMode: "Off"
   minCPU: 50m
   maxCPU: 1000m
   minMemory: 128Mi
   maxMemory: 2Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
-  recommendationMode: false
+  recommendationMode: true
 # Monitoring configuration - disable for frontend UI (no metrics endpoint)
 monitoring:
   enabled: false
