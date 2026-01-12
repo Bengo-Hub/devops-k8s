@@ -23,6 +23,12 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
+      # PruneLast ensures old resources are only deleted after new ones are healthy
+      - PruneLast=true
+      # ApplyOutOfSyncOnly prevents unnecessary resource updates
+      - ApplyOutOfSyncOnly=true
+      # ServerSideApply for better conflict resolution
+      - ServerSideApply=true
       # Remove Replace=true - it forces replacement of immutable resources (PVCs) which fails
       # RespectIgnoreDifferences tells ArgoCD to honor the ignoreDifferences config below
   ignoreDifferences:
