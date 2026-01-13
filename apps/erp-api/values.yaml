@@ -147,7 +147,7 @@ seed:
   command: # Custom management command for initial data (must be an array)
     - python
     - manage.py
-    - seed_core_data
+    - seed_initial  # Production-safe seeding: superuser, roles, taxes, ESS settings
   runAfterMigrations: true # Run seeds only after migrations complete
   resources:
     requests:
