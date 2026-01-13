@@ -123,36 +123,53 @@ spec:
             echo "🔌 Pre-Startup Database Check & Migrations"
             echo "=========================================="
             echo "Pod: $HOSTNAME"
-            
-            # Wait for database connectivity
-            MAX_RETRIES=30
+
+            # Wait for database connectivity using direct connection test
+            # Avoid 'manage.py check' as it can fail due to admin/model issues unrelated to DB
+            MAX_RETRIES=10
             RETRY_COUNT=0
-            
+
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              if python manage.py check --database default > /dev/null 2>&1; then
-                echo "✅ Database is ready"
+              if python -c "
+            import os
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ProcureProKEAPI.settings')
+            import django
+            django.setup()
+            from django.db import connection
+            connection.ensure_connection()
+            " 2>/dev/null; then
+                echo "✅ Database connected"
                 break
               fi
-              
+
               RETRY_COUNT=$((RETRY_COUNT + 1))
               echo "⏳ Waiting for database... (attempt $RETRY_COUNT/$MAX_RETRIES)"
               sleep 2
             done
-            
+
             if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-              echo "❌ Database not responding after $MAX_RETRIES checks"
+              echo "❌ Database connection failed after $MAX_RETRIES attempts"
+              echo "📋 Connection error details:"
+              python -c "
+            import os
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ProcureProKEAPI.settings')
+            import django
+            django.setup()
+            from django.db import connection
+            connection.ensure_connection()
+            " 2>&1 || true
               exit 1
             fi
-            
+
             # Run migrations (safe to run multiple times - idempotent)
             {{- if .Values.migrations.enabled }}
             echo "🔄 Running database migrations..."
-            python manage.py migrate --noinput --run-syncdb
+            python manage.py migrate --noinput
             echo "✅ Migrations completed successfully"
             {{- else }}
-            echo "⚠️ Migrations disabled in init container - will run via app entrypoint"
+            echo "⚠️ Migrations disabled - will run via app entrypoint"
             {{- end }}
-            
+
             echo "=========================================="
             echo "✅ Init container completed"
             echo "=========================================="
