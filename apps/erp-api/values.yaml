@@ -144,7 +144,10 @@ migrations:
 # Seeding configuration
 seed:
   enabled: true # Enable seed data creation via Django management command
-  command: "python manage.py seed_data" # Custom management command for initial data
+  command: # Custom management command for initial data (must be an array)
+    - python
+    - manage.py
+    - seed_data
   runAfterMigrations: true # Run seeds only after migrations complete
   resources:
     requests:
