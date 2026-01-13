@@ -60,31 +60,25 @@ spec:
           livenessProbe:
             exec:
               command:
-                - celery
-                - -A
-                - "{{ .Values.celeryWorker.app | default "ProcureProKEAPI" }}"
-                - inspect
-                - ping
-                - -d
-                - celery@$HOSTNAME
-            initialDelaySeconds: {{ .Values.celeryWorker.livenessProbe.initialDelaySeconds | default 30 }}
+                - /bin/sh
+                - -c
+                - celery -A {{ .Values.celeryWorker.app | default "ProcureProKEAPI" }} inspect ping -d celery@$HOSTNAME --timeout={{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 30 }}
+            initialDelaySeconds: {{ .Values.celeryWorker.livenessProbe.initialDelaySeconds | default 60 }}
             periodSeconds: {{ .Values.celeryWorker.livenessProbe.periodSeconds | default 60 }}
-            timeoutSeconds: {{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 10 }}
-            failureThreshold: {{ .Values.celeryWorker.livenessProbe.failureThreshold | default 3 }}
+            timeoutSeconds: {{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 30 }}
+            failureThreshold: {{ .Values.celeryWorker.livenessProbe.failureThreshold | default 5 }}
           {{- end }}
+          {{- if .Values.celeryWorker.readinessProbe.enabled }}
           readinessProbe:
             exec:
               command:
-                - celery
-                - -A
-                - "{{ .Values.celeryWorker.app | default "ProcureProKEAPI" }}"
-                - inspect
-                - ping
-                - -d
-                - celery@$HOSTNAME
-            initialDelaySeconds: {{ .Values.celeryWorker.readinessProbe.initialDelaySeconds | default 30 }}
+                - /bin/sh
+                - -c
+                - celery -A {{ .Values.celeryWorker.app | default "ProcureProKEAPI" }} inspect ping -d celery@$HOSTNAME --timeout={{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 30 }}
+            initialDelaySeconds: {{ .Values.celeryWorker.readinessProbe.initialDelaySeconds | default 60 }}
             periodSeconds: {{ .Values.celeryWorker.readinessProbe.periodSeconds | default 30 }}
-            timeoutSeconds: {{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 10 }}
-            failureThreshold: {{ .Values.celeryWorker.readinessProbe.failureThreshold | default 3 }}
+            timeoutSeconds: {{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 30 }}
+            failureThreshold: {{ .Values.celeryWorker.readinessProbe.failureThreshold | default 5 }}
+          {{- end }}
 {{- end }}
 
