@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-api
-  tag: "f72b90a7"
+  tag: "0250af88"
   pullSecrets:
     - name: registry-credentials
 # Pod-level security context - CRITICAL for PVC permissions
