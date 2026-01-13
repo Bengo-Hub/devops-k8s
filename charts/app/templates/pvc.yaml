@@ -1,7 +1,5 @@
 {{- if .Values.persistence.enabled }}
 {{- $pvcName := printf "%s-media" (include "app.fullname" .) }}
-{{- $existing := lookup "v1" "PersistentVolumeClaim" .Release.Namespace $pvcName }}
-{{- if not $existing }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -10,10 +8,12 @@ metadata:
     app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
   annotations:
-    # ArgoCD: Ignore immutable fields that Kubernetes sets automatically when binding
-    # volumeName is set by Kubernetes when PVC binds to PV - never include it in spec
+    # CRITICAL: Prevent ArgoCD from deleting PVC with user data
+    # - Prune=false: Never delete this resource during sync
+    # - IgnoreExtraneous: Don't report as out-of-sync for fields Kubernetes sets
     argocd.argoproj.io/sync-options: Prune=false
     argocd.argoproj.io/compare-options: IgnoreExtraneous
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - {{ .Values.persistence.accessMode }}
@@ -23,5 +23,4 @@ spec:
   resources:
     requests:
       storage: {{ .Values.persistence.size }}
-{{- end }}
 {{- end }}
