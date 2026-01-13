@@ -214,16 +214,16 @@ celeryWorker:
       memory: 3Gi # INCREASED: From 2Gi - prevent OOM during heavy processing
   livenessProbe:
     enabled: true
-    initialDelaySeconds: 30
+    initialDelaySeconds: 90 # Allow time for worker to start and connect to broker
     periodSeconds: 60
-    timeoutSeconds: 10
-    failureThreshold: 3
+    timeoutSeconds: 30 # INCREASED: celery inspect ping can be slow
+    failureThreshold: 5 # More tolerance for transient failures
   readinessProbe:
     enabled: true
-    initialDelaySeconds: 60
+    initialDelaySeconds: 60 # Worker should be ready faster than liveness
     periodSeconds: 30
-    timeoutSeconds: 10
-    failureThreshold: 3
+    timeoutSeconds: 30 # INCREASED: celery inspect ping can be slow
+    failureThreshold: 5 # More tolerance for transient failures
 # Celery Beat scheduler for periodic tasks
 celeryBeat:
   enabled: true
