@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-ui
-  tag: 1b58de67
+  tag: 96d9215c
   pullSecrets:
     - name: registry-credentials
 # Deployment strategy for zero-downtime updates
