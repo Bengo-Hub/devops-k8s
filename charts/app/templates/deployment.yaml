@@ -6,7 +6,9 @@ metadata:
     app: {{ include "app.fullname" . }}
     chart: {{ include "app.chart" . }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   minReadySeconds: {{ .Values.minReadySeconds | default 30 }}
   {{- if .Values.strategy }}
   strategy:
