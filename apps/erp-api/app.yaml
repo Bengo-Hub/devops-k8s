@@ -32,6 +32,12 @@ spec:
       # Remove Replace=true - it forces replacement of immutable resources (PVCs) which fails
       # RespectIgnoreDifferences tells ArgoCD to honor the ignoreDifferences config below
   ignoreDifferences:
+      # Deployment replica count - managed by HPA, not Helm
+      # This is the primary cause of "OutOfSync" when autoscaling is enabled
+      - group: apps
+        kind: Deployment
+        jsonPointers:
+          - /spec/replicas
       # Application-level ignore for immutable PVC fields
       - group: ""
         kind: PersistentVolumeClaim

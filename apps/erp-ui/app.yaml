@@ -23,13 +23,9 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
-      # PruneLast ensures old resources are only deleted after new ones are healthy
       - PruneLast=true
-      # ApplyOutOfSyncOnly prevents unnecessary resource updates
       - ApplyOutOfSyncOnly=true
-      # Remove Replace=true - it forces replacement of immutable resources (PVCs) which fails
-      # RespectIgnoreDifferences tells ArgoCD to honor the ignoreDifferences config below
-  # Application-level ignore for immutable PVC fields (must be at spec level, not under syncPolicy)
+      - ServerSideApply=true
   ignoreDifferences:
     - group: ""
       kind: PersistentVolumeClaim
