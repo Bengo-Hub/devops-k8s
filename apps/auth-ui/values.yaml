@@ -1,21 +1,17 @@
 nameOverride: auth-ui
 fullnameOverride: auth-ui
-
 replicaCount: 1
 minReadySeconds: 30
-
 image:
   repository: docker.io/codevertex/auth-ui
-  tag: "cd3fdb0c"
+  tag: "0590c0ce"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 healthCheck:
   enabled: true
   readiness:
@@ -34,13 +30,11 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 3
     failureThreshold: 3
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 env:
   - name: NEXT_PUBLIC_API_URL
     value: https://sso.codevertexitsolutions.com
@@ -56,7 +50,6 @@ env:
       secretKeyRef:
         name: auth-ui-secrets
         key: sentryDsn
-
 resources:
   limits:
     cpu: 500m
@@ -64,14 +57,12 @@ resources:
   requests:
     cpu: 100m
     memory: 256Mi
-
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -88,13 +79,10 @@ ingress:
     - hosts:
         - accounts.codevertexitsolutions.com
       secretName: auth-ui-tls
-
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # VPA configuration for UI - recommendation-only mode
 verticalPodAutoscaling:
   enabled: true
