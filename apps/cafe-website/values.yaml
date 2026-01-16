@@ -1,21 +1,17 @@
 nameOverride: cafe-website
 fullnameOverride: cafe-website
-
 replicaCount: 1
 minReadySeconds: 30
-
 image:
   repository: docker.io/codevertex/cafe-website
-  tag: "latest"
+  tag: "da4b4103"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 # Simplified health checks for Next.js app
 healthCheck:
   enabled: true
@@ -35,13 +31,11 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 5
     failureThreshold: 3
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 # Environment variables - secrets are optional
 env:
   - name: NODE_ENV
@@ -54,10 +48,8 @@ env:
     value: https://accounts.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
-
 # Use envFromSecret for all other environment variables (consistent with erp-ui)
 envFromSecret: cafe-website-env
-
 # Resource constraints optimized for Next.js app
 resources:
   limits:
@@ -66,7 +58,6 @@ resources:
   requests:
     cpu: 50m
     memory: 128Mi
-
 # Disable autoscaling for single instance
 autoscaling:
   enabled: false
@@ -74,7 +65,6 @@ autoscaling:
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -91,13 +81,10 @@ ingress:
     - hosts:
         - cafe.codevertexitsolutions.com
       secretName: cafe-website-tls
-
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # VPA configuration for UI - recommendation-only mode
 verticalPodAutoscaling:
   enabled: true
@@ -109,4 +96,3 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-
