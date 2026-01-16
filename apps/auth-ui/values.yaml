@@ -35,11 +35,15 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
+envFromSecret: auth-ui-env
 env:
   - name: NEXT_PUBLIC_API_URL
     value: https://sso.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexitsolutions.com
+    value: https://notificationsapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_APP_URL
+    value: https://accounts.codevertexitsolutions.com
+  # OAuth providers loaded from secret via envFromSecret
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
@@ -49,8 +53,9 @@ env:
   - name: NEXT_PUBLIC_SENTRY_DSN
     valueFrom:
       secretKeyRef:
-        name: auth-ui-secrets
-        key: sentryDsn
+        name: auth-ui-env
+        key: NEXT_PUBLIC_SENTRY_DSN
+        optional: true
 resources:
   limits:
     cpu: 500m
