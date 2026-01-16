@@ -1,10 +1,11 @@
-nameOverride: notifications-service
-fullnameOverride: notifications-service
+nameOverride: notifications-api
+fullnameOverride: notifications-api
 
 replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
-  repository: docker.io/codevertex/notifications-service
+  # Note: image name is notifications-app (from build.sh APP_NAME)
+  repository: docker.io/codevertex/notifications-app
   tag: "latest"
   pullPolicy: Always
   pullSecrets:
@@ -18,7 +19,7 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# Notifications-service uses separate migrate/seed binaries in the Docker image
+# Notifications-api uses separate migrate/seed binaries in the Docker image
 # Migrations should be run manually before deployment to avoid race conditions
 # Seeding runs automatically via Helm post-install/post-upgrade hook (idempotent)
 migrations:
@@ -38,7 +39,8 @@ seed:
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
-envFromSecret: notifications-service-secrets
+# Uses notifications-app-env created by service's setup_env_secrets.sh
+envFromSecret: notifications-app-env
 
 healthCheck:
   enabled: true
@@ -65,42 +67,70 @@ healthCheck:
 strategy:
   type: RollingUpdate
 
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+# Core settings from values, secrets from notifications-app-env (created by build.sh)
 env:
   - name: NOTIFICATIONS_APP_ENV
     value: production
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
+  # Database and messaging from service secret (setup_env_secrets.sh creates these)
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: notifications-service-secrets
-        key: postgresUrl
+        name: notifications-app-env
+        key: NOTIFICATIONS_POSTGRES_URL
   - name: NOTIFICATIONS_REDIS_ADDR
-    value: redis-master.infra.svc.cluster.local:6379
+    valueFrom:
+      secretKeyRef:
+        name: notifications-app-env
+        key: NOTIFICATIONS_REDIS_ADDR
+        optional: true
+  - name: NOTIFICATIONS_REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: notifications-app-env
+        key: NOTIFICATIONS_REDIS_PASSWORD
+        optional: true
   - name: NOTIFICATIONS_NATS_URL
-    value: nats://nats.messaging.svc.cluster.local:4222
+    valueFrom:
+      secretKeyRef:
+        name: notifications-app-env
+        key: NOTIFICATIONS_NATS_URL
+        optional: true
+  # Provider secrets (optional - create notifications-provider-secrets manually)
   - name: NOTIFICATIONS_SENDGRID_API_KEY
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: sendgridApiKey
+        optional: true
   - name: NOTIFICATIONS_TWILIO_ACCOUNT_SID
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: twilioAccountSid
+        optional: true
   - name: NOTIFICATIONS_TWILIO_AUTH_TOKEN
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: twilioAuthToken
+        optional: true
   - name: NOTIFICATIONS_FCM_SERVICE_ACCOUNT
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: fcmServiceAccount
+        optional: true
   - name: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
-    value: Urban Cafe <hello@codevertexitsolutions.com>
+    valueFrom:
+      secretKeyRef:
+        name: notifications-app-env
+        key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
+        optional: true
   - name: NOTIFICATIONS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: NOTIFICATIONS_REQUIRE_JWT
@@ -150,11 +180,11 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: notifications.codevertexitsolutions.com
+    - host: notificationsapi.codevertexitsolutions.com # ui uses notifications.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - notifications.codevertexitsolutions.com
-      secretName: notifications-service-tls
+        - notificationsapi.codevertexitsolutions.com
+      secretName: notifications-api-tls
