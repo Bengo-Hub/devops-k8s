@@ -6,7 +6,7 @@ replicaCount: 1
 image:
   repository: docker.io/codevertex/cafe-website
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
 
