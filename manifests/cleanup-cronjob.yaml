@@ -1,0 +1,159 @@
+# CronJob to automatically clean up failed pods every 30 minutes
+# This prevents pod limit exhaustion and removes stale pods from failed deployments
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-failed-pods
+  namespace: kube-system
+  labels:
+    app: cluster-maintenance
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  concurrencyPolicy: Forbid  # Don't start new job if previous is still running
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 200
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 600  # Cleanup completed job after 10 minutes
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: cleanup-failed-pods
+        spec:
+          serviceAccountName: cleanup-failed-pods
+          restartPolicy: Never
+          containers:
+          - name: cleanup
+            image: bitnami/kubectl:1.32
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              echo "🧹 Starting automated pod cleanup..."
+
+              # Define namespaces to scan (exclude kube-system for safety)
+              NAMESPACES=$(kubectl get namespaces -o jsonpath='{.items[?(@.metadata.name!="kube-system")].metadata.name}')
+
+              TOTAL_DELETED=0
+
+              # Cleanup Failed pods
+              echo "🔍 Cleaning up Failed pods..."
+              for NS in $NAMESPACES; do
+                PODS=$(kubectl get pods -n "$NS" --field-selector=status.phase=Failed -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+                if [ -n "$PODS" ]; then
+                  for POD in $PODS; do
+                    kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+                    TOTAL_DELETED=$((TOTAL_DELETED + 1))
+                  done
+                fi
+              done
+
+              # Cleanup ImagePullBackOff pods (older than 10 minutes)
+              echo "🔍 Cleaning up ImagePullBackOff pods..."
+              for NS in $NAMESPACES; do
+                kubectl get pods -n "$NS" -o json | jq -r '.items[] | select(
+                  .status.containerStatuses != null and
+                  (.status.containerStatuses[].state.waiting.reason == "ImagePullBackOff" or
+                   .status.containerStatuses[].state.waiting.reason == "ErrImagePull") and
+                  ((now - (.metadata.creationTimestamp | fromdateiso8601)) > 600)
+                ) | .metadata.name' 2>/dev/null | while read POD; do
+                  [ -z "$POD" ] && continue
+                  echo "  Deleting $NS/$POD"
+                  kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+                  TOTAL_DELETED=$((TOTAL_DELETED + 1))
+                done
+              done
+
+              # Cleanup CreateContainerConfigError pods (older than 10 minutes)
+              echo "🔍 Cleaning up CreateContainerConfigError pods..."
+              for NS in $NAMESPACES; do
+                kubectl get pods -n "$NS" -o json | jq -r '.items[] | select(
+                  .status.containerStatuses != null and
+                  .status.containerStatuses[].state.waiting.reason == "CreateContainerConfigError" and
+                  ((now - (.metadata.creationTimestamp | fromdateiso8601)) > 600)
+                ) | .metadata.name' 2>/dev/null | while read POD; do
+                  [ -z "$POD" ] && continue
+                  echo "  Deleting $NS/$POD"
+                  kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+                  TOTAL_DELETED=$((TOTAL_DELETED + 1))
+                done
+              done
+
+              # Cleanup Pending pods (older than 30 minutes)
+              echo "🔍 Cleaning up Pending pods (>30min)..."
+              for NS in $NAMESPACES; do
+                kubectl get pods -n "$NS" --field-selector=status.phase=Pending -o json | jq -r '.items[] | select(
+                  (now - (.metadata.creationTimestamp | fromdateiso8601)) > 1800
+                ) | .metadata.name' 2>/dev/null | while read POD; do
+                  [ -z "$POD" ] && continue
+                  echo "  Deleting $NS/$POD"
+                  kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+                  TOTAL_DELETED=$((TOTAL_DELETED + 1))
+                done
+              done
+
+              # Cleanup stuck Terminating pods (older than 5 minutes)
+              echo "🔍 Cleaning up stuck Terminating pods..."
+              kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '.items[] | select(
+                .metadata.deletionTimestamp != null and
+                ((now - (.metadata.deletionTimestamp | fromdateiso8601)) > 300)
+              ) | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null | while read LINE; do
+                [ -z "$LINE" ] && continue
+                NS=$(echo "$LINE" | awk '{print $1}')
+                POD=$(echo "$LINE" | awk '{print $2}')
+                echo "  Force deleting $NS/$POD"
+                kubectl patch pod "$POD" -n "$NS" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+                kubectl delete pod -n "$NS" "$POD" --grace-period=0 --force 2>/dev/null || true
+              done
+
+              # Report final status
+              TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l)
+              RUNNING_PODS=$(kubectl get pods --all-namespaces --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+
+              echo ""
+              echo "✅ Cleanup complete!"
+              echo "  📊 Total pods: $TOTAL_PODS (running: $RUNNING_PODS)"
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 128Mi
+---
+# ServiceAccount for cleanup job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cleanup-failed-pods
+  namespace: kube-system
+---
+# ClusterRole with permissions to delete pods across namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cleanup-failed-pods
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "delete", "patch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cleanup-failed-pods
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cleanup-failed-pods
+subjects:
+- kind: ServiceAccount
+  name: cleanup-failed-pods
+  namespace: kube-system

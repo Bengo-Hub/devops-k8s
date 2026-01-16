@@ -1,0 +1,81 @@
+# One-time Job to update kubelet maxPods configuration
+# This requires running on the host with access to kubelet config
+# IMPORTANT: Apply with kubectl apply -f, then delete after completion
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: update-kubelet-script
+  namespace: kube-system
+data:
+  update-maxpods.sh: |
+    #!/bin/sh
+    set -e
+
+    KUBELET_CONFIG="/host/var/lib/kubelet/config.yaml"
+    NEW_MAX_PODS=${NEW_MAX_PODS:-130}
+
+    echo "Current kubelet config:"
+    grep -E "^maxPods:" "$KUBELET_CONFIG" || echo "maxPods not set (default: 110)"
+
+    # Backup
+    cp "$KUBELET_CONFIG" "$KUBELET_CONFIG.backup.$(date +%Y%m%d-%H%M%S)"
+
+    # Update or add maxPods
+    if grep -q "^maxPods:" "$KUBELET_CONFIG"; then
+      sed -i "s/^maxPods:.*/maxPods: $NEW_MAX_PODS/" "$KUBELET_CONFIG"
+    else
+      echo "maxPods: $NEW_MAX_PODS" >> "$KUBELET_CONFIG"
+    fi
+
+    echo "Updated maxPods to: $NEW_MAX_PODS"
+    grep "maxPods" "$KUBELET_CONFIG"
+
+    # Note: kubelet needs to be restarted for changes to take effect
+    # This happens automatically when kubelet detects config changes,
+    # or manually via: systemctl restart kubelet
+    echo ""
+    echo "IMPORTANT: Restart kubelet on the node for changes to take effect:"
+    echo "  ssh to node and run: systemctl restart kubelet"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: update-kubelet-maxpods
+  namespace: kube-system
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 1
+  template:
+    spec:
+      hostPID: true
+      hostNetwork: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      restartPolicy: Never
+      containers:
+      - name: update-kubelet
+        image: alpine:3.19
+        command: ["/bin/sh", "/scripts/update-maxpods.sh"]
+        env:
+        - name: NEW_MAX_PODS
+          value: "130"
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+        - name: scripts
+          mountPath: /scripts
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+      - name: scripts
+        configMap:
+          name: update-kubelet-script
+          defaultMode: 0755

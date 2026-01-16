@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: notifications-service
+  name: notifications-api
   namespace: argocd
 spec:
   project: default
@@ -11,7 +11,7 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/notifications-service/values.yaml
+        - ../../apps/notifications-api/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: notifications
