@@ -4,7 +4,7 @@ replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/auth-ui
   tag: "cd3fdb0c"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
 service:

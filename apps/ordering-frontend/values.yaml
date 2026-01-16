@@ -6,7 +6,7 @@ replicaCount: 1  # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/ordering-frontend
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
 
