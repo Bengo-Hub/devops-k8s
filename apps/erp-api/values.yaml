@@ -154,13 +154,21 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-# Persistent storage for media uploads
+# Persistent storage for media uploads and backups
+# Backups are stored in /app/media/backups subdirectory
 persistence:
   enabled: true
   size: 20Gi
   mountPath: /app/media
   accessMode: ReadWriteOnce
   storageClass: local-path
+# Environment variables for the application
+# BACKUP_ROOT points to shared storage within the media PVC
+env:
+  - name: BACKUP_ROOT
+    value: /app/media/backups
+  - name: MEDIA_ROOT
+    value: /app/media
 # Enhanced HPA with custom metrics
 autoscalingCustomMetrics:
   enabled: false # Disabled - using basic HPA for now
