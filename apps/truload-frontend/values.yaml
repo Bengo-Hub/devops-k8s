@@ -65,17 +65,17 @@ migrations:
 # No persistence needed for frontend
 persistence:
   enabled: false
-# VPA configuration - DISABLED due to metrics-server issues causing eviction loop
+# VPA configuration for UI - recommendation-only mode
 verticalPodAutoscaling:
-  enabled: false
+  enabled: true
   updateMode: "Off"
-  minCPU: 100m
+  minCPU: 50m
   maxCPU: 500m
-  minMemory: 128Mi
+  minMemory: 96Mi
   maxMemory: 512Mi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
-  recommendationMode: false
+  recommendationMode: true
 # No Celery for Next.js frontend
 celeryWorker:
   enabled: false
