@@ -2,6 +2,7 @@ nameOverride: cafe-website
 fullnameOverride: cafe-website
 
 replicaCount: 1
+minReadySeconds: 30
 
 image:
   repository: docker.io/codevertex/cafe-website
@@ -71,8 +72,8 @@ autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 1
-  targetCPUUtilizationPercentage: 65
-  targetMemoryUtilizationPercentage: 75
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
 
 ingress:
   enabled: true
@@ -93,10 +94,19 @@ ingress:
 
 monitoring:
   enabled: false
-  prometheus:
-    enabled: false
 
 serviceMonitor:
   enabled: false
-  namespace: infra
+
+# VPA configuration for UI - recommendation-only mode
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Off"
+  minCPU: 50m
+  maxCPU: 1000m
+  minMemory: 128Mi
+  maxMemory: 2Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: true
 

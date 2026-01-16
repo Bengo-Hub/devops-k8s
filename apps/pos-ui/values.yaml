@@ -1,7 +1,8 @@
 nameOverride: pos-ui
 fullnameOverride: pos-ui
 
-replicaCount: 1  # Optimized for resource-constrained environment
+replicaCount: 1
+minReadySeconds: 30
 
 image:
   repository: docker.io/codevertex/pos-ui
@@ -21,17 +22,24 @@ healthCheck:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 5
+    initialDelaySeconds: 10
     periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
   liveness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 20
+    initialDelaySeconds: 30
     periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
 
 strategy:
   type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
 
 env:
   - name: NEXT_PUBLIC_API_URL
@@ -58,13 +66,11 @@ resources:
     memory: 256Mi
 
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 75
-  targetCPUUtilizationPercentage: 65
-  targetMemoryUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
 
 ingress:
   enabled: true
@@ -84,10 +90,19 @@ ingress:
       secretName: pos-ui-tls
 
 monitoring:
-  enabled: true
-  prometheus:
-    enabled: false
+  enabled: false
 
 serviceMonitor:
   enabled: false
-  namespace: infra  # Set namespace even if disabled for consistency
+
+# VPA configuration for UI - recommendation-only mode
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Off"
+  minCPU: 50m
+  maxCPU: 1000m
+  minMemory: 128Mi
+  maxMemory: 2Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: true
