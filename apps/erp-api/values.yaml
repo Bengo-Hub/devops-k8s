@@ -1,6 +1,7 @@
 image:
   repository: docker.io/codevertex/erp-api
   tag: "521d11dd" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
+  pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
 # Pod-level security context - CRITICAL for PVC permissions

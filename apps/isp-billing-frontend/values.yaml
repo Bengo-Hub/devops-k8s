@@ -6,7 +6,7 @@ replicaCount: 1
 image:
   repository: docker.io/codevertex/isp-billing-frontend
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
 
