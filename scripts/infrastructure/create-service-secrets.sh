@@ -30,6 +30,7 @@ if [[ -z "$SERVICE_NAME" ]]; then
     echo "Supported services:"
     echo "  - auth-service"
     echo "  - cafe-backend"
+    echo "  - ordering-backend"
     echo "  - treasury-app"
     echo "  - inventory-service"
     echo "  - logistics-service"
@@ -45,6 +46,9 @@ if [[ -z "$NAMESPACE" ]]; then
             ;;
         cafe-backend)
             NAMESPACE="cafe"
+            ;;
+        ordering-backend)
+            NAMESPACE="ordering"
             ;;
         treasury-app)
             NAMESPACE="treasury"
