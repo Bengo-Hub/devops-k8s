@@ -18,14 +18,22 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# Ordering-backend uses Ent ORM which automatically creates/updates schema on startup
-# See internal/app/app.go line 89: ormClient.Schema.Create(ctx)
-# Seeding runs automatically via Helm post-install/post-upgrade hook (idempotent)
+# Ordering-backend uses Ent ORM for schema management
+# migrations: Runs Ent schema.Create() to create/update tables
+# seed: Populates initial data (roles, permissions, demo tenant)
 migrations:
-  enabled: false  # Disabled - Ent handles schema automatically on startup
+  enabled: true
+  binaryName: migrate
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 seed:
-  enabled: true  # Automated seeding via Helm hook (idempotent)
+  enabled: true
   binaryName: seed
   resources:
     requests:
@@ -92,8 +100,6 @@ autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 1
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 75
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
 
