@@ -724,6 +724,103 @@ jobs:
           echo "✅ All service JWT/RSA keys verified or created"
           echo "::endgroup::"
 
+      - name: Create Auth API Secrets (OAuth Credentials & Admin Seeding)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        timeout-minutes: 5
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
+          MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
+          GLOBAL_ADMIN_PASSWORD: ${{ secrets.GLOBAL_ADMIN_PASSWORD }}
+          GLOBAL_ADMIN_EMAIL: ${{ secrets.GLOBAL_ADMIN_EMAIL }}
+          DEFAULT_TENANT_SLUG: ${{ secrets.DEFAULT_TENANT_SLUG }}
+        run: |
+          echo "::group::Creating Auth API Secrets"
+
+          NAMESPACE="auth"
+          SECRET_NAME="auth-api-secrets"
+
+          # Create namespace if it doesn't exist
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
+
+          # Check if secret already exists
+          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+            echo "✓ Auth API secrets already exist - updating..."
+            kubectl delete secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1 || true
+          fi
+
+          # Get PostgreSQL URL from existing infrastructure
+          PG_HOST="postgresql.infra.svc.cluster.local"
+          PG_PORT="5432"
+          DB_NAME="auth"
+          DB_USER="auth_user"
+          POSTGRES_URL="postgresql://${DB_USER}:${POSTGRES_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
+
+          # Generate OAuth state secret if not provided
+          OAUTH_STATE_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+
+          # Create secret with all auth-api credentials
+          kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
+            --from-literal=postgresUrl="${POSTGRES_URL}" \
+            --from-literal=REDIS_PASSWORD="${POSTGRES_PASSWORD}" \
+            --from-literal=OAUTH_STATE_SECRET="${OAUTH_STATE_SECRET}" \
+            --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}" \
+            --from-literal=GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-}" \
+            --from-literal=GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID:-}" \
+            --from-literal=GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET:-}" \
+            --from-literal=MICROSOFT_CLIENT_ID="${MICROSOFT_CLIENT_ID:-}" \
+            --from-literal=MICROSOFT_CLIENT_SECRET="${MICROSOFT_CLIENT_SECRET:-}" \
+            --from-literal=MICROSOFT_TENANT_ID="${MICROSOFT_TENANT_ID:-common}" \
+            --from-literal=SEED_ADMIN_PASSWORD="${GLOBAL_ADMIN_PASSWORD:-ChangeMe123!}" \
+            --from-literal=SEED_ADMIN_EMAIL="${GLOBAL_ADMIN_EMAIL:-admin@codevertex.com}" \
+            --from-literal=DEFAULT_TENANT_SLUG="${DEFAULT_TENANT_SLUG:-codevertex}"
+
+          # Verify OAuth credentials
+          if [ -n "${GOOGLE_CLIENT_ID}" ]; then
+            echo "✅ Google OAuth credentials configured"
+          else
+            echo "⚠️  Google OAuth credentials not set - set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in GitHub secrets"
+          fi
+
+          if [ -n "${GITHUB_CLIENT_ID}" ]; then
+            echo "✅ GitHub OAuth credentials configured"
+          else
+            echo "⚠️  GitHub OAuth credentials not set - set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in GitHub secrets"
+          fi
+
+          if [ -n "${MICROSOFT_CLIENT_ID}" ]; then
+            echo "✅ Microsoft OAuth credentials configured"
+          else
+            echo "⚠️  Microsoft OAuth credentials not set (optional) - set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in GitHub secrets"
+          fi
+
+          # Verify admin seeding credentials
+          if [ -n "${GLOBAL_ADMIN_PASSWORD}" ]; then
+            echo "✅ Global admin password configured for seeding"
+          else
+            echo "⚠️  GLOBAL_ADMIN_PASSWORD not set - using default (ChangeMe123!)"
+          fi
+
+          if [ -n "${GLOBAL_ADMIN_EMAIL}" ]; then
+            echo "✅ Global admin email configured: ${GLOBAL_ADMIN_EMAIL}"
+          else
+            echo "⚠️  GLOBAL_ADMIN_EMAIL not set - using default (admin@codevertex.com)"
+          fi
+
+          if [ -n "${DEFAULT_TENANT_SLUG}" ]; then
+            echo "✅ Default tenant slug configured: ${DEFAULT_TENANT_SLUG}"
+          else
+            echo "⚠️  DEFAULT_TENANT_SLUG not set - using default (codevertex)"
+          fi
+
+          echo "✅ Auth API secrets created in $NAMESPACE namespace"
+          echo "::endgroup::"
+
       - name: Install Argo CD (idempotent)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
