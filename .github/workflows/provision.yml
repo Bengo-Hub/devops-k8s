@@ -819,6 +819,40 @@ jobs:
           echo "✅ Auth API secrets created in $NAMESPACE namespace"
           echo "::endgroup::"
 
+      - name: Create Ordering Backend Secrets (Database Connection)
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        timeout-minutes: 5
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          echo "::group::Creating Ordering Backend Secrets"
+
+          NAMESPACE="ordering"
+          SECRET_NAME="ordering-backend-secrets"
+
+          # Create namespace if it doesn't exist
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
+
+          # Check if secret already exists
+          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+            echo "✓ Ordering Backend secrets already exist - updating..."
+            kubectl delete secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1 || true
+          fi
+
+          # Get PostgreSQL URL from existing infrastructure
+          PG_HOST="postgresql.infra.svc.cluster.local"
+          PG_PORT="5432"
+          DB_NAME="ordering"
+          DB_USER="ordering_user"
+          POSTGRES_URL="postgresql://${DB_USER}:${POSTGRES_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
+
+          # Create secret with ordering-backend credentials
+          kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
+            --from-literal=postgresUrl="${POSTGRES_URL}"
+
+          echo "✅ Ordering Backend secrets created in $NAMESPACE namespace"
+          echo "::endgroup::"
+
       - name: Install Argo CD (idempotent)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
