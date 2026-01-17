@@ -21,14 +21,28 @@ spec:
         component: setupdb
     spec:
       restartPolicy: Never
+      {{- if .Values.securityContext }}
+      securityContext:
+        {{- if .Values.securityContext.fsGroup }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        {{- end }}
+      {{- end }}
       {{- if .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.volumes }}
+      volumes:
+        {{- toYaml .Values.volumes | nindent 8 }}
       {{- end }}
       containers:
       - name: setupdb
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+        {{- if .Values.volumeMounts }}
+        volumeMounts:
+          {{- toYaml .Values.volumeMounts | nindent 10 }}
+        {{- end }}
         # Load environment variables from the same secret as the main app
         {{- if .Values.envFromSecret }}
         envFrom:
