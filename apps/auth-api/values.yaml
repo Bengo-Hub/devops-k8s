@@ -83,6 +83,75 @@ env:
   # Seed admin password (for manual seeding if needed)
   - name: SEED_ADMIN_PASSWORD
     value: "ChangeMe123!"
+  # Token issuer and audience for JWT
+  - name: AUTH_TOKEN_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: AUTH_TOKEN_AUDIENCE
+    value: "codevertex"
+  # OAuth State Secret (for CSRF protection)
+  - name: AUTH_SECURITY_OAUTH_STATE_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: OAUTH_STATE_SECRET
+        optional: true
+  # Google OAuth Provider
+  - name: AUTH_PROVIDERS_GOOGLE_ENABLED
+    value: "true"
+  - name: AUTH_PROVIDERS_GOOGLE_CLIENT_ID
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: GOOGLE_CLIENT_ID
+        optional: false
+  - name: AUTH_PROVIDERS_GOOGLE_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: GOOGLE_CLIENT_SECRET
+        optional: false
+  - name: AUTH_PROVIDERS_GOOGLE_REDIRECT_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/google/callback"
+  # GitHub OAuth Provider
+  - name: AUTH_PROVIDERS_GITHUB_ENABLED
+    value: "true"
+  - name: AUTH_PROVIDERS_GITHUB_CLIENT_ID
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: GITHUB_CLIENT_ID
+        optional: false
+  - name: AUTH_PROVIDERS_GITHUB_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: GITHUB_CLIENT_SECRET
+        optional: false
+  - name: AUTH_PROVIDERS_GITHUB_REDIRECT_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/github/callback"
+  # Microsoft OAuth Provider
+  - name: AUTH_PROVIDERS_MICROSOFT_ENABLED
+    value: "true"
+  - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_ID
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: MICROSOFT_CLIENT_ID
+        optional: true
+  - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: MICROSOFT_CLIENT_SECRET
+        optional: true
+  - name: AUTH_PROVIDERS_MICROSOFT_TENANT_ID
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: MICROSOFT_TENANT_ID
+        optional: true
+  - name: AUTH_PROVIDERS_MICROSOFT_REDIRECT_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/microsoft/callback"
 # ============================================================================
 # DATABASE SETUP, MIGRATIONS AND SEEDING
 # ============================================================================
@@ -124,6 +193,18 @@ seed:
         secretKeyRef:
           name: auth-api-secrets
           key: SEED_ADMIN_PASSWORD
+          optional: true
+    - name: SEED_ADMIN_EMAIL
+      valueFrom:
+        secretKeyRef:
+          name: auth-api-secrets
+          key: SEED_ADMIN_EMAIL
+          optional: true
+    - name: DEFAULT_TENANT_SLUG
+      valueFrom:
+        secretKeyRef:
+          name: auth-api-secrets
+          key: DEFAULT_TENANT_SLUG
           optional: true
   resources:
     requests:
