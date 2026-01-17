@@ -31,10 +31,10 @@
 
 | Service | CPU Request | Memory Request | Max Replicas |
 |---------|-------------|----------------|--------------|
-| **cafe-backend** | 200m | 512Mi | 4 |
+| **ordering-backend** | 200m | 512Mi | 4 |
 | **notifications-app** | 150m | 512Mi | 4 |
 | **treasury-app** | 150m | 512Mi | 4 |
-| **cafe-frontend** | 100m | 256Mi | 4 |
+| **ordering-frontend** | 100m | 256Mi | 4 |
 | **erp-ui** | 100m | 256Mi | 4 |
 
 #### Tier 3: Standby Services (Minimal Resources)

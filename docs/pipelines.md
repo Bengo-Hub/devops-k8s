@@ -100,7 +100,7 @@ The build.sh script handles the complete deployment process:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: my-service  # Service-specific name (e.g., cafe-backend, erp-api, treasury-app)
+  name: my-service  # Service-specific name (e.g., ordering-backend, erp-api, treasury-app)
   namespace: argocd
 spec:
   project: default
@@ -544,7 +544,7 @@ cd /path/to/devops-k8s
 
 # Apply ArgoCD applications (replace with your service names)
 kubectl apply -f apps/my-service/app.yaml -n argocd
-# Example: kubectl apply -f apps/cafe-backend/app.yaml -n argocd
+# Example: kubectl apply -f apps/ordering-backend/app.yaml -n argocd
 # Example: kubectl apply -f apps/erp-api/app.yaml -n argocd
 
 # Verify applications are created
@@ -558,7 +558,7 @@ kubectl get applications.argoproj.io -n argocd -w
 
 # Get detailed application information (replace with your service name)
 argocd app get my-service
-# Example: argocd app get cafe-backend
+# Example: argocd app get ordering-backend
 
 # Check if applications are syncing
 kubectl get applications.argoproj.io -n argocd -o jsonpath='{.items[*].status.sync.status}'
@@ -570,7 +570,7 @@ kubectl get applications.argoproj.io -n argocd -o jsonpath='{.items[*].status.sy
 ```bash
 # Check all resources in your service namespace (replace 'my-service' with your namespace)
 kubectl get all,ingress,secrets,pvc -n my-service
-# Example: kubectl get all,ingress,secrets,pvc -n cafe
+# Example: kubectl get all,ingress,secrets,pvc -n ordering
 
 # Check specific resource types
 kubectl get deployments -n my-service
@@ -585,7 +585,7 @@ kubectl get pods -n my-service
 
 # View logs for specific pods (replace with your deployment name)
 kubectl logs -f deployment/my-service-app -n my-service
-# Example: kubectl logs -f deployment/cafe-backend -n cafe
+# Example: kubectl logs -f deployment/ordering-backend -n ordering
 ```
 
 #### Check Ingress Configuration
@@ -616,7 +616,7 @@ kubectl get services -n infra -l app.kubernetes.io/name=redis
 ```bash
 # Get database credentials from your service secret (replace with your service name)
 kubectl get secret my-service-env -n my-service -o yaml
-# Example: kubectl get secret cafe-backend-env -n cafe -o yaml
+# Example: kubectl get secret ordering-backend-env -n ordering -o yaml
 
 # Test database connectivity (replace with your database name)
 # Each service has its own database on the shared PostgreSQL instance
@@ -630,15 +630,15 @@ kubectl run postgres-client --rm -i --tty --image postgres:13 -- psql -h postgre
 ```bash
 # Check cert-manager certificates (replace with your service namespace)
 kubectl get certificates -n my-service
-# Example: kubectl get certificates -n cafe
+# Example: kubectl get certificates -n ordering
 
 # Check certificate details (replace with your certificate name)
 kubectl describe certificate my-service-tls -n my-service
-# Example: kubectl describe certificate cafe-masterspace-tls -n cafe
+# Example: kubectl describe certificate cafe-masterspace-tls -n ordering
 
 # Check if certificates are ready (replace with your service namespace)
 kubectl get certificates -n my-service -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
-# Example: kubectl get certificates -n cafe -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
+# Example: kubectl get certificates -n ordering -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
 ```
 
 #### Renew Certificates Manually

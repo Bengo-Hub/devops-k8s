@@ -1016,7 +1016,7 @@ jobs:
           echo "- RabbitMQ: kubectl get secret rabbitmq -n ${DB_NAMESPACE} -o jsonpath='{.data.rabbitmq-password}' | base64 -d"
           echo ""
           echo "Per-Service Databases:"
-          echo "- Each service (cafe-backend, erp-api, treasury-app, notifications-app) creates its own database"
+          echo "- Each service (ordering-backend, erp-api, treasury-app, notifications-app) creates its own database"
           echo "- Database names: cafe, bengo_erp, treasury, notifications"
           echo "- Databases are created automatically during service deployment"
           echo ""
