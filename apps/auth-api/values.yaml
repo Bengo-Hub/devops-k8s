@@ -113,25 +113,26 @@ env:
   - name: AUTH_PROVIDERS_GOOGLE_REDIRECT_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/google/callback"
   # GitHub OAuth Provider (optional: true allows deployment without OAuth configured)
+  # Uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
   - name: AUTH_PROVIDERS_GITHUB_ENABLED
     value: "true"
   - name: AUTH_PROVIDERS_GITHUB_CLIENT_ID
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
-        key: GITHUB_CLIENT_ID
+        key: GIT_APP_ID
         optional: true
   - name: AUTH_PROVIDERS_GITHUB_CLIENT_SECRET
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
-        key: GITHUB_CLIENT_SECRET
+        key: GIT_APP_SECRET
         optional: true
   - name: AUTH_PROVIDERS_GITHUB_REDIRECT_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/github/callback"
-  # Microsoft OAuth Provider
+  # Microsoft OAuth Provider (disabled until credentials are configured)
   - name: AUTH_PROVIDERS_MICROSOFT_ENABLED
-    value: "true"
+    value: "false"
   - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_ID
     valueFrom:
       secretKeyRef:
