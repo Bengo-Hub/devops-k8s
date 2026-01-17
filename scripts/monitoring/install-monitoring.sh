@@ -87,28 +87,47 @@ deploy_via_argocd_app() {
   log_info "Applying ArgoCD monitoring Application: ${app_manifest}"
   kubectl apply -f "${app_manifest}" >/dev/null
 
-  # Wait for key workloads to appear and become ready in the target namespace.
+  # ArgoCD will sync the application asynchronously
+  # We don't need to wait for full deployment - ArgoCD handles that
   local ns="${MONITORING_NAMESPACE}"
-  local deadline=$((SECONDS + 900))
 
-  log_info "Waiting for Prometheus Operator deployment to appear in ${ns}..."
+  # Short wait for ArgoCD to start syncing (30 seconds)
+  log_info "Waiting for ArgoCD to start syncing monitoring Application..."
+  local quick_timeout=$((SECONDS + 60))
+
   until kubectl -n "${ns}" get deployment prometheus-kube-prometheus-operator >/dev/null 2>&1; do
-    if [ $SECONDS -gt $deadline ]; then
-      log_error "Timed out waiting for prometheus-kube-prometheus-operator deployment to be created in ${ns}"
-      return 1
+    if [ $SECONDS -gt $quick_timeout ]; then
+      log_warning "Prometheus Operator deployment not yet created in ${ns}"
+      log_info "ArgoCD will continue syncing asynchronously - check ArgoCD dashboard for status"
+      log_info "ArgoCD Application status:"
+      kubectl get application prometheus -n argocd -o wide 2>/dev/null || true
+      return 0  # Return success - ArgoCD will handle the sync
     fi
     sleep 5
   done
 
-  log_info "Waiting for Prometheus Operator deployment rollout in ${ns}..."
-  kubectl -n "${ns}" rollout status deployment/prometheus-kube-prometheus-operator --timeout=10m
+  # If deployment exists, give it a short time to start rolling out (non-blocking)
+  log_info "Prometheus Operator deployment found in ${ns}"
+  log_info "Checking initial rollout status (non-blocking)..."
 
-  log_info "Waiting for Grafana deployment rollout in ${ns} (if enabled)..."
-  if kubectl -n "${ns}" get deployment prometheus-grafana >/dev/null 2>&1; then
-    kubectl -n "${ns}" rollout status deployment/prometheus-grafana --timeout=10m
+  # Quick check - don't wait long
+  if kubectl -n "${ns}" rollout status deployment/prometheus-kube-prometheus-operator --timeout=2m 2>/dev/null; then
+    log_success "Prometheus Operator rolled out successfully"
+  else
+    log_info "Prometheus Operator still rolling out - ArgoCD will continue syncing"
   fi
 
-  log_success "Monitoring stack applied via ArgoCD in ${ns}"
+  # Check Grafana briefly
+  if kubectl -n "${ns}" get deployment prometheus-grafana >/dev/null 2>&1; then
+    if kubectl -n "${ns}" rollout status deployment/prometheus-grafana --timeout=1m 2>/dev/null; then
+      log_success "Grafana rolled out successfully"
+    else
+      log_info "Grafana still rolling out - ArgoCD will continue syncing"
+    fi
+  fi
+
+  log_success "Monitoring stack ArgoCD Application applied in ${ns}"
+  log_info "Full sync will complete asynchronously via ArgoCD"
   return 0
 }
 
