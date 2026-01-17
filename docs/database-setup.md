@@ -260,10 +260,10 @@ After installation, the script outputs connection strings. Update your app's sec
 # Redis: redis://:xyz789abc@redis-master.infra.svc.cluster.local:6379/0
 
 # Update your service's kubeSecrets/devENV.yaml with these values
-# Example: Update Cafe/cafe-backend/KubeSecrets/devENV.yaml
+# Example: Update Cafe/ordering-backend/KubeSecrets/devENV.yaml
 # Then apply:
 kubectl apply -f your-service/KubeSecrets/devENV.yaml
-# Example: kubectl apply -f Cafe/cafe-backend/KubeSecrets/devENV.yaml
+# Example: kubectl apply -f Cafe/ordering-backend/KubeSecrets/devENV.yaml
 ```
 
 **Note:** The automated script displays the exact credentials you need to copy.
@@ -311,7 +311,7 @@ If not using the automated script output, update your service's secret manifest 
 apiVersion: v1
 kind: Secret
 metadata:
-  name: my-service-env  # Replace with your service name (e.g., cafe-backend-env)
+  name: my-service-env  # Replace with your service name (e.g., ordering-backend-env)
   namespace: my-service  # Replace with your service namespace (e.g., cafe)
 type: Opaque
 stringData:
@@ -344,11 +344,11 @@ stringData:
 ```bash
 # Apply to cluster (replace with your service path)
 kubectl apply -f your-service/KubeSecrets/devENV.yaml
-# Example: kubectl apply -f Cafe/cafe-backend/KubeSecrets/devENV.yaml
+# Example: kubectl apply -f Cafe/ordering-backend/KubeSecrets/devENV.yaml
 
 # Verify (replace with your service secret name and namespace)
 kubectl get secret my-service-env -n my-service -o yaml
-# Example: kubectl get secret cafe-backend-env -n cafe -o yaml
+# Example: kubectl get secret ordering-backend-env -n ordering -o yaml
 ```
 
 ---
@@ -363,7 +363,7 @@ jobs:
   deploy:
     uses: Bengo-Hub/devops-k8s/.github/workflows/reusable-build-deploy.yml@main
     with:
-      app_name: my-service  # Replace with your service name (e.g., cafe-backend)
+      app_name: my-service  # Replace with your service name (e.g., ordering-backend)
       deploy: true
       namespace: my-service  # Replace with your service namespace (e.g., cafe)
       setup_databases: true       # Enable automated DB setup
@@ -417,7 +417,7 @@ ALTER DATABASE my_service_db OWNER TO my_service_user;
 EOF
 # Example for cafe service:
 # CREATE DATABASE cafe;
-# CREATE USER cafe_user WITH PASSWORD 'CHANGE_ME_STRONG_PASSWORD';
+# CREATE USER ordering_user WITH PASSWORD 'CHANGE_ME_STRONG_PASSWORD';
 
 # Configure remote access (if K8s is on different server)
 echo "host all all 0.0.0.0/0 md5" >> /etc/postgresql/*/main/pg_hba.conf
@@ -452,13 +452,13 @@ Update your service's secret manifest (e.g., `KubeSecrets/devENV.yaml`):
 apiVersion: v1
 kind: Secret
 metadata:
-  name: my-service-env  # Replace with your service name (e.g., cafe-backend-env)
+  name: my-service-env  # Replace with your service name (e.g., ordering-backend-env)
   namespace: my-service  # Replace with your service namespace (e.g., cafe)
 type: Opaque
 stringData:
   # PostgreSQL - External VPS
   DATABASE_URL: "postgresql://my_service_user:PASSWORD@VPS_IP_OR_HOSTNAME:5432/my_service_db"
-  # Example: DATABASE_URL: "postgresql://cafe_user:PASSWORD@VPS_IP_OR_HOSTNAME:5432/cafe"
+  # Example: DATABASE_URL: "postgresql://ordering_user:PASSWORD@VPS_IP_OR_HOSTNAME:5432/cafe"
   DB_HOST: "VPS_IP_OR_HOSTNAME"
   DB_PORT: "5432"
   DB_NAME: "my_service_db"  # Replace with your service database name
@@ -488,7 +488,7 @@ jobs:
   deploy:
     uses: codevertex/devops-k8s/.github/workflows/reusable-build-deploy.yml@main
     with:
-      app_name: my-service  # Replace with your service name (e.g., cafe-backend)
+      app_name: my-service  # Replace with your service name (e.g., ordering-backend)
       deploy: true
       namespace: my-service  # Replace with your service namespace (e.g., cafe)
       # Database setup (optional)
@@ -530,7 +530,7 @@ cat > /root/backup-my-service-db.sh <<'EOF'
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
 pg_dump -U my_service_user my_service_db | gzip > /backup/my_service_db_$DATE.sql.gz
-# Example: pg_dump -U cafe_user cafe | gzip > /backup/cafe_$DATE.sql.gz
+# Example: pg_dump -U ordering_user cafe | gzip > /backup/cafe_$DATE.sql.gz
 # Keep only last 7 days
 find /backup -name "my_service_db_*.sql.gz" -mtime +7 -delete
 # Example: find /backup -name "cafe_*.sql.gz" -mtime +7 -delete
@@ -602,7 +602,7 @@ redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/1
 ```bash
 # PostgreSQL
 postgresql://my_service_user:PASSWORD@VPS_IP:5432/my_service_db
-# Example: postgresql://cafe_user:PASSWORD@VPS_IP:5432/cafe
+# Example: postgresql://ordering_user:PASSWORD@VPS_IP:5432/cafe
 
 # Redis
 redis://:PASSWORD@VPS_IP:6379/0
@@ -634,7 +634,7 @@ kubectl get svc -n infra postgresql
 # Test connection from your service pod (replace with your service namespace and deployment name)
 kubectl exec -n my-service deployment/my-service-app -- \
   python manage.py dbshell
-# Example: kubectl exec -n cafe deployment/cafe-backend -- python manage.py dbshell
+# Example: kubectl exec -n ordering deployment/ordering-backend -- python manage.py dbshell
 ```
 
 ### Cannot connect to Redis
@@ -646,7 +646,7 @@ kubectl get pods -n infra -l app.kubernetes.io/name=redis
 # Test connection from your service pod (replace with your service namespace and deployment name)
 kubectl exec -n my-service deployment/my-service-app -- \
   python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0'); print(r.ping())"
-# Example: kubectl exec -n cafe deployment/cafe-backend -- python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0'); print(r.ping())"
+# Example: kubectl exec -n ordering deployment/ordering-backend -- python -c "import redis; r=redis.from_url('redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0'); print(r.ping())"
 ```
 
 ### Database initialization fails
@@ -654,11 +654,11 @@ kubectl exec -n my-service deployment/my-service-app -- \
 ```bash
 # Check init job logs (replace with your service init job name and namespace)
 kubectl logs job/my-service-db-init -n my-service
-# Example: kubectl logs job/cafe-db-init -n cafe
+# Example: kubectl logs job/cafe-db-init -n ordering
 
 # Manually run migrations (replace with your service namespace and deployment name)
 kubectl exec -n my-service deployment/my-service-app -- \
-# Example: kubectl exec -n cafe deployment/cafe-backend -- \
+# Example: kubectl exec -n ordering deployment/ordering-backend -- \
   python manage.py migrate
 ```
 
@@ -715,7 +715,7 @@ Each service has its own unique database on the shared PostgreSQL instance, whil
 │  │              POSTGRES_PASSWORD (from secrets)     │  │
 │  ├──────────────────────────────────────────────────┤  │
 │  │  Service Databases:                              │  │
-│  │  - cafe (cafe_user)                              │  │
+│  │  - cafe (ordering_user)                              │  │
 │  │  - erp (erp_user)                                │  │
 │  │  - treasury (treasury_user)                      │  │
 │  │  - notifications (notifications_user)             │  │
@@ -750,7 +750,7 @@ Each service has its own unique database on the shared PostgreSQL instance, whil
 **2. Per-Service Databases**
 Each service has:
 - **Unique database name**: e.g., `cafe`, `erp`, `treasury`
-- **Service-specific user**: e.g., `cafe_user`, `erp_user`
+- **Service-specific user**: e.g., `ordering_user`, `erp_user`
 - **Isolated data**: Each service's data is completely isolated
 
 **3. Password Management**
@@ -762,7 +762,7 @@ Each service has:
 
 | Service | Database Name | Database User | Namespace | Build Script |
 |---------|--------------|---------------|-----------|--------------|
-| cafe-backend | `cafe` | `cafe_user` | `cafe` | `Cafe/cafe-backend/build.sh` |
+| ordering-backend | `cafe` | `ordering_user` | `cafe` | `Cafe/ordering-backend/build.sh` |
 | erp-api | `bengo_erp` | `erp_user` | `erp` | `erp/erp-api/build.sh` |
 | treasury-app | `treasury` | `treasury_user` | `treasury` | `treasury-app/build.sh` |
 | notifications-app | `notifications` | `notifications_user` | `notifications` | `notifications-app/build.sh` |
@@ -772,7 +772,7 @@ All services use the shared Redis instance in the `infra` namespace. Services ca
 
 | Service | Redis DB Number | Redis Address |
 |---------|----------------|---------------|
-| cafe-backend | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
+| ordering-backend | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
 | erp-api | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
 | treasury-app | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
 | notifications-app | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
@@ -814,7 +814,7 @@ Each service creates its own database during deployment:
 ```bash
 # Option 1: Using the database creation script
 SERVICE_DB_NAME=cafe \
-APP_NAME=cafe-backend \
+APP_NAME=ordering-backend \
 POSTGRES_ADMIN_PASSWORD="your-admin-password" \
 ./devops-k8s/scripts/create-service-database.sh
 
@@ -827,10 +827,10 @@ POSTGRES_ADMIN_PASSWORD="your-admin-password" \
 Each service stores its database credentials in its own namespace:
 
 ```bash
-# Example: cafe-backend
-kubectl -n cafe create secret generic cafe-backend-env \
-  --from-literal=CAFE_POSTGRES_URL="postgresql://cafe_user:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe" \
-  --from-literal=CAFE_REDIS_ADDR="redis-master.infra.svc.cluster.local:6379"
+# Example: ordering-backend
+kubectl -n ordering create secret generic ordering-backend-env \
+  --from-literal=ORDERING_POSTGRES_URL="postgresql://ordering_user:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe" \
+  --from-literal=ORDERING_REDIS_ADDR="redis-master.infra.svc.cluster.local:6379"
 ```
 
 ### Integration with Build Scripts
@@ -854,10 +854,10 @@ DB_TYPES=postgres,redis
 
 ```bash
 # Basic usage (infers database name from APP_NAME or NAMESPACE)
-APP_NAME=cafe-backend ./devops-k8s/scripts/create-service-database.sh
+APP_NAME=ordering-backend ./devops-k8s/scripts/create-service-database.sh
 
 # Explicit database name
-SERVICE_DB_NAME=cafe SERVICE_DB_USER=cafe_user ./devops-k8s/scripts/create-service-database.sh
+SERVICE_DB_NAME=cafe SERVICE_DB_USER=ordering_user ./devops-k8s/scripts/create-service-database.sh
 
 # With custom admin password
 POSTGRES_ADMIN_PASSWORD="custom-password" \
@@ -879,7 +879,7 @@ SERVICE_DB_NAME=cafe \
 **PostgreSQL:**
 ```bash
 # Using service-specific user
-postgresql://cafe_user:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
+postgresql://ordering_user:PASSWORD@postgresql.infra.svc.cluster.local:5432/cafe
 
 # Using admin user (for management tasks)
 postgresql://admin_user:ADMIN_PASSWORD@postgresql.infra.svc.cluster.local:5432/postgres
@@ -944,8 +944,8 @@ kubectl -n infra exec -it postgresql-0 -- \
 
 **Service Can't Connect:**
 1. Verify database exists: `kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -l | grep cafe`
-2. Verify user exists: `kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -d postgres -c "\du" | grep cafe_user`
-3. Check service secret: `kubectl -n cafe get secret cafe-backend-env -o yaml`
+2. Verify user exists: `kubectl -n infra exec -it postgresql-0 -- psql -U admin_user -d postgres -c "\du" | grep ordering_user`
+3. Check service secret: `kubectl -n ordering get secret ordering-backend-env -o yaml`
 
 ### Best Practices
 
