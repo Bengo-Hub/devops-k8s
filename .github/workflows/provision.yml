@@ -727,8 +727,9 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
+          # GitHub OAuth uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
+          GIT_APP_ID: ${{ secrets.GIT_APP_ID }}
+          GIT_APP_SECRET: ${{ secrets.GIT_APP_SECRET }}
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
@@ -761,14 +762,15 @@ jobs:
           OAUTH_STATE_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
 
           # Create secret with all auth-api credentials
+          # Uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
           kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
             --from-literal=postgresUrl="${POSTGRES_URL}" \
             --from-literal=REDIS_PASSWORD="${POSTGRES_PASSWORD}" \
             --from-literal=OAUTH_STATE_SECRET="${OAUTH_STATE_SECRET}" \
             --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}" \
             --from-literal=GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-}" \
-            --from-literal=GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID:-}" \
-            --from-literal=GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET:-}" \
+            --from-literal=GIT_APP_ID="${GIT_APP_ID:-}" \
+            --from-literal=GIT_APP_SECRET="${GIT_APP_SECRET:-}" \
             --from-literal=MICROSOFT_CLIENT_ID="${MICROSOFT_CLIENT_ID:-}" \
             --from-literal=MICROSOFT_CLIENT_SECRET="${MICROSOFT_CLIENT_SECRET:-}" \
             --from-literal=MICROSOFT_TENANT_ID="${MICROSOFT_TENANT_ID:-common}" \
@@ -783,10 +785,10 @@ jobs:
             echo "⚠️  Google OAuth credentials not set - set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in GitHub secrets"
           fi
 
-          if [ -n "${GITHUB_CLIENT_ID}" ]; then
-            echo "✅ GitHub OAuth credentials configured"
+          if [ -n "${GIT_APP_ID}" ]; then
+            echo "✅ GitHub OAuth credentials configured (GIT_APP_ID/GIT_APP_SECRET)"
           else
-            echo "⚠️  GitHub OAuth credentials not set - set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in GitHub secrets"
+            echo "⚠️  GitHub OAuth credentials not set - set GIT_APP_ID and GIT_APP_SECRET in GitHub secrets"
           fi
 
           if [ -n "${MICROSOFT_CLIENT_ID}" ]; then
