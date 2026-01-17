@@ -174,8 +174,11 @@ setupDB:
       cpu: 200m
       memory: 256Mi
 # Create database schema via Ent migrations
+# TEMPORARILY DISABLED: Current image (a8823fad) has OAuth validation bug in migrate binary
+# Re-enable after pushing new image with LoadDatabaseOnly() fix
+# Migrations run at server startup instead (AUTH_DB_RUN_MIGRATIONS=true)
 migrations:
-  enabled: true # Enabled for Go services
+  enabled: false # Disabled until new image is built with LoadDatabaseOnly() fix
   binaryName: auth-migrate
   resources:
     requests:
@@ -185,8 +188,10 @@ migrations:
       cpu: 500m
       memory: 512Mi
 # Seed initial data (tenants, admin user)
+# TEMPORARILY DISABLED: Current image (a8823fad) has OAuth validation bug in seed binary
+# Re-enable after pushing new image with LoadForSeed() fix
 seed:
-  enabled: true # Runs automatically after migrations
+  enabled: false # Disabled until new image is built with LoadForSeed() fix
   binaryName: auth-seed
   env:
     - name: SEED_ADMIN_PASSWORD
