@@ -31,9 +31,9 @@ if [[ -z "$SERVICE_NAME" ]]; then
     echo "  - auth-service"
     echo "  - ordering-backend"
     echo "  - treasury-api"
-    echo "  - inventory-service"
-    echo "  - logistics-service"
-    echo "  - pos-service"
+    echo "  - inventory-api"
+    echo "  - logistics-api"
+    echo "  - pos-api"
     exit 1
 fi
 
@@ -49,13 +49,13 @@ if [[ -z "$NAMESPACE" ]]; then
         treasury-api)
             NAMESPACE="treasury"
             ;;
-        inventory-service)
+        inventory-api)
             NAMESPACE="inventory"
             ;;
-        logistics-service)
+        logistics-api)
             NAMESPACE="logistics"
             ;;
-        pos-service)
+        pos-api)
             NAMESPACE="pos"
             ;;
         *)
