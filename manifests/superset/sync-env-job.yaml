@@ -1,0 +1,133 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: superset-secret-sync
+  namespace: infra
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: superset-secret-sync
+  namespace: infra
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/status"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: superset-secret-sync
+  namespace: infra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: superset-secret-sync
+subjects:
+  - kind: ServiceAccount
+    name: superset-secret-sync
+    namespace: infra
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: superset-env-sync
+  namespace: infra
+  labels:
+    app: superset
+    component: secret-sync
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"  # Run before other resources
+spec:
+  ttlSecondsAfterFinished: 300  # Auto-delete after 5 minutes
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: superset
+        component: secret-sync
+    spec:
+      serviceAccountName: superset-secret-sync
+      restartPolicy: OnFailure
+      containers:
+        - name: sync-secrets
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -e
+
+              echo "==================================="
+              echo "Syncing Superset Secrets"
+              echo "==================================="
+
+              NAMESPACE="infra"
+              SOURCE_SECRET="superset-secrets"
+              TARGET_SECRET="superset-env"
+
+              # Check if source secret exists
+              if ! kubectl get secret "${SOURCE_SECRET}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+                  echo "ERROR: Source secret ${SOURCE_SECRET} not found in namespace ${NAMESPACE}"
+                  echo "Run create-superset-secrets.sh from provision workflow first"
+                  exit 1
+              fi
+
+              # Get values from superset-secrets
+              echo "Reading credentials from ${SOURCE_SECRET}..."
+              DB_PASS=$(kubectl get secret "${SOURCE_SECRET}" -n "${NAMESPACE}" -o jsonpath='{.data.DATABASE_PASSWORD}' | base64 -d)
+              SECRET_KEY=$(kubectl get secret "${SOURCE_SECRET}" -n "${NAMESPACE}" -o jsonpath='{.data.SECRET_KEY}' | base64 -d)
+              REDIS_PASS=$(kubectl get secret "${SOURCE_SECRET}" -n "${NAMESPACE}" -o jsonpath='{.data.REDIS_PASSWORD}' | base64 -d)
+
+              if [ -z "${DB_PASS}" ] || [ -z "${SECRET_KEY}" ]; then
+                  echo "ERROR: Failed to read required credentials from ${SOURCE_SECRET}"
+                  exit 1
+              fi
+
+              # Delete superset-env if it exists
+              if kubectl get secret "${TARGET_SECRET}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+                  echo "Deleting existing ${TARGET_SECRET}..."
+                  kubectl delete secret "${TARGET_SECRET}" -n "${NAMESPACE}"
+              fi
+
+              # Create superset-env with correct values
+              echo "Creating ${TARGET_SECRET} with correct external service hostnames..."
+              kubectl create secret generic "${TARGET_SECRET}" \
+                  --namespace="${NAMESPACE}" \
+                  --from-literal=DB_HOST="postgresql.infra.svc.cluster.local" \
+                  --from-literal=DB_PORT="5432" \
+                  --from-literal=DB_USER="superset_user" \
+                  --from-literal=DB_PASS="${DB_PASS}" \
+                  --from-literal=DB_NAME="superset" \
+                  --from-literal=SECRET_KEY="${SECRET_KEY}" \
+                  --from-literal=SUPERSET_SECRET_KEY="${SECRET_KEY}" \
+                  --from-literal=REDIS_HOST="redis-master.infra.svc.cluster.local" \
+                  --from-literal=REDIS_PORT="6379" \
+                  --from-literal=REDIS_PASSWORD="${REDIS_PASS}"
+
+              if [ $? -eq 0 ]; then
+                  echo "✓ Secret ${TARGET_SECRET} synced successfully"
+              else
+                  echo "ERROR: Failed to create ${TARGET_SECRET}"
+                  exit 1
+              fi
+
+              # Restart deployments to pick up new secret
+              echo "Restarting Superset deployments..."
+              kubectl rollout restart deployment superset superset-worker superset-celerybeat -n "${NAMESPACE}" 2>/dev/null || true
+
+              echo "✓ Deployments restarted"
+              echo "✓ Superset environment secret synced from ${SOURCE_SECRET}"
+              echo "==================================="
+              echo "Sync completed successfully"
+              echo "==================================="
