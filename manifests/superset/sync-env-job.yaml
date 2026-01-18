@@ -123,6 +123,7 @@ spec:
                   --from-literal=DB_NAME="superset" \
                   --from-literal=SECRET_KEY="${SECRET_KEY}" \
                   --from-literal=SUPERSET_SECRET_KEY="${SECRET_KEY}" \
+                  --from-literal=REDIS_PROTO="redis" \
                   --from-literal=REDIS_HOST="redis-master.infra.svc.cluster.local" \
                   --from-literal=REDIS_PORT="6379" \
                   --from-literal=REDIS_PASSWORD="${REDIS_PASS}"
