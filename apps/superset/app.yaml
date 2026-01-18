@@ -209,35 +209,6 @@ spec:
               AUTH_TYPE = AUTH_DB
 
             custom_config: |
-              import os
-
-              # Cache configuration - v0.15.0 requires Redis URL format
-              REDIS_HOST = os.environ.get('REDIS_HOST', 'redis-master.infra.svc.cluster.local')
-              REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
-              REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
-
-              # Build Redis URL with password if available
-              if REDIS_PASSWORD:
-                  REDIS_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0'
-              else:
-                  REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
-
-              # Main cache config
-              CACHE_CONFIG = {
-                  'CACHE_TYPE': 'RedisCache',
-                  'CACHE_DEFAULT_TIMEOUT': 300,
-                  'CACHE_KEY_PREFIX': 'superset_',
-                  'CACHE_REDIS_URL': REDIS_URL,
-              }
-
-              # Data cache config (for query results, dashboard data, etc.)
-              DATA_CACHE_CONFIG = {
-                  'CACHE_TYPE': 'RedisCache',
-                  'CACHE_DEFAULT_TIMEOUT': 86400,  # 24 hours for data cache
-                  'CACHE_KEY_PREFIX': 'superset_data_',
-                  'CACHE_REDIS_URL': REDIS_URL,
-              }
-              
               # Feature flags
               FEATURE_FLAGS = {
                   'ENABLE_TEMPLATE_PROCESSING': True,
@@ -246,17 +217,17 @@ spec:
                   'DASHBOARD_RBAC': True,
                   'EMBEDDED_SUPERSET': True,
               }
-              
+
               # Query settings
               SQL_MAX_ROW = 100000
               SQLLAB_ASYNC_TIME_LIMIT_SEC = 300
               SQLLAB_TIMEOUT = 300
               SUPERSET_WEBSERVER_TIMEOUT = 300
-              
+
               # Security
               WTF_CSRF_ENABLED = True
               WTF_CSRF_TIME_LIMIT = None
-              
+
               # Row level security
               ROW_LEVEL_SECURITY_ENABLED = True
           
