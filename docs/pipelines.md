@@ -100,7 +100,7 @@ The build.sh script handles the complete deployment process:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: my-service  # Service-specific name (e.g., ordering-backend, erp-api, treasury-app)
+  name: my-service  # Service-specific name (e.g., ordering-backend, erp-api, treasury-api)
   namespace: argocd
 spec:
   project: default
