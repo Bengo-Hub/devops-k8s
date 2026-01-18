@@ -209,14 +209,24 @@ spec:
               AUTH_TYPE = AUTH_DB
 
             custom_config: |
-              # Cache configuration
+              import os
+
+              # Cache configuration - v0.15.0 requires Redis URL format
+              REDIS_HOST = os.environ.get('REDIS_HOST', 'redis-master.infra.svc.cluster.local')
+              REDIS_PORT = os.environ.get('REDIS_PORT', '6379')
+              REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD', '')
+
+              # Build Redis URL with password if available
+              if REDIS_PASSWORD:
+                  REDIS_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0'
+              else:
+                  REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
+
               CACHE_CONFIG = {
                   'CACHE_TYPE': 'RedisCache',
                   'CACHE_DEFAULT_TIMEOUT': 300,
                   'CACHE_KEY_PREFIX': 'superset_',
-                  'CACHE_REDIS_HOST': 'redis-master.infra.svc.cluster.local',
-                  'CACHE_REDIS_PORT': 6379,
-                  'CACHE_REDIS_DB': 0,
+                  'CACHE_REDIS_URL': REDIS_URL,
               }
               
               # Feature flags
