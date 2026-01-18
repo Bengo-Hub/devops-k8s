@@ -44,9 +44,9 @@ metadata:
     app: superset
     component: secret-sync
   annotations:
-    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "-5"  # Run before everything else
+    argocd.argoproj.io/sync-wave: "0"  # Run before Helm chart deployment
 spec:
   ttlSecondsAfterFinished: 300  # Auto-delete after 5 minutes
   backoffLimit: 3
