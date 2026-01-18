@@ -187,17 +187,10 @@ spec:
           enabled: false
         
         # External database and cache connections
+        # DO NOT use supersetNode.connections - it creates a separate superset-env secret
+        # with default passwords that conflict with our superset-secrets
         supersetNode:
-          connections:
-            db_host: postgresql.infra.svc.cluster.local
-            db_port: "5432"
-            db_user: superset_user
-            db_name: superset
-            redis_host: redis-master.infra.svc.cluster.local
-            redis_port: "6379"
-            redis_db: "0"
-          
-          # Environment variables from secrets
+          # Environment variables from secrets (includes DB_*, REDIS_*, SECRET_KEY, etc.)
           envFromSecret: superset-secrets
         
         # Superset configuration overrides
