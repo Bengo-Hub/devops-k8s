@@ -192,6 +192,15 @@ spec:
         supersetNode:
           # Environment variables from secrets (includes DB_*, REDIS_*, SECRET_KEY, etc.)
           envFromSecret: superset-secrets
+          # Explicitly set connection details as environment variables to prevent
+          # Helm from creating superset-env with defaults
+          env:
+            DB_HOST: postgresql.infra.svc.cluster.local
+            DB_PORT: "5432"
+            DB_USER: superset_user
+            DB_NAME: superset
+            REDIS_HOST: redis-master.infra.svc.cluster.local
+            REDIS_PORT: "6379"
         
         # Superset configuration overrides
         configOverrides:
