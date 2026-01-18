@@ -316,3 +316,11 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 3m
+
+  # Ignore differences in superset-env secret (managed externally by provision workflow)
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: superset-env
+      jsonPointers:
+        - /data

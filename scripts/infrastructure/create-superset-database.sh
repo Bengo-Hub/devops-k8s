@@ -143,7 +143,6 @@ if kubectl get secret superset-secrets -n "${SUPERSET_NAMESPACE}" >/dev/null 2>&
         -p="[{\"op\": \"replace\", \"path\": \"/data/DATABASE_PASSWORD\", \"value\": \"$(echo -n "${SUPERSET_DB_PASSWORD}" | base64)\"}]" || \
     log_warning "Failed to update Superset secrets. Please update manually."
 else
-ssh root@77.237.232.66
     log_warning "Superset secrets not found in namespace ${SUPERSET_NAMESPACE}"
     log_info "Run ./create-superset-secrets.sh to create the secrets"
 fi
