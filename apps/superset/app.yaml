@@ -13,7 +13,7 @@ spec:
   sources:
     # Superset Helm chart
     - repoURL: https://apache.github.io/superset
-      targetRevision: 0.15.1
+      targetRevision: 0.15.0
       chart: superset
       helm:
         values: |
