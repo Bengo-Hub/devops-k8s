@@ -4,8 +4,8 @@ fullnameOverride: notifications-api
 replicaCount: 1  # Optimized for resource-constrained environment
 
 image:
-  # Note: image name is notifications-app (from build.sh APP_NAME)
-  repository: docker.io/codevertex/notifications-app
+  # Note: image name is notifications-api (from build.sh APP_NAME)
+  repository: docker.io/codevertex/notifications-api
   tag: "latest"
   pullPolicy: Always
   pullSecrets:
@@ -39,8 +39,8 @@ seed:
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
-# Uses notifications-app-env created by service's setup_env_secrets.sh
-envFromSecret: notifications-app-env
+# Uses notifications-api-env created by service's setup_env_secrets.sh
+envFromSecret: notifications-api-env
 
 healthCheck:
   enabled: true
@@ -70,7 +70,7 @@ strategy:
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
-# Core settings from values, secrets from notifications-app-env (created by build.sh)
+# Core settings from values, secrets from notifications-api-env (created by build.sh)
 env:
   - name: NOTIFICATIONS_APP_ENV
     value: production
@@ -80,24 +80,24 @@ env:
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: notifications-app-env
+        name: notifications-api-env
         key: NOTIFICATIONS_POSTGRES_URL
   - name: NOTIFICATIONS_REDIS_ADDR
     valueFrom:
       secretKeyRef:
-        name: notifications-app-env
+        name: notifications-api-env
         key: NOTIFICATIONS_REDIS_ADDR
         optional: true
   - name: NOTIFICATIONS_REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: notifications-app-env
+        name: notifications-api-env
         key: NOTIFICATIONS_REDIS_PASSWORD
         optional: true
   - name: NOTIFICATIONS_NATS_URL
     valueFrom:
       secretKeyRef:
-        name: notifications-app-env
+        name: notifications-api-env
         key: NOTIFICATIONS_NATS_URL
         optional: true
   # Provider secrets (optional - create notifications-provider-secrets manually)
@@ -128,7 +128,7 @@ env:
   - name: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
     valueFrom:
       secretKeyRef:
-        name: notifications-app-env
+        name: notifications-api-env
         key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
         optional: true
   - name: NOTIFICATIONS_OTLP_ENDPOINT
