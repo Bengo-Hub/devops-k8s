@@ -44,9 +44,9 @@ metadata:
     app: superset
     component: secret-sync
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "-1"  # Run before other resources
+    argocd.argoproj.io/sync-wave: "0"  # Run after Helm deployment completes
 spec:
   ttlSecondsAfterFinished: 300  # Auto-delete after 5 minutes
   backoffLimit: 3
@@ -94,31 +94,36 @@ spec:
                   exit 1
               fi
 
-              # Delete superset-env if it exists
-              if kubectl get secret "${TARGET_SECRET}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-                  echo "Deleting existing ${TARGET_SECRET}..."
-                  kubectl delete secret "${TARGET_SECRET}" -n "${NAMESPACE}"
-              fi
+              # Wait for Helm to create superset-env secret
+              echo "Waiting for Helm to create ${TARGET_SECRET}..."
+              for i in $(seq 1 30); do
+                  if kubectl get secret "${TARGET_SECRET}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+                      echo "✓ Secret ${TARGET_SECRET} found"
+                      break
+                  fi
+                  echo "Waiting... ($i/30)"
+                  sleep 2
+              done
 
-              # Create superset-env with correct values
-              echo "Creating ${TARGET_SECRET} with correct external service hostnames..."
-              kubectl create secret generic "${TARGET_SECRET}" \
-                  --namespace="${NAMESPACE}" \
-                  --from-literal=DB_HOST="postgresql.infra.svc.cluster.local" \
-                  --from-literal=DB_PORT="5432" \
-                  --from-literal=DB_USER="superset_user" \
-                  --from-literal=DB_PASS="${DB_PASS}" \
-                  --from-literal=DB_NAME="superset" \
-                  --from-literal=SECRET_KEY="${SECRET_KEY}" \
-                  --from-literal=SUPERSET_SECRET_KEY="${SECRET_KEY}" \
-                  --from-literal=REDIS_HOST="redis-master.infra.svc.cluster.local" \
-                  --from-literal=REDIS_PORT="6379" \
-                  --from-literal=REDIS_PASSWORD="${REDIS_PASS}"
+              # Patch superset-env with correct external service hostnames
+              echo "Patching ${TARGET_SECRET} with correct external service hostnames..."
+              kubectl patch secret "${TARGET_SECRET}" -n "${NAMESPACE}" --type='json' -p='[
+                {"op": "replace", "path": "/data/DB_HOST", "value": "'$(echo -n "postgresql.infra.svc.cluster.local" | base64)'"},
+                {"op": "replace", "path": "/data/DB_PORT", "value": "'$(echo -n "5432" | base64)'"},
+                {"op": "replace", "path": "/data/DB_USER", "value": "'$(echo -n "superset_user" | base64)'"},
+                {"op": "replace", "path": "/data/DB_PASS", "value": "'$(echo -n "${DB_PASS}" | base64)'"},
+                {"op": "replace", "path": "/data/DB_NAME", "value": "'$(echo -n "superset" | base64)'"},
+                {"op": "replace", "path": "/data/SECRET_KEY", "value": "'$(echo -n "${SECRET_KEY}" | base64)'"},
+                {"op": "replace", "path": "/data/SUPERSET_SECRET_KEY", "value": "'$(echo -n "${SECRET_KEY}" | base64)'"},
+                {"op": "replace", "path": "/data/REDIS_HOST", "value": "'$(echo -n "redis-master.infra.svc.cluster.local" | base64)'"},
+                {"op": "replace", "path": "/data/REDIS_PORT", "value": "'$(echo -n "6379" | base64)'"},
+                {"op": "replace", "path": "/data/REDIS_PASSWORD", "value": "'$(echo -n "${REDIS_PASS}" | base64)'"}
+              ]'
 
               if [ $? -eq 0 ]; then
-                  echo "✓ Secret ${TARGET_SECRET} synced successfully"
+                  echo "✓ Secret ${TARGET_SECRET} patched successfully"
               else
-                  echo "ERROR: Failed to create ${TARGET_SECRET}"
+                  echo "ERROR: Failed to patch ${TARGET_SECRET}"
                   exit 1
               fi
 
