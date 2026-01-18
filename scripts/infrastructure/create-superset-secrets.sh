@@ -111,7 +111,12 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=REDIS_HOST="redis-master.infra.svc.cluster.local" \
     --from-literal=REDIS_PORT="6379" \
     --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
-    --from-literal=SUPERSET_DB_PASSWORD="${DATABASE_PASSWORD}"
+    --from-literal=SUPERSET_DB_PASSWORD="${DATABASE_PASSWORD}" \
+    --from-literal=DB_USER="superset_user" \
+    --from-literal=DB_PASS="${DATABASE_PASSWORD}" \
+    --from-literal=DB_HOST="postgresql.infra.svc.cluster.local" \
+    --from-literal=DB_PORT="5432" \
+    --from-literal=DB_NAME="superset"
 
 if [ $? -eq 0 ]; then
     log_success "Secret ${SECRET_NAME} created successfully in namespace ${NAMESPACE}"
