@@ -7,7 +7,7 @@ set -euo pipefail
 # Usage:
 #   SERVICE_NAME=auth-service ./create-service-secrets.sh
 #   SERVICE_NAME=ordering-backend NAMESPACE=ordering ./create-service-secrets.sh
-#   SERVICE_NAME=treasury-app NAMESPACE=treasury ./create-service-secrets.sh
+#   SERVICE_NAME=treasury-api NAMESPACE=treasury ./create-service-secrets.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../tools/common.sh"
@@ -30,7 +30,7 @@ if [[ -z "$SERVICE_NAME" ]]; then
     echo "Supported services:"
     echo "  - auth-service"
     echo "  - ordering-backend"
-    echo "  - treasury-app"
+    echo "  - treasury-api"
     echo "  - inventory-service"
     echo "  - logistics-service"
     echo "  - pos-service"
@@ -46,7 +46,7 @@ if [[ -z "$NAMESPACE" ]]; then
         ordering-backend)
             NAMESPACE="ordering"
             ;;
-        treasury-app)
+        treasury-api)
             NAMESPACE="treasury"
             ;;
         inventory-service)

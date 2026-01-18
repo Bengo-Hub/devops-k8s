@@ -764,7 +764,7 @@ Each service has:
 |---------|--------------|---------------|-----------|--------------|
 | ordering-backend | `cafe` | `ordering_user` | `cafe` | `Cafe/ordering-backend/build.sh` |
 | erp-api | `bengo_erp` | `erp_user` | `erp` | `erp/erp-api/build.sh` |
-| treasury-app | `treasury` | `treasury_user` | `treasury` | `treasury-app/build.sh` |
+| treasury-api | `treasury` | `treasury_user` | `treasury` | `treasury-api/build.sh` |
 | notifications-app | `notifications` | `notifications_user` | `notifications` | `notifications-app/build.sh` |
 
 **Redis Configuration:**
@@ -774,7 +774,7 @@ All services use the shared Redis instance in the `infra` namespace. Services ca
 |---------|----------------|---------------|
 | ordering-backend | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
 | erp-api | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
-| treasury-app | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
+| treasury-api | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
 | notifications-app | 0 (default) | `redis-master.infra.svc.cluster.local:6379` |
 
 **RabbitMQ Configuration:**
