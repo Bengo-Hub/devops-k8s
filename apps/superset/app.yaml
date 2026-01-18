@@ -183,9 +183,13 @@ spec:
           # Disable embedded PostgreSQL and Redis (using external instances)
           postgresql:
             enabled: false
-          
+
           redis:
             enabled: false
+
+          # Disable automatic superset-env secret creation (managed by PreSync hook)
+          secretEnv:
+            create: false
           
           # External database and cache connections
           # DO NOT use supersetNode.connections - it creates a separate superset-env secret
