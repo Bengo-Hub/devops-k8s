@@ -95,8 +95,7 @@ spec:
           ingress:
             enabled: true
             ingressClassName: nginx
-            hosts:
-              - superset.codevertexitsolutions.com
+            host: superset.codevertexitsolutions.com
             path: /
             pathType: Prefix
             annotations:
