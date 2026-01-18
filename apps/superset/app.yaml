@@ -204,16 +204,56 @@ spec:
           env:
             SUPERSET_LOAD_EXAMPLES: "no"
             SUPERSET_PORT: "8088"
+            SECRET_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: SECRET_KEY
             SUPERSET_SECRET_KEY:
               valueFrom:
                 secretKeyRef:
                   name: superset-secrets
                   key: SECRET_KEY
-            DATABASE_PASSWORD:
+            DB_USER:
               valueFrom:
                 secretKeyRef:
                   name: superset-secrets
-                  key: DATABASE_PASSWORD
+                  key: DB_USER
+            DB_PASS:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: DB_PASS
+            DB_HOST:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: DB_HOST
+            DB_PORT:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: DB_PORT
+            DB_NAME:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: DB_NAME
+            REDIS_HOST:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: REDIS_HOST
+            REDIS_PORT:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: REDIS_PORT
+            REDIS_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: REDIS_PASSWORD
             ADMIN_USERNAME:
               valueFrom:
                 secretKeyRef:
