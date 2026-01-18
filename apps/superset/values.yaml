@@ -230,10 +230,14 @@ supersetNode:
 # SUPERSET CONFIGURATION OVERRIDES
 # ============================================================================
 configOverrides:
+  secret_config: |
+    import os
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'CHANGE-ME-TO-A-COMPLEX-RANDOM-SECRET')
+
   enable_oauth: |
     from flask_appbuilder.security.manager import AUTH_DB
     AUTH_TYPE = AUTH_DB
-  
+
   custom_config: |
     # Cache configuration
     CACHE_CONFIG = {
