@@ -79,11 +79,18 @@ else
     SECRET_KEY=$(generate_password 64)
 fi
 
-# Redis password (if Redis uses password)
-REDIS_PASSWORD=""
-if kubectl get secret redis -n infra >/dev/null 2>&1; then
+# Redis password - use POSTGRES_PASSWORD for uniformity across all infra services
+# Priority: POSTGRES_PASSWORD env > Redis cluster secret > generate
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    log_info "Using POSTGRES_PASSWORD from environment for Redis (GitHub secret)"
+    REDIS_PASSWORD="${POSTGRES_PASSWORD}"
+elif kubectl get secret redis -n infra >/dev/null 2>&1; then
+    log_info "Using existing Redis password from cluster secret"
     REDIS_PASSWORD=$(kubectl get secret redis -n infra \
         -o jsonpath="{.data.redis-password}" | base64 -d 2>/dev/null || echo "")
+else
+    log_warning "POSTGRES_PASSWORD not set and Redis secret not found. Using empty password."
+    REDIS_PASSWORD=""
 fi
 
 # Admin username
@@ -103,6 +110,7 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=DATABASE_HOST="postgresql.infra.svc.cluster.local" \
     --from-literal=DATABASE_PORT="5432" \
     --from-literal=SECRET_KEY="${SECRET_KEY}" \
+    --from-literal=SUPERSET_SECRET_KEY="${SECRET_KEY}" \
     --from-literal=ADMIN_USERNAME="${ADMIN_USERNAME}" \
     --from-literal=ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
     --from-literal=ADMIN_FIRSTNAME="${ADMIN_FIRSTNAME}" \
