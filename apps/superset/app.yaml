@@ -16,7 +16,7 @@ spec:
       targetRevision: 0.12.1
       chart: superset
       helm:
-      values: |
+        values: |
         # Image configuration with pinned version for stability
         image:
           repository: apache/superset
