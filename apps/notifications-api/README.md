@@ -5,11 +5,11 @@ ArgoCD application deploying the multi-channel notifications platform.
 ## Highlights
 
 - Namespace: `notifications`
-- Image: `ghcr.io/bengobox/notifications-app`
+- Image: `ghcr.io/bengobox/notifications-api`
 - Health endpoint: `/healthz`
 - Metrics endpoint: `/metrics`
 - Secrets:
-  - `notifications-app-secrets` – provides `postgresUrl`
+  - `notifications-api-secrets` – provides `postgresUrl`
   - `notifications-provider-secrets` – provider API credentials (SendGrid, Twilio, FCM)
 - External dependencies:
   - PostgreSQL: tenant/template metadata
