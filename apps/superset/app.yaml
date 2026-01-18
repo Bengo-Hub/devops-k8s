@@ -94,7 +94,7 @@ spec:
         ingress:
           enabled: true
           ingressClassName: nginx
-          hostname: superset.codevertexitsolutions.co.ke
+          hostname: superset.codevertexitsolutions.com
           path: /
           pathType: Prefix
           annotations:
@@ -106,7 +106,7 @@ spec:
             nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
           tls:
             - hosts:
-                - superset.codevertexitsolutions.co.ke
+                - superset.codevertexitsolutions.com
               secretName: superset-codevertexitsolutions-tls
         
         # Admin user initialization
@@ -233,10 +233,14 @@ spec:
         
         # Superset configuration overrides
         configOverrides:
+          secret_config: |
+            import os
+            SECRET_KEY = os.environ.get('SUPERSET_SECRET_KEY') or os.environ.get('SECRET_KEY')
+
           enable_oauth: |
             from flask_appbuilder.security.manager import AUTH_DB
             AUTH_TYPE = AUTH_DB
-          
+
           custom_config: |
             # Cache configuration
             CACHE_CONFIG = {
