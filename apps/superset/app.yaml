@@ -222,10 +222,19 @@ spec:
               else:
                   REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/0'
 
+              # Main cache config
               CACHE_CONFIG = {
                   'CACHE_TYPE': 'RedisCache',
                   'CACHE_DEFAULT_TIMEOUT': 300,
                   'CACHE_KEY_PREFIX': 'superset_',
+                  'CACHE_REDIS_URL': REDIS_URL,
+              }
+
+              # Data cache config (for query results, dashboard data, etc.)
+              DATA_CACHE_CONFIG = {
+                  'CACHE_TYPE': 'RedisCache',
+                  'CACHE_DEFAULT_TIMEOUT': 86400,  # 24 hours for data cache
+                  'CACHE_KEY_PREFIX': 'superset_data_',
                   'CACHE_REDIS_URL': REDIS_URL,
               }
               
