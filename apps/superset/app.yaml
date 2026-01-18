@@ -10,11 +10,12 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: https://apache.github.io/superset
-    targetRevision: 0.12.1
-    chart: superset
-    helm:
+  sources:
+    # Superset Helm chart
+    - repoURL: https://apache.github.io/superset
+      targetRevision: 0.12.1
+      chart: superset
+      helm:
       values: |
         # Image configuration with pinned version for stability
         image:
@@ -299,7 +300,12 @@ spec:
                         values:
                           - superset
                   topologyKey: kubernetes.io/hostname
-  
+
+    # Pre-sync job to fix superset-env secret
+    - repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+      targetRevision: main
+      path: manifests/superset
+
   destination:
     server: https://kubernetes.default.svc
     namespace: infra  # Deploy alongside storage services (PostgreSQL, Redis)
