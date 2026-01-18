@@ -131,24 +131,96 @@ kubectl label secret "${SECRET_NAME}" -n "${NAMESPACE}" \
     managed-by=script \
     --overwrite
 
+# =============================================================================
+# Create superset-env secret (Helm chart expects this)
+# =============================================================================
+# The Superset Helm chart automatically creates a 'superset-env' secret if it doesn't exist.
+# We pre-create it here with correct values to prevent Helm from creating it with defaults.
+# This follows the same pattern as PostgreSQL secret management.
+
+log_section "Creating Superset Helm Environment Secret"
+
+HELM_SECRET_NAME="superset-env"
+
+# Check if superset-env already exists
+if kubectl get secret "${HELM_SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log_warning "Secret ${HELM_SECRET_NAME} already exists in namespace ${NAMESPACE}"
+
+    # Check if running in CI/CD (non-interactive)
+    if [[ -n "${CI:-}${GITHUB_ACTIONS:-}${GITLAB_CI:-}" ]] || [[ ! -t 0 ]]; then
+        log_info "Running in non-interactive mode - updating existing secret"
+        kubectl delete secret "${HELM_SECRET_NAME}" -n "${NAMESPACE}"
+    else
+        # Interactive mode - prompt user
+        read -p "Do you want to recreate it? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Keeping existing ${HELM_SECRET_NAME} secret"
+        else
+            log_info "Deleting existing secret..."
+            kubectl delete secret "${HELM_SECRET_NAME}" -n "${NAMESPACE}"
+        fi
+    fi
+fi
+
+# Create superset-env if it doesn't exist or was deleted
+if ! kubectl get secret "${HELM_SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    log_info "Creating ${HELM_SECRET_NAME} secret..."
+
+    kubectl create secret generic "${HELM_SECRET_NAME}" \
+        --namespace="${NAMESPACE}" \
+        --from-literal=DB_HOST="postgresql.infra.svc.cluster.local" \
+        --from-literal=DB_PORT="5432" \
+        --from-literal=DB_USER="superset_user" \
+        --from-literal=DB_PASS="${DATABASE_PASSWORD}" \
+        --from-literal=DB_NAME="superset" \
+        --from-literal=SECRET_KEY="${SECRET_KEY}" \
+        --from-literal=SUPERSET_SECRET_KEY="${SECRET_KEY}" \
+        --from-literal=REDIS_HOST="redis-master.infra.svc.cluster.local" \
+        --from-literal=REDIS_PORT="6379" \
+        --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}"
+
+    if [ $? -eq 0 ]; then
+        log_success "Secret ${HELM_SECRET_NAME} created successfully"
+
+        # Label for Helm management
+        kubectl label secret "${HELM_SECRET_NAME}" -n "${NAMESPACE}" \
+            app=superset \
+            app.kubernetes.io/managed-by=Helm \
+            managed-by=script \
+            --overwrite
+    else
+        log_error "Failed to create ${HELM_SECRET_NAME}"
+        exit 1
+    fi
+else
+    log_info "${HELM_SECRET_NAME} already exists - skipping creation"
+fi
+
 # Display summary
 log_section "Secret Creation Summary"
 echo "Namespace: ${NAMESPACE}"
-echo "Secret Name: ${SECRET_NAME}"
+echo "Primary Secret: ${SECRET_NAME} (comprehensive credentials)"
+echo "Helm Secret: superset-env (Helm chart integration)"
 echo "Admin Username: ${ADMIN_USERNAME}"
 echo "Admin Email: ${ADMIN_EMAIL}"
 echo ""
 log_warning "IMPORTANT: Save these credentials securely!"
 echo "Admin Password: ${ADMIN_PASSWORD}"
 echo ""
-log_info "To view the secret:"
+log_info "Both secrets created to prevent Helm chart conflicts:"
+echo "  - ${SECRET_NAME}: Complete credentials for all use cases"
+echo "  - superset-env: Pre-created to prevent Helm defaults"
+echo ""
+log_info "To view secrets:"
 echo "  kubectl get secret ${SECRET_NAME} -n ${NAMESPACE} -o yaml"
+echo "  kubectl get secret superset-env -n ${NAMESPACE} -o yaml"
 echo ""
 log_info "To update a specific field:"
 echo "  kubectl patch secret ${SECRET_NAME} -n ${NAMESPACE} --type='json' -p='[{\"op\": \"replace\", \"path\": \"/data/ADMIN_PASSWORD\", \"value\": \"<base64-encoded-value>\"}]'"
 echo ""
-log_info "To delete the secret:"
-echo "  kubectl delete secret ${SECRET_NAME} -n ${NAMESPACE}"
+log_info "To delete secrets:"
+echo "  kubectl delete secret ${SECRET_NAME} superset-env -n ${NAMESPACE}"
 
 # Create a backup file (encrypted)
 BACKUP_DIR="${SCRIPT_DIR}/../../backups"
