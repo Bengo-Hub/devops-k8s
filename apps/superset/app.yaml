@@ -10,13 +10,12 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  sources:
-    # Superset Helm chart
-    - repoURL: https://apache.github.io/superset
-      targetRevision: 0.15.0
-      chart: superset
-      helm:
-        values: |
+  source:
+    repoURL: https://apache.github.io/superset
+    targetRevision: 0.15.0
+    chart: superset
+    helm:
+      values: |
           # Image configuration with pinned version for stability
           image:
             repository: apache/superset
@@ -188,16 +187,35 @@ spec:
           redis:
             enabled: false
 
-          # Disable automatic superset-env secret creation (managed by Sync hook)
-          secretEnv:
-            create: false
+          # Use chart's built-in extraEnvRaw to reference external secrets directly
+          # This eliminates the need for PreSync hooks and intermediate secrets
+          extraEnvRaw:
+            # Database credentials from superset-secrets
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: POSTGRES_PASSWORD
+            - name: SUPERSET_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: SECRET_KEY
+            # Redis password (optional, can be empty for internal Redis)
+            - name: REDIS_PASSWORD
+              value: ""
 
-          # External database and cache connections
-          # superset-env secret is created by the Sync hook job before Helm deployment
-          # DO NOT use supersetNode.connections - it creates a separate config
-          supersetNode:
-            # Environment variables from secrets (includes DB_*, REDIS_*, SECRET_KEY, etc.)
-            envFromSecret: superset-secrets
+          # External database configuration (non-sensitive values can be in values.yaml)
+          extraEnv:
+            DB_HOST: "postgresql.infra.svc.cluster.local"
+            DB_PORT: "5432"
+            DB_USER: "superset_user"
+            DB_NAME: "superset"
+            REDIS_HOST: "redis-master.infra.svc.cluster.local"
+            REDIS_PORT: "6379"
+            REDIS_PROTO: "redis"
+            REDIS_DB: "1"
+            REDIS_CELERY_DB: "0"
           
           # Superset configuration overrides
           configOverrides:
@@ -303,11 +321,6 @@ spec:
                           values:
                             - superset
                     topologyKey: kubernetes.io/hostname
-
-    # Pre-sync job to fix superset-env secret
-    - repoURL: https://github.com/Bengo-Hub/devops-k8s.git
-      targetRevision: main
-      path: manifests/superset
 
   destination:
     server: https://kubernetes.default.svc
