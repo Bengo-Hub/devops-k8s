@@ -185,10 +185,22 @@ spec:
           redis:
             enabled: false
 
-          # Use chart's built-in extraEnvRaw to reference external secrets directly
-          # This eliminates the need for PreSync hooks and intermediate secrets
+          # External database and Redis configuration using supersetNode.connections
+          # This uses the chart's built-in support for external databases
+          supersetNode:
+            connections:
+              db_host: "postgresql.infra.svc.cluster.local"
+              db_port: "5432"
+              db_user: "superset_user"
+              db_name: "superset"
+              redis_host: "redis-master.infra.svc.cluster.local"
+              redis_port: "6379"
+              redis_proto: "redis"
+              redis_db: "1"
+              redis_celery_db: "0"
+
+          # Use extraEnvRaw to reference sensitive values from external secret
           extraEnvRaw:
-            # Database credentials from superset-secrets
             - name: DB_PASS
               valueFrom:
                 secretKeyRef:
@@ -199,24 +211,11 @@ spec:
                 secretKeyRef:
                   name: superset-secrets
                   key: SECRET_KEY
-            # Redis password from superset-secrets
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: superset-secrets
                   key: REDIS_PASSWORD
-
-          # External database configuration (non-sensitive values can be in values.yaml)
-          extraEnv:
-            DB_HOST: "postgresql.infra.svc.cluster.local"
-            DB_PORT: "5432"
-            DB_USER: "superset_user"
-            DB_NAME: "superset"
-            REDIS_HOST: "redis-master.infra.svc.cluster.local"
-            REDIS_PORT: "6379"
-            REDIS_PROTO: "redis"
-            REDIS_DB: "1"
-            REDIS_CELERY_DB: "0"
           
           # Superset configuration overrides
           configOverrides:
