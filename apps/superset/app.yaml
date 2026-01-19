@@ -193,15 +193,18 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: superset-secrets
-                  key: POSTGRES_PASSWORD
+                  key: DATABASE_PASSWORD
             - name: SUPERSET_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: superset-secrets
                   key: SECRET_KEY
-            # Redis password (optional, can be empty for internal Redis)
+            # Redis password from superset-secrets
             - name: REDIS_PASSWORD
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: superset-secrets
+                  key: REDIS_PASSWORD
 
           # External database configuration (non-sensitive values can be in values.yaml)
           extraEnv:
