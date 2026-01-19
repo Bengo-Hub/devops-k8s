@@ -95,7 +95,8 @@ spec:
           ingress:
             enabled: true
             ingressClassName: nginx
-            host: superset.codevertexitsolutions.com
+            hosts:
+              - superset.codevertexitsolutions.com
             path: /
             pathType: Prefix
             annotations:
@@ -209,6 +210,13 @@ spec:
               AUTH_TYPE = AUTH_DB
 
             custom_config: |
+              # HTTPS/Proxy Configuration (essential for proper HTTPS handling behind ingress)
+              ENABLE_PROXY_FIX = True
+              PREFERRED_URL_SCHEME = 'https'
+              SESSION_COOKIE_SECURE = True
+              SESSION_COOKIE_HTTPONLY = True
+              SESSION_COOKIE_SAMESITE = 'Lax'
+
               # Feature flags
               FEATURE_FLAGS = {
                   'ENABLE_TEMPLATE_PROCESSING': True,
@@ -227,6 +235,7 @@ spec:
               # Security
               WTF_CSRF_ENABLED = True
               WTF_CSRF_TIME_LIMIT = None
+              TALISMAN_ENABLED = True
 
               # Row level security
               ROW_LEVEL_SECURITY_ENABLED = True
