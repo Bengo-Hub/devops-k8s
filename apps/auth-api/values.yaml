@@ -83,9 +83,6 @@ env:
     value: /etc/auth-keys/private.pem
   - name: AUTH_TOKEN_PUBLIC_KEY_PATH
     value: /etc/auth-keys/public.pem
-  # Seed admin password (for manual seeding if needed)
-  - name: SEED_ADMIN_PASSWORD
-    value: "ChangeMe123!"
   # Token issuer and audience for JWT
   - name: AUTH_TOKEN_ISSUER
     value: "https://sso.codevertexitsolutions.com"
