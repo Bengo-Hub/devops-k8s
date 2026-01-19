@@ -60,6 +60,8 @@ env:
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: LOGISTICS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  - name: LOGISTICS_HTTP_ALLOWED_ORIGINS
+    value: "https://ordersapp.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 
 resources:
   limits:
