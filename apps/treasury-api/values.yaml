@@ -64,6 +64,8 @@ env:
     value: treasury-artifacts
   - name: TREASURY_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  - name: TREASURY_HTTP_ALLOWED_ORIGINS
+    value: "https://books.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 
 resources:
   limits:
