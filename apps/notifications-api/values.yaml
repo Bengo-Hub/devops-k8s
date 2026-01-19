@@ -141,6 +141,8 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: NOTIFICATIONS_JWT_AUDIENCE
     value: "codevertex"
+  - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
+    value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 
 resources:
   limits:

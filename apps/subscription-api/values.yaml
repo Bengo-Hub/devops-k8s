@@ -65,6 +65,8 @@ env:
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: SUBSCRIPTION_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  - name: SUBSCRIPTION_HTTP_ALLOWED_ORIGINS
+    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricingapi.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 
 resources:
   limits:
