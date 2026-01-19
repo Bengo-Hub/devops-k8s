@@ -140,17 +140,13 @@ kubectl label secret "${SECRET_NAME}" -n "${NAMESPACE}" \
     --overwrite
 
 # =============================================================================
-# Sync superset-env from superset-secrets
+# Note: superset-env sync removed
 # =============================================================================
-# The Superset Helm chart creates a 'superset-env' secret automatically.
-# We use sync-superset-env.sh to ensure it has correct external service hostnames
-log_info "Syncing superset-env from superset-secrets..."
-if [ -f "${SCRIPT_DIR}/sync-superset-env.sh" ]; then
-    NAMESPACE="${NAMESPACE}" RESTART_DEPLOYMENTS=no "${SCRIPT_DIR}/sync-superset-env.sh"
-else
-    log_warning "sync-superset-env.sh not found - skipping automatic sync"
-    log_info "Run ./sync-superset-env.sh manually after ArgoCD sync if needed"
-fi
+# The Superset Helm chart now uses supersetNode.connections and extraEnvRaw
+# to directly reference external databases from the ArgoCD app.yaml configuration.
+# The manual sync-superset-env.sh script is no longer needed and has been removed.
+log_info "✓ External database configuration is handled via Helm chart values"
+log_info "  (supersetNode.connections + extraEnvRaw in apps/superset/app.yaml)"
 
 # Display summary
 log_section "Secret Creation Summary"
@@ -163,11 +159,9 @@ log_warning "IMPORTANT: Save these credentials securely!"
 echo "Admin Password: ${ADMIN_PASSWORD}"
 echo ""
 log_info "Secret management:"
-echo "  - ${SECRET_NAME}: Source of truth for credentials"
-echo "  - superset-env: Auto-synced from ${SECRET_NAME} by sync-superset-env.sh"
-echo ""
-log_info "After ArgoCD sync, if Superset fails with connection errors:"
-echo "  ./sync-superset-env.sh"
+echo "  - ${SECRET_NAME}: Contains all Superset credentials and database connection info"
+echo "  - Referenced by apps/superset/app.yaml via extraEnvRaw and supersetNode.connections"
+echo "  - No manual sync needed - ArgoCD manages the deployment automatically"
 echo ""
 log_info "To view secret:"
 echo "  kubectl get secret ${SECRET_NAME} -n ${NAMESPACE} -o yaml"

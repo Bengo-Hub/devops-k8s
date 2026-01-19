@@ -655,19 +655,19 @@ jobs:
         timeout-minutes: 10
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          NAMESPACE: default
-          SUPERSET_NAMESPACE: default
+          NAMESPACE: infra
+          SUPERSET_NAMESPACE: infra
         run: |
           echo "::group::Creating Superset Database and Secrets"
           echo "📊 Creating superset database and user in PostgreSQL..."
           echo "This ensures Superset dependencies are ready before ArgoCD deploys it"
-          
+
           # Create Superset database and user
           ./scripts/infrastructure/create-superset-database.sh
-          
+
           # Create Superset secrets (includes SECRET_KEY, admin password, etc.)
           ./scripts/infrastructure/create-superset-secrets.sh
-          
+
           echo "✅ Superset database and secrets created successfully"
           echo "::endgroup::"
       
