@@ -96,7 +96,6 @@ spec:
           securityContext:
             runAsUser: 1000
             runAsGroup: 1000
-            fsGroup: 1000
         {{- end }}
         {{- if and .Values.migrations .Values.migrations.runOnStartup }}
         - name: wait-for-db
