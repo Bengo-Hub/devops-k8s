@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-ui
-  tag: c9b9ce00
+  tag: 33a7ce1e
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
