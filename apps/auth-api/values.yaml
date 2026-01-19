@@ -45,6 +45,9 @@ env:
     value: production
   - name: AUTH_SERVICE_PORT
     value: "4101"
+  # Frontend UI URL for OAuth redirects
+  - name: AUTH_UI_URL
+    value: "https://accounts.codevertexitsolutions.com"
   # Database connection (auth-api expects AUTH_DB_URL)
   - name: AUTH_DB_URL
     valueFrom:
@@ -174,11 +177,9 @@ setupDB:
       cpu: 200m
       memory: 256Mi
 # Create database schema via Ent migrations
-# TEMPORARILY DISABLED: Current image (a8823fad) has OAuth validation bug in migrate binary
-# Re-enable after pushing new image with LoadDatabaseOnly() fix
-# Migrations run at server startup instead (AUTH_DB_RUN_MIGRATIONS=true)
+# Uses LoadDatabaseOnly() to avoid OAuth validation - only needs AUTH_DB_URL
 migrations:
-  enabled: false # Disabled until new image is built with LoadDatabaseOnly() fix
+  enabled: true
   binaryName: auth-migrate
   resources:
     requests:
@@ -187,11 +188,10 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
-# Seed initial data (tenants, admin user)
-# TEMPORARILY DISABLED: Current image (a8823fad) has OAuth validation bug in seed binary
-# Re-enable after pushing new image with LoadForSeed() fix
+# Seed initial data (tenants, demo user, admin user)
+# Uses LoadForSeed() to avoid OAuth validation - only needs AUTH_DB_URL and security config
 seed:
-  enabled: false # Disabled until new image is built with LoadForSeed() fix
+  enabled: true
   binaryName: auth-seed
   env:
     - name: SEED_ADMIN_PASSWORD
