@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-api
-  tag: "f0bc7137" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
+  tag: "bad7f177" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
