@@ -2,7 +2,7 @@ nameOverride: truload-backend
 fullnameOverride: truload-backend
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: 4187016c
+  tag: 6b6149aa
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -19,7 +19,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 10
-    failureThreshold: 60  # 10 minutes total for migrations and seeding
+    failureThreshold: 60 # 10 minutes total for migrations and seeding
   readiness:
     httpGet:
       path: /health
