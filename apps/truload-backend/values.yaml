@@ -1,3 +1,6 @@
+nameOverride: truload-backend
+fullnameOverride: truload-backend
+
 image:
   repository: docker.io/codevertex/truload-backend
   tag: latest
@@ -91,4 +94,8 @@ verticalPodAutoscaling:
 celeryWorker:
   enabled: false
 celeryBeat:
+  enabled: false
+
+# Disable ServiceMonitor - monitoring namespace not available
+serviceMonitor:
   enabled: false
