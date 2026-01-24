@@ -1,29 +1,25 @@
 # Ordering Service Backend Production Configuration
 nameOverride: ordering-backend
 fullnameOverride: ordering-backend
-
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "fb45a308"
+  tag: "43f6dd8b"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
 replicaCount: 1
-
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 2
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
-
 # ============================================================================
 # SERVICE CONFIGURATION
 # ============================================================================
@@ -31,7 +27,6 @@ service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -40,10 +35,8 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 minReadySeconds: 30
-progressDeadlineSeconds: 1200  # 20 minutes for migrations and startup (matches auth-api)
-
+progressDeadlineSeconds: 1200 # 20 minutes for migrations and startup (matches auth-api)
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
@@ -55,13 +48,12 @@ env:
     value: "4000"
   - name: ORDERING_HTTP_ALLOWED_ORIGINS
     value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://cafe.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-
   # Database Configuration - uses standard keys from devops-k8s create-service-secrets.sh
   - name: ORDERING_POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
-        key: postgresUrl  # Standard key from devops-k8s (not ORDERING_POSTGRES_URL)
+        key: postgresUrl # Standard key from devops-k8s (not ORDERING_POSTGRES_URL)
   # Database connection pool settings (prevent connection exhaustion)
   - name: ORDERING_DB_MAX_OPEN_CONNS
     value: "10"
@@ -69,7 +61,6 @@ env:
     value: "3"
   - name: ORDERING_DB_CONN_MAX_LIFETIME
     value: "15m"
-
   # Messaging & Cache
   - name: ORDERING_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
@@ -83,11 +74,9 @@ env:
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: ORDERING_EVENTS_STREAM
     value: ordering
-
   # Observability
   - name: ORDERING_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-
   # ============================================================================
   # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
   # ============================================================================
@@ -107,7 +96,6 @@ env:
         name: ordering-backend-secrets
         key: AUTH_SERVICE_API_KEY
         optional: true
-
   # Treasury Service - Payment processing and refunds
   - name: ORDERING_TREASURY_SERVICE_URL
     value: "https://booksapi.codevertexitsolutions.com"
@@ -129,7 +117,6 @@ env:
     value: "true"
   - name: ORDERING_MPESA_CALLBACK_BASE_URL
     value: "https://orderingapi.codevertexitsolutions.com/api/v1/webhooks/mpesa"
-
   # Logistics Service - Delivery task management
   - name: ORDERING_LOGISTICS_SERVICE_URL
     value: "https://logisticsapi.codevertexitsolutions.com"
@@ -149,7 +136,6 @@ env:
     value: "30s"
   - name: ORDERING_LOGISTICS_WEBSOCKET_URL
     value: "wss://logisticsapi.codevertexitsolutions.com/ws"
-
   # Inventory Service - Stock management
   - name: ORDERING_INVENTORY_SERVICE_URL
     value: "https://inventoryapi.codevertexitsolutions.com"
@@ -161,7 +147,6 @@ env:
         optional: true
   - name: ORDERING_INVENTORY_REQUEST_TIMEOUT
     value: "10s"
-
   # Notifications Service - Email, SMS, Push notifications
   - name: ORDERING_NOTIFICATIONS_SERVICE_URL
     value: "https://notificationsapi.codevertexitsolutions.com"
@@ -173,7 +158,6 @@ env:
         optional: true
   - name: ORDERING_NOTIFICATIONS_REQUEST_TIMEOUT
     value: "10s"
-
   # Superset - Business Intelligence & Analytics
   - name: ORDERING_SUPERSET_BASE_URL
     value: "https://superset.codevertexitsolutions.com"
@@ -191,12 +175,10 @@ env:
     value: "30s"
   - name: ORDERING_SUPERSET_GUEST_TOKEN_TTL_MINUTES
     value: "5"
-
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
 envFromSecret: ordering-backend-secrets
-
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
@@ -213,7 +195,6 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
-
 seed:
   enabled: true
   binaryName: ordering-seed
@@ -224,7 +205,6 @@ seed:
     limits:
       cpu: 500m
       memory: 512Mi
-
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
@@ -236,7 +216,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 10
-    failureThreshold: 60  # 10 minutes total for startup (matches auth-api)
+    failureThreshold: 60 # 10 minutes total for startup (matches auth-api)
   readiness:
     httpGet:
       path: /healthz
@@ -253,7 +233,6 @@ healthCheck:
     periodSeconds: 30
     timeoutSeconds: 5
     failureThreshold: 5
-
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
@@ -264,7 +243,6 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
-
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
@@ -290,7 +268,6 @@ ingress:
     - hosts:
         - orderingapi.codevertexitsolutions.com
       secretName: ordering-backend-tls
-
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
@@ -300,7 +277,6 @@ monitoring:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -308,7 +284,6 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 # ============================================================================
 # SECURITY CONFIGURATION
 # ============================================================================
