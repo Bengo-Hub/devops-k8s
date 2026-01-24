@@ -118,17 +118,23 @@ update_helm_values() {
     local token
     token=$(resolve_token)
     
-    # Log which token source was used
+    # Log which token source was used and validate it's not empty
     if [[ -n "$token" ]]; then
-        if [[ "$token" == "${GH_PAT:-}" ]]; then
-            log_info "Using GH_PAT for git operations"
-        elif [[ "$token" == "${GIT_TOKEN:-}" ]]; then
-            log_info "Using GIT_TOKEN for git operations"
-        elif [[ "$token" == "${GIT_SECRET:-}" ]]; then
-            log_info "Using GIT_SECRET for git operations"
+        local token_length=${#token}
+        if [[ -n "${GH_PAT:-}" ]]; then
+            log_info "Using GH_PAT for git operations (length: ${token_length} chars)"
+        elif [[ -n "${GIT_TOKEN:-}" ]]; then
+            log_info "Using GIT_TOKEN for git operations (length: ${token_length} chars)"
+        elif [[ -n "${GIT_SECRET:-}" ]]; then
+            log_info "Using GIT_SECRET for git operations (length: ${token_length} chars)"
+        fi
+        
+        # Validate token looks like a valid GitHub token (should be reasonably long)
+        if [[ $token_length -lt 20 ]]; then
+            log_warning "Token seems too short (${token_length} chars) - might be invalid"
         fi
     else
-        log_warning "No GitHub token found"
+        log_warning "No GitHub token found (GH_PAT, GIT_TOKEN, GIT_SECRET all empty)"
     fi
     if ! validate_cross_repo_push "$devops_repo" "$token"; then
         return 1
@@ -143,7 +149,7 @@ update_helm_values() {
     
     # Build clone URL
     local clone_url="https://github.com/${devops_repo}.git"
-    [[ -n "$token" ]] && clone_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
+    [[ -n "$token" ]] && clone_url="https://${token}@github.com/${devops_repo}.git"
     
     # Clone or update devops-k8s repo
     if [[ ! -d "$devops_dir" ]]; then
@@ -165,7 +171,7 @@ update_helm_values() {
     
     # Set remote URL with token if token is available
     if [[ -n "$token" ]]; then
-        local auth_remote_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
+        local auth_remote_url="https://${token}@github.com/${devops_repo}.git"
         git remote set-url origin "$auth_remote_url" 2>/dev/null || {
             # If remote doesn't exist, add it
             git remote remove origin 2>/dev/null || true
@@ -233,9 +239,19 @@ update_helm_values() {
         return 0
     fi
     
+    # Validate token is not just whitespace
+    if [[ -z "${token// /}" ]]; then
+        log_error "Token is empty or contains only whitespace"
+        popd >/dev/null || true
+        return 1
+    fi
+    
     log_step "Pushing changes to origin/main..."
-    # Update remote URL to include token for authentication
-    local push_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
+    # GitHub supports multiple authentication URL formats:
+    # Format 1: https://TOKEN@github.com/... (simplest, recommended for PAT)
+    # Format 2: https://x-access-token:TOKEN@github.com/... (also valid)
+    # Using format 1 as it's simpler and works reliably with PATs
+    local push_url="https://${token}@github.com/${devops_repo}.git"
     git remote set-url origin "$push_url" >/dev/null 2>&1 || {
         log_error "Failed to set remote URL with authentication"
         popd >/dev/null || true
