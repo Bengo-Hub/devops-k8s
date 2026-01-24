@@ -61,14 +61,14 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: truloadapitest.masterspace.co.ke
+    - host: kuraweighapitest.masterspace.co.ke
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - truloadapitest.masterspace.co.ke
-      secretName: truload-api-tls # Will use existing cert-manager certificate
+        - kuraweighapitest.masterspace.co.ke
+      secretName: kuraweigh-api-tls # Will use existing cert-manager certificate
 envFromSecret: truload-backend-env
 # ============================================================================
 # MIGRATIONS AND SEEDING
