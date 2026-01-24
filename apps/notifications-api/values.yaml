@@ -20,10 +20,12 @@ service:
 # MIGRATIONS AND SEEDING
 # ============================================================================
 # Notifications-api uses separate migrate/seed binaries in the Docker image
-# Migrations must run before the app starts to ensure schema exists
+# Binary names must match the Dockerfile output: /usr/local/bin/notifications-migrate, etc.
+# Migrations run as pre-install/pre-upgrade Helm hook (weight 0)
+# Seeds run as post-install/post-upgrade Helm hook (weight 5)
 migrations:
   enabled: true
-  binaryName: migrate
+  binaryName: notifications-migrate  # Must match Dockerfile: /usr/local/bin/notifications-migrate
   resources:
     requests:
       cpu: 100m
@@ -34,7 +36,7 @@ migrations:
 
 seed:
   enabled: true
-  binaryName: seed
+  binaryName: notifications-seed  # Must match Dockerfile: /usr/local/bin/notifications-seed
   resources:
     requests:
       cpu: 100m
@@ -197,6 +199,9 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
   hosts:
     - host: notificationsapi.codevertexitsolutions.com # ui uses notifications.codevertexitsolutions.com
       paths:
@@ -206,3 +211,19 @@ ingress:
     - hosts:
         - notificationsapi.codevertexitsolutions.com
       secretName: notifications-api-tls
+
+# ============================================================================
+# SECURITY CONFIGURATION
+# ============================================================================
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+
+# ============================================================================
+# POD DISRUPTION BUDGET
+# ============================================================================
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
