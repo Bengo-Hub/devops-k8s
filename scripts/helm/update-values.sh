@@ -44,13 +44,15 @@ log_step()    { echo -e "\033[0;35m[STEP]\033[0m $1"; }
 # Note: This function ONLY echoes the token, no log output
 resolve_token() {
     local token=""
+    # Check in order: GH_PAT, GIT_TOKEN, GIT_SECRET
     if [[ -n "${GH_PAT:-}" ]]; then
-        token="$GH_PAT"
+        token="${GH_PAT}"
     elif [[ -n "${GIT_TOKEN:-}" ]]; then
-        token="$GIT_TOKEN"
+        token="${GIT_TOKEN}"
     elif [[ -n "${GIT_SECRET:-}" ]]; then
-        token="$GIT_SECRET"
+        token="${GIT_SECRET}"
     fi
+    # Return token (even if empty)
     echo "$token"
 }
 
@@ -156,10 +158,20 @@ update_helm_values() {
     # Change to devops directory
     pushd "$devops_dir" >/dev/null || return 1
     
-    # Configure git
+    # Configure git with token in remote URL for authenticated operations
     log_step "Configuring git..."
     git config user.email "$git_email"
     git config user.name "$git_user"
+    
+    # Set remote URL with token if token is available
+    if [[ -n "$token" ]]; then
+        local auth_remote_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
+        git remote set-url origin "$auth_remote_url" 2>/dev/null || {
+            # If remote doesn't exist, add it
+            git remote remove origin 2>/dev/null || true
+            git remote add origin "$auth_remote_url"
+        }
+    fi
     log_success "Git configured"
     
     # Ensure we have latest changes
@@ -225,13 +237,21 @@ update_helm_values() {
     # Update remote URL to include token for authentication
     local push_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
     git remote set-url origin "$push_url" >/dev/null 2>&1 || {
-        log_warning "Failed to update remote URL, attempting direct push"
+        log_error "Failed to set remote URL with authentication"
+        popd >/dev/null || true
+        return 1
     }
     
-    if git push origin HEAD:main 2>&1 | grep -q "Everything up-to-date\|main -> main"; then
+    # Perform the push with full error output for debugging
+    local push_output
+    local push_status=0
+    push_output=$(git push origin HEAD:main 2>&1) || push_status=$?
+    
+    if [[ $push_status -eq 0 ]]; then
         log_success "Changes pushed to origin/main"
     else
         log_error "Failed to push changes - check token permissions"
+        log_error "Push output: $push_output"
         log_error "Remote URL: $(git remote get-url origin 2>/dev/null | sed 's/:[^@]*@/:***@/')"
         popd >/dev/null || true
         return 1
