@@ -199,7 +199,7 @@ envFromSecret: ordering-backend-secrets
 # seed: Populates initial data (roles, permissions, demo tenant)
 migrations:
   enabled: true
-  binaryName: migrate
+  binaryName: ordering-migrate
   resources:
     requests:
       cpu: 100m
@@ -210,7 +210,7 @@ migrations:
 
 seed:
   enabled: true
-  binaryName: seed
+  binaryName: ordering-seed
   resources:
     requests:
       cpu: 100m
