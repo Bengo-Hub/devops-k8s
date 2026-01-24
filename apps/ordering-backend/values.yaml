@@ -7,7 +7,7 @@ fullnameOverride: ordering-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "321e8818"
+  tag: "fb45a308"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -54,7 +54,7 @@ env:
   - name: ORDERING_HTTP_PORT
     value: "4000"
   - name: ORDERING_HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderapp.codevertexitsolutions.com,https://cafe.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://cafe.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 
   # Database Configuration - uses standard keys from devops-k8s create-service-secrets.sh
   - name: ORDERING_POSTGRES_URL
@@ -128,7 +128,7 @@ env:
   - name: ORDERING_MPESA_ENABLED
     value: "true"
   - name: ORDERING_MPESA_CALLBACK_BASE_URL
-    value: "https://orderapi.codevertexitsolutions.com/api/v1/webhooks/mpesa"
+    value: "https://orderingapi.codevertexitsolutions.com/api/v1/webhooks/mpesa"
 
   # Logistics Service - Delivery task management
   - name: ORDERING_LOGISTICS_SERVICE_URL
@@ -282,13 +282,13 @@ ingress:
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-connections: "200"
   hosts:
-    - host: orderapi.codevertexitsolutions.com
+    - host: orderingapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - orderapi.codevertexitsolutions.com
+        - orderingapi.codevertexitsolutions.com
       secretName: ordering-backend-tls
 
 # ============================================================================
