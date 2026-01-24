@@ -50,14 +50,14 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: truloadtest.masterspace.co.ke
+    - host: kuraweightest.masterspace.co.ke
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - truloadtest.masterspace.co.ke
-      secretName: truload-frontend-tls # Will use existing cert-manager certificate
+        - kuraweightest.masterspace.co.ke
+      secretName: kuraweigh-frontend-tls # Will use existing cert-manager certificate
 envFromSecret: truload-frontend-env
 # No migrations needed for Next.js frontend
 migrations:
