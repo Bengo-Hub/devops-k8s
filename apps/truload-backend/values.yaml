@@ -1,9 +1,8 @@
 nameOverride: truload-backend
 fullnameOverride: truload-backend
-
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: latest
+  tag: 4187016c
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -32,7 +31,7 @@ healthCheck:
 # Production resource limits for .NET API
 resources:
   requests:
-    cpu: 30m  # Further reduced - service not actively used
+    cpu: 30m # Further reduced - service not actively used
     memory: 96Mi
   limits:
     cpu: 300m
@@ -68,10 +67,9 @@ envFromSecret: truload-backend-env
 # TruLoad-backend is a .NET application
 # EF Core migrations are typically handled in application startup code
 migrations:
-  enabled: false  # .NET EF Core handles migrations on startup
-
+  enabled: false # .NET EF Core handles migrations on startup
 seed:
-  enabled: false  # Seeding handled in application code if needed
+  enabled: false # Seeding handled in application code if needed
 # Persistent storage for file uploads
 persistence:
   enabled: true
@@ -95,7 +93,6 @@ celeryWorker:
   enabled: false
 celeryBeat:
   enabled: false
-
 # Disable ServiceMonitor - monitoring namespace not available
 serviceMonitor:
   enabled: false
