@@ -20,7 +20,7 @@
 #   DEVOPS_DIR       - Local directory (default: $HOME/devops-k8s)
 #   GIT_EMAIL        - Commit email (default: dev@bengobox.com)
 #   GIT_USER         - Commit user (default: BengoBox Bot)
-#   TOKEN            - GitHub token (GH_PAT, GIT_SECRET, GITHUB_TOKEN, GITHUB_SECRET)
+#   TOKEN            - GitHub token (GH_PAT, GIT_TOKEN, GIT_SECRET)
 # =============================================================================
 
 set -euo pipefail
@@ -46,15 +46,12 @@ resolve_token() {
     if [[ -n "${GH_PAT:-}" ]]; then
         token="$GH_PAT"
         log_info "Using GH_PAT for git operations"
+    elif [[ -n "${GIT_TOKEN:-}" ]]; then
+        token="$GIT_TOKEN"
+        log_info "Using GIT_TOKEN for git operations"
     elif [[ -n "${GIT_SECRET:-}" ]]; then
         token="$GIT_SECRET"
         log_info "Using GIT_SECRET for git operations"
-    elif [[ -n "${GITHUB_SECRET:-}" ]]; then
-        token="$GITHUB_SECRET"
-        log_info "Using GITHUB_SECRET for git operations"
-    elif [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        token="$GITHUB_TOKEN"
-        log_info "Using GITHUB_TOKEN for git operations (may lack cross-repo write)"
     else
         log_warning "No GitHub token found"
     fi
@@ -72,10 +69,10 @@ validate_cross_repo_push() {
         return 0
     fi
     
-    # Cross-repo push requires GH_PAT or GITHUB_SECRET
-    if [[ -z "${GH_PAT:-${GITHUB_SECRET:-}}" ]]; then
+    # Cross-repo push requires GH_PAT or GIT_SECRET
+    if [[ -z "${GH_PAT:-${GIT_SECRET:-}}" ]]; then
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        log_error "CRITICAL: GH_PAT or GITHUB_SECRET required for cross-repo push"
+        log_error "CRITICAL: GH_PAT or GIT_SECRET required for cross-repo push"
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         log_error "You are pushing from: ${origin_repo}"
         log_error "         to repository: ${target_repo}"
@@ -87,7 +84,7 @@ validate_cross_repo_push() {
         log_error "1. Create a Personal Access Token (PAT) at:"
         log_error "   https://github.com/settings/tokens/new"
         log_error "2. Select scope: 'repo' (full control)"
-        log_error "3. Add as repository secret named 'GH_PAT' or 'GITHUB_SECRET'"
+        log_error "3. Add as repository secret named 'GH_PAT' or 'GIT_SECRET'"
         log_error "4. Re-run this workflow"
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         return 1
@@ -211,17 +208,24 @@ update_helm_values() {
     
     # Push changes
     if [[ -z "$token" ]]; then
-        log_error "No GitHub token (GH_PAT/GITHUB_TOKEN/GITHUB_SECRET) available for devops-k8s push"
-        log_warning "Skipping git push; set GH_PAT (preferred) with repo write perms to Bengo-Hub/devops-k8s"
+        log_error "No GitHub token (GH_PAT/GIT_TOKEN/GIT_SECRET) available for devops-k8s push"
+        log_warning "Skipping git push; set GH_PAT or GIT_TOKEN (preferred) with repo write perms to Bengo-Hub/devops-k8s"
         popd >/dev/null || true
         return 0
     fi
     
     log_step "Pushing changes to origin/main..."
-    if git push origin HEAD:main >/dev/null 2>&1; then
+    # Update remote URL to include token for authentication
+    local push_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
+    git remote set-url origin "$push_url" >/dev/null 2>&1 || {
+        log_warning "Failed to update remote URL, attempting direct push"
+    }
+    
+    if git push origin HEAD:main 2>&1 | grep -q "Everything up-to-date\|main -> main"; then
         log_success "Changes pushed to origin/main"
     else
         log_error "Failed to push changes - check token permissions"
+        log_error "Remote URL: $(git remote get-url origin 2>/dev/null | sed 's/:[^@]*@/:***@/')"
         popd >/dev/null || true
         return 1
     fi
@@ -278,10 +282,9 @@ Options:
   -h, --help          Show this help message
 
 Environment Variables:
-  GH_PAT              GitHub Personal Access Token (preferred)
-  GIT_SECRET          Alternative GitHub token
-  GITHUB_TOKEN        GitHub Actions token
-  GITHUB_SECRET       Alternative GitHub token
+  GH_PAT              GitHub Personal Access Token (preferred for cross-repo access)
+  GIT_TOKEN           GitHub Actions default token (use in GitHub workflows)
+  GIT_SECRET          Custom GitHub token secret (set in GitHub Actions secrets)
   GIT_EMAIL           Git commit email (default: dev@bengobox.com)
   GIT_USER            Git commit user (default: BengoBox Bot)
 
