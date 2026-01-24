@@ -41,19 +41,15 @@ log_step()    { echo -e "\033[0;35m[STEP]\033[0m $1"; }
 # CONFIGURATION
 # =============================================================================
 # Resolve token from available sources (priority order)
+# Note: This function ONLY echoes the token, no log output
 resolve_token() {
     local token=""
     if [[ -n "${GH_PAT:-}" ]]; then
         token="$GH_PAT"
-        log_info "Using GH_PAT for git operations"
     elif [[ -n "${GIT_TOKEN:-}" ]]; then
         token="$GIT_TOKEN"
-        log_info "Using GIT_TOKEN for git operations"
     elif [[ -n "${GIT_SECRET:-}" ]]; then
         token="$GIT_SECRET"
-        log_info "Using GIT_SECRET for git operations"
-    else
-        log_warning "No GitHub token found"
     fi
     echo "$token"
 }
@@ -120,7 +116,18 @@ update_helm_values() {
     local token
     token=$(resolve_token)
     
-    # Validate cross-repo push permissions if needed
+    # Log which token source was used
+    if [[ -n "$token" ]]; then
+        if [[ "$token" == "${GH_PAT:-}" ]]; then
+            log_info "Using GH_PAT for git operations"
+        elif [[ "$token" == "${GIT_TOKEN:-}" ]]; then
+            log_info "Using GIT_TOKEN for git operations"
+        elif [[ "$token" == "${GIT_SECRET:-}" ]]; then
+            log_info "Using GIT_SECRET for git operations"
+        fi
+    else
+        log_warning "No GitHub token found"
+    fi
     if ! validate_cross_repo_push "$devops_repo" "$token"; then
         return 1
     fi
