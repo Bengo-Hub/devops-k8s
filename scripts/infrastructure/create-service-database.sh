@@ -168,6 +168,26 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${SERVICE_DB_USER};
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${SERVICE_DB_USER};" || true
 
+# Install PostgreSQL extensions if requested (idempotent)
+# ENABLE_PGVECTOR=true to install pgvector extension for AI/embedding workloads
+if [[ "${ENABLE_PGVECTOR:-false}" == "true" ]]; then
+    log_info "Installing pgvector extension for database '${SERVICE_DB_NAME}'..."
+    kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
+        env PGPASSWORD="$ADMIN_PASSWORD" \
+        psql -h localhost -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c \
+        "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null && \
+        log_success "pgvector extension installed" || \
+        log_warning "pgvector extension may already exist or is not available"
+fi
+
+# Install other common extensions (idempotent)
+# uuid-ossp for UUID generation
+log_info "Installing uuid-ossp extension..."
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
+    env PGPASSWORD="$ADMIN_PASSWORD" \
+    psql -h localhost -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c \
+    "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" 2>/dev/null || true
+
 log_success "Database '${SERVICE_DB_NAME}' and user '${SERVICE_DB_USER}' created successfully"
 log_info "Connection string: postgresql://${SERVICE_DB_USER}:<POSTGRES_PASSWORD>@${PG_HOST}:${PG_PORT}/${SERVICE_DB_NAME}"
 log_info "User password: Uses POSTGRES_PASSWORD (master password) for consistency"
