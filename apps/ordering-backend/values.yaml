@@ -1,8 +1,10 @@
+# Ordering Service Backend Production Configuration
 nameOverride: ordering-backend
 fullnameOverride: ordering-backend
 
-replicaCount: 1  # Optimized for resource-constrained environment
-
+# ============================================================================
+# IMAGE CONFIGURATION
+# ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
   tag: "latest"
@@ -10,10 +12,184 @@ image:
   pullSecrets:
     - name: registry-credentials
 
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 75
+
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
 service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
+
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+minReadySeconds: 30
+progressDeadlineSeconds: 600  # 10 minutes for migrations and startup
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+env:
+  # Core Configuration
+  - name: ORDERING_APP_ENV
+    value: production
+  - name: ORDERING_HTTP_PORT
+    value: "4000"
+  - name: ORDERING_HTTP_ALLOWED_ORIGINS
+    value: "https://ordersapp.codevertexitsolutions.com,https://orderapp.codevertexitsolutions.com,https://cafe.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+
+  # Database Configuration
+  - name: ORDERING_POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: ORDERING_POSTGRES_URL
+  # Database connection pool settings (prevent connection exhaustion)
+  - name: ORDERING_DB_MAX_OPEN_CONNS
+    value: "10"
+  - name: ORDERING_DB_MAX_IDLE_CONNS
+    value: "3"
+  - name: ORDERING_DB_CONN_MAX_LIFETIME
+    value: "15m"
+
+  # Messaging & Cache
+  - name: ORDERING_REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
+  - name: ORDERING_NATS_URL
+    value: nats://nats.messaging.svc.cluster.local:4222
+  - name: ORDERING_EVENTS_STREAM
+    value: ordering
+
+  # Observability
+  - name: ORDERING_OTLP_ENDPOINT
+    value: http://otel-collector.infra.svc.cluster.local:4317
+
+  # ============================================================================
+  # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
+  # ============================================================================
+
+  # Auth Service (SSO) - User authentication and identity management
+  - name: ORDERING_AUTH_SERVICE_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: ORDERING_AUTH_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: ORDERING_AUTH_JWKS_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+  - name: ORDERING_AUTH_AUDIENCE
+    value: "codevertex"
+  - name: ORDERING_AUTH_SERVICE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: AUTH_SERVICE_API_KEY
+        optional: true
+
+  # Treasury Service - Payment processing and refunds
+  - name: ORDERING_TREASURY_SERVICE_URL
+    value: "https://booksapi.codevertexitsolutions.com"
+  - name: ORDERING_TREASURY_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: TREASURY_API_KEY
+        optional: true
+  - name: ORDERING_TREASURY_WEBHOOK_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: TREASURY_WEBHOOK_SECRET
+        optional: true
+  - name: ORDERING_TREASURY_REQUEST_TIMEOUT
+    value: "30s"
+  - name: ORDERING_MPESA_ENABLED
+    value: "true"
+  - name: ORDERING_MPESA_CALLBACK_BASE_URL
+    value: "https://orderapi.codevertexitsolutions.com/api/v1/webhooks/mpesa"
+
+  # Logistics Service - Delivery task management
+  - name: ORDERING_LOGISTICS_SERVICE_URL
+    value: "https://logisticsapi.codevertexitsolutions.com"
+  - name: ORDERING_LOGISTICS_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: LOGISTICS_API_KEY
+        optional: true
+  - name: ORDERING_LOGISTICS_WEBHOOK_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: LOGISTICS_WEBHOOK_SECRET
+        optional: true
+  - name: ORDERING_LOGISTICS_REQUEST_TIMEOUT
+    value: "30s"
+  - name: ORDERING_LOGISTICS_WEBSOCKET_URL
+    value: "wss://logisticsapi.codevertexitsolutions.com/ws"
+
+  # Inventory Service - Stock management
+  - name: ORDERING_INVENTORY_SERVICE_URL
+    value: "https://inventoryapi.codevertexitsolutions.com"
+  - name: ORDERING_INVENTORY_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: INVENTORY_API_KEY
+        optional: true
+  - name: ORDERING_INVENTORY_REQUEST_TIMEOUT
+    value: "10s"
+
+  # Notifications Service - Email, SMS, Push notifications
+  - name: ORDERING_NOTIFICATIONS_SERVICE_URL
+    value: "https://notificationsapi.codevertexitsolutions.com"
+  - name: ORDERING_NOTIFICATIONS_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: NOTIFICATIONS_API_KEY
+        optional: true
+  - name: ORDERING_NOTIFICATIONS_REQUEST_TIMEOUT
+    value: "10s"
+
+  # Superset - Business Intelligence & Analytics
+  - name: ORDERING_SUPERSET_BASE_URL
+    value: "https://superset.codevertexitsolutions.com"
+  - name: ORDERING_SUPERSET_ADMIN_USERNAME
+    value: "admin"
+  - name: ORDERING_SUPERSET_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: SUPERSET_ADMIN_PASSWORD
+        optional: true
+  - name: ORDERING_SUPERSET_API_VERSION
+    value: "v1"
+  - name: ORDERING_SUPERSET_REQUEST_TIMEOUT
+    value: "30s"
+  - name: ORDERING_SUPERSET_GUEST_TOKEN_TTL_MINUTES
+    value: "5"
+
+# ============================================================================
+# SECRET REFERENCE FOR HOOKS
+# ============================================================================
+envFromSecret: ordering-backend-secrets
 
 # ============================================================================
 # MIGRATIONS AND SEEDING
@@ -44,67 +220,74 @@ seed:
       memory: 512Mi
 
 # ============================================================================
-# SECRET REFERENCE FOR HOOKS
+# HEALTH CHECKS
 # ============================================================================
-envFromSecret: ordering-backend-secrets
-
 healthCheck:
   enabled: true
+  startup:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 30  # 5 minutes total for startup
   readiness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 5
+    initialDelaySeconds: 15
     periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
   liveness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 20
-    periodSeconds: 15
+    initialDelaySeconds: 60
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 5
 
-strategy:
-  type: RollingUpdate
-  rollingUpdate:
-    maxSurge: 1
-    maxUnavailable: 0
-
-env:
-  - name: ORDERING_APP_ENV
-    value: production
-  - name: ORDERING_POSTGRES_URL
-    valueFrom:
-      secretKeyRef:
-        name: ordering-backend-secrets
-        key: postgresUrl
-  - name: ORDERING_REDIS_ADDR
-    value: redis-master.infra.svc.cluster.local:6379
-  - name: ORDERING_NATS_URL
-    value: nats://nats.messaging.svc.cluster.local:4222
-  - name: ORDERING_OTLP_ENDPOINT
-    value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: ORDERING_EVENTS_STREAM
-    value: ordering
-  - name: ORDERING_HTTP_PORT
-    value: "4000"
-  - name: ORDERING_HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderapp.codevertexitsolutions.com,https://cafe.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-
+# ============================================================================
+# RESOURCE LIMITS AND REQUESTS
+# ============================================================================
 resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
   limits:
     cpu: 1000m
     memory: 1Gi
-  requests:
-    cpu: 200m  # Balanced for 12-core server
-    memory: 512Mi
 
-autoscaling:
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+ingress:
   enabled: true
-  minReplicas: 1
-  maxReplicas: 1
-  targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 75
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # Rate limiting for API endpoints
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "200"
+  hosts:
+    - host: orderapi.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - orderapi.codevertexitsolutions.com
+      secretName: ordering-backend-tls
 
+# ============================================================================
+# MONITORING AND OBSERVABILITY
+# ============================================================================
 monitoring:
   enabled: true
   prometheus:
@@ -120,19 +303,11 @@ serviceMonitor:
   labels:
     release: prometheus
 
-ingress:
-  enabled: true
-  ingressClassName: nginx
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-  hosts:
-    - host: orderapi.codevertexitsolutions.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - hosts:
-        - orderapi.codevertexitsolutions.com
-      secretName: ordering-backend-tls
+# ============================================================================
+# SECURITY CONFIGURATION
+# ============================================================================
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
