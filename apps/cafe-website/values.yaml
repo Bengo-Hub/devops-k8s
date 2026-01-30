@@ -73,13 +73,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: cafe.codevertexitsolutions.com
+    - host: theurbanloftcafe.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - cafe.codevertexitsolutions.com
+        - theurbanloftcafe.com
       secretName: cafe-website-tls
 monitoring:
   enabled: false
