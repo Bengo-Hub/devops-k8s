@@ -6,7 +6,7 @@ fullnameOverride: ordering-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "43f6dd8b"
+  tag: "7eb40865"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -77,12 +77,12 @@ env:
   # Observability
   - name: ORDERING_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  # ============================================================================
-  # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
-  # ============================================================================
-
   # Auth Service (SSO) - User authentication and identity management
   - name: ORDERING_AUTH_SERVICE_URL
+    # ============================================================================
+    # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
+    # ============================================================================
+
     value: "https://sso.codevertexitsolutions.com"
   - name: ORDERING_AUTH_ISSUER
     value: "https://sso.codevertexitsolutions.com"
