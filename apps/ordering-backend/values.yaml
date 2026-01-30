@@ -47,7 +47,7 @@ env:
   - name: ORDERING_HTTP_PORT
     value: "4000"
   - name: ORDERING_HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://cafe.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://theurbanloftcafe.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   # Database Configuration - uses standard keys from devops-k8s create-service-secrets.sh
   - name: ORDERING_POSTGRES_URL
     valueFrom:
