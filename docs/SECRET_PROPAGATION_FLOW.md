@@ -85,7 +85,7 @@ secret: KUBE_CONFIG
 value: YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3RlcjoKICAgIGNlcnRpZmljYX...
 ---
 secret: POSTGRES_PASSWORD
-value: Vertex2020!
+value: ************
 ---
 ```
 
