@@ -152,7 +152,63 @@ check_and_sync_secrets() {
 
       if [ "$resp" = "204" ] || [ "$resp" = "201" ]; then
         echo "[INFO] Dispatch request accepted by $DEVOPS_REPO (http $resp) using $tokenSource"
-        echo "[INFO] Secrets should be propagated shortly by devops-k8s workflow"
+        echo "[INFO] Waiting for secrets to be propagated by devops-k8s workflow..."
+        
+        # Ensure gh is authenticated for secret list commands
+        if ! gh auth status &>/dev/null; then
+          echo "[DEBUG] Authenticating gh CLI with $tokenSource for secret verification"
+          echo "${tokenToUse}" | gh auth login --with-token 2>/dev/null || {
+            echo "[WARN] Could not authenticate gh CLI, will retry secret checks anyway"
+          }
+        fi
+        
+        # Initial delay to allow workflow to start (GitHub Actions startup ~3-5 seconds)
+        echo "[DEBUG] Initial wait of 5 seconds for workflow to start..."
+        sleep 5
+        
+        # Poll for secrets to appear (max 60 seconds, check every 2 seconds)
+        local MAX_WAIT=30
+        local WAIT_INTERVAL=2
+        local attempts=0
+        local all_secrets_present=false
+        
+        while [ $attempts -lt $MAX_WAIT ]; do
+          attempts=$((attempts + 1))
+          sleep $WAIT_INTERVAL
+          
+          # Check if all missing secrets are now present
+          local still_missing=0
+          for secret_name in "${MISSING_SECRETS[@]}"; do
+            if ! gh secret list --repo "$REPO_FULL_NAME" --json name -q '.[].name' 2>/dev/null | grep -q "^${secret_name}$"; then
+              still_missing=$((still_missing + 1))
+            fi
+          done
+          
+          if [ $still_missing -eq 0 ]; then
+            all_secrets_present=true
+            echo "[INFO] ✓ All secrets successfully propagated after $((attempts * WAIT_INTERVAL)) seconds"
+            return 0
+          else
+            # Show progress every 5 attempts (10 seconds)
+            if [ $((attempts % 5)) -eq 0 ]; then
+              echo "[INFO] Still waiting... ($still_missing secrets pending, ${attempts}/${MAX_WAIT} attempts)"
+            fi
+          fi
+        done
+        
+        # Timeout reached
+        if [ "$all_secrets_present" = "false" ]; then
+          echo "[ERROR] Timeout waiting for secrets to be propagated after $((MAX_WAIT * WAIT_INTERVAL)) seconds"
+          echo "[ERROR] The following secrets are still missing:"
+          for secret_name in "${MISSING_SECRETS[@]}"; do
+            if ! gh secret list --repo "$REPO_FULL_NAME" --json name -q '.[].name' 2>/dev/null | grep -q "^${secret_name}$"; then
+              echo "  - $secret_name"
+            fi
+          done
+          echo "[ERROR] Check devops-k8s workflow logs: https://github.com/$DEVOPS_REPO/actions/workflows/propagate-secrets.yml"
+          return 1
+        fi
+        
         return 0
       else
         echo "[ERROR] Dispatch request failed (http $resp)"
