@@ -62,15 +62,29 @@ while IFS= read -r line; do
 done < "$SECRETS_FILE"
 [[ -n "$cur_name" && -n "$cur_value" ]] && SECRETS_MAP["$cur_name"]="$cur_value"
 
+# Critical secrets that should not be overwritten if they already exist and are working
+# These are typically cluster/infrastructure secrets that are manually configured
+CRITICAL_SECRETS=("KUBE_CONFIG" "CONTABO_API_PASSWORD" "CONTABO_CLIENT_SECRET")
+
 # Propagate secrets
 SUCCESS=0
 FAILED=0
+SKIPPED=0
 
 for SECRET_NAME in "${SECRETS_TO_PROPAGATE[@]}"; do
   if [ -z "${SECRETS_MAP[$SECRET_NAME]:-}" ]; then
-    echo "[WARN] $SECRET_NAME not found. Skipping."
+    echo "[WARN] $SECRET_NAME not found in secrets file. Skipping."
     FAILED=$((FAILED + 1))
     continue
+  fi
+  
+  # Check if this is a critical secret that already exists
+  if [[ " ${CRITICAL_SECRETS[*]} " =~ " ${SECRET_NAME} " ]]; then
+    if gh secret list --repo "$TARGET_REPO" --json name -q '.[].name' 2>/dev/null | grep -q "^${SECRET_NAME}$"; then
+      echo "[INFO] $SECRET_NAME is a critical secret and already exists in $TARGET_REPO - skipping to prevent overwrite"
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
   fi
   
   VALUE="${SECRETS_MAP[$SECRET_NAME]}"
@@ -94,5 +108,12 @@ for SECRET_NAME in "${SECRETS_TO_PROPAGATE[@]}"; do
   fi
 done
 
-echo "[INFO] Summary: $SUCCESS succeeded, $FAILED failed"
-[ $FAILED -gt 0 ] && exit 1 || exit 0
+echo "[INFO] Summary: $SUCCESS succeeded, $FAILED failed, $SKIPPED skipped (critical secrets already present)"
+if [ $FAILED -gt 0 ]; then
+  exit 1
+elif [ $SUCCESS -eq 0 ] && [ $SKIPPED -eq 0 ]; then
+  echo "[WARN] No secrets were propagated"
+  exit 1
+else
+  exit 0
+fi
