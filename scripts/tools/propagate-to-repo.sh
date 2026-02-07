@@ -66,6 +66,11 @@ done < "$SECRETS_FILE"
 # These are typically cluster/infrastructure secrets that are manually configured
 CRITICAL_SECRETS=("KUBE_CONFIG" "CONTABO_API_PASSWORD" "CONTABO_CLIENT_SECRET")
 
+# Secrets that are already base64-encoded in the source file
+# These should be propagated AS-IS without additional encoding
+# Workflows will decode them when needed
+BASE64_ENCODED_SECRETS=("KUBE_CONFIG" "SSH_PRIVATE_KEY" "DOCKER_SSH_KEY")
+
 # Propagate secrets
 SUCCESS=0
 FAILED=0
@@ -89,16 +94,26 @@ for SECRET_NAME in "${SECRETS_TO_PROPAGATE[@]}"; do
   
   VALUE="${SECRETS_MAP[$SECRET_NAME]}"
   
-  # Debug: Show masked value for credential secrets
-  if [[ "$SECRET_NAME" == "REGISTRY_USERNAME" ]]; then
-    echo "[DEBUG] Decoded username: $VALUE"
-  elif [[ "$SECRET_NAME" == "REGISTRY_PASSWORD" ]] || [[ "$SECRET_NAME" == *"PASSWORD"* ]]; then
-    MASKED="${VALUE:0:1}****${VALUE: -1}"
-    echo "[DEBUG] Decoded password length: ${#VALUE} chars, masked: $MASKED"
+  # Identify secret type for proper handling
+  IS_BASE64_ENCODED=false
+  if [[ " ${BASE64_ENCODED_SECRETS[*]} " =~ " ${SECRET_NAME} " ]]; then
+    IS_BASE64_ENCODED=true
+    echo "[DEBUG] $SECRET_NAME is pre-encoded (base64) - propagating as-is"
+    echo "[DEBUG] Value length: ${#VALUE} chars"
   fi
   
-  # Set secret as plain text (GitHub encrypts it automatically)
-  # DO NOT base64-encode here - gh secret set expects plain text
+  # Debug: Show masked value for credential secrets
+  if [[ "$SECRET_NAME" == "REGISTRY_USERNAME" ]]; then
+    echo "[DEBUG] Username: $VALUE"
+  elif [[ "$SECRET_NAME" == "REGISTRY_PASSWORD" ]] || [[ "$SECRET_NAME" == *"PASSWORD"* ]]; then
+    MASKED="${VALUE:0:1}****${VALUE: -1}"
+    echo "[DEBUG] Password length: ${#VALUE} chars, masked: $MASKED"
+  fi
+  
+  # Set secret (GitHub encrypts it automatically)
+  # - Plain text secrets: Set as-is
+  # - Base64 secrets: Set as-is (already encoded, workflow will decode)
+  # DO NOT re-encode base64 secrets here
   echo "[INFO] Setting $SECRET_NAME in $TARGET_REPO"
   if echo -n "$VALUE" | gh secret set "$SECRET_NAME" --repo "$TARGET_REPO" --body - 2>&1; then
     SUCCESS=$((SUCCESS + 1))

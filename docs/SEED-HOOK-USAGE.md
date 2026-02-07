@@ -223,7 +223,7 @@ Release: auth-service
 Image: docker.io/codevertex/auth-service:abc12345
 
 ✓ Running seed binary: /usr/local/bin/auth-seed
-seed completed: admin=admin@codevertexitsolutions.com tenant=codevertex password=ChangeMe123!
+seed completed: admin=admin@codevertexitsolutions.com tenant=codevertex password=************
 ✓ Seed job completed successfully
 ```
 
