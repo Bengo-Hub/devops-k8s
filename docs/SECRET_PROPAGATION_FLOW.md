@@ -1,7 +1,36 @@
 # Secret Propagation Flow Analysis
 
 **Last Updated:** February 7, 2026  
-**Status:** Complete flow from source to usage documented
+**Status:** Current implementation - consider migrating to org-level (see SECRET_ORG_LEVEL_STRATEGY.md)
+
+## ⚠️ Important Note on File Paths
+
+### Local vs CI Environment
+
+**Local execution (developer machine):**
+- Secrets source: `D:/KubeSecrets/git-secrets/Bengo-Hub__devops-k8s/secrets.txt`
+- Scripts access local filesystem directly
+- Used for: Initializing PROPAGATE_SECRETS, manual operations
+
+**CI execution (GitHub Actions runners):**
+- No access to `D:/KubeSecrets` (local directory)
+- Secrets source: `PROPAGATE_SECRETS` secret → decoded to `/tmp/propagate-secrets.txt`
+- `/tmp` directory IS accessible on GitHub Actions runners (Linux VM)
+- Used for: Automated secret propagation in workflows
+
+**Key insight:** GitHub Actions workflows **CAN** access `/tmp` - it's on the runner VM, not the developer's local machine. The current implementation is correct for CI environments.
+
+### Recommended Alternative: Organization-Level Secrets
+
+Instead of propagation complexity, consider setting secrets at GitHub organization level:
+- ✅ Direct access in all repo workflows
+- ✅ No decoding/propagation needed
+- ✅ Instant updates across all repos
+- ✅ No local or temp file dependencies
+
+See [SECRET_ORG_LEVEL_STRATEGY.md] for complete migration guide.
+
+---
 
 ## Overview
 
