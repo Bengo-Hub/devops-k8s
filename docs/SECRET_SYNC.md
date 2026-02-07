@@ -117,7 +117,7 @@ fi
 
 #### GitHub/Git (2)
 - `GIT_TOKEN` - **********
-- `GH_PAT` - ********** (same token)
+- `GH_PAT` - **********
 
 #### Database Passwords (4)
 - `POSTGRES_PASSWORD` - ************
