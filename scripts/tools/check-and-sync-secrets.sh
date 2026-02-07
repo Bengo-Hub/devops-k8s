@@ -89,8 +89,40 @@ check_and_sync_secrets() {
     rm -f "$TEMP_SCRIPT"
     return 0
   else
-    echo "[ERROR] Failed to sync secrets from $DEVOPS_REPO"
+    echo "[WARN] Direct propagate script failed. Attempting remote dispatch to $DEVOPS_REPO if possible"
     rm -f "$TEMP_SCRIPT"
+
+    # If a PROPAGATE_TRIGGER_TOKEN is configured in this repo, use it to trigger
+    # a workflow in the devops-k8s repo that will run the propagate operation there
+    if [ -n "${PROPAGATE_TRIGGER_TOKEN:-}" ]; then
+      echo "[INFO] Using PROPAGATE_TRIGGER_TOKEN to request devops-k8s to propagate secrets"
+
+      # Build JSON payload
+      js_secrets="["
+      for s in "${MISSING_SECRETS[@]}"; do
+        js_secrets+="\"${s}\",";
+      done
+      js_secrets="${js_secrets%,}]"
+
+      body="{\"event_type\":\"propagate-secrets\",\"client_payload\":{\"target_repo\":\"$REPO_FULL_NAME\",\"secrets\":$js_secrets}}"
+
+      resp=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: token ${PROPAGATE_TRIGGER_TOKEN}" \
+        -d "$body" \
+        "https://api.github.com/repos/$DEVOPS_REPO/dispatches" ) || true
+
+      if [ "$resp" = "204" ] || [ "$resp" = "201" ]; then
+        echo "[INFO] Dispatch request accepted by $DEVOPS_REPO (http $resp)"
+        echo "[INFO] Secrets should be propagated shortly by devops-k8s workflow"
+        return 0
+      else
+        echo "[ERROR] Dispatch request failed (http $resp)"
+        return 1
+      fi
+    fi
+
+    echo "[ERROR] Failed to sync secrets from $DEVOPS_REPO"
     return 1
   fi
 }
