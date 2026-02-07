@@ -95,82 +95,101 @@ fi
 **How it works**:
 1. Workflow has access to all secret values via `${{ secrets.SECRET_NAME }}`
 2. Maps requested secret names to environment variables
-3. Uses `gh secret set` to copy each secret to target repo
-4. Reports success/failure for each secret
+3. **Validates** that provisioning-only secrets are never synced to service repos
+4. **Warns** (not fails) if a requested secret doesn't exist in devops-k8s yet
+5. Uses `gh secret set` to copy each secret to target repo
+6. Reports success/failure/warnings/skips for each secret
+
+**Authentication**: Uses `GH_PAT` from devops-k8s secrets (falls back to `GIT_TOKEN` if GH_PAT not set). The gh CLI automatically uses the `GH_TOKEN` environment variable - no explicit login needed.
 
 **Why this works**: GitHub Actions workflows CAN access their own secret values at runtime, even though the API/CLI cannot read secrets externally. This is the only way to programmatically copy secrets between repos.
 
 ## Secret Inventory
 
-### All Repositories (25 total secrets)
+### Provisioning-Only Secrets (🚫 NEVER sync to service repos)
 
-#### Base64-Encoded (3)
-- `KUBE_CONFIG` - Kubernetes config for cluster access (7540 chars)
-- `SSH_PRIVATE_KEY` - SSH key for repo access (620 chars)
-- `DOCKER_SSH_KEY` - SSH key for Docker deployments (620 chars)
+These secrets are for devops-k8s infrastructure only and should **NEVER** be synced to service repositories:
 
-#### Docker Registry (4)
-- `REGISTRY_USERNAME` - ********
-- `REGISTRY_PASSWORD` - ************
+- `KUBE_CONFIG` - Kubernetes config for cluster access (7540 chars, base64)
+- `SSH_PRIVATE_KEY` - SSH key for repo access (620 chars, base64)
+- `DOCKER_SSH_KEY` - SSH key for Docker deployments (620 chars, base64)
+- `SSH_HOST` - VPS host IP (94.16.119.213)
+- `SSH_USER` - VPS username (vertexhub)
+
+**⚠️  Important**: The sync workflow will automatically **skip** these secrets if requested, preventing accidental exposure.
+
+### Standard Application Secrets (✅ Safe to sync)
+
+These secrets are used across most service repositories. **Always use these exact names** for consistency:
+
+#### Docker Registry (Required for all services)
+- `REGISTRY_USERNAME` - Docker registry username
+- `REGISTRY_PASSWORD` - Docker registry password
 - `REGISTRY_EMAIL` - info@vertexhub.tech
-- `REGISTRY_URL` - vertexhubacr.azurecr.io
 
-#### GitHub/Git (2)
-- `GIT_TOKEN` - **********
-- `GH_PAT` - **********
+#### Git Access (Required for all services)
+- `GIT_TOKEN` - GitHub personal access token (note: at devops-k8s level this is named `GH_PAT`, but syncs as `GIT_TOKEN` to service repos)
 
-#### Database Passwords (4)
-- `POSTGRES_PASSWORD` - ************
-- `MYSQL_ROOT_PASSWORD` - ************
-- `REDIS_PASSWORD` - ************
-- `RABBITMQ_PASSWORD` - ************
+#### Database Passwords (Required for backend services)
+- `POSTGRES_PASSWORD` - PostgreSQL database password
+- `REDIS_PASSWORD` - Redis cache password
+- `RABBITMQ_PASSWORD` - RabbitMQ message queue password (if used)
 
-#### VPS/Infrastructure (3 per cluster)
-**Main cluster (CONTABO_*):**
-- `CONTABO_SSH_HOST` - 94.16.119.213
-- `CONTABO_SSH_USER` - vertexhub
-- `CONTABO_SSH_PASSWORD` - ************
+### Rarely Used Secrets
 
-**Mosuon cluster (VPS_*):**
-- `VPS_SSH_HOST` - [mosuon cluster IP]
-- `VPS_SSH_USER` - [mosuon user]
-- `VPS_SSH_PASSWORD` - ************
+These may be needed for specific services:
 
-#### M-Pesa/Payment (4)
+#### M-Pesa/Payment
 - `MPESA_CONSUMER_KEY`
 - `MPESA_CONSUMER_SECRET`
 - `MPESA_SHORTCODE`
 - `MPESA_PASSKEY`
 
-#### Email/SMTP (3)
+#### Email/SMTP
 - `SMTP_HOST`
 - `SMTP_USER`
 - `SMTP_PASSWORD`
 
-#### Security/Auth (2)
+#### Security/Auth
 - `JWT_SECRET_KEY`
 - `ENCRYPTION_KEY`
 
 ## Service Secret Requirements
 
 ### Backend Services (API)
-**Typical secrets needed**:
-- `KUBE_CONFIG` - For deployment
-- `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` - For Docker push
-- `GIT_TOKEN` - For git operations
+**Standard secrets needed** (use these exact names):
+- `REGISTRY_USERNAME` - Docker registry login
+- `REGISTRY_PASSWORD` - Docker registry password
+- `GIT_TOKEN` - Git operations (cloning, pushing)
 - `POSTGRES_PASSWORD` - Database access
 - `REDIS_PASSWORD` - Cache access
 - `RABBITMQ_PASSWORD` - Message queue (if used)
 
-**Example**: isp-billing-backend needs all of the above
+**🚫 Never include**: `KUBE_CONFIG`, `SSH_PRIVATE_KEY`, `DOCKER_SSH_KEY`, `SSH_HOST`, `SSH_USER`
+
+**Example sync command**:
+```bash
+gh workflow run sync-secrets.yml \
+  --repo Bengo-Hub/devops-k8s \
+  -f target_repo=Bengo-Hub/your-backend \
+  -f secrets='REGISTRY_USERNAME REGISTRY_PASSWORD GIT_TOKEN POSTGRES_PASSWORD REDIS_PASSWORD'
+```
 
 ### Frontend Services (UI)
-**Typical secrets needed**:
-- `KUBE_CONFIG` - For deployment
-- `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` - For Docker push
-- `GIT_TOKEN` - For git operations
+**Standard secrets needed** (use these exact names):
+- `REGISTRY_USERNAME` - Docker registry login
+- `REGISTRY_PASSWORD` - Docker registry password
+- `GIT_TOKEN` - Git operations
 
-**Example**: isp-billing-frontend needs only these 4
+**🚫 Never include**: `KUBE_CONFIG`, `SSH_PRIVATE_KEY`, `DOCKER_SSH_KEY`, `SSH_HOST`, `SSH_USER`
+
+**Example sync command**:
+```bash
+gh workflow run sync-secrets.yml \
+  --repo Bengo-Hub/devops-k8s \
+  -f target_repo=Bengo-Hub/your-frontend \
+  -f secrets='REGISTRY_USERNAME REGISTRY_PASSWORD GIT_TOKEN'
+```
 
 ## Migration from Old System
 
@@ -267,6 +286,18 @@ done
 **Cause**: Secrets missing in service repo
 **Solution**: Run sync-secrets.yml workflow or set manually
 
+### "⚠️  WARNING: SECRET_NAME not found in devops-k8s secrets"
+**Cause**: Secret doesn't exist in devops-k8s yet
+**Behavior**: Workflow continues with warning (doesn't fail)
+**Solution**: 
+1. Set the secret in devops-k8s first: `gh secret set SECRET_NAME --repo Bengo-Hub/devops-k8s`
+2. Re-run the sync workflow
+
+### "🚫 SKIPPED: SECRET_NAME is a provisioning secret"
+**Cause**: Attempted to sync a provisioning-only secret (KUBE_CONFIG, SSH_PRIVATE_KEY, etc.)
+**Behavior**: Workflow skips the secret (doesn't sync or fail)
+**Solution**: Remove provisioning secrets from your sync request. These should NEVER be in service repos.
+
 ### "Cannot detect repository"
 **Cause**: Running outside git repo or gh CLI not configured
 **Solution**: Set `GITHUB_REPOSITORY=Bengo-Hub/repo-name` or run from repo directory
@@ -276,11 +307,12 @@ done
 **Solution**: Run `gh auth login` or set `GH_PAT` environment variable
 
 ### "Failed to sync SECRET_NAME"
-**Cause**: Secret doesn't exist in devops-k8s or permission issue
+**Cause**: gh secret set command failed (not a missing secret)
 **Solution**: 
 1. Verify secret exists: `gh secret list --repo Bengo-Hub/devops-k8s`
 2. Check GH_PAT has `repo` scope
 3. Ensure workflow has secret mapped in env section
+4. Check target repo permissions
 
 ## Security Considerations
 
@@ -298,7 +330,8 @@ done
 
 ### Secret Scope
 - ✅ **DO**: Only sync secrets needed by each service
-- ✅ **DO**: Protect infrastructure secrets (KUBE_CONFIG from app repos)
+- ✅ **DO**: Use standard secret names (REGISTRY_USERNAME, GIT_TOKEN, etc.)
+- 🚫 **DON'T**: Sync provisioning secrets (KUBE_CONFIG, SSH_PRIVATE_KEY, SSH_HOST, etc.) to service repos
 - ❌ **DON'T**: Give all secrets to all repos
 - ❌ **DON'T**: Use production secrets in dev environments
 
@@ -315,12 +348,14 @@ done
 | **Complexity** | High (dispatch, polling, decode) | Low (one workflow, one script) |
 | **Setup** | Encode all secrets to base64 container | Set secrets normally in devops repo |
 | **Update** | Re-encode entire container | Update one secret, sync individually |
-| **Debugging** | Hard (base64, async dispatch) | Easy (direct workflow, clear logs) |
+| **Debugging** | Hard (base64, async dispatch) | Easy (detailed logs, clear errors) |
 | **Security** | All secrets in one place (blast radius) | Secrets synced per-service (isolated) |
 | **Speed** | 15s+ polling delay | Immediate (no waiting) |
 | **Local file** | Requires D:/KubeSecrets in setup | No local files needed |
 | **Documentation** | Secret propagation flow needed | Self-documenting (check output) |
 | **Failure mode** | Silent (polling timeout) | Explicit (CI fails, shows URLs) |
+| **Provisioning secrets** | Could leak to service repos | Automatically blocked from sync |
+| **Missing secrets** | Hard fail (breaks builds) | Soft warn (continues with others) |
 
 ## Mosuon Cluster Differences
 
@@ -328,8 +363,9 @@ The mosuon cluster has identical setup but uses `mosuon-devops-k8s` as source:
 
 1. **Script URL**: `https://raw.githubusercontent.com/Bengo-Hub/mosuon-devops-k8s/master/scripts/tools/check-and-sync-secrets.sh`
 2. **Workflow**: `https://github.com/Bengo-Hub/mosuon-devops-k8s/actions/workflows/sync-secrets.yml`
-3. **VPS secrets**: Uses `VPS_*` instead of `CONTABO_*` prefix
+3. **Provisioning secrets**: KUBE_CONFIG, SSH_PRIVATE_KEY, DOCKER_SSH_KEY, SSH_HOST, SSH_USER, VPS_SSH_HOST, VPS_SSH_USER
 4. **Services**: game-stats-api, game-stats-ui
+5. **Standard secrets**: Same as main cluster (REGISTRY_USERNAME, REGISTRY_PASSWORD, GIT_TOKEN, etc.)
 
 ## Future Enhancements
 
