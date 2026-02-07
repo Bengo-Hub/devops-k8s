@@ -8,16 +8,40 @@ check_and_sync_secrets() {
   local MISSING_SECRETS=()
   local REPO_FULL_NAME=""
   
-  # Detect current repo name
+  # Detect current repo name. Prefer 'gh' but fall back to GITHUB_REPOSITORY env var if needed
   if command -v gh &>/dev/null; then
-    REPO_FULL_NAME=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || echo "")
+    # Try to get the repo using gh; if it fails, fall back to GITHUB_REPOSITORY
+    if REPO_FULL_NAME=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null); then
+      :
+    else
+      echo "[WARN] 'gh repo view' failed or is unauthenticated; falling back to GITHUB_REPOSITORY if set"
+      REPO_FULL_NAME="${GITHUB_REPOSITORY:-}"
+    fi
+  else
+    # gh not available; try GitHub Actions env var
+    REPO_FULL_NAME="${GITHUB_REPOSITORY:-}"
   fi
-  
+
   if [ -z "$REPO_FULL_NAME" ]; then
     echo "[WARN] Could not detect repository name. Skipping secret sync check."
+    echo "[WARN] Ensure 'gh' is installed and authenticated or set GITHUB_REPOSITORY env var (owner/repo)"
     return 0
   fi
-  
+
+  # Ensure gh is authenticated (required for cross-repo secret writes)
+  if command -v gh &>/dev/null; then
+    if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+      echo "[WARN] gh is not authenticated. Attempting non-interactive auth using GH_PAT or GITHUB_TOKEN env vars"
+      if [ -n "${GH_PAT:-}" ]; then
+        echo "${GH_PAT}" | gh auth login --with-token >/dev/null 2>&1 || echo "[WARN] gh auth login with GH_PAT failed"
+      elif [ -n "${GITHUB_TOKEN:-}" ]; then
+        echo "${GITHUB_TOKEN}" | gh auth login --with-token >/dev/null 2>&1 || echo "[WARN] gh auth login with GITHUB_TOKEN failed"
+      else
+        echo "[WARN] No GH token available in env; propagate script may fail due to lack of auth"
+      fi
+    fi
+  fi
+
   echo "[INFO] Checking required secrets for $REPO_FULL_NAME"
   
   # Check which secrets are missing
