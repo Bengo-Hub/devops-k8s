@@ -1,225 +1,149 @@
 #!/usr/bin/env bash
 # check-and-sync-secrets.sh
-# Helper script for build.sh files to check required secrets and auto-sync from devops-k8s
+# Helper script for build.sh files to check required secrets and auto-sync from source repo
+# Features: Direct query from source repo (devops-k8s, mosuon-devops-k8s, or custom)
 # Usage: source this file in build.sh, then call: check_and_sync_secrets "SECRET1" "SECRET2" ...
 
 check_and_sync_secrets() {
   local REQUIRED_SECRETS=("$@")
   local MISSING_SECRETS=()
-  local REPO_FULL_NAME=""
+  local TARGET_REPO=""
   
-  # Detect current repo name. Prefer 'gh' but fall back to GITHUB_REPOSITORY env var if needed
+  # Source repo configuration (default: devops-k8s, override with SOURCE_SECRETS_REPO env var)
+  local SOURCE_REPO="${SOURCE_SECRETS_REPO:-Bengo-Hub/devops-k8s}"
+  
+  # Detect target repo name. Prefer 'gh' but fall back to GITHUB_REPOSITORY env var
   if command -v gh &>/dev/null; then
-    # Try to get the repo using gh; if it fails, fall back to GITHUB_REPOSITORY
-    if REPO_FULL_NAME=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null); then
+    if TARGET_REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null); then
       :
     else
-      echo "[WARN] 'gh repo view' failed or is unauthenticated; falling back to GITHUB_REPOSITORY if set"
-      REPO_FULL_NAME="${GITHUB_REPOSITORY:-}"
+      echo "[WARN] 'gh repo view' failed; falling back to GITHUB_REPOSITORY if set"
+      TARGET_REPO="${GITHUB_REPOSITORY:-}"
     fi
   else
-    # gh not available; try GitHub Actions env var
-    REPO_FULL_NAME="${GITHUB_REPOSITORY:-}"
+    TARGET_REPO="${GITHUB_REPOSITORY:-}"
   fi
 
-  if [ -z "$REPO_FULL_NAME" ]; then
+  if [ -z "$TARGET_REPO" ]; then
     echo "[WARN] Could not detect repository name. Skipping secret sync check."
-    echo "[WARN] Ensure 'gh' is installed and authenticated or set GITHUB_REPOSITORY env var (owner/repo)"
+    echo "[WARN] Ensure 'gh' is installed and authenticated or set GITHUB_REPOSITORY env var"
     return 0
   fi
 
-  # Ensure gh is authenticated (required for cross-repo secret writes)
+  # Ensure gh is authenticated
   if command -v gh &>/dev/null; then
     if ! gh auth status --hostname github.com >/dev/null 2>&1; then
-      echo "[WARN] gh is not authenticated. Attempting non-interactive auth using GH_PAT or GITHUB_TOKEN env vars"
+      echo "[WARN] gh is not authenticated. Attempting auth with GH_PAT or GITHUB_TOKEN"
       if [ -n "${GH_PAT:-}" ]; then
-        echo "${GH_PAT}" | gh auth login --with-token >/dev/null 2>&1 || echo "[WARN] gh auth login with GH_PAT failed"
+        echo "${GH_PAT}" | gh auth login --with-token >/dev/null 2>&1 || true
       elif [ -n "${GITHUB_TOKEN:-}" ]; then
-        echo "${GITHUB_TOKEN}" | gh auth login --with-token >/dev/null 2>&1 || echo "[WARN] gh auth login with GITHUB_TOKEN failed"
-      else
-        echo "[WARN] No GH token available in env; propagate script may fail due to lack of auth"
+        echo "${GITHUB_TOKEN}" | gh auth login --with-token >/dev/null 2>&1 || true
       fi
     fi
   fi
 
-  echo "[INFO] Checking required secrets for $REPO_FULL_NAME"
+  echo "[INFO] Checking required secrets for $TARGET_REPO"
   
-  # Check which secrets are missing
+  # Check which secrets are missing from target repo
   for SECRET_NAME in "${REQUIRED_SECRETS[@]}"; do
-    if ! gh secret list --repo "$REPO_FULL_NAME" --json name -q '.[].name' 2>/dev/null | grep -q "^${SECRET_NAME}$"; then
-      echo "[WARN] Secret $SECRET_NAME is missing"
+    if ! gh secret list --repo "$TARGET_REPO" --json name -q '.[].name' 2>/dev/null | grep -q "^${SECRET_NAME}$"; then
+      echo "[WARN] Secret $SECRET_NAME is missing in $TARGET_REPO"
       MISSING_SECRETS+=("$SECRET_NAME")
     fi
   done
   
   if [ ${#MISSING_SECRETS[@]} -eq 0 ]; then
-    echo "[INFO] All required secrets are present"
+    echo "[INFO] All required secrets are present in $TARGET_REPO"
     return 0
   fi
   
-  echo "[INFO] Missing secrets: ${MISSING_SECRETS[*]}"
-  echo "[INFO] Attempting to sync secrets from devops-k8s..."
+  echo "[INFO] Missing ${#MISSING_SECRETS[@]} secret(s); syncing from $SOURCE_REPO..."
   
-  local DEVOPS_REPO="Bengo-Hub/devops-k8s"
-  local DISPATCH_NEEDED=false
+  # Select token for authentication
+  local AUTH_TOKEN=""
+  local TOKEN_SOURCE=""
   
-  # In CI environments (GitHub Actions), skip direct propagation since:
-  # - PROPAGATE_SECRETS_FILE won't be set (no local files)
-  # - Remote dispatch uses centralized PROPAGATE_SECRETS secret instead
-  if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${CI:-}" ]; then
-    echo "[INFO] Running in CI environment - using remote dispatch (no local secrets file)"
-    DISPATCH_NEEDED=true
-  elif [ -n "${PROPAGATE_SECRETS_FILE:-}" ] && [ -f "${PROPAGATE_SECRETS_FILE}" ]; then
-    echo "[INFO] PROPAGATE_SECRETS_FILE is set and exists - attempting direct propagation"
-    
-    local PROPAGATE_SCRIPT_URL="https://raw.githubusercontent.com/$DEVOPS_REPO/main/scripts/tools/propagate-to-repo.sh"
-    local TEMP_SCRIPT="/tmp/propagate-to-repo-$$.sh"
-    
-    # Download propagate script
-    if command -v curl &>/dev/null; then
-      curl -fsSL "$PROPAGATE_SCRIPT_URL" -o "$TEMP_SCRIPT" 2>/dev/null || {
-        echo "[WARN] Failed to download propagate script from $DEVOPS_REPO"
-        DISPATCH_NEEDED=true
-      }
-    elif command -v wget &>/dev/null; then
-      wget -q "$PROPAGATE_SCRIPT_URL" -O "$TEMP_SCRIPT" 2>/dev/null || {
-        echo "[WARN] Failed to download propagate script from $DEVOPS_REPO"
-        DISPATCH_NEEDED=true
-      }
-    else
-      echo "[WARN] Neither curl nor wget found. Cannot download propagate script."
-      DISPATCH_NEEDED=true
-    fi
-    
-    if [ "$DISPATCH_NEEDED" = "false" ]; then
-      chmod +x "$TEMP_SCRIPT"
-      
-      # Run propagate script with PROPAGATE_SECRETS_FILE set
-      if bash "$TEMP_SCRIPT" "$REPO_FULL_NAME" "${MISSING_SECRETS[@]}"; then
-        echo "[INFO] Successfully synced secrets from $DEVOPS_REPO via direct propagation"
-        rm -f "$TEMP_SCRIPT"
-        return 0
-      else
-        echo "[WARN] Direct propagation failed - falling back to remote dispatch"
-        rm -f "$TEMP_SCRIPT"
-        DISPATCH_NEEDED=true
-      fi
-    fi
+  if [ -n "${GH_PAT:-}" ]; then
+    AUTH_TOKEN="${GH_PAT}"
+    TOKEN_SOURCE="GH_PAT"
+  elif [ -n "${GITHUB_TOKEN:-}" ]; then
+    AUTH_TOKEN="${GITHUB_TOKEN}"
+    TOKEN_SOURCE="GITHUB_TOKEN"
   else
-    echo "[INFO] PROPAGATE_SECRETS_FILE not set or file not found - using remote dispatch"
-    DISPATCH_NEEDED=true
+    echo "[ERROR] No auth token (GH_PAT or GITHUB_TOKEN) available for secret sync"
+    return 1
   fi
+
+  local TOKEN_MASK="${AUTH_TOKEN:0:4}****${AUTH_TOKEN: -4}"
+  echo "[DEBUG] Using auth token from $TOKEN_SOURCE: $TOKEN_MASK"
   
-  # Remote dispatch fallback (or primary method in CI)
-  if [ "$DISPATCH_NEEDED" = "true" ]; then
-    # Select token for dispatch authentication
-    if [ -n "${PROPAGATE_TRIGGER_TOKEN:-}" ]; then
-      echo "[INFO] Using PROPAGATE_TRIGGER_TOKEN to request devops-k8s to propagate secrets"
-      tokenToUse="${PROPAGATE_TRIGGER_TOKEN}"
-      tokenSource="PROPAGATE_TRIGGER_TOKEN"
-    elif [ -n "${GH_PAT:-}" ]; then
-      echo "[INFO] Using GH_PAT env to request devops-k8s to propagate secrets"
-      tokenToUse="${GH_PAT}"
-      tokenSource="GH_PAT"
-    elif [ -n "${GITHUB_TOKEN:-}" ]; then
-      echo "[INFO] Using GITHUB_TOKEN env to request devops-k8s to propagate secrets"
-      tokenToUse="${GITHUB_TOKEN}"
-      tokenSource="GITHUB_TOKEN"
-    else
-      tokenToUse=""
-      tokenSource=""
-    fi
-
-    if [ -n "${tokenToUse:-}" ]; then
-      # Build JSON payload
-      js_secrets="["
-      for s in "${MISSING_SECRETS[@]}"; do
-        js_secrets+="\"${s}\",";
+  # Sync each missing secret via export workflow in source repo
+  local SYNC_FAILURES=0
+  for SECRET_NAME in "${MISSING_SECRETS[@]}"; do
+    echo "[INFO] Requesting export of $SECRET_NAME from $SOURCE_REPO..."
+    
+    # Build dispatch payload
+    local PAYLOAD=$(cat <<EOF
+{
+  "event_type": "export-secret",
+  "client_payload": {
+    "secret_name": "$SECRET_NAME",
+    "target_repo": "$TARGET_REPO"
+  }
+}
+EOF
+)
+    
+    # Trigger export-secret workflow in source repo
+    local RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: token ${AUTH_TOKEN}" \
+      -d "$PAYLOAD" \
+      "https://api.github.com/repos/$SOURCE_REPO/dispatches") || true
+    
+    if [ "$RESP" = "204" ] || [ "$RESP" = "201" ]; then
+      echo "[DEBUG] Export dispatch accepted for $SECRET_NAME (http $RESP)"
+      
+      # Poll until secret appears in target repo (30 seconds max, 2 second intervals)
+      local POLL_ATTEMPTS=15
+      local POLL_INTERVAL=2
+      local poll=0
+      local found=false
+      
+      echo "[DEBUG] Polling for $SECRET_NAME to appear in $TARGET_REPO..."
+      
+      while [ $poll -lt $POLL_ATTEMPTS ]; do
+        sleep $POLL_INTERVAL
+        poll=$((poll + 1))
+        
+        if gh secret list --repo "$TARGET_REPO" --json name -q '.[].name' 2>/dev/null | grep -q "^${SECRET_NAME}$"; then
+          echo "[INFO] ✓ $SECRET_NAME synced successfully after $((poll * POLL_INTERVAL))s"
+          found=true
+          break
+        fi
+        
+        if [ $((poll % 3)) -eq 0 ]; then
+          echo "[DEBUG] Still waiting for $SECRET_NAME... (attempt $poll/$POLL_ATTEMPTS)"
+        fi
       done
-      js_secrets="${js_secrets%,}]"
-
-      body="{\"event_type\":\"propagate-secrets\",\"client_payload\":{\"target_repo\":\"$REPO_FULL_NAME\",\"secrets\":$js_secrets}}"
-
-      # Mask token for debug (show first/last 4 chars)
-      tokenMask="${tokenToUse:0:4}****${tokenToUse: -4}"
-      echo "[DEBUG] Using token from $tokenSource: $tokenMask"
-
-      resp=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-        -H "Accept: application/vnd.github+json" \
-        -H "Authorization: token ${tokenToUse}" \
-        -d "$body" \
-        "https://api.github.com/repos/$DEVOPS_REPO/dispatches" ) || true
-
-      if [ "$resp" = "204" ] || [ "$resp" = "201" ]; then
-        echo "[INFO] Dispatch request accepted by $DEVOPS_REPO (http $resp) using $tokenSource"
-        echo "[INFO] Waiting for secrets to be propagated by devops-k8s workflow..."
-        
-        # Ensure gh is authenticated for secret list commands
-        if ! gh auth status &>/dev/null; then
-          echo "[DEBUG] Authenticating gh CLI with $tokenSource for secret verification"
-          echo "${tokenToUse}" | gh auth login --with-token 2>/dev/null || {
-            echo "[WARN] Could not authenticate gh CLI, will retry secret checks anyway"
-          }
-        fi
-        
-        # Initial delay to allow workflow to start (GitHub Actions startup ~3-5 seconds)
-        echo "[DEBUG] Initial wait of 5 seconds for workflow to start..."
-        sleep 5
-        
-        # Poll for secrets to appear (max 10 seconds, check every 2 seconds)
-        local MAX_WAIT=5
-        local WAIT_INTERVAL=2
-        local attempts=0
-        local all_secrets_present=false
-        
-        while [ $attempts -lt $MAX_WAIT ]; do
-          attempts=$((attempts + 1))
-          sleep $WAIT_INTERVAL
-          
-          # Check if all missing secrets are now present
-          local still_missing=0
-          for secret_name in "${MISSING_SECRETS[@]}"; do
-            if ! gh secret list --repo "$REPO_FULL_NAME" --json name -q '.[].name' 2>/dev/null | grep -q "^${secret_name}$"; then
-              still_missing=$((still_missing + 1))
-            fi
-          done
-          
-          if [ $still_missing -eq 0 ]; then
-            all_secrets_present=true
-            echo "[INFO] ✓ All secrets successfully propagated after $((attempts * WAIT_INTERVAL)) seconds"
-            return 0
-          else
-            # Show progress every 2 attempts (4 seconds)
-            if [ $((attempts % 2)) -eq 0 ]; then
-              echo "[INFO] Still waiting... ($still_missing secrets pending, ${attempts}/${MAX_WAIT} attempts)"
-            fi
-          fi
-        done
-        
-        # Timeout reached
-        if [ "$all_secrets_present" = "false" ]; then
-          echo "[ERROR] Timeout waiting for secrets to be propagated after $((MAX_WAIT * WAIT_INTERVAL)) seconds"
-          echo "[ERROR] The following secrets are still missing:"
-          for secret_name in "${MISSING_SECRETS[@]}"; do
-            if ! gh secret list --repo "$REPO_FULL_NAME" --json name -q '.[].name' 2>/dev/null | grep -q "^${secret_name}$"; then
-              echo "  - $secret_name"
-            fi
-          done
-          echo "[ERROR] Check devops-k8s workflow logs: https://github.com/$DEVOPS_REPO/actions/workflows/propagate-secrets.yml"
-          return 1
-        fi
-        
-        return 0
-      else
-        echo "[ERROR] Dispatch request failed (http $resp)"
-        return 1
+      
+      if [ "$found" = "false" ]; then
+        echo "[ERROR] Timeout waiting for $SECRET_NAME (not found after $((POLL_ATTEMPTS * POLL_INTERVAL))s)"
+        echo "[INFO] Check source repo workflow logs: https://github.com/$SOURCE_REPO/actions"
+        SYNC_FAILURES=$((SYNC_FAILURES + 1))
       fi
     else
-      echo "[ERROR] No authentication token available for dispatch (PROPAGATE_TRIGGER_TOKEN, GH_PAT, or GITHUB_TOKEN required)"
-      return 1
+      echo "[ERROR] Export dispatch failed for $SECRET_NAME (http $RESP)"
+      echo "[INFO] Ensure export-secret.yml workflow exists in $SOURCE_REPO"
+      SYNC_FAILURES=$((SYNC_FAILURES + 1))
     fi
-  fi
+  done
   
-  echo "[ERROR] Failed to sync secrets from $DEVOPS_REPO"
-  return 1
+  if [ $SYNC_FAILURES -eq 0 ]; then
+    echo "[INFO] Successfully synced all ${#MISSING_SECRETS[@]} secret(s) from $SOURCE_REPO"
+    return 0
+  else
+    echo "[ERROR] Failed to sync $SYNC_FAILURES of ${#MISSING_SECRETS[@]} secret(s)"
+    return 1
+  fi
 }
