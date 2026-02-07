@@ -110,14 +110,14 @@ fi
 - `DOCKER_SSH_KEY` - SSH key for Docker deployments (620 chars)
 
 #### Docker Registry (4)
-- `REGISTRY_USERNAME` - vertexhubacr
+- `REGISTRY_USERNAME` - ********
 - `REGISTRY_PASSWORD` - ************
 - `REGISTRY_EMAIL` - info@vertexhub.tech
 - `REGISTRY_URL` - vertexhubacr.azurecr.io
 
 #### GitHub/Git (2)
-- `GIT_TOKEN` - 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
-- `GH_PAT` - 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 (same token)
+- `GIT_TOKEN` - **********
+- `GH_PAT` - ********** (same token)
 
 #### Database Passwords (4)
 - `POSTGRES_PASSWORD` - ************
