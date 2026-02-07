@@ -75,7 +75,7 @@ validate_cross_repo_push() {
         log_error "You are pushing from: ${origin_repo}"
         log_error "         to repository: ${target_repo}"
         log_error ""
-        log_error "Default GITHUB_TOKEN does NOT have cross-repo write access."
+        log_error "GitHub Actions default token does NOT have cross-repo write access."
         log_error "Deploy keys also do NOT work for pushing to other repos."
         log_error ""
         log_error "ACTION REQUIRED:"
