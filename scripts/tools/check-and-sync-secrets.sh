@@ -96,7 +96,22 @@ check_and_sync_secrets() {
     # a workflow in the devops-k8s repo that will run the propagate operation there
     if [ -n "${PROPAGATE_TRIGGER_TOKEN:-}" ]; then
       echo "[INFO] Using PROPAGATE_TRIGGER_TOKEN to request devops-k8s to propagate secrets"
+      tokenToUse="${PROPAGATE_TRIGGER_TOKEN}"
+      tokenSource="PROPAGATE_TRIGGER_TOKEN"
+    elif [ -n "${GH_PAT:-}" ]; then
+      echo "[INFO] Using GH_PAT env to request devops-k8s to propagate secrets"
+      tokenToUse="${GH_PAT}"
+      tokenSource="GH_PAT"
+    elif [ -n "${GITHUB_TOKEN:-}" ]; then
+      echo "[INFO] Using GITHUB_TOKEN env to request devops-k8s to propagate secrets"
+      tokenToUse="${GITHUB_TOKEN}"
+      tokenSource="GITHUB_TOKEN"
+    else
+      tokenToUse=""
+      tokenSource=""
+    fi
 
+    if [ -n "${tokenToUse:-}" ]; then
       # Build JSON payload
       js_secrets="["
       for s in "${MISSING_SECRETS[@]}"; do
@@ -106,14 +121,18 @@ check_and_sync_secrets() {
 
       body="{\"event_type\":\"propagate-secrets\",\"client_payload\":{\"target_repo\":\"$REPO_FULL_NAME\",\"secrets\":$js_secrets}}"
 
+      # Mask token for debug (show first/last 4 chars)
+      tokenMask="${tokenToUse:0:4}****${tokenToUse: -4}"
+      echo "[DEBUG] Using token from $tokenSource: $tokenMask"
+
       resp=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
         -H "Accept: application/vnd.github+json" \
-        -H "Authorization: token ${PROPAGATE_TRIGGER_TOKEN}" \
+        -H "Authorization: token ${tokenToUse}" \
         -d "$body" \
         "https://api.github.com/repos/$DEVOPS_REPO/dispatches" ) || true
 
       if [ "$resp" = "204" ] || [ "$resp" = "201" ]; then
-        echo "[INFO] Dispatch request accepted by $DEVOPS_REPO (http $resp)"
+        echo "[INFO] Dispatch request accepted by $DEVOPS_REPO (http $resp) using $tokenSource"
         echo "[INFO] Secrets should be propagated shortly by devops-k8s workflow"
         return 0
       else
