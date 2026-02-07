@@ -258,8 +258,8 @@ After configuring secrets:
 
 ```bash
 # Environment variables are used to SET passwords during installation
-export POSTGRES_PASSWORD="Vertex2020!"
-export REDIS_PASSWORD="Vertex2020!"
+export POSTGRES_PASSWORD="************"
+export REDIS_PASSWORD="************"
 
 # These create Kubernetes secrets:
 # - postgresql secret (with postgres-password key)
@@ -428,8 +428,8 @@ export ENV_SECRET_NAME=erp-api-env
 **1. Initial Setup (devops-k8s):**
 ```bash
 # Run once during cluster provisioning
-export POSTGRES_PASSWORD="Vertex2020!"
-export REDIS_PASSWORD="Vertex2020!"
+export POSTGRES_PASSWORD="************"
+export REDIS_PASSWORD="************"
 ./scripts/infrastructure/install-databases.sh
 
 # Creates:
