@@ -166,8 +166,8 @@ check_and_sync_secrets() {
         echo "[DEBUG] Initial wait of 5 seconds for workflow to start..."
         sleep 5
         
-        # Poll for secrets to appear (max 60 seconds, check every 2 seconds)
-        local MAX_WAIT=30
+        # Poll for secrets to appear (max 10 seconds, check every 2 seconds)
+        local MAX_WAIT=5
         local WAIT_INTERVAL=2
         local attempts=0
         local all_secrets_present=false
@@ -189,8 +189,8 @@ check_and_sync_secrets() {
             echo "[INFO] ✓ All secrets successfully propagated after $((attempts * WAIT_INTERVAL)) seconds"
             return 0
           else
-            # Show progress every 5 attempts (10 seconds)
-            if [ $((attempts % 5)) -eq 0 ]; then
+            # Show progress every 2 attempts (4 seconds)
+            if [ $((attempts % 2)) -eq 0 ]; then
               echo "[INFO] Still waiting... ($still_missing secrets pending, ${attempts}/${MAX_WAIT} attempts)"
             fi
           fi
