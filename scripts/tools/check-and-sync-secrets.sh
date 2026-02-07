@@ -60,40 +60,59 @@ check_and_sync_secrets() {
   echo "[INFO] Missing secrets: ${MISSING_SECRETS[*]}"
   echo "[INFO] Attempting to sync secrets from devops-k8s..."
   
-  # Call centralized propagate script
   local DEVOPS_REPO="Bengo-Hub/devops-k8s"
-  local PROPAGATE_SCRIPT_URL="https://raw.githubusercontent.com/$DEVOPS_REPO/main/scripts/tools/propagate-to-repo.sh"
-  local TEMP_SCRIPT="/tmp/propagate-to-repo-$$.sh"
+  local DISPATCH_NEEDED=false
   
-  # Download propagate script
-  if command -v curl &>/dev/null; then
-    curl -fsSL "$PROPAGATE_SCRIPT_URL" -o "$TEMP_SCRIPT" 2>/dev/null || {
-      echo "[ERROR] Failed to download propagate script from $DEVOPS_REPO"
-      return 1
-    }
-  elif command -v wget &>/dev/null; then
-    wget -q "$PROPAGATE_SCRIPT_URL" -O "$TEMP_SCRIPT" 2>/dev/null || {
-      echo "[ERROR] Failed to download propagate script from $DEVOPS_REPO"
-      return 1
-    }
+  # In CI environments (GitHub Actions), skip direct propagation since:
+  # - PROPAGATE_SECRETS_FILE won't be set (no local files)
+  # - Remote dispatch uses centralized PROPAGATE_SECRETS secret instead
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ -n "${CI:-}" ]; then
+    echo "[INFO] Running in CI environment - using remote dispatch (no local secrets file)"
+    DISPATCH_NEEDED=true
+  elif [ -n "${PROPAGATE_SECRETS_FILE:-}" ] && [ -f "${PROPAGATE_SECRETS_FILE}" ]; then
+    echo "[INFO] PROPAGATE_SECRETS_FILE is set and exists - attempting direct propagation"
+    
+    local PROPAGATE_SCRIPT_URL="https://raw.githubusercontent.com/$DEVOPS_REPO/main/scripts/tools/propagate-to-repo.sh"
+    local TEMP_SCRIPT="/tmp/propagate-to-repo-$$.sh"
+    
+    # Download propagate script
+    if command -v curl &>/dev/null; then
+      curl -fsSL "$PROPAGATE_SCRIPT_URL" -o "$TEMP_SCRIPT" 2>/dev/null || {
+        echo "[WARN] Failed to download propagate script from $DEVOPS_REPO"
+        DISPATCH_NEEDED=true
+      }
+    elif command -v wget &>/dev/null; then
+      wget -q "$PROPAGATE_SCRIPT_URL" -O "$TEMP_SCRIPT" 2>/dev/null || {
+        echo "[WARN] Failed to download propagate script from $DEVOPS_REPO"
+        DISPATCH_NEEDED=true
+      }
+    else
+      echo "[WARN] Neither curl nor wget found. Cannot download propagate script."
+      DISPATCH_NEEDED=true
+    fi
+    
+    if [ "$DISPATCH_NEEDED" = "false" ]; then
+      chmod +x "$TEMP_SCRIPT"
+      
+      # Run propagate script with PROPAGATE_SECRETS_FILE set
+      if bash "$TEMP_SCRIPT" "$REPO_FULL_NAME" "${MISSING_SECRETS[@]}"; then
+        echo "[INFO] Successfully synced secrets from $DEVOPS_REPO via direct propagation"
+        rm -f "$TEMP_SCRIPT"
+        return 0
+      else
+        echo "[WARN] Direct propagation failed - falling back to remote dispatch"
+        rm -f "$TEMP_SCRIPT"
+        DISPATCH_NEEDED=true
+      fi
+    fi
   else
-    echo "[ERROR] Neither curl nor wget found. Cannot download propagate script."
-    return 1
+    echo "[INFO] PROPAGATE_SECRETS_FILE not set or file not found - using remote dispatch"
+    DISPATCH_NEEDED=true
   fi
   
-  chmod +x "$TEMP_SCRIPT"
-  
-  # Run propagate script
-  if bash "$TEMP_SCRIPT" "$REPO_FULL_NAME" "${MISSING_SECRETS[@]}"; then
-    echo "[INFO] Successfully synced secrets from $DEVOPS_REPO"
-    rm -f "$TEMP_SCRIPT"
-    return 0
-  else
-    echo "[WARN] Direct propagate script failed. Attempting remote dispatch to $DEVOPS_REPO if possible"
-    rm -f "$TEMP_SCRIPT"
-
-    # If a PROPAGATE_TRIGGER_TOKEN is configured in this repo, use it to trigger
-    # a workflow in the devops-k8s repo that will run the propagate operation there
+  # Remote dispatch fallback (or primary method in CI)
+  if [ "$DISPATCH_NEEDED" = "true" ]; then
+    # Select token for dispatch authentication
     if [ -n "${PROPAGATE_TRIGGER_TOKEN:-}" ]; then
       echo "[INFO] Using PROPAGATE_TRIGGER_TOKEN to request devops-k8s to propagate secrets"
       tokenToUse="${PROPAGATE_TRIGGER_TOKEN}"
@@ -139,9 +158,12 @@ check_and_sync_secrets() {
         echo "[ERROR] Dispatch request failed (http $resp)"
         return 1
       fi
+    else
+      echo "[ERROR] No authentication token available for dispatch (PROPAGATE_TRIGGER_TOKEN, GH_PAT, or GITHUB_TOKEN required)"
+      return 1
     fi
-
-    echo "[ERROR] Failed to sync secrets from $DEVOPS_REPO"
-    return 1
   fi
+  
+  echo "[ERROR] Failed to sync secrets from $DEVOPS_REPO"
+  return 1
 }

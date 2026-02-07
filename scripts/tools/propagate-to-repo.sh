@@ -15,10 +15,23 @@ TARGET_REPO="$1"
 shift
 SECRETS_TO_PROPAGATE=("$@")
 
-SECRETS_FILE="${PROPAGATE_SECRETS_FILE:-D:/KubeSecrets/git-secrets/Bengo-Hub__devops-k8s/secrets.txt}"
+# PROPAGATE_SECRETS_FILE must be set explicitly - no defaults to local paths
+# In CI: Set by workflow after decoding PROPAGATE_SECRETS to /tmp/propagate-secrets.txt
+# Locally: Set via PROPAGATE_SECRETS_FILE=/path/to/secrets.txt
+if [ -z "${PROPAGATE_SECRETS_FILE:-}" ]; then
+  echo "[ERROR] PROPAGATE_SECRETS_FILE environment variable is not set"
+  echo "[INFO] This script requires PROPAGATE_SECRETS_FILE to point to the secrets file"
+  echo "[INFO] In CI: Should be set to /tmp/propagate-secrets.txt (decoded from PROPAGATE_SECRETS)"
+  echo "[INFO] Locally: Set via PROPAGATE_SECRETS_FILE=/path/to/secrets.txt"
+  echo "[INFO] Skipping direct propagation - use remote dispatch instead"
+  exit 1
+fi
+
+SECRETS_FILE="${PROPAGATE_SECRETS_FILE}"
 
 echo "[INFO] Propagating secrets to: $TARGET_REPO"
 echo "[INFO] Secrets requested: ${SECRETS_TO_PROPAGATE[*]}"
+echo "[DEBUG] Using secrets file: $SECRETS_FILE"
 
 if ! gh auth status &>/dev/null; then
   echo "[ERROR] gh not authenticated"
@@ -27,6 +40,7 @@ fi
 
 if [ ! -f "$SECRETS_FILE" ]; then
   echo "[ERROR] Secrets file not found: $SECRETS_FILE"
+  echo "[INFO] Ensure PROPAGATE_SECRETS_FILE points to a valid file"
   exit 1
 fi
 
