@@ -22,4 +22,20 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true
+  ignoreDifferences:
+    # Deployment replica count - managed by HPA, not Helm
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    # Immutable PVC fields
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/volumeMode
+        - /status
 

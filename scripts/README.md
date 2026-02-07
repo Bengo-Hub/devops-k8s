@@ -68,6 +68,8 @@ Helper scripts and utilities used by other scripts. Core scripts are automatical
 - **`deployment-metrics.sh`** - Deployment metrics collection (for manual monitoring)
 - **`deployment-rollback.sh`** - Manual rollback deployments (run when needed)
 - **`pre-deploy-health-check.sh`** - Pre-deployment health validation (for CI/CD integration)
+- **`export-k8s-secrets.sh`** - Export Kubernetes secrets to plain text YAML files (Linux/macOS)
+- **`export-k8s-secrets.ps1`** - Export Kubernetes secrets to plain text YAML files (Windows/PowerShell)
 
 ### `diagnostics/` - Diagnostic Scripts
 
@@ -113,6 +115,44 @@ export ENABLE_CLEANUP=true
 export FORCE_CLEANUP=true
 ./cluster/cleanup-cluster.sh
 ```
+
+### Export Kubernetes Secrets (Backup/Migration)
+
+**⚠️ WARNING: These scripts export secrets in PLAIN TEXT. Use with extreme caution!**
+
+Export all secrets from a namespace (Linux/macOS):
+```bash
+cd /path/to/devops-k8s/scripts/tools
+./export-k8s-secrets.sh -n production
+```
+
+Export from all namespaces (Linux/macOS):
+```bash
+./export-k8s-secrets.sh --all-namespaces
+```
+
+Export with custom output directory (Linux/macOS):
+```bash
+./export-k8s-secrets.sh -n staging -o ./staging-secrets
+```
+
+Export all secrets (Windows/PowerShell):
+```powershell
+cd \path\to\devops-k8s\scripts\tools
+.\export-k8s-secrets.ps1 -Namespace production
+```
+
+Export from all namespaces (Windows/PowerShell):
+```powershell
+.\export-k8s-secrets.ps1 -AllNamespaces
+```
+
+**Security Notes:**
+- Exported files are saved to `devops-k8s/KubeSecrets/` (gitignored automatically)
+- Files contain decoded, plain text secret values
+- NEVER commit these files to version control
+- Use only for backup, migration, or emergency recovery
+- Delete exported files after use
 
 ## Script Dependencies
 
