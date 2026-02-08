@@ -3,22 +3,19 @@
 # ============================================================================
 nameOverride: isp-billing-backend
 fullnameOverride: isp-billing-backend
-
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 image:
   repository: docker.io/codevertex/isp-billing-backend
-  tag: "latest"
+  tag: "95a536dd"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
 replicaCount: 1
-
 autoscaling:
   enabled: true
   minReplicas: 1
@@ -39,7 +36,6 @@ autoscaling:
         value: 1
         periodSeconds: 60
     selectPolicy: Max
-
 # ============================================================================
 # SERVICE CONFIGURATION
 # ============================================================================
@@ -47,7 +43,6 @@ service:
   type: ClusterIP
   port: 4000
   targetPort: 8000
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -56,10 +51,8 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 minReadySeconds: 30
 progressDeadlineSeconds: 600
-
 # ============================================================================
 # DATABASE MIGRATIONS (Alembic)
 # ============================================================================
@@ -74,10 +67,8 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
-
 seed:
   enabled: false
-
 # ============================================================================
 # CELERY WORKERS (background billing, provisioning, notification tasks)
 # ============================================================================
@@ -92,7 +83,6 @@ celeryWorker:
     limits:
       cpu: 500m
       memory: 512Mi
-
 celeryBeat:
   enabled: true
   command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
@@ -103,12 +93,10 @@ celeryBeat:
     limits:
       cpu: 200m
       memory: 256Mi
-
 # ============================================================================
 # ENVIRONMENT VARIABLES — bulk secret injection
 # ============================================================================
 envFromSecret: isp-billing-backend-secrets
-
 env:
   # ── Application ──
   - name: ENVIRONMENT
@@ -123,7 +111,6 @@ env:
     value: "2"
   - name: APP_NAME
     value: "ISP Billing System"
-
   # ── Database (async driver for FastAPI) ──
   - name: DATABASE_URL
     valueFrom:
@@ -134,7 +121,6 @@ env:
     value: "10"
   - name: DATABASE_MAX_OVERFLOW
     value: "20"
-
   # ── Redis ──
   - name: REDIS_URL
     valueFrom:
@@ -147,7 +133,6 @@ env:
         name: isp-billing-backend-secrets
         key: REDIS_PASSWORD
         optional: true
-
   # ── Celery ──
   - name: CELERY_BROKER_URL
     valueFrom:
@@ -159,7 +144,6 @@ env:
       secretKeyRef:
         name: isp-billing-backend-secrets
         key: CELERY_RESULT_BACKEND
-
   # ── JWT / Security ──
   - name: SECRET_KEY
     valueFrom:
@@ -182,7 +166,6 @@ env:
       secretKeyRef:
         name: isp-billing-backend-secrets
         key: MASTER_PASSWORD
-
   # ── CORS ──
   - name: CORS_ORIGINS
     value: '["https://ispbilling.codevertexitsolutions.com"]'
@@ -192,7 +175,6 @@ env:
     value: "https://ispbilling.codevertexitsolutions.com"
   - name: API_BASE_URL
     value: "https://ispbillingapi.codevertexitsolutions.com/api/v1"
-
   # ── M-PESA ──
   - name: MPESA_ENVIRONMENT
     value: "production"
@@ -218,7 +200,6 @@ env:
         key: MPESA_SHORTCODE
   - name: MPESA_CALLBACK_URL
     value: "https://ispbillingapi.codevertexitsolutions.com/api/v1/payments/mpesa/callback"
-
   # ── SMS ──
   - name: SMS_PROVIDER
     valueFrom:
@@ -238,7 +219,6 @@ env:
         name: isp-billing-backend-secrets
         key: AFRICASTALKING_USERNAME
         optional: true
-
   # ── Email ──
   - name: EMAIL_PROVIDER
     valueFrom:
@@ -270,7 +250,6 @@ env:
         name: isp-billing-backend-secrets
         key: SMTP_PASSWORD
         optional: true
-
   # ── MikroTik RouterOS ──
   - name: MIKROTIK_DEFAULT_USERNAME
     valueFrom:
@@ -288,7 +267,6 @@ env:
     value: "8728"
   - name: MIKROTIK_TIMEOUT
     value: "10"
-
   # ── Rate Limiting ──
   - name: RATE_LIMIT_ENABLED
     value: "true"
@@ -296,13 +274,11 @@ env:
     value: "100"
   - name: RATE_LIMIT_WINDOW
     value: "60"
-
   # ── Logging ──
   - name: LOG_LEVEL
     value: "INFO"
   - name: LOG_FORMAT
     value: "json"
-
   # ── Security ──
   - name: BCRYPT_ROUNDS
     value: "12"
@@ -310,7 +286,6 @@ env:
     value: "8"
   - name: SESSION_TIMEOUT
     value: "3600"
-
   # ── Monitoring ──
   - name: SENTRY_DSN
     valueFrom:
@@ -320,7 +295,6 @@ env:
         optional: true
   - name: HEALTH_CHECK_INTERVAL
     value: "30"
-
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
@@ -331,7 +305,6 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
-
 # ============================================================================
 # HEALTH CHECKS (FastAPI serves /health, NOT /healthz)
 # ============================================================================
@@ -360,7 +333,6 @@ healthCheck:
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 5
-
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
@@ -389,7 +361,6 @@ ingress:
     - hosts:
         - ispbillingapi.codevertexitsolutions.com
       secretName: isp-billing-backend-tls
-
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
@@ -399,7 +370,6 @@ monitoring:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -407,7 +377,6 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 # ============================================================================
 # SECURITY CONTEXT
 # ============================================================================
@@ -416,11 +385,9 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   runAsNonRoot: true
-
 # ============================================================================
 # POD DISRUPTION BUDGET
 # ============================================================================
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
-
