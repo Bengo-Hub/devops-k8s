@@ -5,13 +5,14 @@
 set -euo pipefail
 
 # Apps that DON'T have images yet (disable automatic sync)
+# Deployed apps removed: isp-billing-backend, isp-billing-frontend,
+# ordering-backend, ordering-frontend, notifications-api
 UNDEPLOYED_APPS=(
   "inventory-api"
+  "inventory-ui"
   "iot-api"
   "logistics-api"
-  "notifications-api"
-  "ordering-backend"
-  "ordering-frontend"
+  "logistics-ui"
   "pos-api"
   "pos-ui"
   "projects-api"
@@ -20,8 +21,7 @@ UNDEPLOYED_APPS=(
   "ticketing-api"
   "ticketing-ui"
   "treasury-api"
-  "isp-billing-backend"
-  "isp-billing-frontend"
+  "treasury-ui"
 )
 
 echo "🔧 Disabling automatic sync for undeployed apps..."
