@@ -63,12 +63,12 @@ spec:
                 - "ps aux | grep 'celery' | grep 'beat' | grep -v 'grep'"
             initialDelaySeconds: 15
             periodSeconds: 30
-          {{- if .Values.celeryBeat.persistence.enabled }}
+          {{- if and .Values.celeryBeat.persistence .Values.celeryBeat.persistence.enabled }}
           volumeMounts:
             - name: celerybeat-schedule
               mountPath: /app/celerybeat-schedule
           {{- end }}
-      {{- if .Values.celeryBeat.persistence.enabled }}
+      {{- if and .Values.celeryBeat.persistence .Values.celeryBeat.persistence.enabled }}
       volumes:
         - name: celerybeat-schedule
           persistentVolumeClaim:

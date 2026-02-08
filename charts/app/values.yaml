@@ -199,6 +199,10 @@ celeryWorker:
 
 celeryBeat:
   enabled: false
+  persistence:
+    enabled: false
+    size: 1Mi
+    storageClass: ""
 
 # KEDA ScaledObject configuration (queue-driven autoscaling)
 keda:
