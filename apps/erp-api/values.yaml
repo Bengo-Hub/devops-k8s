@@ -12,7 +12,7 @@ securityContext:
   fsGroup: 1000
   runAsNonRoot: true
 # Deployment strategy for zero-downtime updates
-replicaCount: 2
+replicaCount: 1
 strategy:
   type: RollingUpdate
   rollingUpdate:
@@ -64,16 +64,16 @@ healthCheck:
 # INCREASED RESOURCES: 20-30min rollout indicates insufficient CPU for migrations
 resources:
   requests:
-    cpu: 1500m # INCREASED: From 500m - heavy migrations need more CPU
-    memory: 4Gi # INCREASED: From 3Gi - better for concurrent migrations + app startup
+    cpu: 500m   # Right-sized: migrations run in init container, not main app
+    memory: 1.5Gi # Right-sized: steady-state usage is ~1Gi, burst to limit
   limits:
-    cpu: 4000m # INCREASED: From 3000m - allow more CPU during peak migration load
-    memory: 8Gi # INCREASED: From 6Gi - prevent OOM during heavy migrations
+    cpu: 2000m  # Allow burst for peak load
+    memory: 4Gi # Allow burst for complex queries
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true
-  minReplicas: 2 # Minimum 2 for high availability
-  maxReplicas: 6 # INCREASED: From 4 - allow more scaling with higher resource baseline
+  minReplicas: 1 # Single server — HA not meaningful, scale up under load
+  maxReplicas: 3 # Reasonable burst capacity for single node
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
   scaleDown:
@@ -127,11 +127,11 @@ migrations:
   runOnStartup: true # Wait for migrations to complete before app starts
   resources:
     requests:
-      cpu: 1000m # INCREASED: From 500m - migrations are very CPU-intensive
-      memory: 4Gi # INCREASED: From 3Gi - better for large schema migrations
+      cpu: 500m   # Right-sized for migration init container
+      memory: 2Gi # Sufficient for Django schema migrations
     limits:
-      cpu: 3000m # INCREASED: From 2000m - allow more CPU for parallel migration operations
-      memory: 8Gi # INCREASED: From 6Gi - prevent OOM during complex migrations
+      cpu: 2000m  # Allow burst during heavy migrations
+      memory: 4Gi # Prevent OOM during complex migrations
 # Seeding configuration
 seed:
   enabled: true # Enable seed data creation via Django management command
@@ -209,11 +209,11 @@ celeryWorker:
   maxTasksPerChild: 100
   resources:
     requests:
-      cpu: 500m # INCREASED: From 300m - better task processing performance
-      memory: 1.5Gi # INCREASED: From 1Gi - workers load Django models
+      cpu: 200m   # Right-sized for async task processing
+      memory: 512Mi # Sufficient for Django worker with 4 concurrent tasks
     limits:
-      cpu: 2000m # INCREASED: From 1500m - allow more CPU for heavy tasks
-      memory: 3Gi # INCREASED: From 2Gi - prevent OOM during heavy processing
+      cpu: 1000m  # Allow burst for heavy tasks
+      memory: 1.5Gi # Prevent OOM during batch processing
   livenessProbe:
     enabled: true
     initialDelaySeconds: 90 # Allow time for worker to start and connect to broker

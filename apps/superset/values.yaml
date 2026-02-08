@@ -39,11 +39,11 @@ autoscaling:
 # ============================================================================
 resources:
   requests:
-    cpu: 500m
-    memory: 1Gi
+    cpu: 300m   # Right-sized: analytics not primary workload
+    memory: 768Mi
   limits:
-    cpu: 2000m
-    memory: 4Gi
+    cpu: 1500m
+    memory: 3Gi
 
 # ============================================================================
 # DEPLOYMENT STRATEGY
@@ -262,14 +262,14 @@ configOverrides:
 # ============================================================================
 supersetWorker:
   enabled: true
-  replicaCount: 2
+  replicaCount: 1
   resources:
     requests:
-      cpu: 200m
-      memory: 512Mi
+      cpu: 150m   # Single worker sufficient for current analytics load
+      memory: 384Mi
     limits:
-      cpu: 1000m
-      memory: 2Gi
+      cpu: 750m
+      memory: 1.5Gi
   livenessProbe:
     exec:
       command:
@@ -282,7 +282,7 @@ supersetWorker:
     failureThreshold: 3
   autoscaling:
     enabled: true
-    minReplicas: 2
+    minReplicas: 1
     maxReplicas: 2
     targetCPUUtilizationPercentage: 70
 

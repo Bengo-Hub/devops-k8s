@@ -30,10 +30,10 @@ primary:
     pullPolicy: IfNotPresent
   resources:
     requests:
-      memory: "2Gi"  # Increased - priority database for all services
-      cpu: "500m"
+      memory: "3Gi"  # Shared database for 27+ services — needs headroom
+      cpu: "750m"
     limits:
-      memory: "4Gi"
+      memory: "6Gi"
       cpu: "2000m"
   priorityClassName: db-critical
   
@@ -45,10 +45,10 @@ primary:
   ## PostgreSQL tuning
   extendedConfiguration: |
     max_connections = 200
-    shared_buffers = 512MB
-    effective_cache_size = 1536MB
-    work_mem = 2621kB
-    maintenance_work_mem = 128MB
+    shared_buffers = 1GB
+    effective_cache_size = 3GB
+    work_mem = 4MB
+    maintenance_work_mem = 256MB
     checkpoint_completion_target = 0.9
     wal_buffers = 16MB
     default_statistics_target = 100

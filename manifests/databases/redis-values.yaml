@@ -13,22 +13,22 @@ architecture: standalone  # Use 'replication' for HA with replicas
 master:
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "100m"
+      memory: "512Mi"  # Shared cache/broker for 27+ services
+      cpu: "150m"
     limits:
-      memory: "1Gi"
+      memory: "1536Mi"
       cpu: "500m"
   priorityClassName: db-critical
-  
+
   persistence:
     enabled: true
     size: 8Gi
     storageClass: ""  # Use default storage class
-  
+
   ## Redis configuration
   configuration: |
     # Memory management
-    maxmemory 768mb
+    maxmemory 1024mb
     maxmemory-policy allkeys-lru
     # Performance
     tcp-backlog 511
