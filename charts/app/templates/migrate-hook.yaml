@@ -56,7 +56,20 @@ spec:
         {{- end }}
         {{- if .Values.env }}
         env:
-          {{- toYaml .Values.env | nindent 10 }}
+          {{- range $i, $e := .Values.env }}
+          - name: {{$e.name}}
+            {{- if $e.value }}
+            value: {{ $e.value | quote }}
+            {{- else if and $e.valueFrom $e.valueFrom.secretKeyRef }}
+            valueFrom:
+              secretKeyRef:
+                name: {{$e.valueFrom.secretKeyRef.name}}
+                key: {{$e.valueFrom.secretKeyRef.key}}
+                optional: true
+            {{- else }}
+            {{- toYaml $e | nindent 12 }}
+            {{- end }}
+          {{- end }}
         {{- end }}
         resources:
           requests:
@@ -79,6 +92,23 @@ spec:
           echo "Image: {{ .Values.image.repository }}:{{ .Values.image.tag }}"
           echo "Pod: $HOSTNAME"
           echo ""
+
+          # Ensure critical secrets are present before attempting migrations
+          # Wait for critical keys for up to ~2 minutes before giving up
+          CRITICAL_KEYS=(DATABASE_URL SECRET_KEY)
+          for key in "${CRITICAL_KEYS[@]}"; do
+            COUNT=0
+            while [ -z "${!key:-}" ] && [ $COUNT -lt 60 ]; do
+              echo "Waiting for secret key $key to be available in environment... (attempt $((COUNT+1))/60)"
+              sleep 2
+              COUNT=$((COUNT+1))
+            done
+            if [ -z "${!key:-}" ]; then
+              echo "⚠️  WARNING: $key still not set after timeout - migration may fail or skip depending on app type"
+            else
+              echo "✅ $key detected"
+            fi
+          done
 
           # Detect framework and run appropriate migrations
           if [ -f "/app/manage.py" ]; then
