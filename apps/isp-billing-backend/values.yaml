@@ -83,8 +83,22 @@ celeryWorker:
     limits:
       cpu: 500m
       memory: 512Mi
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 90
+    periodSeconds: 60
+    timeoutSeconds: 30
+    failureThreshold: 5
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 30
+    failureThreshold: 5
 celeryBeat:
   enabled: true
+  persistence:
+    enabled: false
   command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
   resources:
     requests:
