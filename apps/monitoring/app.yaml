@@ -60,13 +60,13 @@ spec:
               cert-manager.io/cluster-issuer: letsencrypt-prod
               nginx.ingress.kubernetes.io/ssl-redirect: "true"
             hosts:
-              - grafana.masterspace.co.ke
+              - grafana.codevertexitsolutions.com
             path: /
             pathType: Prefix
             tls:
               - secretName: grafana-tls
                 hosts:
-                  - grafana.masterspace.co.ke
+                  - grafana.codevertexitsolutions.com
 
         alertmanager:
           enabled: true
