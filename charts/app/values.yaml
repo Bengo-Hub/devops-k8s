@@ -184,6 +184,18 @@ serviceMonitor:
 # Celery components are disabled by default for generic apps (e.g., UI)
 celeryWorker:
   enabled: false
+  livenessProbe:
+    enabled: false
+    initialDelaySeconds: 60
+    periodSeconds: 60
+    timeoutSeconds: 30
+    failureThreshold: 5
+  readinessProbe:
+    enabled: false
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 30
+    failureThreshold: 5
 
 celeryBeat:
   enabled: false
