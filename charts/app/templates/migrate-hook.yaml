@@ -95,21 +95,29 @@ spec:
 
           # Ensure critical secrets are present before attempting migrations
           # Wait for critical keys for up to ~2 minutes before giving up
-          CRITICAL_KEYS=(DATABASE_URL SECRET_KEY)
-          for key in "${CRITICAL_KEYS[@]}"; do
+          CRITICAL_KEYS="DATABASE_URL SECRET_KEY"
+          for key in $CRITICAL_KEYS; do
             COUNT=0
-            while [ -z "${!key:-}" ] && [ $COUNT -lt 60 ]; do
+            eval "val=\"\${${key}:-}\""
+            while [ -z "$val" ] && [ $COUNT -lt 60 ]; do
               echo "Waiting for secret key $key to be available in environment... (attempt $((COUNT+1))/60)"
               sleep 2
               COUNT=$((COUNT+1))
+              eval "val=\"\${${key}:-}\""
             done
-            if [ -z "${!key:-}" ]; then
-              echo "⚠️  WARNING: $key still not set after timeout - migration may fail or skip depending on app type"
+            if [ -z "$val" ]; then
+              echo "WARNING: $key still not set after timeout - migration may fail or skip depending on app type"
             else
-              echo "✅ $key detected"
+              echo "$key detected"
             fi
           done
 
+          {{- if .Values.migrations.command }}
+          # Explicit migration command configured in values.yaml
+          echo "Running configured migration command: {{ join " " .Values.migrations.command }}"
+          {{ join " " .Values.migrations.command }}
+          echo "Migration command completed successfully"
+          {{- else }}
           # Detect framework and run appropriate migrations
           if [ -f "/app/manage.py" ]; then
             # Django application
@@ -147,7 +155,6 @@ spec:
             # Go application with Ent
             echo "Detected Go application (Ent ORM)"
 
-            # Try common migrate binary locations
             if [ -x "/usr/local/bin/{{ .Values.migrations.binaryName | default (printf "%s-migrate" (include "app.name" .)) }}" ]; then
               echo "Running migrate binary: /usr/local/bin/{{ .Values.migrations.binaryName | default (printf "%s-migrate" (include "app.name" .)) }}"
               /usr/local/bin/{{ .Values.migrations.binaryName | default (printf "%s-migrate" (include "app.name" .)) }}
@@ -169,11 +176,21 @@ spec:
             php artisan migrate --force
             echo "Laravel migrations completed"
 
+          elif command -v alembic >/dev/null 2>&1 || [ -f "/app/alembic.ini" ]; then
+            # Python application with Alembic (FastAPI, Flask, etc.)
+            echo "Detected Python application (Alembic)"
+
+            echo "Running Alembic migrations..."
+            alembic upgrade head
+            echo "Alembic migrations completed"
+
           else
             echo "No recognized framework detected"
-            echo "Searched for: Django (manage.py), Go/Ent (migrate binary), Laravel (artisan)"
+            echo "Searched for: Django (manage.py), Go/Ent (migrate binary), Laravel (artisan), Python/Alembic (alembic.ini)"
+            echo "Tip: Set migrations.command in values.yaml to specify a custom migration command"
             exit 1
           fi
+          {{- end }}
 
           echo ""
           echo "=========================================="
