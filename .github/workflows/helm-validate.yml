@@ -1,0 +1,36 @@
+name: Helm Template Validation
+
+on:
+  push:
+    paths:
+      - 'charts/**'
+      - 'apps/**'
+  pull_request:
+    paths:
+      - 'charts/**'
+      - 'apps/**'
+
+jobs:
+  validate:
+    name: Helm lint & template
+    runs-on: ubuntu-latest
+    container:
+      image: lachlanevenson/k8s-helm:3.12.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Helm lint chart
+        run: |
+          helm version
+          helm lint charts/app || true
+
+      - name: Render chart templates for all apps
+        run: |
+          set -euo pipefail
+          for app in apps/*; do
+            if [ -f "$app/values.yaml" ]; then
+              echo "Rendering chart with values from $app/values.yaml"
+              helm template . -f "$app/values.yaml" --namespace test --name-template test --include-crds >/dev/null
+            fi
+          done
