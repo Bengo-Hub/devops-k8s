@@ -1,3 +1,4 @@
+{{- if hasKey .Values "celeryWorker" }}
 {{- if .Values.celeryWorker.enabled }}
 apiVersion: apps/v1
 kind: Deployment
@@ -56,7 +57,8 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.celeryWorker.resources | nindent 12 }}
-          {{- if .Values.celeryWorker.livenessProbe.enabled }}
+          {{- if hasKey .Values.celeryWorker "livenessProbe" }}
+            {{- if .Values.celeryWorker.livenessProbe.enabled }}
           livenessProbe:
             exec:
               command:
@@ -67,8 +69,10 @@ spec:
             periodSeconds: {{ .Values.celeryWorker.livenessProbe.periodSeconds | default 60 }}
             timeoutSeconds: {{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 30 }}
             failureThreshold: {{ .Values.celeryWorker.livenessProbe.failureThreshold | default 5 }}
+            {{- end }}
           {{- end }}
-          {{- if .Values.celeryWorker.readinessProbe.enabled }}
+          {{- if hasKey .Values.celeryWorker "readinessProbe" }}
+            {{- if .Values.celeryWorker.readinessProbe.enabled }}
           readinessProbe:
             exec:
               command:
@@ -79,6 +83,8 @@ spec:
             periodSeconds: {{ .Values.celeryWorker.readinessProbe.periodSeconds | default 30 }}
             timeoutSeconds: {{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 30 }}
             failureThreshold: {{ .Values.celeryWorker.readinessProbe.failureThreshold | default 5 }}
+            {{- end }}
           {{- end }}
+{{- end }}
 {{- end }}
 
