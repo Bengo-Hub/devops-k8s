@@ -1,36 +1,40 @@
-name: Helm Template Validation
+name: Helm template validation
 
 on:
   push:
-    paths:
-      - 'charts/**'
-      - 'apps/**'
+    branches: [ main ]
   pull_request:
-    paths:
-      - 'charts/**'
-      - 'apps/**'
+    branches: [ main ]
 
 jobs:
   validate:
-    name: Helm lint & template
     runs-on: ubuntu-latest
-    container:
-      image: lachlanevenson/k8s-helm:3.12.0
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Helm lint chart
-        run: |
-          helm version
-          helm lint charts/app || true
-
-      - name: Render chart templates for all apps
+      - name: Install Helm
         run: |
           set -euo pipefail
-          for app in apps/*; do
-            if [ -f "$app/values.yaml" ]; then
-              echo "Rendering chart with values from $app/values.yaml"
-              helm template . -f "$app/values.yaml" --namespace test --name-template test --include-crds >/dev/null
+          HELM_VERSION=v3.13.4
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o helm.tgz
+          tar -zxvf helm.tgz
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Validate Helm templates for apps
+        run: |
+          set -euo pipefail
+          CHART_DIR=charts/app
+          echo "Searching for app values files in apps/*/values.yaml"
+          for VALUES in apps/*/values.yaml; do
+            if [ -f "$VALUES" ]; then
+              APP=$(basename "$(dirname "$VALUES")")
+              echo "\n==> Rendering $APP using $VALUES"
+              helm template "$APP" "$CHART_DIR" --values "$VALUES" --namespace "$APP" --include-crds >/dev/null
+              echo "  ✓ $APP rendered successfully"
             fi
           done
