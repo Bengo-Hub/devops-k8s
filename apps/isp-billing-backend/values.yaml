@@ -153,11 +153,13 @@ env:
       secretKeyRef:
         name: isp-billing-backend-secrets
         key: CELERY_BROKER_URL
+        optional: true
   - name: CELERY_RESULT_BACKEND
     valueFrom:
       secretKeyRef:
         name: isp-billing-backend-secrets
         key: CELERY_RESULT_BACKEND
+        optional: true
   # ── JWT / Security ──
   - name: SECRET_KEY
     valueFrom:
