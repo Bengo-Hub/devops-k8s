@@ -52,7 +52,7 @@ strategy:
     maxSurge: 1
     maxUnavailable: 0
 minReadySeconds: 30
-progressDeadlineSeconds: 600
+progressDeadlineSeconds: 1200  # 20 minutes - allows time for migrations + pod startup
 # ============================================================================
 # DATABASE MIGRATIONS (Alembic)
 # ============================================================================
@@ -346,14 +346,14 @@ healthCheck:
     httpGet:
       path: /health
       port: http
-    initialDelaySeconds: 15
+    initialDelaySeconds: 20
     periodSeconds: 10
-    failureThreshold: 30
+    failureThreshold: 60  # 10 minutes max for initial startup
   readiness:
     httpGet:
       path: /health
       port: http
-    initialDelaySeconds: 90
+    initialDelaySeconds: 120  # Wait 2 minutes before checking readiness
     periodSeconds: 15
     timeoutSeconds: 10
     failureThreshold: 5
