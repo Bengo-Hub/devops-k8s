@@ -3,20 +3,17 @@
 # ============================================================================
 nameOverride: isp-billing-frontend
 fullnameOverride: isp-billing-frontend
-
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 replicaCount: 1
 minReadySeconds: 30
-
 image:
   repository: docker.io/codevertex/isp-billing-frontend
-  tag: "latest"
+  tag: "3d9f1707"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # SERVICE CONFIGURATION
 # ============================================================================
@@ -24,7 +21,6 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 # ============================================================================
 # HEALTH CHECKS (Next.js serves / — use root path like auth-ui)
 # ============================================================================
@@ -46,7 +42,6 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 3
     failureThreshold: 3
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -55,12 +50,10 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
 envFromSecret: isp-billing-frontend-secrets
-
 env:
   # NEXT_PUBLIC_* vars are baked at build time via Dockerfile ARGs
   # Runtime-only vars below
@@ -88,7 +81,6 @@ env:
         optional: true
   - name: NEXTAUTH_URL
     value: https://ispbilling.codevertexitsolutions.com
-
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
@@ -99,7 +91,6 @@ resources:
   requests:
     cpu: 100m
     memory: 256Mi
-
 # ============================================================================
 # AUTOSCALING
 # ============================================================================
@@ -109,7 +100,6 @@ autoscaling:
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
@@ -129,16 +119,13 @@ ingress:
     - hosts:
         - ispbilling.codevertexitsolutions.com
       secretName: isp-billing-frontend-tls
-
 # ============================================================================
 # MONITORING
 # ============================================================================
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # ============================================================================
 # VPA configuration for UI — recommendation-only mode
 # ============================================================================
@@ -152,4 +139,3 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-
