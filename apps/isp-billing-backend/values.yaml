@@ -17,9 +17,9 @@ image:
 # ============================================================================
 replicaCount: 1
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
-  maxReplicas: 2
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
   scaleDown:
@@ -60,6 +60,7 @@ migrations:
   enabled: true
   binaryName: alembic
   command: ["alembic", "upgrade", "head"]
+  ttlSecondsAfterFinished: 300
   resources:
     requests:
       cpu: 100m
@@ -132,9 +133,9 @@ env:
         name: isp-billing-backend-secrets
         key: DATABASE_URL
   - name: DATABASE_POOL_SIZE
-    value: "10"
+    value: "3"
   - name: DATABASE_MAX_OVERFLOW
-    value: "20"
+    value: "2"
   # ── Redis ──
   - name: REDIS_URL
     valueFrom:
@@ -337,10 +338,10 @@ healthCheck:
     httpGet:
       path: /health
       port: http
-    initialDelaySeconds: 10
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 3
+    initialDelaySeconds: 90
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 5
   liveness:
     httpGet:
       path: /health
