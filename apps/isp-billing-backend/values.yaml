@@ -185,6 +185,17 @@ env:
       secretKeyRef:
         name: isp-billing-backend-secrets
         key: MASTER_PASSWORD
+  # ── Platform Admin Credentials (from git secrets) ──
+  - name: GLOBAL_ADMIN_EMAIL
+    valueFrom:
+      secretKeyRef:
+        name: isp-billing-backend-secrets
+        key: GLOBAL_ADMIN_EMAIL
+  - name: GLOBAL_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: isp-billing-backend-secrets
+        key: GLOBAL_ADMIN_PASSWORD
   # ── CORS ──
   - name: CORS_ORIGINS
     value: '["https://ispbilling.codevertexitsolutions.com"]'
