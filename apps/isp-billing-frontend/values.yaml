@@ -58,7 +58,7 @@ env:
   # NEXT_PUBLIC_* vars are baked at build time via Dockerfile ARGs
   # Runtime-only vars below
   - name: NEXT_PUBLIC_API_URL
-    value: https://ispbillingapi.codevertexitsolutions.com
+    value: https://ispbillingapi.codevertexitsolutions.com/api/v1
   - name: NEXT_PUBLIC_WS_BASE_URL
     value: wss://ispbillingapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_APP_NAME
