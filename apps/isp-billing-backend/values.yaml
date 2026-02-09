@@ -59,22 +59,9 @@ progressDeadlineSeconds: 1200 # 20 minutes - allows time for migrations + pod st
 migrations:
   enabled: true
   binaryName: alembic
-  command:
-    - "sh"
-    - "-c"
-    - |
-      # Handle migration revision mismatch (regenerated migrations)
-      # Delete old alembic_version entries to allow fresh migration
-      python -c "
-      from sqlalchemy import create_engine, text
-      import os
-      engine = create_engine(os.environ['DATABASE_URL'].replace('asyncpg', 'psycopg2'))
-      with engine.connect() as conn:
-          conn.execute(text('TRUNCATE TABLE alembic_version'))
-          conn.commit()
-      print('Cleared old migration state')
-      " || echo "No existing migration state"
-      alembic upgrade head
+  # Use simple command that works with Helm template's join function
+  # Clear old version state + run migrations
+  command: ["sh", "-c", "python -c 'from sqlalchemy import create_engine, text; import os; engine = create_engine(os.environ[\"DATABASE_URL\"].replace(\"asyncpg\", \"psycopg2\")); conn = engine.connect(); conn.execute(text(\"TRUNCATE TABLE alembic_version\")); conn.commit(); conn.close()' 2>/dev/null || echo 'No existing state'; alembic upgrade head"]
   ttlSecondsAfterFinished: 300
   resources:
     requests:
