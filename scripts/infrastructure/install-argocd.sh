@@ -77,6 +77,32 @@ fi
 # Wait for pods to be ready
 wait_for_pods "argocd" "app.kubernetes.io/name=argocd-server" 1200
 
+# Ensure argocd-secret exists (fix for missing core secret issue)
+log_info "Verifying argocd-secret exists..."
+if kubectl -n argocd get secret argocd-secret >/dev/null 2>&1; then
+  log_success "argocd-secret exists"
+else
+  log_warning "argocd-secret missing - creating it..."
+  kubectl apply -f - <<EOF >/dev/null 2>&1
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app.kubernetes.io/name: argocd-secret
+    app.kubernetes.io/part-of: argocd
+  name: argocd-secret
+  namespace: argocd
+type: Opaque
+EOF
+  log_success "argocd-secret created (ArgoCD will auto-populate)"
+  
+  # Restart ArgoCD server to pick up the new secret
+  log_info "Restarting ArgoCD server to apply changes..."
+  kubectl rollout restart deployment argocd-server -n argocd >/dev/null 2>&1
+  kubectl rollout status deployment argocd-server -n argocd --timeout=120s >/dev/null 2>&1
+  log_success "ArgoCD server restarted"
+fi
+
 # Apply ArgoCD health customizations for better app health assessment
 log_info "Applying ArgoCD health customizations..."
 kubectl apply -f "${MANIFESTS_DIR}/argocd-cm.yaml" || {
