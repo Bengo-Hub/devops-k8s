@@ -22,10 +22,14 @@ log_section() { echo -e "${CYAN}━━━ $1 ━━━${NC}"; }
 # =============================================================================
 log_section "Pod Count Analysis"
 
-TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
-ACTIVE_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -cv "Terminating\|Completed" || echo "0")
-TERMINATING_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -c "Terminating" || echo "0")
-FAILED_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -c "Error\|Failed\|CrashLoopBackOff" || echo "0")
+TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l)
+TOTAL_PODS=${TOTAL_PODS:-0}
+ACTIVE_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -cv "Terminating\|Completed" || true)
+ACTIVE_PODS=${ACTIVE_PODS:-0}
+TERMINATING_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -c "Terminating" || true)
+TERMINATING_PODS=${TERMINATING_PODS:-0}
+FAILED_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | grep -c "Error\|Failed\|CrashLoopBackOff" || true)
+FAILED_PODS=${FAILED_PODS:-0}
 
 POD_LIMIT=150
 POD_USAGE_PCT=$((ACTIVE_PODS * 100 / POD_LIMIT))
@@ -142,7 +146,8 @@ echo ""
 # =============================================================================
 log_section "Vertical Pod Autoscaler Status"
 
-VPA_COUNT=$(kubectl get vpa --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+VPA_COUNT=$(kubectl get vpa --all-namespaces --no-headers 2>/dev/null | wc -l)
+VPA_COUNT=${VPA_COUNT:-0}
 
 if [[ $VPA_COUNT -eq 0 ]]; then
     log_info "No VPA resources found"
@@ -163,8 +168,10 @@ echo ""
 # =============================================================================
 log_section "Horizontal Pod Autoscaler Status"
 
-HPA_COUNT=$(kubectl get hpa --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
-HPA_UNKNOWN=$(kubectl get hpa --all-namespaces 2>/dev/null | grep -c "<unknown>" || echo "0")
+HPA_COUNT=$(kubectl get hpa --all-namespaces --no-headers 2>/dev/null | wc -l)
+HPA_COUNT=${HPA_COUNT:-0}
+HPA_UNKNOWN=$(kubectl get hpa --all-namespaces 2>/dev/null | grep -c "<unknown>" || true)
+HPA_UNKNOWN=${HPA_UNKNOWN:-0}
 
 echo "Total HPAs: $HPA_COUNT"
 echo "HPAs with unknown metrics: $HPA_UNKNOWN"
@@ -184,7 +191,8 @@ log_section "Duplicate Resource Detection"
 # Check for duplicate Prometheus operators
 PROM_OPS=$(kubectl get deployment --all-namespaces -o json 2>/dev/null | \
     jq -r '.items[] | select(.metadata.name | contains("prometheus-operator")) | "\(.metadata.namespace)/\(.metadata.name)"' | \
-    wc -l || echo "0")
+    wc -l)
+PROM_OPS=${PROM_OPS:-0}
 
 if [[ $PROM_OPS -gt 1 ]]; then
     log_error "Found $PROM_OPS Prometheus operators (expected 1)"
@@ -196,7 +204,8 @@ fi
 # Check for duplicate Grafana
 GRAFANA=$(kubectl get deployment --all-namespaces -o json 2>/dev/null | \
     jq -r '.items[] | select(.metadata.name | contains("grafana")) | "\(.metadata.namespace)/\(.metadata.name)"' | \
-    wc -l || echo "0")
+    wc -l)
+GRAFANA=${GRAFANA:-0}
 
 if [[ $GRAFANA -gt 1 ]]; then
     log_warning "Found $GRAFANA Grafana deployments (expected 1)"
