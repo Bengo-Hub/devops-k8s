@@ -8,7 +8,7 @@ fullnameOverride: isp-billing-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/isp-billing-backend
-  tag: "c5dca4c2"
+  tag: "bbcd8882"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -52,7 +52,7 @@ strategy:
     maxSurge: 1
     maxUnavailable: 0
 minReadySeconds: 30
-progressDeadlineSeconds: 1200  # 20 minutes - allows time for migrations + pod startup
+progressDeadlineSeconds: 1200 # 20 minutes - allows time for migrations + pod startup
 # ============================================================================
 # DATABASE MIGRATIONS (Alembic)
 # ============================================================================
@@ -348,12 +348,12 @@ healthCheck:
       port: http
     initialDelaySeconds: 20
     periodSeconds: 10
-    failureThreshold: 60  # 10 minutes max for initial startup
+    failureThreshold: 60 # 10 minutes max for initial startup
   readiness:
     httpGet:
       path: /health
       port: http
-    initialDelaySeconds: 120  # Wait 2 minutes before checking readiness
+    initialDelaySeconds: 120 # Wait 2 minutes before checking readiness
     periodSeconds: 15
     timeoutSeconds: 10
     failureThreshold: 5
