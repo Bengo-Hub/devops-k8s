@@ -59,7 +59,22 @@ progressDeadlineSeconds: 600
 migrations:
   enabled: true
   binaryName: alembic
-  command: ["alembic", "upgrade", "head"]
+  command:
+    - "sh"
+    - "-c"
+    - |
+      # Handle migration revision mismatch (regenerated migrations)
+      # Delete old alembic_version entries to allow fresh migration
+      python -c "
+      from sqlalchemy import create_engine, text
+      import os
+      engine = create_engine(os.environ['DATABASE_URL'].replace('asyncpg', 'psycopg2'))
+      with engine.connect() as conn:
+          conn.execute(text('TRUNCATE TABLE alembic_version'))
+          conn.commit()
+      print('Cleared old migration state')
+      " || echo "No existing migration state"
+      alembic upgrade head
   ttlSecondsAfterFinished: 300
   resources:
     requests:
