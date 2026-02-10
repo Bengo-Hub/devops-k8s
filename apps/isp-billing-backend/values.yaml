@@ -79,6 +79,7 @@ seed:
   # Creates: RBAC, platform admin, package templates, plans
   # Skips: demo users, licences, subscriptions
   command: ["python", "scripts/seed_all.py", "--users", "0", "--licences", "0", "--subscriptions", "0"]
+  ttlSecondsAfterFinished: 300
   resources:
     requests:
       cpu: 100m
