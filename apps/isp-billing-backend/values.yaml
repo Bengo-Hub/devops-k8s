@@ -70,8 +70,19 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
+# ============================================================================
+# DATABASE SEEDING (platform admin, RBAC, system configs)
+# ============================================================================
 seed:
-  enabled: false
+  enabled: true
+  command: ["python", "scripts/seed_all.py", "--env", "production"]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 # ============================================================================
 # CELERY WORKERS (background billing, provisioning, notification tasks)
 # ============================================================================
