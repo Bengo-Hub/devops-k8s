@@ -75,7 +75,10 @@ migrations:
 # ============================================================================
 seed:
   enabled: true
-  command: ["python", "scripts/seed_all.py", "--env", "production"]
+  # Production mode: seed essential data with counts=0 for demo data
+  # Creates: RBAC, platform admin, package templates, plans
+  # Skips: demo users, licences, subscriptions
+  command: ["python", "scripts/seed_all.py", "--users", "0", "--licences", "0", "--subscriptions", "0"]
   resources:
     requests:
       cpu: 100m
