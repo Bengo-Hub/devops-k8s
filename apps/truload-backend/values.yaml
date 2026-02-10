@@ -2,7 +2,7 @@ nameOverride: truload-backend
 fullnameOverride: truload-backend
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: a13cb1e5
+  tag: bbbb7ea3
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -40,7 +40,7 @@ healthCheck:
 # Increased memory for EF Core migrations and seeding
 resources:
   requests:
-    cpu: 200m   # Priority service — increased for .NET API + EF Core
+    cpu: 200m # Priority service — increased for .NET API + EF Core
     memory: 512Mi
   limits:
     cpu: 1000m
