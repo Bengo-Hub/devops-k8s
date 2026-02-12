@@ -226,6 +226,8 @@ env:
     value: "https://ispbilling.codevertexitsolutions.com"
   - name: API_BASE_URL
     value: "https://ispbillingapi.codevertexitsolutions.com/api/v1"
+  - name: BACKEND_URL
+    value: "https://ispbillingapi.codevertexitsolutions.com"
   # ── M-PESA ──
   - name: MPESA_ENVIRONMENT
     value: "production"
