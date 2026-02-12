@@ -403,6 +403,8 @@ ingress:
     # CORS headers (backup — app-level CORS is primary)
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://ispbilling.codevertexitsolutions.com"
+    # Allow the custom headers used by the frontend (preflight must include these)
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-Request-ID,X-Organization-Slug,x-organization-slug"
   hosts:
     - host: ispbillingapi.codevertexitsolutions.com
       paths:
