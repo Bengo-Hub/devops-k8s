@@ -56,8 +56,11 @@ progressDeadlineSeconds: 1200 # 20 minutes - allows time for migrations + pod st
 # ============================================================================
 # DATABASE MIGRATIONS (Alembic)
 # ============================================================================
+# NOTE: migrations are also performed by the container entrypoint. Disable the
+# Helm hook Job to avoid duplicate/parallel migration Jobs that may conflict
+# with the container's idempotent migration behavior.
 migrations:
-  enabled: true
+  enabled: false
   binaryName: alembic
   # Use simple command that works with Helm template's join function
   # Clear old version state + run migrations
@@ -73,8 +76,11 @@ migrations:
 # ============================================================================
 # DATABASE SEEDING (platform admin, RBAC, system configs)
 # ============================================================================
+# NOTE: seeding is performed by the container entrypoint (idempotent). Disable
+# the Helm hook Job to prevent duplicate seed runs and race conditions during
+# chart upgrades. Use the values.seed.enabled flag only for one-off manual Jobs.
 seed:
-  enabled: true
+  enabled: false
   # Production mode: seed essential data with counts=0 for demo data
   # Creates: RBAC, platform admin, package templates, plans
   # Skips: demo users, licences, subscriptions
