@@ -8,7 +8,7 @@ fullnameOverride: isp-billing-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/isp-billing-backend
-  tag: "c6bb01d1"
+  tag: "1deaf896"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
