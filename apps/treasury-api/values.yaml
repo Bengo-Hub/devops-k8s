@@ -66,6 +66,16 @@ env:
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: TREASURY_HTTP_ALLOWED_ORIGINS
     value: "https://books.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+  - name: TREASURY_MPESA_CALLBACK_URL
+    value: "https://booksapi.codevertexitsolutions.com/api/v1/webhooks/mpesa/callback"
+  - name: TREASURY_AUTH_SERVICE_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: TREASURY_AUTH_JWKS_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+  - name: TREASURY_AUTH_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: TREASURY_AUTH_AUDIENCE
+    value: "codevertex"
 
 resources:
   limits:
