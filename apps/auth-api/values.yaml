@@ -6,7 +6,7 @@ fullnameOverride: auth-api
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-api
-  tag: "fe2235b7"
+  tag: "33b02e19"
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
