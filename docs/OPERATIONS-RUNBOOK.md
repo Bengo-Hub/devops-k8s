@@ -581,6 +581,60 @@ kubectl exec deployment/argocd-repo-server -n argocd -- git ls-remote https://gi
 
 ## Security Procedures
 
+## Automation & health-management (cronjobs / autoscale)
+
+- Automated pod-cleanup CronJob runs periodic cleanup of Failed/Terminating pods and scales down repeatedly-failing Deployments. See `manifests/cleanup-cronjob.yaml` and `scripts/tools/cleanup-failed-pods.sh`.
+- Pre-deploy health check script: `scripts/tools/pre-deploy-health-check.sh` — validates namespace capacity, pod limits, DB connectivity and required secrets before a release.
+- Default replica/auto-scale strategy: conservative HPA/VPA settings for infra and app tiers (find defaults in `apps/*/values.yaml`).
+
+Quick remediation commands:
+
+```bash
+# Trigger the cleanup job manually
+kubectl create job --from=cronjob/cleanup-failed-pods -n kube-system manual-cleanup-$(date +%s)
+
+# Restart the pod-cleanup cronjob if missing
+kubectl get cronjob -n kube-system cleanup-failed-pods
+kubectl logs -n kube-system -l app=pod-cleanup --tail=100
+```
+
+---
+
+## Common issues & prevention (extracted)
+
+This section highlights recurring incidents and how to prevent them.
+
+1) Helm template nil-pointer errors
+- Ensure optional `.Values` sections exist in values.yaml (e.g. `migrations:`) or use safe template access.
+- Validate templates with `helm template --debug --dry-run` before committing.
+
+2) VPA eviction loop
+- Only enable VPA when `metrics-server` is healthy. For unstable environments keep `verticalPodAutoscaling.enabled=false`.
+- Emergency fix: `kubectl delete vpa -n <ns> <name>` and disable in values.yaml.
+
+3) Pod limit exhaustion
+- Monitor total pod count and avoid duplicate monitoring stacks on the same cluster.
+- Reduce replica counts for low-priority workloads and apply conservative resource requests/limits.
+
+4) Secret setup mismatches
+- Source-of-truth for passwords is the in-cluster secret created by provisioning; CI must read DB passwords from the Kubernetes secret, not from repository environment variables.
+
+5) Metrics-server unavailability
+- Verify `kubectl top nodes` and `kubectl get deployment metrics-server -n kube-system` before enabling autoscalers.
+
+Reference quick checks:
+
+```bash
+# Pod count by namespace
+kubectl get pods --all-namespaces --no-headers | awk '{print $1}' | sort | uniq -c | sort -rn
+
+# Check metrics server
+kubectl get deployment metrics-server -n kube-system
+kubectl get --raw "/apis/metrics.k8s.io/v1beta1/nodes"
+```
+
+---
+
 ### Security Best Practices
 
 **Pipeline Security:**
