@@ -1,29 +1,25 @@
 # Ordering Service Frontend Production Configuration
 nameOverride: ordering-frontend
 fullnameOverride: ordering-frontend
-
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-frontend
-  tag: "latest"
+  tag: "ab10b2ee"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
 replicaCount: 1
-
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 2
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 # ============================================================================
 # SERVICE CONFIGURATION
 # ============================================================================
@@ -31,7 +27,6 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -40,15 +35,12 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 minReadySeconds: 30
-
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
 # Load all environment variables from secret (like auth-ui)
 envFromSecret: ordering-frontend-secrets
-
 env:
   # API URLs - Production endpoints
   - name: NEXT_PUBLIC_API_URL
@@ -59,7 +51,6 @@ env:
     value: https://sso.codevertexitsolutions.com
   - name: NEXT_PUBLIC_APP_URL
     value: https://ordersapp.codevertexitsolutions.com
-
   # Optional third-party integrations (from secret)
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
@@ -73,7 +64,6 @@ env:
         name: ordering-frontend-secrets
         key: sentryDsn
         optional: true
-
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
@@ -97,7 +87,6 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 3
     failureThreshold: 3
-
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
@@ -108,7 +97,6 @@ resources:
   limits:
     cpu: 500m
     memory: 768Mi
-
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
@@ -128,16 +116,13 @@ ingress:
     - hosts:
         - ordersapp.codevertexitsolutions.com
       secretName: ordering-frontend-tls
-
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # ============================================================================
 # VPA CONFIGURATION - Recommendation-only mode
 # ============================================================================
