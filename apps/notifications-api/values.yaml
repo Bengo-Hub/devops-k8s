@@ -4,7 +4,7 @@ replicaCount: 1 # Optimized for resource-constrained environment
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "16c85ea8"
+  tag: "ab31a9c7"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
