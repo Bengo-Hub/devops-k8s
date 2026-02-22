@@ -20,7 +20,7 @@ healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /healthz
+      path: /
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
@@ -28,7 +28,7 @@ healthCheck:
     failureThreshold: 3
   liveness:
     httpGet:
-      path: /healthz
+      path: /
       port: http
     initialDelaySeconds: 30
     periodSeconds: 15

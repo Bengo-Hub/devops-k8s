@@ -6,7 +6,7 @@ replicaCount: 1  # Optimized for resource-constrained environment
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "latest"
+  tag: "327158b"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -48,8 +48,8 @@ seed:
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
-# Uses notifications-api-env created by service's setup_env_secrets.sh
-envFromSecret: notifications-api-env
+# Uses notifications-api-secrets created by service's centralized script
+envFromSecret: notifications-api-secrets
 
 healthCheck:
   enabled: true

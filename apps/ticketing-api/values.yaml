@@ -5,7 +5,7 @@ replicaCount: 1
 
 image:
   repository: docker.io/codevertex/ticketing-api
-  tag: "latest"
+  tag: "cbbeeca"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -27,13 +27,13 @@ healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /api/v1/healthz
+      path: /readyz
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
-      path: /api/v1/healthz
+      path: /healthz
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
