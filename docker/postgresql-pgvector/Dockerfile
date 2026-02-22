@@ -1,10 +1,10 @@
 # Multi-stage Dockerfile: build pgvector with official PostgreSQL + Bitnami compatibility wrapper
-# This creates a Bitnami-compatible image using official postgres:16 as base
+# This creates a Bitnami-compatible image using official postgres:17 as base
 
 # ---------------------------
 # Stage 1 — build pgvector
 # ---------------------------
-FROM postgres:16 AS builder
+FROM postgres:17 AS builder
 USER root
 
 # Install build dependencies
@@ -13,7 +13,7 @@ RUN apt-get update \
     git \
     ca-certificates \
     build-essential \
-    postgresql-server-dev-16 \
+    postgresql-server-dev-17 \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone and build pgvector
@@ -26,13 +26,13 @@ RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector
 # ---------------------------
 # Stage 2 — Bitnami-compatible runtime
 # ---------------------------
-FROM postgres:16
+FROM postgres:17
 
 USER root
 
 # Copy pgvector extension
-COPY --from=builder /usr/lib/postgresql/16/lib/vector.so /usr/lib/postgresql/16/lib/
-COPY --from=builder /usr/share/postgresql/16/extension/vector* /usr/share/postgresql/16/extension/
+COPY --from=builder /usr/lib/postgresql/17/lib/vector.so /usr/lib/postgresql/17/lib/
+COPY --from=builder /usr/share/postgresql/17/extension/vector* /usr/share/postgresql/17/extension/
 
 # Create Bitnami-compatible directory structure
 RUN mkdir -p /bitnami/postgresql/data \
@@ -54,9 +54,9 @@ RUN mkdir -p /var/run/postgresql \
     && chmod 2777 /var/run/postgresql
 
 # Ensure pgvector is properly owned
-RUN chown postgres:postgres /usr/lib/postgresql/16/lib/vector.so \
-    && chown postgres:postgres /usr/share/postgresql/16/extension/vector*
+RUN chown postgres:postgres /usr/lib/postgresql/17/lib/vector.so \
+    && chown postgres:postgres /usr/share/postgresql/17/extension/vector*
 
 USER postgres
 
-# Default command inherited from postgres:16
+# Default command inherited from postgres:17

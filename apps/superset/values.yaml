@@ -244,6 +244,21 @@ configOverrides:
         'EMBEDDED_SUPERSET': True,
     }
     
+    # CORS Configuration for Embedding
+    ENABLE_CORS = True
+    CORS_OPTIONS = {
+        'supports_credentials': True,
+        'allow_headers': ['*'],
+        'resources': ['*'],
+        'origins': [
+            'https://kuraweightest.masterspace.co.ke',
+            'http://localhost:3000'
+        ]
+    }
+    
+    # Guest role for embedded dashboards
+    GUEST_ROLE_NAME = "Public"
+    
     # Query settings
     SQL_MAX_ROW = 100000
     SQLLAB_ASYNC_TIME_LIMIT_SEC = 300
@@ -256,6 +271,11 @@ configOverrides:
     
     # Row level security
     ROW_LEVEL_SECURITY_ENABLED = True
+    
+    # Cookie settings for cross-domain embedding
+    SESSION_COOKIE_SAMESITE = 'None'
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
 
 # ============================================================================
 # CELERY WORKERS - ASYNC QUERY EXECUTION

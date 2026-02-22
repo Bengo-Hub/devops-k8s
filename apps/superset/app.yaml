@@ -233,7 +233,7 @@ spec:
               PREFERRED_URL_SCHEME = 'https'
               SESSION_COOKIE_SECURE = True
               SESSION_COOKIE_HTTPONLY = True
-              SESSION_COOKIE_SAMESITE = 'Lax'
+              SESSION_COOKIE_SAMESITE = 'None'
 
               # Feature flags
               FEATURE_FLAGS = {
@@ -243,6 +243,21 @@ spec:
                   'DASHBOARD_RBAC': True,
                   'EMBEDDED_SUPERSET': True,
               }
+              
+              # CORS Configuration for Embedding
+              ENABLE_CORS = True
+              CORS_OPTIONS = {
+                  'supports_credentials': True,
+                  'allow_headers': ['*'],
+                  'resources': ['*'],
+                  'origins': [
+                      'https://kuraweightest.masterspace.co.ke',
+                      'http://localhost:3000'
+                  ]
+              }
+              
+              # Guest role for embedded dashboards
+              GUEST_ROLE_NAME = "Public"
 
               # Query settings
               SQL_MAX_ROW = 100000
