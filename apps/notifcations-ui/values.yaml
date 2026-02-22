@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/notifications-ui
-  tag: 21b11fce
+  tag: "21b11fce"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -21,7 +21,7 @@ healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /health
+      path: /
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
@@ -29,7 +29,7 @@ healthCheck:
     failureThreshold: 3
   liveness:
     httpGet:
-      path: /health
+      path: /
       port: http
     initialDelaySeconds: 30
     periodSeconds: 15
@@ -62,7 +62,7 @@ ingress:
     - hosts:
         - notifications.codevertexitsolutions.com
       secretName: notifications-codevertex-tls
-envFromSecret: notifications-ui-env
+envFromSecret: notifications-ui-secrets
 # VPA configuration for UI
 # CRITICAL: Use "Off" mode to prevent VPA from recreating pods and causing downtime
 # VPA will still provide recommendations via kubectl describe vpa but won't act on them
