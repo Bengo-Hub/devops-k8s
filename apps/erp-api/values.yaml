@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-api
-  tag: "fe112cf1" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
+  tag: "3dd3327d" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -64,10 +64,10 @@ healthCheck:
 # INCREASED RESOURCES: 20-30min rollout indicates insufficient CPU for migrations
 resources:
   requests:
-    cpu: 500m   # Right-sized: migrations run in init container, not main app
+    cpu: 500m # Right-sized: migrations run in init container, not main app
     memory: 1.5Gi # Right-sized: steady-state usage is ~1Gi, burst to limit
   limits:
-    cpu: 2000m  # Allow burst for peak load
+    cpu: 2000m # Allow burst for peak load
     memory: 4Gi # Allow burst for complex queries
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
@@ -127,10 +127,10 @@ migrations:
   runOnStartup: true # Wait for migrations to complete before app starts
   resources:
     requests:
-      cpu: 500m   # Right-sized for migration init container
+      cpu: 500m # Right-sized for migration init container
       memory: 2Gi # Sufficient for Django schema migrations
     limits:
-      cpu: 2000m  # Allow burst during heavy migrations
+      cpu: 2000m # Allow burst during heavy migrations
       memory: 4Gi # Prevent OOM during complex migrations
 # Seeding configuration
 seed:
@@ -209,10 +209,10 @@ celeryWorker:
   maxTasksPerChild: 100
   resources:
     requests:
-      cpu: 200m   # Right-sized for async task processing
+      cpu: 200m # Right-sized for async task processing
       memory: 512Mi # Sufficient for Django worker with 4 concurrent tasks
     limits:
-      cpu: 1000m  # Allow burst for heavy tasks
+      cpu: 1000m # Allow burst for heavy tasks
       memory: 1.5Gi # Prevent OOM during batch processing
   livenessProbe:
     enabled: true
