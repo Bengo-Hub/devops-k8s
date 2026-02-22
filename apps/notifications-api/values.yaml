@@ -44,7 +44,6 @@ seed:
 # ============================================================================
 # Uses notifications-api-env created by service's centralized script
 envFromSecret: notifications-api-env
-
 healthCheck:
   enabled: true
   startup:
@@ -101,7 +100,6 @@ env:
         name: notifications-api-env
         key: SECRET_KEY
         optional: true
-
   # Database connection - REQUIRED for app to start
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
