@@ -1,21 +1,17 @@
 nameOverride: notifications-api
 fullnameOverride: notifications-api
-
-replicaCount: 1  # Optimized for resource-constrained environment
-
+replicaCount: 1 # Optimized for resource-constrained environment
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "latest"
+  tag: "16c85ea8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
-
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
@@ -25,7 +21,7 @@ service:
 # Seeds run as post-install/post-upgrade Helm hook (weight 5)
 migrations:
   enabled: true
-  binaryName: notifications-migrate  # Must match Dockerfile: /usr/local/bin/notifications-migrate
+  binaryName: notifications-migrate # Must match Dockerfile: /usr/local/bin/notifications-migrate
   resources:
     requests:
       cpu: 100m
@@ -33,10 +29,9 @@ migrations:
     limits:
       cpu: 500m
       memory: 512Mi
-
 seed:
   enabled: true
-  binaryName: notifications-seed  # Must match Dockerfile: /usr/local/bin/notifications-seed
+  binaryName: notifications-seed # Must match Dockerfile: /usr/local/bin/notifications-seed
   resources:
     requests:
       cpu: 100m
@@ -44,13 +39,11 @@ seed:
     limits:
       cpu: 500m
       memory: 512Mi
-
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
 # Uses notifications-api-env created by service's setup_env_secrets.sh
 envFromSecret: notifications-api-env
-
 healthCheck:
   enabled: true
   startup:
@@ -60,7 +53,7 @@ healthCheck:
     initialDelaySeconds: 15
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 60  # 10 minutes total for startup (includes waiting for migrations)
+    failureThreshold: 60 # 10 minutes total for startup (includes waiting for migrations)
   readiness:
     httpGet:
       path: /api/v1/healthz
@@ -77,7 +70,6 @@ healthCheck:
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 5
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -86,10 +78,8 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 minReadySeconds: 30
-progressDeadlineSeconds: 900  # 15 minutes for migrations and startup
-
+progressDeadlineSeconds: 900 # 15 minutes for migrations and startup
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
@@ -99,14 +89,12 @@ env:
     value: production
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
-
   # Database connection - REQUIRED for app to start
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: NOTIFICATIONS_POSTGRES_URL
-
   # Messaging and cache - use infra namespace defaults
   - name: NOTIFICATIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
@@ -161,29 +149,25 @@ env:
     value: "codevertex"
   - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
     value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-
 resources:
   limits:
     cpu: 1000m
     memory: 1Gi
   requests:
-    cpu: 150m  # Balanced for 12-core server
+    cpu: 150m # Balanced for 12-core server
     memory: 512Mi
-
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 monitoring:
   enabled: true
   prometheus:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -191,7 +175,6 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -211,7 +194,6 @@ ingress:
     - hosts:
         - notificationsapi.codevertexitsolutions.com
       secretName: notifications-api-tls
-
 # ============================================================================
 # SECURITY CONFIGURATION
 # ============================================================================
@@ -220,7 +202,6 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   runAsNonRoot: true
-
 # ============================================================================
 # POD DISRUPTION BUDGET
 # ============================================================================
