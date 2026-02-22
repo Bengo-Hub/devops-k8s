@@ -4,7 +4,7 @@ replicaCount: 1 # Optimized for resource-constrained environment
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "29d73a77"
+  tag: "38028756"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -89,20 +89,17 @@ env:
   # App
   - name: NOTIFICATIONS_APP_ENV
     value: production
-
   # HTTP - NOTIFICATIONS_HTTP_PORT (struct HTTP + tag PORT)
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
   - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
     value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-
   # Database - NOTIFICATIONS_POSTGRES_URL (struct POSTGRES + tag URL)
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: NOTIFICATIONS_POSTGRES_URL
-
   # Redis - struct REDIS + tag ADDR/PASSWORD
   - name: NOTIFICATIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
@@ -112,11 +109,9 @@ env:
         name: notifications-api-env
         key: NOTIFICATIONS_REDIS_PASSWORD
         optional: true
-
   # NATS - struct EVENTS + tag NATS_URL = NOTIFICATIONS_EVENTS_NATS_URL
   - name: NOTIFICATIONS_EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-
   # Provider secrets (optional - create notifications-provider-secrets manually)
   # struct PROVIDERS + tag → NOTIFICATIONS_PROVIDERS_{TAG}
   - name: NOTIFICATIONS_PROVIDERS_SENDGRID_API_KEY
@@ -149,11 +144,9 @@ env:
         name: notifications-api-env
         key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
         optional: true
-
   # Observability
   - name: NOTIFICATIONS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-
   # Security JWT - struct SECURITY + tag → NOTIFICATIONS_SECURITY_{TAG}
   - name: NOTIFICATIONS_SECURITY_REQUIRE_JWT
     value: "true"
