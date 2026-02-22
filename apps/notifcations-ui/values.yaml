@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/notifications-ui
-  tag: "21b11fce"
+  tag: "latest"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
