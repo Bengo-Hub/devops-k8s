@@ -149,6 +149,14 @@ if [[ -z "$DATABASE_PASSWORD" ]]; then
     log_warning "Ensure POSTGRES_PASSWORD is set or PostgreSQL secret exists."
 fi
 
+# Application SECRET_KEY (used by some services for encryption/session)
+if [[ -n "${SECRET_KEY:-}" ]]; then
+    APP_SECRET_KEY="$SECRET_KEY"
+else
+    APP_SECRET_KEY=$(generate_password 64)
+    log_info "Generated app SECRET_KEY"
+fi
+
 # Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
 # CRITICAL: Redis now uses POSTGRES_PASSWORD (master password) for consistency
 REDIS_PASSWORD=""
@@ -190,6 +198,7 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=postgresUrl="${POSTGRES_URL}" \
     --from-literal=POSTGRES_URL="${POSTGRES_URL}" \
     --from-literal=DATABASE_URL="${POSTGRES_URL}" \
+    --from-literal=SECRET_KEY="${APP_SECRET_KEY}" \
     --from-literal=DATABASE_HOST="${PG_HOST}" \
     --from-literal=DATABASE_PORT="${PG_PORT}" \
     --from-literal=DATABASE_NAME="${DB_NAME}" \
@@ -225,6 +234,7 @@ echo "Database Password: ${DATABASE_PASSWORD}"
 echo ""
 echo "PostgreSQL URL: ${POSTGRES_URL}"
 echo "Redis URL: ${REDIS_URL}"
+echo "SECRET_KEY: ${APP_SECRET_KEY}"
 echo ""
 
 # Create backup file
