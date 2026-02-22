@@ -15,7 +15,7 @@ spec:
         - ../../apps/notifications-ui/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: erp
+    namespace: notifications
   syncPolicy:
     automated:
       prune: true

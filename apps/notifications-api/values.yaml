@@ -83,21 +83,27 @@ progressDeadlineSeconds: 900 # 15 minutes for migrations and startup
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
-# Core settings from values, secrets from notifications-api-env (created by build.sh)
+# Env var naming: NOTIFICATIONS_{STRUCT_FIELD}_{TAG}
+# Struct fields: APP, HTTP, POSTGRES, REDIS, EVENTS, PROVIDERS, TEMPLATES, SECURITY
 env:
+  # App
   - name: NOTIFICATIONS_APP_ENV
     value: production
+
+  # HTTP - NOTIFICATIONS_HTTP_PORT (struct HTTP + tag PORT)
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
-  # Satisfy Generic App chart migrate-hook.yaml requirements and app config
-  - name: DATABASE_URL
+  - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
+    value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+
+  # Database - NOTIFICATIONS_POSTGRES_URL (struct POSTGRES + tag URL)
+  - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: NOTIFICATIONS_POSTGRES_URL
-  - name: SECRET_KEY
-    value: "fixed-auto-satisfied" # satisfy migrate-hook.yaml check and avoid optional secret issues
-  # Messaging and cache - use infra namespace defaults
+
+  # Redis - struct REDIS + tag ADDR/PASSWORD
   - name: NOTIFICATIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: NOTIFICATIONS_REDIS_PASSWORD
@@ -106,51 +112,57 @@ env:
         name: notifications-api-env
         key: NOTIFICATIONS_REDIS_PASSWORD
         optional: true
+
+  # NATS - struct EVENTS + tag NATS_URL = NOTIFICATIONS_EVENTS_NATS_URL
   - name: NOTIFICATIONS_EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
+
   # Provider secrets (optional - create notifications-provider-secrets manually)
-  - name: NOTIFICATIONS_SENDGRID_API_KEY
+  # struct PROVIDERS + tag → NOTIFICATIONS_PROVIDERS_{TAG}
+  - name: NOTIFICATIONS_PROVIDERS_SENDGRID_API_KEY
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: sendgridApiKey
         optional: true
-  - name: NOTIFICATIONS_TWILIO_ACCOUNT_SID
+  - name: NOTIFICATIONS_PROVIDERS_TWILIO_ACCOUNT_SID
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: twilioAccountSid
         optional: true
-  - name: NOTIFICATIONS_TWILIO_AUTH_TOKEN
+  - name: NOTIFICATIONS_PROVIDERS_TWILIO_AUTH_TOKEN
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: twilioAuthToken
         optional: true
-  - name: NOTIFICATIONS_FCM_SERVICE_ACCOUNT
+  - name: NOTIFICATIONS_PROVIDERS_FCM_SERVICE_ACCOUNT
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: fcmServiceAccount
         optional: true
-  - name: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
+  - name: NOTIFICATIONS_PROVIDERS_DEFAULT_EMAIL_SENDER
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
         optional: true
+
+  # Observability
   - name: NOTIFICATIONS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: NOTIFICATIONS_REQUIRE_JWT
+
+  # Security JWT - struct SECURITY + tag → NOTIFICATIONS_SECURITY_{TAG}
+  - name: NOTIFICATIONS_SECURITY_REQUIRE_JWT
     value: "true"
-  - name: NOTIFICATIONS_JWKS_URL
+  - name: NOTIFICATIONS_SECURITY_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-  - name: NOTIFICATIONS_JWT_ISSUER
+  - name: NOTIFICATIONS_SECURITY_JWT_ISSUER
     value: "https://sso.codevertexitsolutions.com"
-  - name: NOTIFICATIONS_JWT_AUDIENCE
+  - name: NOTIFICATIONS_SECURITY_JWT_AUDIENCE
     value: "codevertex"
-  - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
-    value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 resources:
   limits:
     cpu: 1000m
