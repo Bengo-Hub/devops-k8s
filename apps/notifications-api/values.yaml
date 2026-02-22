@@ -6,7 +6,7 @@ replicaCount: 1  # Optimized for resource-constrained environment
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "327158b"
+  tag: "latest"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -99,6 +99,13 @@ env:
     value: production
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: notifications-api-secrets
+        key: NOTIFICATIONS_POSTGRES_URL
+  - name: SECRET_KEY
+    value: "fixed-migration-hook-requirement"  # Migration hook requirement placeholder
 
   # Database connection - REQUIRED for app to start
   - name: NOTIFICATIONS_POSTGRES_URL
