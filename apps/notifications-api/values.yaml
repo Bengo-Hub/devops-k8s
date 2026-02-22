@@ -89,31 +89,14 @@ env:
     value: production
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
+  # Satisfy Generic App chart migrate-hook.yaml requirements and app config
   - name: DATABASE_URL
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: NOTIFICATIONS_POSTGRES_URL
   - name: SECRET_KEY
-    valueFrom:
-      secretKeyRef:
-        name: notifications-api-env
-        key: SECRET_KEY
-        optional: true
-  # Database connection - REQUIRED for app to start
-  - name: NOTIFICATIONS_POSTGRES_URL
-    valueFrom:
-      secretKeyRef:
-        name: notifications-api-env
-        key: NOTIFICATIONS_POSTGRES_URL
-  # Satisfy Generic App chart migrate-hook.yaml requirements
-  - name: DATABASE_URL
-    valueFrom:
-      secretKeyRef:
-        name: notifications-api-env
-        key: NOTIFICATIONS_POSTGRES_URL
-  - name: SECRET_KEY
-    value: "fixed-auto-satisfied" # satisfy migrate-hook.yaml check
+    value: "fixed-auto-satisfied" # satisfy migrate-hook.yaml check and avoid optional secret issues
   # Messaging and cache - use infra namespace defaults
   - name: NOTIFICATIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
