@@ -44,7 +44,6 @@ seed:
 # ============================================================================
 # Uses notifications-api-secrets created by service's centralized script
 envFromSecret: notifications-api-secrets
-
 healthCheck:
   enabled: true
   startup:
@@ -96,8 +95,7 @@ env:
         name: notifications-api-secrets
         key: NOTIFICATIONS_POSTGRES_URL
   - name: SECRET_KEY
-    value: "fixed-migration-hook-requirement"  # Migration hook requirement placeholder
-
+    value: "fixed-migration-hook-requirement" # Migration hook requirement placeholder
   # Database connection - REQUIRED for app to start
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
