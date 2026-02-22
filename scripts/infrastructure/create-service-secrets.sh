@@ -193,6 +193,9 @@ fi
 # Create the secret
 log_info "Creating Kubernetes secret..."
 
+# Derive a service-specific env prefix (e.g., notifications-api -> NOTIFICATIONS)
+SERVICE_PREFIX="$(echo "${SERVICE_NAME}" | sed 's/-.*$//' | tr '[:lower:]' '[:upper:]')"
+
 kubectl create secret generic "${SECRET_NAME}" \
     --namespace="${NAMESPACE}" \
     --from-literal=postgresUrl="${POSTGRES_URL}" \
@@ -207,7 +210,10 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=REDIS_URL="${REDIS_URL}" \
     --from-literal=REDIS_HOST="${REDIS_HOST}" \
     --from-literal=REDIS_PORT="${REDIS_PORT}" \
-    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}"
+    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
+    --from-literal="${SERVICE_PREFIX}_POSTGRES_URL"="${POSTGRES_URL}" \
+    --from-literal="${SERVICE_PREFIX}_DATABASE_URL"="${POSTGRES_URL}" \
+    --from-literal="${SERVICE_PREFIX}_REDIS_PASSWORD"="${REDIS_PASSWORD}"
 
 if [ $? -eq 0 ]; then
     log_success "Secret ${SECRET_NAME} created successfully in namespace ${NAMESPACE}"
