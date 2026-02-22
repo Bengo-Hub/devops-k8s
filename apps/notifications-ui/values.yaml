@@ -1,0 +1,114 @@
+# Notifications UI Production Configuration
+nameOverride: notifications-ui
+fullnameOverride: notifications-ui
+
+# ============================================================================
+# IMAGE CONFIGURATION
+# ============================================================================
+image:
+  repository: docker.io/codevertex/notifications-ui
+  tag: "latest"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 1
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+
+# VPA Configuration (Vertical Pod Autoscaler)
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Off"
+  recommendationMode: true
+  minCPU: 50m
+  maxCPU: 750m
+  minMemory: 128Mi
+  maxMemory: 1Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 20
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+envFromSecret: notifications-ui-secrets
+env:
+  - name: NODE_ENV
+    value: production
+  - name: PORT
+    value: "3000"
+  - name: NEXT_PUBLIC_API_URL
+    value: "https://notificationsapi.codevertexitsolutions.com"
+
+# ============================================================================
+# RESOURCE LIMITS
+# ============================================================================
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 768Mi
+
+# ============================================================================
+# HEALTH CHECKS
+# ============================================================================
+healthCheck:
+  enabled: true
+  liveness:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 15
+  readiness:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: notifications.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: notifications-ui-tls
+      hosts:
+        - notifications.codevertexitsolutions.com
