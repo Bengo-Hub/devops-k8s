@@ -180,6 +180,9 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+  selector:
+    matchLabels:
+      app: notifications-api
 ingress:
   enabled: true
   ingressClassName: nginx
