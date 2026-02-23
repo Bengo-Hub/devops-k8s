@@ -1,6 +1,6 @@
 nameOverride: notifications-api
 fullnameOverride: notifications-api
-replicaCount: 1 # Optimized for resource-constrained environment
+replicaCount: 1
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
@@ -164,11 +164,9 @@ resources:
     cpu: 150m # Balanced for 12-core server
     memory: 512Mi
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 80
+  maxReplicas: 1
 monitoring:
   enabled: true
   prometheus:
@@ -213,5 +211,4 @@ securityContext:
 # POD DISRUPTION BUDGET
 # ============================================================================
 podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
+  enabled: false
