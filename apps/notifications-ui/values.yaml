@@ -18,6 +18,8 @@ autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 1
+serviceMonitor:
+  enabled: false
 # VPA Configuration (Vertical Pod Autoscaler)
 verticalPodAutoscaling:
   enabled: false
