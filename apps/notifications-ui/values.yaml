@@ -17,17 +17,13 @@ image:
 # ============================================================================
 replicaCount: 1
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 75
-  targetMemoryUtilizationPercentage: 80
+  maxReplicas: 1
 
 # VPA Configuration (Vertical Pod Autoscaler)
 verticalPodAutoscaling:
-  enabled: true
-  updateMode: "Off"
-  recommendationMode: true
+  enabled: false
   minCPU: 50m
   maxCPU: 750m
   minMemory: 128Mi
@@ -63,7 +59,10 @@ env:
   - name: PORT
     value: "3000"
   - name: NEXT_PUBLIC_API_URL
-    value: "https://notificationsapi.codevertexitsolutions.com"
+    valueFrom:
+      secretKeyRef:
+        name: notifications-ui-secrets
+        key: NEXT_PUBLIC_API_URL
 
 # ============================================================================
 # RESOURCE LIMITS
