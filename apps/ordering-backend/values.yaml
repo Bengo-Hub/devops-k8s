@@ -186,7 +186,7 @@ envFromSecret: ordering-backend-secrets
 # migrations: Runs Ent schema.Create() to create/update tables
 # seed: Populates initial data (roles, permissions, demo tenant)
 migrations:
-  enabled: true
+  enabled: false
   binaryName: ordering-migrate
   resources:
     requests:
@@ -196,7 +196,7 @@ migrations:
       cpu: 500m
       memory: 512Mi
 seed:
-  enabled: true
+  enabled: false
   binaryName: ordering-seed
   resources:
     requests:
