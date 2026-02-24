@@ -174,9 +174,9 @@ setupDB:
       cpu: 200m
       memory: 256Mi
 # Create database schema via Ent migrations
-# Uses LoadDatabaseOnly() to avoid OAuth validation - only needs AUTH_DB_URL
+# Disabled: entrypoint.sh runs auth-migrate on every pod startup (self-contained)
 migrations:
-  enabled: true
+  enabled: false
   binaryName: auth-migrate
   resources:
     requests:
@@ -186,9 +186,9 @@ migrations:
       cpu: 500m
       memory: 512Mi
 # Seed initial data (tenants, demo user, admin user)
-# Uses LoadForSeed() to avoid OAuth validation - only needs AUTH_DB_URL and security config
+# Disabled: entrypoint.sh runs auth-seed on every pod startup (idempotent, self-contained)
 seed:
-  enabled: true
+  enabled: false
   binaryName: auth-seed
   env:
     - name: SEED_ADMIN_PASSWORD
