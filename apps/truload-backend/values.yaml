@@ -79,7 +79,13 @@ migrations:
   enabled: false # .NET EF Core handles migrations on startup
 seed:
   enabled: false # Seeding handled in application code if needed
-# Persistent storage for file uploads
+# Pod securityContext so media and backup PVCs are writable by app (uid 1001 in Dockerfile)
+securityContext:
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  runAsNonRoot: true
+# Persistent storage for file uploads (media, backups)
 persistence:
   enabled: true
   size: 10Gi
