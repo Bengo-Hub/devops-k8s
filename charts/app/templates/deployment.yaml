@@ -69,7 +69,7 @@ spec:
                        {{ .Values.persistence.mountPath }}/userprofiles \
                        {{ .Values.persistence.mountPath }}/backups
               
-              # Set permissions for app user (UID 1000)
+              # Set permissions for app user (UID from securityContext, default 1000)
               # Use 775 for directories (owner+group can write, others can read)
               chmod -R 775 {{ .Values.persistence.mountPath }} 2>/dev/null || {
                 echo "   ⚠️ Could not set 775 permissions, trying 755..."
@@ -94,8 +94,8 @@ spec:
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
           securityContext:
-            runAsUser: 1000
-            runAsGroup: 1000
+            runAsUser: {{ .Values.securityContext.runAsUser | default 1000 }}
+            runAsGroup: {{ .Values.securityContext.runAsGroup | default 1000 }}
         {{- end }}
         {{- if and .Values.migrations .Values.migrations.runOnStartup }}
         - name: wait-for-db
