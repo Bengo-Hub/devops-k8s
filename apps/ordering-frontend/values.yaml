@@ -67,13 +67,12 @@ env:
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
-# Health checks - using / (homepage) like auth-ui for reliable frontend health checks
-# The /healthz route exists but / is more reliable for Next.js apps
+# Health checks - using /healthz which returns 200 JSON (root / redirects → 3xx, probes fail)
 healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /
+      path: /healthz
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
@@ -81,7 +80,7 @@ healthCheck:
     failureThreshold: 6
   liveness:
     httpGet:
-      path: /
+      path: /healthz
       port: http
     initialDelaySeconds: 30
     periodSeconds: 15
