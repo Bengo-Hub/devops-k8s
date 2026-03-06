@@ -282,6 +282,13 @@ ingress:
     # Rate limiting for auth endpoints
     nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/limit-connections: "100"
+    # CORS: allow all SSO frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ordersapp.codevertexitsolutions.com, https://theurbanloftcafe.com, https://accounts.codevertexitsolutions.com, https://notifications.codevertexitsolutions.com, https://logistics.codevertexitsolutions.com, https://riderapp.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001, http://localhost:3002, http://127.0.0.1:3000, http://127.0.0.1:3001"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Requested-With, X-API-Key, X-Tenant-Slug"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     - host: sso.codevertexitsolutions.com
       paths:
