@@ -61,6 +61,7 @@ spec:
               # Create subdirectories
               mkdir -p {{ .Values.persistence.mountPath }}/business \
                        {{ .Values.persistence.mountPath }}/products \
+                       {{ .Values.persistence.mountPath }}/menu \
                        {{ .Values.persistence.mountPath }}/employees \
                        {{ .Values.persistence.mountPath }}/documents \
                        {{ .Values.persistence.mountPath }}/avatars \
