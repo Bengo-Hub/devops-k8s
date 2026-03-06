@@ -36,19 +36,36 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-# Environment variables - secrets are optional
+# Environment variables - must match cafe-website src/config/env.ts and auth/sso usage.
+# For Next.js, NEXT_PUBLIC_* are baked at build time; pass these as Docker build-args in build.sh
+# so production image has correct URLs. These env entries override at runtime where supported.
 env:
   - name: NODE_ENV
     value: "production"
-  - name: NEXT_PUBLIC_ORDERING_API_URL
-    value: https://orderapi.codevertexitsolutions.com
-  - name: NEXT_PUBLIC_AUTH_URL
+  # Service base URLs (cafe-website integrates with these for menu, auth, notifications, etc.)
+  - name: NEXT_PUBLIC_AUTH_SERVICE_URL
     value: https://sso.codevertexitsolutions.com
   - name: NEXT_PUBLIC_AUTH_UI_URL
     value: https://accounts.codevertexitsolutions.com
-  - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexitsolutions.com
-# Use envFromSecret for all other environment variables (consistent with erp-ui)
+  - name: NEXT_PUBLIC_ORDERING_SERVICE_URL
+    value: https://orderapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_NOTIFICATIONS_SERVICE_URL
+    value: https://notificationsapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_LOGISTICS_SERVICE_URL
+    value: https://logisticsapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_TREASURY_SERVICE_URL
+    value: https://booksapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_INVENTORY_SERVICE_URL
+    value: https://inventoryapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SITE_URL
+    value: https://theurbanloftcafe.com
+  - name: NEXT_PUBLIC_APP_URL
+    value: https://theurbanloftcafe.com
+  - name: NEXT_PUBLIC_TENANT_SLUG
+    value: urban-loft
+  - name: NEXT_PUBLIC_TENANT_ID
+    value: tenant-urban-loft
+# Use envFromSecret for optional secrets (tokens, DSN, etc.)
 envFromSecret: cafe-website-env
 # Resource constraints optimized for Next.js app
 resources:
