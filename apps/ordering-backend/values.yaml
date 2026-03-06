@@ -175,6 +175,22 @@ env:
     value: "30s"
   - name: ORDERING_SUPERSET_GUEST_TOKEN_TTL_MINUTES
     value: "5"
+  # Media storage: local testing uses ./media; production uses persistent volume (see persistence below)
+  - name: ORDERING_MEDIA_ROOT
+    value: "/media"
+  - name: ORDERING_MEDIA_URL_BASE
+    value: "https://orderingapi.codevertexitsolutions.com"
+# ============================================================================
+# PERSISTENT STORAGE (MEDIA UPLOADS & MENU IMAGES)
+# ============================================================================
+# Enables PVC for /media so the app can read/write menu images and uploads.
+# securityContext.runAsUser/fsGroup 1000 must have write access; init-media sets 775.
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  mountPath: /media
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
