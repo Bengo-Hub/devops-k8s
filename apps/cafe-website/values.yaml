@@ -48,7 +48,7 @@ env:
   - name: NEXT_PUBLIC_AUTH_UI_URL
     value: https://accounts.codevertexitsolutions.com
   - name: NEXT_PUBLIC_ORDERING_SERVICE_URL
-    value: https://orderapi.codevertexitsolutions.com
+    value: https://orderingapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_SERVICE_URL
     value: https://notificationsapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_LOGISTICS_SERVICE_URL
