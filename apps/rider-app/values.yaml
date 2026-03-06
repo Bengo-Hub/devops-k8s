@@ -52,7 +52,7 @@ env:
   - name: NEXT_PUBLIC_SSO_URL
     value: https://sso.codevertexitsolutions.com
   - name: NEXT_PUBLIC_APP_URL
-    value: https://rider.codevertexitsolutions.com
+    value: https://riderapp.codevertexitsolutions.com
   - name: NEXT_PUBLIC_DEFAULT_TENANT
     value: urban-loft
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
@@ -106,13 +106,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: rider.codevertexitsolutions.com
+    - host: riderapp.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - rider.codevertexitsolutions.com
+        - riderapp.codevertexitsolutions.com
       secretName: rider-app-tls
 
 # ============================================================================
