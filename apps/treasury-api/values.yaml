@@ -114,6 +114,13 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # CORS: allow ordering, cafe, pos, accounts (see shared-docs/devops-k8s-ingress-cors.md)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ordersapp.codevertexitsolutions.com, https://theurbanloftcafe.com, https://pos.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, http://localhost:3001, http://localhost:4201"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     - host: booksapi.codevertexitsolutions.com
       paths:
