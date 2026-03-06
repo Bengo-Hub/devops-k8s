@@ -52,7 +52,7 @@ env:
   - name: INVENTORY_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: inventory-service-secrets
+        name: inventory-api-secrets
         key: postgresUrl
   - name: INVENTORY_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
