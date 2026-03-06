@@ -98,6 +98,7 @@ serviceMonitor:
   labels:
     release: prometheus
 
+# Ingress CORS: allow subscriptions-ui, ordering, accounts (see shared-docs/devops-k8s-ingress-cors.md)
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -105,6 +106,12 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://subscriptions.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     - host: pricingapi.codevertexitsolutions.com
       paths:
