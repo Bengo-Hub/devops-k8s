@@ -93,7 +93,7 @@ env:
   - name: NOTIFICATIONS_HTTP_PORT
     value: "4000"
   - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
-    value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   # Database - NOTIFICATIONS_POSTGRES_URL (struct POSTGRES + tag URL)
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
