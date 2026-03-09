@@ -64,8 +64,11 @@ env:
     value: treasury-artifacts
   - name: TREASURY_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Public base URL of this API: used to auto-generate webhook and callback URLs (TruLoad pattern). Same host as ingress (see hosts below).
+  - name: TREASURY_HTTP_PUBLIC_BASE_URL
+    value: "https://booksapi.codevertexitsolutions.com"
   - name: TREASURY_HTTP_ALLOWED_ORIGINS
-    value: "https://books.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://books.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://ordering.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   - name: TREASURY_MPESA_CALLBACK_URL
     value: "https://booksapi.codevertexitsolutions.com/api/v1/webhooks/mpesa/callback"
   - name: TREASURY_AUTH_SERVICE_URL
