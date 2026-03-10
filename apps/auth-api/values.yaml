@@ -41,24 +41,19 @@ progressDeadlineSeconds: 1200 # 20 minutes for migrations and startup
 # ENVIRONMENT VARIABLES
 # ============================================================================
 env:
-  - name: AUTH_SERVICE_ENV
+  - name: APP_ENV
     value: production
-  - name: AUTH_SERVICE_PORT
+  - name: HTTP_PORT
     value: "4101"
   # Frontend UI URL for OAuth redirects
   - name: AUTH_UI_URL
     value: "https://accounts.codevertexitsolutions.com"
-  # Database connection (auth-api expects AUTH_DB_URL)
-  - name: AUTH_DB_URL
+  # Database connection (standardized POSTGRES_URL)
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
-        key: postgresUrl
-  - name: AUTH_POSTGRES_URL
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: postgresUrl
+        key: POSTGRES_URL
   # Disable auto-run migrations on startup (handled by pre-install hook)
   - name: AUTH_DB_RUN_MIGRATIONS
     value: "false"
@@ -70,9 +65,9 @@ env:
   - name: AUTH_DB_CONN_MAX_LIFETIME
     value: "15m"
   # Redis connection
-  - name: AUTH_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: AUTH_REDIS_PASSWORD
+  - name: REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
