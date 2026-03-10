@@ -5,7 +5,7 @@ minReadySeconds: 30
 progressDeadlineSeconds: 600
 image:
   repository: docker.io/codevertex/inventory-api
-  tag: "e70cc195"
+  tag: "28002c8e"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
