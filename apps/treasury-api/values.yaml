@@ -48,39 +48,39 @@ healthCheck:
 strategy:
   type: RollingUpdate
 env:
-  - name: TREASURY_API_ENV
+  - name: APP_ENV
     value: production
-  - name: TREASURY_HTTP_PORT
+  - name: HTTP_PORT
     value: "4000"
-  - name: TREASURY_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: treasury-api-secrets
         key: POSTGRES_URL
-  - name: TREASURY_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: TREASURY_NATS_URL
+  - name: NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: TREASURY_STORAGE_ENDPOINT
+  - name: STORAGE_ENDPOINT
     value: http://minio.storage.svc.cluster.local:9000
-  - name: TREASURY_STORAGE_BUCKET
+  - name: STORAGE_BUCKET
     value: treasury-artifacts
-  - name: TREASURY_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Public base URL of this API: used to auto-generate webhook and callback URLs (TruLoad pattern). Same host as ingress (see hosts below).
-  - name: TREASURY_HTTP_PUBLIC_BASE_URL
+  - name: HTTP_PUBLIC_BASE_URL
     value: "https://booksapi.codevertexitsolutions.com"
-  - name: TREASURY_HTTP_ALLOWED_ORIGINS
+  - name: HTTP_ALLOWED_ORIGINS
     value: "https://books.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://ordering.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-  - name: TREASURY_MPESA_CALLBACK_URL
+  - name: MPESA_CALLBACK_URL
     value: "https://booksapi.codevertexitsolutions.com/api/v1/webhooks/mpesa/callback"
-  - name: TREASURY_AUTH_SERVICE_URL
+  - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
-  - name: TREASURY_AUTH_JWKS_URL
+  - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-  - name: TREASURY_AUTH_ISSUER
+  - name: AUTH_ISSUER
     value: "https://sso.codevertexitsolutions.com"
-  - name: TREASURY_AUTH_AUDIENCE
+  - name: AUTH_AUDIENCE
     value: "codevertex"
 resources:
   limits:
