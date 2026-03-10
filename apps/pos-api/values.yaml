@@ -59,6 +59,14 @@ env:
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: POS_HTTP_ALLOWED_ORIGINS
     value: "https://pos.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+  - name: POS_AUTH_SERVICE_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: POS_AUTH_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: POS_AUTH_JWKS_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+  - name: POS_AUTH_AUDIENCE
+    value: "codevertex"
 resources:
   limits:
     cpu: 500m
