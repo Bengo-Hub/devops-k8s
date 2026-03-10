@@ -102,15 +102,15 @@ if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
     kubectl create namespace "${NAMESPACE}"
 fi
 
-# Check if secret already exists
+# Check if secret already exists and retrieve existing values to avoid rotation
+EXISTING_SECRET_KEY=""
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-    log_warning "Secret ${SECRET_NAME} already exists in namespace ${NAMESPACE}"
+    log_info "Secret ${SECRET_NAME} already exists. Retrieving existing values to avoid rotation..."
+    EXISTING_SECRET_KEY=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.SECRET_KEY}" 2>/dev/null | base64 -d || echo "")
+    
     if [[ "${ENABLE_CLEANUP:-false}" == "true" ]]; then
-        log_info "Cleanup mode active: Deleting existing secret..."
+        log_info "Cleanup mode active: Existing secret will be fully replaced."
         kubectl delete secret "${SECRET_NAME}" -n "${NAMESPACE}"
-    else
-        log_info "Cleanup mode inactive: Keeping existing secret. No changes will be applied."
-        exit 0
     fi
 fi
 
@@ -152,9 +152,12 @@ fi
 # Application SECRET_KEY (used by some services for encryption/session)
 if [[ -n "${SECRET_KEY:-}" ]]; then
     APP_SECRET_KEY="$SECRET_KEY"
+elif [[ -n "${EXISTING_SECRET_KEY:-}" ]]; then
+    log_info "Retrieved existing app SECRET_KEY from cluster"
+    APP_SECRET_KEY="$EXISTING_SECRET_KEY"
 else
     APP_SECRET_KEY=$(generate_password 64)
-    log_info "Generated app SECRET_KEY"
+    log_info "Generated new app SECRET_KEY"
 fi
 
 # Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
@@ -205,7 +208,8 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=REDIS_URL="${REDIS_URL}" \
     --from-literal=REDIS_HOST="${REDIS_HOST}" \
     --from-literal=REDIS_PORT="${REDIS_PORT}" \
-    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}"
+    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
+    --dry-run=client -o yaml | kubectl apply -f -
 
 if [ $? -eq 0 ]; then
     log_success "Secret ${SECRET_NAME} created successfully in namespace ${NAMESPACE}"
