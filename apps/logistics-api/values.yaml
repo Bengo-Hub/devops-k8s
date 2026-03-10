@@ -5,7 +5,7 @@ minReadySeconds: 30
 progressDeadlineSeconds: 600
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "985b2c68"
+  tag: "916de241"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
