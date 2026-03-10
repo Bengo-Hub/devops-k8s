@@ -5,7 +5,7 @@ minReadySeconds: 30
 progressDeadlineSeconds: 600
 image:
   repository: docker.io/codevertex/pos-api
-  tag: "b4fb8987"
+  tag: "cb59ce26"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -47,7 +47,6 @@ healthCheck:
     periodSeconds: 30
     timeoutSeconds: 5
     failureThreshold: 5
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
