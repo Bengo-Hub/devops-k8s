@@ -53,7 +53,7 @@ env:
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
-        key: postgresUrl # Standard key from devops-k8s (not ORDERING_POSTGRES_URL)
+        key: POSTGRES_URL # Standard key from devops-k8s (matches other services)
   # Database connection pool settings (prevent connection exhaustion)
   - name: ORDERING_DB_MAX_OPEN_CONNS
     value: "10"
