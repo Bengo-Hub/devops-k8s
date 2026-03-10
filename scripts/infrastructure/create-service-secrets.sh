@@ -195,9 +195,7 @@ log_info "Creating Kubernetes secret..."
 
 kubectl create secret generic "${SECRET_NAME}" \
     --namespace="${NAMESPACE}" \
-    --from-literal=postgresUrl="${POSTGRES_URL}" \
     --from-literal=POSTGRES_URL="${POSTGRES_URL}" \
-    --from-literal=DATABASE_URL="${POSTGRES_URL}" \
     --from-literal=SECRET_KEY="${APP_SECRET_KEY}" \
     --from-literal=DATABASE_HOST="${PG_HOST}" \
     --from-literal=DATABASE_PORT="${PG_PORT}" \
