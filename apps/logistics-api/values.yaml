@@ -61,7 +61,7 @@ env:
     valueFrom:
       secretKeyRef:
         name: logistics-api-secrets
-        key: postgresUrl
+        key: POSTGRES_URL
   - name: LOGISTICS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: LOGISTICS_NATS_URL

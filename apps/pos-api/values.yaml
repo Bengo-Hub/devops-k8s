@@ -62,7 +62,7 @@ env:
     valueFrom:
       secretKeyRef:
         name: pos-api-secrets
-        key: postgresUrl
+        key: POSTGRES_URL
   - name: POS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: POS_NATS_URL
