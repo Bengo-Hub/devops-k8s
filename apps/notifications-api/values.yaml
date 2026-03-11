@@ -88,29 +88,22 @@ progressDeadlineSeconds: 900 # 15 minutes for migrations and startup
 # Env var naming: NOTIFICATIONS_{STRUCT_FIELD}_{TAG}
 # Struct fields: APP, HTTP, POSTGRES, REDIS, EVENTS, PROVIDERS, TEMPLATES, SECURITY
 env:
-  # App
-  - name: NOTIFICATIONS_APP_ENV
+  # App and HTTP (unprefixed; config namespace empty)
+  - name: APP_ENV
     value: production
-  # HTTP - NOTIFICATIONS_HTTP_PORT (struct HTTP + tag PORT)
-  - name: NOTIFICATIONS_HTTP_PORT
+  - name: HTTP_PORT
     value: "4000"
-  - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
+  - name: HTTP_ALLOWED_ORIGINS
     value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-  # Database - standardized key POSTGRES_URL (app reads POSTGRES_URL or NOTIFICATIONS_POSTGRES_URL)
+  # Database and Redis: uniform unprefixed keys (config namespace empty)
   - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: POSTGRES_URL
-  - name: NOTIFICATIONS_POSTGRES_URL
-    valueFrom:
-      secretKeyRef:
-        name: notifications-api-env
-        key: POSTGRES_URL
-  # Redis - standardized key REDIS_PASSWORD from secret
-  - name: NOTIFICATIONS_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: NOTIFICATIONS_REDIS_PASSWORD
+  - name: REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
