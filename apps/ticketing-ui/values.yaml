@@ -51,6 +51,7 @@ env:
       secretKeyRef:
         name: ticketing-ui-secrets
         key: sentryDsn
+        optional: true
 
 resources:
   limits:
