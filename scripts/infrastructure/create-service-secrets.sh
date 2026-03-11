@@ -196,19 +196,25 @@ fi
 # Create the secret
 log_info "Creating Kubernetes secret..."
 
+# Build array of secret literals
+declare -a secret_literals=(
+    "--from-literal=POSTGRES_URL=${POSTGRES_URL}"
+    "--from-literal=SECRET_KEY=${APP_SECRET_KEY}"
+    "--from-literal=DATABASE_HOST=${PG_HOST}"
+    "--from-literal=DATABASE_PORT=${PG_PORT}"
+    "--from-literal=DATABASE_NAME=${DB_NAME}"
+    "--from-literal=DATABASE_USER=${DB_USER}"
+    "--from-literal=DATABASE_PASSWORD=${DATABASE_PASSWORD}"
+    "--from-literal=REDIS_URL=${REDIS_URL}"
+    "--from-literal=REDIS_HOST=${REDIS_HOST}"
+    "--from-literal=REDIS_PORT=${REDIS_PORT}"
+    "--from-literal=REDIS_PASSWORD=${REDIS_PASSWORD}"
+)
+
+# Create secret with standardized literals (no service-specific duplicates)
 kubectl create secret generic "${SECRET_NAME}" \
     --namespace="${NAMESPACE}" \
-    --from-literal=POSTGRES_URL="${POSTGRES_URL}" \
-    --from-literal=SECRET_KEY="${APP_SECRET_KEY}" \
-    --from-literal=DATABASE_HOST="${PG_HOST}" \
-    --from-literal=DATABASE_PORT="${PG_PORT}" \
-    --from-literal=DATABASE_NAME="${DB_NAME}" \
-    --from-literal=DATABASE_USER="${DB_USER}" \
-    --from-literal=DATABASE_PASSWORD="${DATABASE_PASSWORD}" \
-    --from-literal=REDIS_URL="${REDIS_URL}" \
-    --from-literal=REDIS_HOST="${REDIS_HOST}" \
-    --from-literal=REDIS_PORT="${REDIS_PORT}" \
-    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
+    "${secret_literals[@]}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
 if [ $? -eq 0 ]; then
