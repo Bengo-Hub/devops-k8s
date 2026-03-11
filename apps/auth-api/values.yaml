@@ -6,7 +6,7 @@ fullnameOverride: auth-api
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-api
-  tag: "cfb2df5a"
+  tag: "f5dc91f2"
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
@@ -54,7 +54,6 @@ env:
       secretKeyRef:
         name: auth-api-secrets
         key: POSTGRES_URL
-
   # Database connection pool settings (prevent connection exhaustion)
   - name: AUTH_DB_MAX_OPEN_CONNS
     value: "10" # Reduced from default 20 to prevent pool exhaustion
