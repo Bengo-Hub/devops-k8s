@@ -42,20 +42,27 @@ strategy:
   type: RollingUpdate
 
 env:
-  - name: IOT_APP_ENV
+  # Common keys (same as all Go backends): POSTGRES_URL, REDIS_ADDR, REDIS_PASSWORD
+  - name: APP_ENV
     value: production
-  - name: IOT_HTTP_PORT
+  - name: HTTP_PORT
     value: "4006"
-  - name: IOT_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: iot-api-secrets
         key: POSTGRES_URL
-  - name: IOT_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: IOT_NATS_URL
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: iot-api-secrets
+        key: REDIS_PASSWORD
+        optional: true
+  - name: NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: IOT_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
 
 resources:
