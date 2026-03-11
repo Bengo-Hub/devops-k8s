@@ -42,20 +42,27 @@ strategy:
   type: RollingUpdate
 
 env:
-  - name: PROJECTS_APP_ENV
+  # Common keys (same as all Go backends): POSTGRES_URL, REDIS_ADDR, REDIS_PASSWORD
+  - name: APP_ENV
     value: production
-  - name: PROJECTS_HTTP_PORT
+  - name: HTTP_PORT
     value: "4005"
-  - name: PROJECTS_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: projects-api-secrets
         key: POSTGRES_URL
-  - name: PROJECTS_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: PROJECTS_NATS_URL
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: projects-api-secrets
+        key: REDIS_PASSWORD
+        optional: true
+  - name: NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: PROJECTS_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
 
 resources:
