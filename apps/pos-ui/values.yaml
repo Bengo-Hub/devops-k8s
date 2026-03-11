@@ -45,11 +45,13 @@ env:
       secretKeyRef:
         name: pos-ui-secrets
         key: mapboxToken
+        optional: true
   - name: NEXT_PUBLIC_SENTRY_DSN
     valueFrom:
       secretKeyRef:
         name: pos-ui-secrets
         key: sentryDsn
+        optional: true
 resources:
   limits:
     cpu: 500m

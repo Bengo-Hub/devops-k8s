@@ -42,7 +42,9 @@ seed:
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
-# Uses notifications-api-env created by service's centralized script
+# Uses notifications-api-env created by service's build.sh (create-service-secrets.sh).
+# Must contain POSTGRES_URL so migrate/seed hook jobs can run. When migrating to
+# "migrate on startup" (entrypoint), set migrations.enabled and seed.enabled to false.
 envFromSecret: notifications-api-env
 healthCheck:
   enabled: true
