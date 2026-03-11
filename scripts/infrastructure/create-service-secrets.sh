@@ -29,12 +29,16 @@ if [[ -z "$SERVICE_NAME" ]]; then
     echo "  SERVICE_NAME=ordering-backend NAMESPACE=ordering ./create-service-secrets.sh"
     echo ""
     echo "Supported services:"
-    echo "  - auth-api"
-    echo "  - ordering-backend"
-    echo "  - treasury-api"
-    echo "  - inventory-api"
-    echo "  - logistics-api"
-    echo "  - pos-api"
+    echo "  - auth"
+    echo "  - ordering"
+    echo "  - treasury"
+    echo "  - inventory"
+    echo "  - logistics"
+    echo "  - erp"
+    echo "  - subscriptions"
+    echo "  - projects"
+    echo "  - notifications"
+    echo "  - iot"
     exit 1
 fi
 
@@ -44,20 +48,68 @@ if [[ -z "$NAMESPACE" ]]; then
         auth-api)
             NAMESPACE="auth"
             ;;
+        auth-ui)
+            NAMESPACE="auth"
+            ;;
+        subscription-api)
+            NAMESPACE="subscription"
+            ;;
+        subscription-ui)
+            NAMESPACE="subscription"
+            ;;
+        notifications-api)
+            NAMESPACE="notifications"
+            ;;
+        notifications-ui)
+            NAMESPACE="notifications"
+            ;;
+        logistics-ui)
+            NAMESPACE="logistics"
+            ;;
+        logistics-api)
+            NAMESPACE="logistics"
+            ;;
+        iot-api)
+            NAMESPACE="iot"
+            ;;
+        iot-ui)
+            NAMESPACE="iot"
+            ;;
         ordering-backend)
+            NAMESPACE="ordering"
+            ;;
+        ordering-frontend)
             NAMESPACE="ordering"
             ;;
         treasury-api)
             NAMESPACE="treasury"
             ;;
+        treasury-ui)
+            NAMESPACE="treasury"
+            ;;
         inventory-api)
             NAMESPACE="inventory"
             ;;
-        logistics-api)
-            NAMESPACE="logistics"
+        inventory-ui)
+            NAMESPACE="inventory"
             ;;
         pos-api)
             NAMESPACE="pos"
+            ;;
+        pos-ui)
+            NAMESPACE="pos"
+            ;;
+        erp-api)
+            NAMESPACE="erp"
+            ;;
+        erp-ui)
+            NAMESPACE="erp"
+            ;;
+        projects-api)
+            NAMESPACE="projects"
+            ;;
+        projects-ui)
+            NAMESPACE="projects"
             ;;
         *)
             # Try to extract namespace from service name

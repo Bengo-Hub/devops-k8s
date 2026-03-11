@@ -51,11 +51,13 @@ env:
       secretKeyRef:
         name: projects-ui-secrets
         key: mapboxToken
+        optional: true
   - name: NEXT_PUBLIC_SENTRY_DSN
     valueFrom:
       secretKeyRef:
         name: projects-ui-secrets
         key: sentryDsn
+        optional: true
 
 resources:
   limits:
