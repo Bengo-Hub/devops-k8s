@@ -1,9 +1,9 @@
-nameOverride: subscription-ui
-fullnameOverride: subscription-ui
+nameOverride: subscriptions-ui
+fullnameOverride: subscriptions-ui
 replicaCount: 1
 minReadySeconds: 30
 image:
-  repository: docker.io/codevertex/subscription-ui
+  repository: docker.io/codevertex/subscriptions-ui
   tag: "63f96df3"
   pullPolicy: Always
   pullSecrets:
@@ -63,14 +63,14 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: subscriptions.codevertexitsolutions.com
+    - host: pricing.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - subscriptions.codevertexitsolutions.com
-      secretName: subscription-ui-tls
+        - pricing.codevertexitsolutions.com
+      secretName: subscriptions-ui-tls
 monitoring:
   enabled: false
 serviceMonitor:
