@@ -51,11 +51,11 @@ if [[ -z "$NAMESPACE" ]]; then
         auth-ui)
             NAMESPACE="auth"
             ;;
-        subscription-api)
-            NAMESPACE="subscription"
+        subscriptions-api)
+            NAMESPACE="subscriptions"
             ;;
-        subscription-ui)
-            NAMESPACE="subscription"
+        subscriptions-ui)
+            NAMESPACE="subscriptions"
             ;;
         notifications-api)
             NAMESPACE="notifications"

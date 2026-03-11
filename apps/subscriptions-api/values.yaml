@@ -1,8 +1,8 @@
-nameOverride: subscription-api
-fullnameOverride: subscription-api
+nameOverride: subscriptions-api
+fullnameOverride: subscriptions-api
 replicaCount: 1
 image:
-  repository: docker.io/codevertex/subscription-api
+  repository: docker.io/codevertex/subscriptions-api
   tag: "ef0cfec7"
   pullPolicy: Always
   pullSecrets:
@@ -23,7 +23,7 @@ seed:
     limits:
       cpu: 500m
       memory: 512Mi
-envFromSecret: subscription-api-secrets
+envFromSecret: subscriptions-api-secrets
 healthCheck:
   enabled: true
   readiness:
@@ -41,22 +41,22 @@ healthCheck:
 strategy:
   type: RollingUpdate
 env:
-  - name: SUBSCRIPTION_APP_ENV
+  - name: SUBSCRIPTIONS_APP_ENV
     value: production
-  - name: SUBSCRIPTION_HTTP_PORT
+  - name: SUBSCRIPTIONS_HTTP_PORT
     value: "4005"
-  - name: SUBSCRIPTION_POSTGRES_URL
+  - name: SUBSCRIPTIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: subscription-api-secrets
+        name: subscriptions-api-secrets
         key: POSTGRES_URL
-  - name: SUBSCRIPTION_REDIS_ADDR
+  - name: SUBSCRIPTIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: SUBSCRIPTION_NATS_URL
+  - name: SUBSCRIPTIONS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: SUBSCRIPTION_OTLP_ENDPOINT
+  - name: SUBSCRIPTIONS_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: SUBSCRIPTION_HTTP_ALLOWED_ORIGINS
+  - name: SUBSCRIPTIONS_HTTP_ALLOWED_ORIGINS
     value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricingapi.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 resources:
   limits:
@@ -84,7 +84,7 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-# Ingress CORS: allow subscriptions-ui, ordering, accounts (see shared-docs/devops-k8s-ingress-cors.md)
+# Ingress CORS: allow pricing-ui, ordering, accounts (see shared-docs/devops-k8s-ingress-cors.md)
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -93,7 +93,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://subscriptions.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pricing.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
@@ -106,4 +106,4 @@ ingress:
   tls:
     - hosts:
         - pricingapi.codevertexitsolutions.com
-      secretName: subscription-api-tls
+      secretName: subscriptions-api-tls
