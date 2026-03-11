@@ -94,20 +94,25 @@ env:
     value: "4000"
   - name: NOTIFICATIONS_HTTP_ALLOWED_ORIGINS
     value: "https://notifications.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-  # Database - NOTIFICATIONS_POSTGRES_URL (struct POSTGRES + tag URL)
+  # Database - standardized key POSTGRES_URL (app reads POSTGRES_URL or NOTIFICATIONS_POSTGRES_URL)
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: notifications-api-env
+        key: POSTGRES_URL
   - name: NOTIFICATIONS_POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
-        key: NOTIFICATIONS_POSTGRES_URL
-  # Redis - struct REDIS + tag ADDR/PASSWORD
+        key: POSTGRES_URL
+  # Redis - standardized key REDIS_PASSWORD from secret
   - name: NOTIFICATIONS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: NOTIFICATIONS_REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
-        key: NOTIFICATIONS_REDIS_PASSWORD
+        key: REDIS_PASSWORD
         optional: true
   # NATS - struct EVENTS + tag NATS_URL = NOTIFICATIONS_EVENTS_NATS_URL
   - name: NOTIFICATIONS_EVENTS_NATS_URL
