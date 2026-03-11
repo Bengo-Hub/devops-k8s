@@ -41,22 +41,29 @@ healthCheck:
 strategy:
   type: RollingUpdate
 env:
-  - name: SUBSCRIPTIONS_APP_ENV
+  # Common keys (same as all Go backends): POSTGRES_URL, REDIS_ADDR, REDIS_PASSWORD
+  - name: APP_ENV
     value: production
-  - name: SUBSCRIPTIONS_HTTP_PORT
+  - name: HTTP_PORT
     value: "4005"
-  - name: SUBSCRIPTIONS_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: subscriptions-api-secrets
         key: POSTGRES_URL
-  - name: SUBSCRIPTIONS_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: SUBSCRIPTIONS_NATS_URL
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: subscriptions-api-secrets
+        key: REDIS_PASSWORD
+        optional: true
+  - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: SUBSCRIPTIONS_OTLP_ENDPOINT
+  - name: TELEMETRY_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: SUBSCRIPTIONS_HTTP_ALLOWED_ORIGINS
+  - name: HTTP_ALLOWED_ORIGINS
     value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricingapi.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 resources:
   limits:
