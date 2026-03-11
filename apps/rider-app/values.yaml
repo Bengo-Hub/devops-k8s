@@ -1,29 +1,25 @@
 # Rider App (Delivery PWA) Production Configuration
 nameOverride: rider-app
 fullnameOverride: rider-app
-
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
 image:
   repository: docker.io/codevertex/rider-app
-  tag: "latest"
+  tag: "87555ebe"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
 replicaCount: 1
-
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 2
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 # ============================================================================
 # SERVICE CONFIGURATION
 # ============================================================================
@@ -31,7 +27,6 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -40,9 +35,7 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 minReadySeconds: 30
-
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
@@ -61,7 +54,6 @@ env:
         name: rider-app-secrets
         key: mapboxToken
         optional: true
-
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
@@ -83,7 +75,6 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 3
     failureThreshold: 3
-
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
@@ -94,7 +85,6 @@ resources:
   limits:
     cpu: 300m
     memory: 512Mi
-
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
@@ -114,16 +104,13 @@ ingress:
     - hosts:
         - riderapp.codevertexitsolutions.com
       secretName: rider-app-tls
-
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # ============================================================================
 # VPA CONFIGURATION
 # ============================================================================
