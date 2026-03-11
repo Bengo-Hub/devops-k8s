@@ -50,7 +50,7 @@ env:
     valueFrom:
       secretKeyRef:
         name: projects-api-secrets
-        key: postgresUrl
+        key: POSTGRES_URL
   - name: PROJECTS_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: PROJECTS_NATS_URL

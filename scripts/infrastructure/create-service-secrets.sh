@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Script to create Kubernetes secrets for Go microservices
-# This script generates secure passwords and creates connection strings for services
+# Creates only standardized keys: POSTGRES_URL, REDIS_URL, REDIS_PASSWORD, SECRET_KEY, DATABASE_*
+# All Go backends must read these env keys (no postgresUrl or service-prefixed DB URL keys).
 #
 # Usage:
 #   SERVICE_NAME=auth-api ./create-service-secrets.sh
@@ -193,8 +194,8 @@ else
     REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
 fi
 
-# Create the secret
-log_info "Creating Kubernetes secret..."
+# Create the secret (standardized keys only: POSTGRES_URL, REDIS_*, SECRET_KEY, DATABASE_*)
+log_info "Creating secret ${SECRET_NAME} in namespace ${NAMESPACE}..."
 
 # Build array of secret literals
 declare -a secret_literals=(
