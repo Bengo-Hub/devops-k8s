@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: subscription-ui
+  name: subscriptions-ui
   namespace: argocd
 spec:
   project: default
@@ -11,10 +11,10 @@ spec:
     path: charts/app
     helm:
       valueFiles:
-        - ../../apps/subscription-ui/values.yaml
+        - ../../apps/subscriptions-ui/values.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: subscription
+    namespace: subscriptions
   syncPolicy:
     automated:
       prune: true
