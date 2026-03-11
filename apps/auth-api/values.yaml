@@ -54,9 +54,7 @@ env:
       secretKeyRef:
         name: auth-api-secrets
         key: POSTGRES_URL
-  # Disable auto-run migrations on startup (handled by pre-install hook)
-  - name: AUTH_DB_RUN_MIGRATIONS
-    value: "false"
+
   # Database connection pool settings (prevent connection exhaustion)
   - name: AUTH_DB_MAX_OPEN_CONNS
     value: "10" # Reduced from default 20 to prevent pool exhaustion
@@ -152,14 +150,15 @@ env:
 # DATABASE SETUP, MIGRATIONS AND SEEDING
 # ============================================================================
 # For Go services:
-#   1. setupDB: Creates the database if missing (runs as Job before migrations)
-#   2. migrations: Runs Ent schema.Create() to create tables (pre-install/pre-upgrade hook)
-#   3. seed: Populates initial data (post-install/post-upgrade hook)
-# All are idempotent and safe to run multiple times
+#   - entrypoint.sh handles all DB setup on pod startup:
+#   - 1. Waits for DB connection (with retries)
+#   - 2. Runs auth-migrate to create/update schema
+#   - 3. Runs auth-seed to populate initial data
+# All steps are idempotent and safe to run multiple times
 
 # Setup database if it doesn't exist (must run before migrations)
 setupDB:
-  enabled: true
+  enabled: false
   binaryName: auth-setup-db
   resources:
     requests:
