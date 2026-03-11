@@ -50,7 +50,7 @@ env:
     valueFrom:
       secretKeyRef:
         name: ticketing-api-secrets
-        key: postgresUrl
+        key: POSTGRES_URL
   - name: TICKETING_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: TICKETING_NATS_URL
