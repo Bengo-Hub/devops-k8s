@@ -50,7 +50,7 @@ env:
     valueFrom:
       secretKeyRef:
         name: iot-api-secrets
-        key: postgresUrl
+        key: POSTGRES_URL
   - name: IOT_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: IOT_NATS_URL

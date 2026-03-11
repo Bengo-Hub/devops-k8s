@@ -88,73 +88,26 @@ env:
         name: auth-api-secrets
         key: OAUTH_STATE_SECRET
         optional: true
-  # Google OAuth Provider (optional: true allows deployment without OAuth configured)
+  # OAuth provider credentials are read from DB (integration_configs), not from env.
+  # Enable/redirect are set here; client_id/client_secret/tenant_id come from seeded/updated integration configs.
   - name: AUTH_PROVIDERS_GOOGLE_ENABLED
     value: "true"
-  - name: AUTH_PROVIDERS_GOOGLE_CLIENT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GOOGLE_CLIENT_ID
-        optional: true
-  - name: AUTH_PROVIDERS_GOOGLE_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GOOGLE_CLIENT_SECRET
-        optional: true
   - name: AUTH_PROVIDERS_GOOGLE_REDIRECT_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/google/callback"
-  # GitHub OAuth Provider (optional: true allows deployment without OAuth configured)
-  # Uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
   - name: AUTH_PROVIDERS_GITHUB_ENABLED
     value: "true"
-  - name: AUTH_PROVIDERS_GITHUB_CLIENT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GIT_APP_ID
-        optional: true
-  - name: AUTH_PROVIDERS_GITHUB_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GIT_APP_SECRET
-        optional: true
   - name: AUTH_PROVIDERS_GITHUB_REDIRECT_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/github/callback"
-  # Microsoft OAuth Provider (disabled until credentials are configured)
   - name: AUTH_PROVIDERS_MICROSOFT_ENABLED
     value: "false"
-  - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: MICROSOFT_CLIENT_ID
-        optional: true
-  - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: MICROSOFT_CLIENT_SECRET
-        optional: true
-  - name: AUTH_PROVIDERS_MICROSOFT_TENANT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: MICROSOFT_TENANT_ID
-        optional: true
   - name: AUTH_PROVIDERS_MICROSOFT_REDIRECT_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/microsoft/callback"
 # ============================================================================
 # DATABASE SETUP, MIGRATIONS AND SEEDING
 # ============================================================================
-# For Go services:
-#   - entrypoint.sh handles all DB setup on pod startup:
-#   - 1. Waits for DB connection (with retries)
-#   - 2. Runs auth-migrate to create/update schema
-#   - 3. Runs auth-seed to populate initial data
-# All steps are idempotent and safe to run multiple times
+# Migrate and seed run in the main container entrypoint, not via the Helm migrate hook.
+# entrypoint.sh: (1) wait for DB, (2) auth-migrate, (3) auth-seed, (4) start server.
+# migrations.enabled and seed.enabled are false so the chart does not create migrate-hook Jobs.
 
 # Setup database if it doesn't exist (must run before migrations)
 setupDB:
