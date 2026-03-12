@@ -65,7 +65,7 @@ env:
   - name: TELEMETRY_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://subscriptions.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://notifications.codevertexitsolutions.com,http://localhost:3000,http://localhost:3010"
+    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://notifications.codevertexitsolutions.com,http://localhost:3000,http://localhost:3010"
 resources:
   limits:
     cpu: 500m
@@ -101,7 +101,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://subscriptions.codevertexitsolutions.com, https://pricing.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://books.codevertexitsolutions.com, http://localhost:3010, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pricing.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://books.codevertexitsolutions.com, http://localhost:3010, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
