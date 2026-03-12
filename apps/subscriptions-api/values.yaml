@@ -59,6 +59,7 @@ env:
         name: subscriptions-api-secrets
         key: REDIS_PASSWORD
         optional: true
+  # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: TELEMETRY_OTLP_ENDPOINT
