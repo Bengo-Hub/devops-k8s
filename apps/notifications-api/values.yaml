@@ -109,8 +109,8 @@ env:
         name: notifications-api-env
         key: REDIS_PASSWORD
         optional: true
-  # NATS - struct EVENTS + tag NATS_URL = NOTIFICATIONS_EVENTS_NATS_URL
-  - name: NOTIFICATIONS_EVENTS_NATS_URL
+  # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
+  - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
   # Provider secrets (optional - create notifications-provider-secrets manually)
   # struct PROVIDERS + tag → NOTIFICATIONS_PROVIDERS_{TAG}

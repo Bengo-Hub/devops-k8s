@@ -70,7 +70,8 @@ env:
         name: pos-api-secrets
         key: REDIS_PASSWORD
         optional: true
-  - name: NATS_URL
+  # NATS - standard key EVENTS_NATS_URL
+  - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
