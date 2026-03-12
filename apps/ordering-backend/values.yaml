@@ -47,7 +47,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://theurbanloftcafe.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://ordersapp.codevertexitsolutions.com,https://theurbanloftcafe.com,https://pos.codevertexitsolutions.com,https://notifications.codevertexitsolutions.com,https://subscriptions.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://logistics.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   # Database Configuration - uses standardized POSTGRES_URL
   - name: POSTGRES_URL
     valueFrom:
@@ -274,7 +274,7 @@ ingress:
     nginx.ingress.kubernetes.io/limit-connections: "200"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ordersapp.codevertexitsolutions.com, https://theurbanloftcafe.com, https://pos.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://notifications.codevertexitsolutions.com, http://localhost:3001, http://127.0.0.1:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ordersapp.codevertexitsolutions.com, https://theurbanloftcafe.com, https://pos.codevertexitsolutions.com, https://notifications.codevertexitsolutions.com, https://subscriptions.codevertexitsolutions.com, https://pricing.codevertexitsolutions.com, https://books.codevertexitsolutions.com, https://logistics.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3001, http://127.0.0.1:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Tenant-ID, X-Tenant-Slug, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
