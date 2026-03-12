@@ -96,13 +96,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: rider.codevertexitsolutions.com
+    - host: riderapp.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - rider.codevertexitsolutions.com
+        - riderapp.codevertexitsolutions.com
       secretName: rider-app-tls
 # ============================================================================
 # MONITORING AND OBSERVABILITY
