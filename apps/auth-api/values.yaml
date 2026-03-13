@@ -235,7 +235,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://ordersapp.codevertexitsolutions.com, https://theurbanloftcafe.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://notifications.codevertexitsolutions.com, https://riderapp.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://pricing.codevertexitsolutions.com, https://books.codevertexitsolutions.com, https://logistics.codevertexitsolutions.com, https://inventory.codevertexitsolutions.com, https://ticketing.codevertexitsolutions.com, https://projects.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001, http://localhost:3002, http://localhost:3010, http://localhost:3011, http://localhost:3012, http://localhost:3013, http://127.0.0.1:3000, http://127.0.0.1:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Requested-With, X-API-Key, X-Tenant-Slug"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Requested-With, X-API-Key, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
