@@ -19,7 +19,8 @@ service:
 # Logistics-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
-  enabled: false # No migration support yet
+  enabled: false # Handle migrations within the service pod on startup
+  binaryName: logistics-migrate
 seed:
   enabled: false # No seed support yet
 healthCheck:
@@ -85,6 +86,20 @@ env:
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
   - name: AUTH_AUDIENCE
     value: "codevertex"
+  - name: MEDIA_ROOT
+    value: "/media"
+  - name: MEDIA_URL_BASE
+    value: "https://logisticsapi.codevertexitsolutions.com"
+# ============================================================================
+# PERSISTENT STORAGE
+# ============================================================================
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  mountPath: /media
+
 resources:
   limits:
     cpu: 500m
@@ -111,6 +126,16 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+
+# ============================================================================
+# SECURITY CONFIGURATION
+# ============================================================================
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+
 ingress:
   enabled: true
   ingressClassName: nginx
