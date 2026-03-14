@@ -5,7 +5,7 @@ minReadySeconds: 30
 progressDeadlineSeconds: 600
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "2301678a"
+  tag: "b0449b63"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -99,7 +99,6 @@ persistence:
   accessMode: ReadWriteOnce
   size: 5Gi
   mountPath: /media
-
 resources:
   limits:
     cpu: 500m
@@ -126,7 +125,6 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 # ============================================================================
 # SECURITY CONFIGURATION
 # ============================================================================
@@ -135,7 +133,6 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   runAsNonRoot: true
-
 ingress:
   enabled: true
   ingressClassName: nginx
