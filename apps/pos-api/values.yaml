@@ -5,7 +5,7 @@ minReadySeconds: 30
 progressDeadlineSeconds: 600
 image:
   repository: docker.io/codevertex/pos-api
-  tag: "85bd37df"
+  tag: "48e6d579"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
