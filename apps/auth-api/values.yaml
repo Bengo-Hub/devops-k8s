@@ -157,7 +157,7 @@ env:
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"
   - name: AUTH_SUBSCRIPTION_BASE_URL
-    value: "http://subscription-api.subscription.svc.cluster.local:4000"
+    value: "http://subscriptions-api.subscription.svc.cluster.local:4000"
   - name: AUTH_SUBSCRIPTION_TIMEOUT
     value: "5s"
   - name: AUTH_SUBSCRIPTION_API_KEY
