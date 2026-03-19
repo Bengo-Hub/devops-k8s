@@ -1,18 +1,23 @@
-nameOverride: subscriptions-api
-fullnameOverride: subscriptions-api
+nameOverride: subscription-api
+fullnameOverride: subscription-api
+
 replicaCount: 1
+
 image:
-  repository: docker.io/codevertex/subscriptions-api
-  tag: "4eb2dc99"
+  repository: docker.io/codevertex/subscription-api
+  tag: "latest"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
+
 service:
   type: ClusterIP
   port: 4000
   targetPort: 4005
+
 migrations:
   enabled: false
+
 seed:
   enabled: true
   binaryName: seed
@@ -23,7 +28,9 @@ seed:
     limits:
       cpu: 500m
       memory: 512Mi
-envFromSecret: subscriptions-api-secrets
+
+envFromSecret: subscription-api-secrets
+
 healthCheck:
   enabled: true
   readiness:
@@ -38,34 +45,32 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
+
 strategy:
   type: RollingUpdate
+
 env:
-  # Common keys (same as all Go backends): POSTGRES_URL, REDIS_ADDR, REDIS_PASSWORD
-  - name: APP_ENV
+  - name: SUBSCRIPTION_APP_ENV
     value: production
-  - name: HTTP_PORT
+  - name: SUBSCRIPTION_HTTP_PORT
     value: "4005"
-  - name: POSTGRES_URL
+  - name: SUBSCRIPTION_POSTGRES_URL
     valueFrom:
       secretKeyRef:
-        name: subscriptions-api-secrets
+        name: subscription-api-secrets
         key: POSTGRES_URL
-  - name: REDIS_ADDR
+  - name: SUBSCRIPTION_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: REDIS_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: subscriptions-api-secrets
-        key: REDIS_PASSWORD
-        optional: true
-  # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
-  - name: EVENTS_NATS_URL
+  - name: SUBSCRIPTION_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: TELEMETRY_OTLP_ENDPOINT
+  - name: SUBSCRIPTION_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: HTTP_ALLOWED_ORIGINS
-    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://notifications.codevertexitsolutions.com,http://localhost:3000,http://localhost:3010"
+  - name: SUBSCRIPTION_HTTP_ALLOWED_ORIGINS
+    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricingapi.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+  # API key validation — validates X-API-Key headers against auth-api (used for S2S calls from auth-api)
+  - name: API_KEY_DB_URL
+    value: "http://auth-api.auth.svc.cluster.local:4101"
+
 resources:
   limits:
     cpu: 500m
@@ -73,18 +78,21 @@ resources:
   requests:
     cpu: 100m
     memory: 256Mi
+
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
+
 monitoring:
   enabled: true
   prometheus:
     enabled: true
     port: 9090
     path: /metrics
+
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -92,7 +100,7 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-# Ingress CORS: allow pricing-ui, ordering, accounts (see shared-docs/devops-k8s-ingress-cors.md)
+
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -100,12 +108,6 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pricing.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://books.codevertexitsolutions.com, http://localhost:3010, http://localhost:3001"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
-    nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     - host: pricingapi.codevertexitsolutions.com
       paths:
@@ -114,4 +116,5 @@ ingress:
   tls:
     - hosts:
         - pricingapi.codevertexitsolutions.com
-      secretName: subscriptions-api-tls
+      secretName: subscription-api-tls
+
