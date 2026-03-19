@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/truload-frontend
-  tag: "4ab0d9d4"
+  tag: "1d52093d"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -60,11 +60,11 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    # Example: enforcement tenant with custom domain (add one entry per customer)
-    # - host: kura-weigh.ntsa.go.ke
-    #   paths:
-    #     - path: /
-    #       pathType: Prefix
+          # Example: enforcement tenant with custom domain (add one entry per customer)
+          # - host: kura-weigh.ntsa.go.ke
+          #   paths:
+          #     - path: /
+          #       pathType: Prefix
   tls:
     # Axle load enforcement test TLS
     - hosts:
@@ -74,10 +74,10 @@ ingress:
     - hosts:
         - truload.codevertexitsolutions.com
       secretName: truload-frontend-tls
-    # Example: enforcement tenant custom domain TLS
-    # - hosts:
-    #     - kura-weigh.ntsa.go.ke
-    #   secretName: kura-weigh-ntsa-tls
+      # Example: enforcement tenant custom domain TLS
+      # - hosts:
+      #     - kura-weigh.ntsa.go.ke
+      #   secretName: kura-weigh-ntsa-tls
 envFromSecret: truload-frontend-env
 # No migrations needed for Next.js frontend
 migrations:
