@@ -1,31 +1,25 @@
 nameOverride: logistics-api
 fullnameOverride: logistics-api
-
-replicaCount: 1  # Optimized for resource-constrained environment
-
+replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "latest"
+  tag: "091c3cd7"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
-
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
 # Logistics-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
-  enabled: false  # No migration support yet
-
+  enabled: false # No migration support yet
 seed:
-  enabled: false  # No seed support yet
-
+  enabled: false # No seed support yet
 healthCheck:
   enabled: true
   readiness:
@@ -40,10 +34,8 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
-
 strategy:
   type: RollingUpdate
-
 env:
   - name: LOGISTICS_APP_ENV
     value: production
@@ -62,29 +54,25 @@ env:
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: LOGISTICS_HTTP_ALLOWED_ORIGINS
     value: "https://ordersapp.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,https://riderapp.codevertexitsolutions.com,http://localhost:3001"
-
 resources:
   limits:
     cpu: 500m
     memory: 512Mi
   requests:
-    cpu: 50m  # Minimal - service not actively used
+    cpu: 50m # Minimal - service not actively used
     memory: 128Mi
-
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
-
 monitoring:
   enabled: true
   prometheus:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -92,7 +80,6 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -109,4 +96,3 @@ ingress:
     - hosts:
         - logisticsapi.codevertexitsolutions.com
       secretName: logisticsapi-tls
-
