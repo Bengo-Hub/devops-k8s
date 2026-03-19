@@ -53,13 +53,13 @@ grafana:
           return 200;
         }
     hosts:
-      - grafana.masterspace.co.ke
+      - grafana.codevertexitsolutions.com
     path: /
     pathType: Prefix
     tls:
       - secretName: grafana-tls
         hosts:
-          - grafana.masterspace.co.ke
+          - grafana.codevertexitsolutions.com
 
 alertmanager:
   alertmanagerSpec:
