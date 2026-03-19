@@ -61,15 +61,48 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
+    # Axle load enforcement test domain (KuraWeigh API — road authority use case)
     - host: kuraweighapitest.masterspace.co.ke
+      paths:
+        - path: /
+          pathType: Prefix
+    # Production backend domain (serves all tenants — commercial and enforcement)
+    - host: truloadapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
         - kuraweighapitest.masterspace.co.ke
-      secretName: kuraweigh-api-tls # Will use existing cert-manager certificate
+      secretName: kuraweigh-api-tls
+    - hosts:
+        - truloadapi.codevertexitsolutions.com
+      secretName: truload-api-tls
 envFromSecret: truload-backend-env
+# Additional environment variables (non-secret config)
+# Sensitive values (JWT secrets, service tokens) must go in truload-backend-env secret, not here.
+env:
+  # Auth-api JWKS URL for SSO token validation (commercial tenants)
+  - name: Auth__JwksUrl
+    value: "https://sso.codevertexitsolutions.com/.well-known/jwks.json"
+  - name: Auth__SsoIssuer
+    value: "https://sso.codevertexitsolutions.com"
+  # Treasury-api base URL (commercial tenant payments)
+  - name: Treasury__ApiUrl
+    value: "http://treasury-api.treasury.svc.cluster.local:8080"
+  # Subscriptions-api base URL (commercial tenant subscription checks)
+  - name: Subscriptions__ApiUrl
+    value: "http://subscriptions-api.subscriptions.svc.cluster.local:8080"
+  # CORS: frontend origins allowed to call this API
+  # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
+  # Add enforcement tenant custom frontend domains here as they are onboarded
+  - name: CORS_ALLOWED_ORIGINS
+    value: "https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com"
+  # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
+  #   Auth__JwksUrl (if using env-based override)
+  #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
+  #   Subscriptions__ServiceJwt   — service-to-service JWT for subscriptions-api
+  #   Treasury__WebhookSecret     — HMAC secret for treasury webhook verification
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
@@ -92,6 +125,14 @@ persistence:
   mountPath: /app/uploads
   accessMode: ReadWriteOnce
   storageClass: local-path
+# Additional volume mounts for backup storage
+volumeMounts:
+  - name: backup-storage
+    mountPath: /var/backups/truload
+volumes:
+  - name: backup-storage
+    persistentVolumeClaim:
+      claimName: truload-backups
 # VPA configuration - DISABLED due to metrics-server issues causing eviction loop
 verticalPodAutoscaling:
   enabled: false

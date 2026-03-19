@@ -11,10 +11,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - argocd.masterspace.co.ke
+    - argocd.codevertexitsolutions.com
     secretName: argocd-tls
   rules:
-  - host: argocd.masterspace.co.ke
+  - host: argocd.codevertexitsolutions.com
     http:
       paths:
       - path: /

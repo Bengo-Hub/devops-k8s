@@ -24,8 +24,8 @@ jobs:
     env:
       # Configurable domains and IPs via GitHub secrets (with defaults)
       # Priority: GitHub secrets first, fallback to defaults
-      ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.masterspace.co.ke' }}
-      GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.masterspace.co.ke' }}
+      ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.codevertexitsolutions.com' }}
+      GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.codevertexitsolutions.com' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
       CLUSTER_NAME: ${{ secrets.CLUSTER_NAME || 'mss-prod' }}
