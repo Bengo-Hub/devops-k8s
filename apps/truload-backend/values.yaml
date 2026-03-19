@@ -2,7 +2,7 @@ nameOverride: truload-backend
 fullnameOverride: truload-backend
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: 8556e453
+  tag: 46da8a4d
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -98,11 +98,11 @@ env:
   # Add enforcement tenant custom frontend domains here as they are onboarded
   - name: CORS_ALLOWED_ORIGINS
     value: "https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com"
-  # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
-  #   Auth__JwksUrl (if using env-based override)
-  #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
-  #   Subscriptions__ServiceJwt   — service-to-service JWT for subscriptions-api
-  #   Treasury__WebhookSecret     — HMAC secret for treasury webhook verification
+    # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
+    #   Auth__JwksUrl (if using env-based override)
+    #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
+    #   Subscriptions__ServiceJwt   — service-to-service JWT for subscriptions-api
+    #   Treasury__WebhookSecret     — HMAC secret for treasury webhook verification
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
