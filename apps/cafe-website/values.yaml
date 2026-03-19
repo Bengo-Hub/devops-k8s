@@ -65,6 +65,10 @@ env:
     value: urban-loft
   - name: NEXT_PUBLIC_TENANT_ID
     value: tenant-urban-loft
+  - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
+    value: https://pricingapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
+    value: https://pricing.codevertexitsolutions.com
 # Use envFromSecret for optional secrets (tokens, DSN, etc.)
 envFromSecret: cafe-website-env
 # Resource constraints optimized for Next.js app

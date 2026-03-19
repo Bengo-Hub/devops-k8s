@@ -42,6 +42,10 @@ env:
     value: https://sso.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
+    value: https://pricingapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
+    value: https://pricing.codevertexitsolutions.com
 resources:
   limits:
     cpu: 500m
