@@ -1,113 +1,104 @@
 nameOverride: treasury-api
 fullnameOverride: treasury-api
-replicaCount: 1 # Optimized for resource-constrained environment
+
+replicaCount: 1  # Optimized for resource-constrained environment
+
 image:
   repository: docker.io/codevertex/treasury-api
-  tag: "5d622329"
+  tag: "latest"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
+
 service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
+
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
 # Treasury-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
-  enabled: false # No migration support yet
+  enabled: false  # No migration support yet
+
 seed:
-  enabled: false # No seed support yet
+  enabled: false  # No seed support yet
+
 healthCheck:
   enabled: true
-  startup:
-    httpGet:
-      path: /healthz
-      port: http
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    failureThreshold: 60
   readiness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 30
+    initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 5
   liveness:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 120
-    periodSeconds: 30
-    timeoutSeconds: 5
-    failureThreshold: 5
+    initialDelaySeconds: 30
+    periodSeconds: 15
+
 strategy:
   type: RollingUpdate
+
 env:
-  - name: APP_ENV
+  - name: TREASURY_API_ENV
     value: production
-  - name: HTTP_PORT
+  - name: TREASURY_HTTP_PORT
     value: "4000"
-  - name: POSTGRES_URL
+  - name: TREASURY_POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: treasury-api-secrets
         key: POSTGRES_URL
-  - name: REDIS_ADDR
+  - name: TREASURY_REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: REDIS_PASSWORD
-    valueFrom:
-      secretKeyRef:
-        name: treasury-api-secrets
-        key: REDIS_PASSWORD
-        optional: true
-  # NATS - standard key EVENTS_NATS_URL
-  - name: EVENTS_NATS_URL
+  - name: TREASURY_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: STORAGE_ENDPOINT
+  - name: TREASURY_STORAGE_ENDPOINT
     value: http://minio.storage.svc.cluster.local:9000
-  - name: STORAGE_BUCKET
+  - name: TREASURY_STORAGE_BUCKET
     value: treasury-artifacts
-  - name: OTLP_ENDPOINT
+  - name: TREASURY_OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  # Public base URL of this API: used to auto-generate webhook and callback URLs (TruLoad pattern). Same host as ingress (see hosts below).
-  - name: HTTP_PUBLIC_BASE_URL
-    value: "https://booksapi.codevertexitsolutions.com"
-  - name: HTTP_ALLOWED_ORIGINS
-    value: "https://books.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://notifications.codevertexitsolutions.com,http://localhost:3000,http://localhost:3011"
-  - name: MPESA_CALLBACK_URL
+  - name: TREASURY_HTTP_ALLOWED_ORIGINS
+    value: "https://books.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+  - name: TREASURY_MPESA_CALLBACK_URL
     value: "https://booksapi.codevertexitsolutions.com/api/v1/webhooks/mpesa/callback"
-  - name: AUTH_SERVICE_URL
+  - name: TREASURY_AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
-  - name: AUTH_JWKS_URL
+  - name: TREASURY_AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-  - name: AUTH_ISSUER
+  - name: TREASURY_AUTH_ISSUER
     value: "https://sso.codevertexitsolutions.com"
-  - name: AUTH_AUDIENCE
+  - name: TREASURY_AUTH_AUDIENCE
     value: "codevertex"
+
 resources:
   limits:
     cpu: 1000m
     memory: 1Gi
   requests:
-    cpu: 150m # Balanced for 12-core server
+    cpu: 150m  # Balanced for 12-core server
     memory: 512Mi
+
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
+
 monitoring:
   enabled: true
   prometheus:
     enabled: true
     port: 9090
     path: /metrics
+
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -115,6 +106,7 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -122,13 +114,6 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # CORS: allow ordering, cafe, pos, accounts (see shared-docs/devops-k8s-ingress-cors.md)
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://books.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://theurbanloftcafe.com, https://pos.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3011, http://localhost:3001, http://localhost:4201"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
-    nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     - host: booksapi.codevertexitsolutions.com
       paths:
