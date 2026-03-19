@@ -144,6 +144,11 @@ env:
         optional: true
   - name: INVENTORY_REQUEST_TIMEOUT
     value: "10s"
+  # Subscriptions Service - Subscription enforcement
+  - name: SUBSCRIPTIONS_SERVICE_URL
+    value: "https://pricingapi.codevertexitsolutions.com"
+  - name: SUBSCRIPTIONS_REQUEST_TIMEOUT
+    value: "10s"
   # Notifications Service - Email, SMS, Push notifications
   - name: NOTIFICATIONS_SERVICE_URL
     value: "https://notificationsapi.codevertexitsolutions.com"
