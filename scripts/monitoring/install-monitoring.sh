@@ -12,7 +12,7 @@ MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
-GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
+GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.codevertexitsolutions.com}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-infra}
 
 # Deployment strategy:
@@ -179,8 +179,8 @@ if [ ! -f "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" ]; then
 fi
 
 cp "${MANIFESTS_DIR}/monitoring/prometheus-values.yaml" "${TEMP_VALUES}"
-sed -i "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
-  sed -i '' "s|grafana\.masterspace\.co\.ke|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
+sed -i "s|grafana\.codevertexitsolutions\.com|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || \
+  sed -i '' "s|grafana\.codevertexitsolutions\.com|${GRAFANA_DOMAIN}|g" "${TEMP_VALUES}" 2>/dev/null || true
 
 # Install or upgrade kube-prometheus-stack (idempotent)
 log_info "Installing/upgrading kube-prometheus-stack..."

@@ -10,7 +10,7 @@ MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
-ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.masterspace.co.ke}
+ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.codevertexitsolutions.com}
 
 log_section "Installing Argo CD (Production)"
 log_info "Domain: ${ARGOCD_DOMAIN}"
