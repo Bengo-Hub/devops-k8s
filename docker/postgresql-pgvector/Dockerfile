@@ -20,7 +20,7 @@ RUN apt-get update \
     postgresql-server-dev-${PG_MAJOR} \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PGVECTOR_VERSION=v0.8.0
+ENV PGVECTOR_VERSION=v0.7.4
 RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector/pgvector.git /tmp/pgvector \
     && cd /tmp/pgvector \
     && make \
