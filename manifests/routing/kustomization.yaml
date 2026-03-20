@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: logistics
+
+resources:
+  # Valhalla routing engine
+  - valhalla-pvc.yaml
+  - valhalla-deployment.yaml
+  - valhalla-service.yaml
+  - valhalla-cronjob.yaml
+  # TileServer GL
+  - tileserver-pvc.yaml
+  - tileserver-deployment.yaml
+  - tileserver-service.yaml
+
+commonLabels:
+  managed-by: kustomize
+  part-of: map-services

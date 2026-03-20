@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: valhalla-data-refresh
+  namespace: logistics
+  labels:
+    app: valhalla
+    component: data-refresh
+spec:
+  # Run every Monday at 2 AM UTC - updates Kenya OSM data
+  schedule: "0 2 * * 1"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600 # 1 hour max
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: valhalla-refresh
+              image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  echo "=== Valhalla Data Refresh: $(date) ==="
+
+                  cd /custom_files
+
+                  # Download latest Kenya PBF
+                  echo "Downloading Kenya OSM data..."
+                  wget -q -O kenya-latest.osm.pbf.tmp \
+                    https://download.geofabrik.de/africa/kenya-latest.osm.pbf
+
+                  # Replace old PBF
+                  mv kenya-latest.osm.pbf.tmp kenya-latest.osm.pbf
+
+                  # Remove old tiles to trigger rebuild on next pod restart
+                  rm -rf valhalla_tiles
+
+                  echo "=== Data refresh complete. Restart valhalla pod to rebuild tiles. ==="
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 2Gi
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+              volumeMounts:
+                - name: valhalla-data
+                  mountPath: /custom_files
+          volumes:
+            - name: valhalla-data
+              persistentVolumeClaim:
+                claimName: valhalla-data
