@@ -41,38 +41,33 @@ progressDeadlineSeconds: 1200 # 20 minutes for migrations and startup
 # ENVIRONMENT VARIABLES
 # ============================================================================
 env:
-  - name: AUTH_SERVICE_ENV
+  - name: APP_ENV
     value: production
-  - name: AUTH_SERVICE_PORT
+  - name: HTTP_PORT
     value: "4101"
   # Frontend UI URL for OAuth redirects
   - name: AUTH_UI_URL
     value: "https://accounts.codevertexitsolutions.com"
-  # Database connection (auth-api expects AUTH_DB_URL)
-  - name: AUTH_DB_URL
+  # Database connection — config.go DatabaseConfig expects POSTGRES_* (envPrefix:"")
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
         key: POSTGRES_URL
-  - name: AUTH_POSTGRES_URL
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: POSTGRES_URL
-  # Disable auto-run migrations on startup (handled by pre-install hook)
-  - name: AUTH_DB_RUN_MIGRATIONS
+  # Migrations run via entrypoint.sh (auth-migrate), not the server; keep false here
+  - name: POSTGRES_RUN_MIGRATIONS
     value: "false"
   # Database connection pool settings (prevent connection exhaustion)
-  - name: AUTH_DB_MAX_OPEN_CONNS
+  - name: POSTGRES_MAX_OPEN_CONNS
     value: "10" # Reduced from default 20 to prevent pool exhaustion
-  - name: AUTH_DB_MAX_IDLE_CONNS
+  - name: POSTGRES_MAX_IDLE_CONNS
     value: "3" # Reduced from default 5
-  - name: AUTH_DB_CONN_MAX_LIFETIME
+  - name: POSTGRES_CONN_MAX_LIFETIME
     value: "15m"
-  # Redis connection
-  - name: AUTH_REDIS_ADDR
+  # Redis connection — config.go RedisConfig expects REDIS_* (envPrefix:"REDIS_")
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: AUTH_REDIS_PASSWORD
+  - name: REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
@@ -166,14 +161,39 @@ env:
         name: auth-api-secrets
         key: PLATFORM_API_KEY
         optional: true
+  # Seed env vars — auth-seed runs inside entrypoint.sh on every pod startup
+  - name: SEED_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: SEED_ADMIN_PASSWORD
+        optional: true
+  - name: SEED_ADMIN_EMAIL
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: SEED_ADMIN_EMAIL
+        optional: true
+  - name: DEFAULT_TENANT_SLUG
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: DEFAULT_TENANT_SLUG
+        optional: true
+  - name: PLATFORM_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: PLATFORM_API_KEY
+        optional: true
 # ============================================================================
 # DATABASE SETUP, MIGRATIONS AND SEEDING
 # ============================================================================
-# For Go services:
-#   1. setupDB: Creates the database if missing (runs as Job before migrations)
-#   2. migrations: Runs Ent schema.Create() to create tables (pre-install/pre-upgrade hook)
-#   3. seed: Populates initial data (post-install/post-upgrade hook)
-# All are idempotent and safe to run multiple times
+# Standardized Go service startup approach:
+#   1. setupDB: Pre-install Helm hook — creates the database if missing
+#   2. Entrypoint: Pod startup runs auth-migrate → auth-seed → auth (server)
+#      Migrations and seeding are INBUILT and run on every pod start (idempotent)
+# External migration/seed hooks are DISABLED — all logic is self-contained in entrypoint.sh
 
 # Setup database if it doesn't exist (must run before migrations)
 setupDB:

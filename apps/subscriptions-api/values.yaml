@@ -35,13 +35,13 @@ healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /api/v1/healthz
+      path: /api/v1/health
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
-      path: /api/v1/healthz
+      path: /api/v1/health
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
@@ -50,22 +50,23 @@ strategy:
   type: RollingUpdate
 
 env:
-  - name: SUBSCRIPTION_APP_ENV
+  # Standardized Go backend env vars — no service prefix (config.go namespace = "")
+  - name: APP_ENV
     value: production
-  - name: SUBSCRIPTION_HTTP_PORT
+  - name: HTTP_PORT
     value: "4005"
-  - name: SUBSCRIPTION_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: subscription-api-secrets
         key: POSTGRES_URL
-  - name: SUBSCRIPTION_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: SUBSCRIPTION_NATS_URL
+  - name: NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: SUBSCRIPTION_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: SUBSCRIPTION_HTTP_ALLOWED_ORIGINS
+  - name: HTTP_ALLOWED_ORIGINS
     value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricingapi.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   # API key validation — validates X-API-Key headers against auth-api (used for S2S calls from auth-api)
   - name: API_KEY_DB_URL

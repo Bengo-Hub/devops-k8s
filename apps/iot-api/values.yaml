@@ -4,7 +4,7 @@ fullnameOverride: iot-api
 replicaCount: 1
 
 image:
-  repository: docker.io/codevertex/iot-api
+  repository: docker.io/codevertex/iot-service-api
   tag: "latest"
   pullPolicy: Always
   pullSecrets:

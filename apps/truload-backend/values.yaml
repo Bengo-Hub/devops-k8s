@@ -125,6 +125,13 @@ persistence:
   mountPath: /app/uploads
   accessMode: ReadWriteOnce
   storageClass: local-path
+# Extra PVCs to create via the Helm chart (auto-synced by ArgoCD)
+extraPersistentVolumeClaims:
+  - name: truload-backups
+    size: 20Gi
+    accessMode: ReadWriteOnce
+    storageClass: local-path
+    component: backup
 # Additional volume mounts for backup storage
 volumeMounts:
   - name: backup-storage
@@ -133,6 +140,28 @@ volumes:
   - name: backup-storage
     persistentVolumeClaim:
       claimName: truload-backups
+# Init containers for backup directory permissions
+initContainers:
+  - name: init-backup-dir
+    image: busybox:1.36
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "Initializing backup directory: /var/backups/truload"
+        mkdir -p /var/backups/truload
+        chmod -R 775 /var/backups/truload 2>/dev/null || true
+        if [ -w "/var/backups/truload" ]; then
+          echo "Backup directory is writable"
+        else
+          echo "Warning: Backup directory may not be writable"
+          ls -la /var/backups/truload || true
+        fi
+    volumeMounts:
+      - name: backup-storage
+        mountPath: /var/backups/truload
+    securityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
 # VPA configuration - DISABLED due to metrics-server issues causing eviction loop
 verticalPodAutoscaling:
   enabled: false
