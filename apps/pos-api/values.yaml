@@ -3,9 +3,7 @@ fullnameOverride: pos-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/pos-api
-
-  tag: "9b40e5e5"
-
+  tag: "210d6964"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -57,7 +55,6 @@ env:
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://pos.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
-
   # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
@@ -67,7 +64,6 @@ env:
     value: "codevertex"
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-
 resources:
   limits:
     cpu: 500m
