@@ -1,0 +1,124 @@
+# TileServer-GL - Kenya Vector Map Tiles
+nameOverride: tileserver
+fullnameOverride: tileserver
+# ============================================================================
+# IMAGE CONFIGURATION
+# ============================================================================
+image:
+  repository: maptiler/tileserver-gl
+  tag: "latest"
+  pullPolicy: Always
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 1
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2 # Can scale for tile serving (read-only)
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: Recreate # Single PVC - use Recreate
+minReadySeconds: 10
+progressDeadlineSeconds: 600
+# ============================================================================
+# CONTAINER ARGS
+# ============================================================================
+args:
+  - "--verbose"
+  - "--port"
+  - "8080"
+# ============================================================================
+# PERSISTENT STORAGE
+# ============================================================================
+persistence:
+  enabled: true
+  storageClass: local-path
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  mountPath: /data
+# ============================================================================
+# RESOURCE LIMITS AND REQUESTS
+# ============================================================================
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+# ============================================================================
+# HEALTH CHECKS
+# ============================================================================
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  liveness:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Origin, Content-Type, Accept"
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header Cache-Control "public, max-age=86400, s-maxage=604800";
+  hosts:
+    - host: tiles.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - tiles.codevertexitsolutions.com
+      secretName: tiles-codevertexitsolutions-tls
+# ============================================================================
+# VERTICAL POD AUTOSCALER
+# ============================================================================
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Recreate"
+  minCPU: 100m
+  maxCPU: 1000m
+  minMemory: 256Mi
+  maxMemory: 2Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: true
+# ============================================================================
+# MONITORING
+# ============================================================================
+monitoring:
+  enabled: false
