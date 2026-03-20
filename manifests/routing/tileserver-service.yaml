@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tileserver
+  namespace: logistics
+  labels:
+    app: tileserver
+    component: map-tiles
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: tileserver
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tileserver
+  namespace: logistics
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Enable CORS for all frontend origins
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Origin, Content-Type, Accept"
+    # Cache tile responses at ingress level
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header Cache-Control "public, max-age=86400, s-maxage=604800";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - tiles.codevertexitsolutions.com
+      secretName: tileserver-tls
+  rules:
+    - host: tiles.codevertexitsolutions.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tileserver
+                port:
+                  number: 8080

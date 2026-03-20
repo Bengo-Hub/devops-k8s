@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valhalla
+  namespace: logistics
+  labels:
+    app: valhalla
+    component: routing-engine
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # Single replica with PVC - must use Recreate
+  selector:
+    matchLabels:
+      app: valhalla
+  template:
+    metadata:
+      labels:
+        app: valhalla
+        component: routing-engine
+    spec:
+      containers:
+        - name: valhalla
+          image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+          ports:
+            - name: http
+              containerPort: 8002
+              protocol: TCP
+          env:
+            # Kenya-only OSM data from Geofabrik
+            - name: tile_urls
+              value: "https://download.geofabrik.de/africa/kenya-latest.osm.pbf"
+            - name: use_tiles_ignore_pbf
+              value: "True"
+            - name: build_elevation
+              value: "False"
+            - name: build_admins
+              value: "True"
+            - name: build_time_zones
+              value: "True"
+            - name: serve_tiles
+              value: "True"
+            - name: force_rebuild
+              value: "False"
+            # Performance tuning
+            - name: server_threads
+              value: "4"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 3Gi
+            limits:
+              cpu: "4"
+              memory: 5Gi
+          volumeMounts:
+            - name: valhalla-data
+              mountPath: /custom_files
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8002
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8002
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: valhalla-data
+          persistentVolumeClaim:
+            claimName: valhalla-data

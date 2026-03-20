@@ -54,7 +54,12 @@ env:
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,https://riderapp.codevertexitsolutions.com,http://localhost:3001"
+    value: "https://ordersapp.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,https://riderapp.codevertexitsolutions.com,http://localhost:3001,https://logistics.codevertexitsolutions.com"
+  # Routing engine (Valhalla in-cluster)
+  - name: ROUTING_PRIMARY_URL
+    value: "http://valhalla.logistics.svc.cluster.local:8002"
+  - name: ROUTING_CACHE_TTL
+    value: "5m"
   # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
