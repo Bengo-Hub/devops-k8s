@@ -936,34 +936,6 @@ jobs:
           kubectl get applications -n argocd || true
           echo "::endgroup::"
 
-      - name: Deploy Map Services (Valhalla + TileServer) [logistics namespace]
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
-        timeout-minutes: 15
-        run: |
-          echo "::group::Deploying Map Services"
-          echo "Deploying Valhalla routing engine and TileServer-GL to logistics namespace"
-          echo "These are infrastructure services managed via Kustomize (not ArgoCD apps)"
-
-          # Ensure logistics namespace exists
-          kubectl create namespace logistics --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
-
-          # Apply map services via kustomize
-          kubectl apply -k manifests/routing/
-          echo "✅ Map services manifests applied"
-
-          # Verify deployments exist (don't wait for full readiness - Valhalla takes time to build tiles)
-          echo "Checking deployment status..."
-          kubectl get deployments -n logistics -l part-of=map-services 2>/dev/null || \
-            kubectl get deployments -n logistics -l 'app in (valhalla,tileserver)' 2>/dev/null || true
-          kubectl get cronjobs -n logistics 2>/dev/null || true
-          kubectl get ingress -n logistics 2>/dev/null || true
-
-          echo ""
-          echo "ℹ️  Valhalla first-run builds Kenya routing tiles (~10-20 min)"
-          echo "ℹ️  TileServer downloads Kenya vector tiles on init (~2-5 min)"
-          echo "✅ Map services deployment complete"
-          echo "::endgroup::"
-
       - name: Install Vertical Pod Autoscaler (VPA) [Optional]
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 10
