@@ -1,9 +1,9 @@
 # Multi-stage Dockerfile: build pgvector + PostGIS with official PostgreSQL
 # Extensions: pgvector (vector similarity), PostGIS (geospatial)
 # NOTE: PG_MAJOR must match the running cluster data directory version.
-# Current production: PG 16. Do NOT bump without running pg_upgrade first.
+# Current production: PG 17. Upgraded from PG 16 via pg_dumpall/restore (2026-03-21).
 
-ARG PG_MAJOR=16
+ARG PG_MAJOR=17
 
 # ---------------------------
 # Stage 1 — build pgvector
@@ -20,7 +20,7 @@ RUN apt-get update \
     postgresql-server-dev-${PG_MAJOR} \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PGVECTOR_VERSION=v0.7.0
+ENV PGVECTOR_VERSION=v0.8.0
 RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector/pgvector.git /tmp/pgvector \
     && cd /tmp/pgvector \
     && make \
