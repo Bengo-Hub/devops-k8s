@@ -70,9 +70,10 @@ env:
         name: ordering-backend-secrets
         key: REDIS_PASSWORD
         optional: true
-  - name: ORDERING_NATS_URL
+  # NATS - standard key EVENTS_NATS_URL (Events.NATSURL loaded via Process("", &cfg.Events))
+  - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: ORDERING_EVENTS_STREAM
+  - name: NATS_STREAM
     value: ordering
   # Observability
   - name: ORDERING_OTLP_ENDPOINT
