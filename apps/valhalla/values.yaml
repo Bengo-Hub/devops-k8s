@@ -131,6 +131,14 @@ verticalPodAutoscaling:
   controlledValues: RequestsAndLimits
   recommendationMode: true
 # ============================================================================
+# SECURITY CONTEXT
+# ============================================================================
+securityContext:
+  runAsUser: 59999  # valhalla user
+  runAsGroup: 59999
+  fsGroup: 59999
+  runAsNonRoot: true
+# ============================================================================
 # MONITORING
 # ============================================================================
 monitoring:
