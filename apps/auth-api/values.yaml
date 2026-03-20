@@ -73,6 +73,11 @@ env:
         name: auth-api-secrets
         key: REDIS_PASSWORD
         optional: true
+  # NATS Events (EventsConfig expects AUTH_EVENTS_* prefix via caarlos0/env)
+  - name: AUTH_EVENTS_NATS_URL
+    value: nats://nats.messaging.svc.cluster.local:4222
+  - name: AUTH_EVENTS_ENABLED
+    value: "true"
   # JWT Token Keys (RSA keys for token signing/verification)
   - name: AUTH_TOKEN_PRIVATE_KEY_PATH
     value: /etc/auth-keys/private.pem
