@@ -1,0 +1,137 @@
+# Valhalla Routing Engine - Kenya OSM Data
+nameOverride: valhalla
+fullnameOverride: valhalla
+# ============================================================================
+# IMAGE CONFIGURATION
+# ============================================================================
+image:
+  repository: ghcr.io/gis-ops/docker-valhalla/valhalla
+  tag: "latest"
+  pullPolicy: Always
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 1
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 1 # Single replica with PVC
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
+service:
+  type: ClusterIP
+  port: 8002
+  targetPort: 8002
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: Recreate # Single replica with PVC - must use Recreate
+minReadySeconds: 30
+progressDeadlineSeconds: 1200 # 20 min - tile building takes time
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+env:
+  - name: tile_urls
+    value: "https://download.geofabrik.de/africa/kenya-latest.osm.pbf"
+  - name: use_tiles_ignore_pbf
+    value: "False"
+  - name: build_elevation
+    value: "False"
+  - name: build_admins
+    value: "True"
+  - name: build_time_zones
+    value: "True"
+  - name: serve_tiles
+    value: "True"
+  - name: force_rebuild
+    value: "False"
+  - name: server_threads
+    value: "4"
+# ============================================================================
+# PERSISTENT STORAGE
+# ============================================================================
+persistence:
+  enabled: true
+  storageClass: local-path
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  mountPath: /custom_files
+# ============================================================================
+# RESOURCE LIMITS AND REQUESTS
+# ============================================================================
+resources:
+  requests:
+    cpu: "1"
+    memory: 3Gi
+  limits:
+    cpu: "4"
+    memory: 5Gi
+# ============================================================================
+# HEALTH CHECKS
+# ============================================================================
+healthCheck:
+  enabled: true
+  startup:
+    httpGet:
+      path: /status
+      port: http
+    initialDelaySeconds: 120
+    periodSeconds: 15
+    failureThreshold: 40  # 10 min for tile building
+  readiness:
+    httpGet:
+      path: /status
+      port: http
+    initialDelaySeconds: 120
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 20
+  liveness:
+    httpGet:
+      path: /status
+      port: http
+    initialDelaySeconds: 600
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 10
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: routing.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - routing.codevertexitsolutions.com
+      secretName: routing-codevertexitsolutions-tls
+# ============================================================================
+# VERTICAL POD AUTOSCALER
+# ============================================================================
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Recreate"
+  minCPU: 500m
+  maxCPU: 4000m
+  minMemory: 2Gi
+  maxMemory: 6Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: true
+# ============================================================================
+# MONITORING
+# ============================================================================
+monitoring:
+  enabled: false
