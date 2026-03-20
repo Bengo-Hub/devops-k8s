@@ -745,26 +745,49 @@ jobs:
           # Create namespace if it doesn't exist
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
 
-          # Check if secret already exists
-          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-            echo "✓ Auth API secrets already exist - updating..."
-            kubectl delete secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1 || true
-          fi
-
-          # Get PostgreSQL URL from existing infrastructure
+          # Database connection (standardized keys matching Go config.go expectations)
           PG_HOST="postgresql.infra.svc.cluster.local"
           PG_PORT="5432"
           DB_NAME="auth"
           DB_USER="auth_user"
           POSTGRES_URL="postgresql://${DB_USER}:${POSTGRES_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
 
-          # Generate OAuth state secret if not provided
-          OAUTH_STATE_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+          # Redis connection
+          REDIS_HOST="redis-master.infra.svc.cluster.local"
+          REDIS_PORT="6379"
+          REDIS_URL="redis://:${POSTGRES_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
 
-          # Create secret with all auth-api credentials
-          # Uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
+          # Preserve existing OAUTH_STATE_SECRET if secret exists; otherwise generate
+          EXISTING_OAUTH_SECRET=""
+          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+            EXISTING_OAUTH_SECRET=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" \
+              -o jsonpath='{.data.OAUTH_STATE_SECRET}' 2>/dev/null | base64 -d || echo "")
+            echo "✓ Auth API secrets already exist — merging (non-destructive)"
+          fi
+          OAUTH_STATE_SECRET="${EXISTING_OAUTH_SECRET:-$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-32)}"
+
+          # Preserve existing SECRET_KEY if present
+          EXISTING_SECRET_KEY=""
+          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+            EXISTING_SECRET_KEY=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" \
+              -o jsonpath='{.data.SECRET_KEY}' 2>/dev/null | base64 -d || echo "")
+          fi
+          SECRET_KEY="${EXISTING_SECRET_KEY:-$(openssl rand -base64 48 | tr -d '=+/' | cut -c1-64)}"
+
+          # Non-destructive: create full secret manifest and apply (merge, never delete)
+          # Includes BOTH standardized infra keys (POSTGRES_URL, DATABASE_*, REDIS_*)
+          # AND auth-specific keys (OAuth, seeding) so neither code path loses the other's keys
           kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
-            --from-literal=postgresUrl="${POSTGRES_URL}" \
+            --from-literal=POSTGRES_URL="${POSTGRES_URL}" \
+            --from-literal=SECRET_KEY="${SECRET_KEY}" \
+            --from-literal=DATABASE_HOST="${PG_HOST}" \
+            --from-literal=DATABASE_PORT="${PG_PORT}" \
+            --from-literal=DATABASE_NAME="${DB_NAME}" \
+            --from-literal=DATABASE_USER="${DB_USER}" \
+            --from-literal=DATABASE_PASSWORD="${POSTGRES_PASSWORD}" \
+            --from-literal=REDIS_URL="${REDIS_URL}" \
+            --from-literal=REDIS_HOST="${REDIS_HOST}" \
+            --from-literal=REDIS_PORT="${REDIS_PORT}" \
             --from-literal=REDIS_PASSWORD="${POSTGRES_PASSWORD}" \
             --from-literal=OAUTH_STATE_SECRET="${OAUTH_STATE_SECRET}" \
             --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}" \
@@ -776,7 +799,8 @@ jobs:
             --from-literal=MICROSOFT_TENANT_ID="${MICROSOFT_TENANT_ID:-common}" \
             --from-literal=SEED_ADMIN_PASSWORD="${GLOBAL_ADMIN_PASSWORD:-ChangeMe123!}" \
             --from-literal=SEED_ADMIN_EMAIL="${GLOBAL_ADMIN_EMAIL:-admin@codevertex.com}" \
-            --from-literal=DEFAULT_TENANT_SLUG="${DEFAULT_TENANT_SLUG:-codevertex}"
+            --from-literal=DEFAULT_TENANT_SLUG="${DEFAULT_TENANT_SLUG:-codevertex}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
           # Verify OAuth credentials
           if [ -n "${GOOGLE_CLIENT_ID}" ]; then
@@ -833,22 +857,42 @@ jobs:
           # Create namespace if it doesn't exist
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
 
-          # Check if secret already exists
-          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-            echo "✓ Ordering Backend secrets already exist - updating..."
-            kubectl delete secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1 || true
-          fi
-
-          # Get PostgreSQL URL from existing infrastructure
+          # Database connection (standardized keys)
           PG_HOST="postgresql.infra.svc.cluster.local"
           PG_PORT="5432"
           DB_NAME="ordering"
           DB_USER="ordering_user"
           POSTGRES_URL="postgresql://${DB_USER}:${POSTGRES_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
 
-          # Create secret with ordering-backend credentials
+          # Redis connection
+          REDIS_HOST="redis-master.infra.svc.cluster.local"
+          REDIS_PORT="6379"
+          REDIS_URL="redis://:${POSTGRES_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
+
+          # Preserve existing SECRET_KEY
+          EXISTING_SECRET_KEY=""
+          if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+            EXISTING_SECRET_KEY=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" \
+              -o jsonpath='{.data.SECRET_KEY}' 2>/dev/null | base64 -d || echo "")
+            echo "✓ Ordering Backend secrets already exist — merging (non-destructive)"
+          fi
+          SECRET_KEY="${EXISTING_SECRET_KEY:-$(openssl rand -base64 48 | tr -d '=+/' | cut -c1-64)}"
+
+          # Non-destructive: create + apply (merge, never delete)
+          # Includes all standardized keys so build.sh runs don't lose them
           kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
-            --from-literal=postgresUrl="${POSTGRES_URL}"
+            --from-literal=POSTGRES_URL="${POSTGRES_URL}" \
+            --from-literal=SECRET_KEY="${SECRET_KEY}" \
+            --from-literal=DATABASE_HOST="${PG_HOST}" \
+            --from-literal=DATABASE_PORT="${PG_PORT}" \
+            --from-literal=DATABASE_NAME="${DB_NAME}" \
+            --from-literal=DATABASE_USER="${DB_USER}" \
+            --from-literal=DATABASE_PASSWORD="${POSTGRES_PASSWORD}" \
+            --from-literal=REDIS_URL="${REDIS_URL}" \
+            --from-literal=REDIS_HOST="${REDIS_HOST}" \
+            --from-literal=REDIS_PORT="${REDIS_PORT}" \
+            --from-literal=REDIS_PASSWORD="${POSTGRES_PASSWORD}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
           echo "✅ Ordering Backend secrets created in $NAMESPACE namespace"
           echo "::endgroup::"

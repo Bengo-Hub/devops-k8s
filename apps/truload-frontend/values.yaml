@@ -79,6 +79,14 @@ ingress:
       #     - kura-weigh.ntsa.go.ke
       #   secretName: kura-weigh-ntsa-tls
 envFromSecret: truload-frontend-env
+env:
+  # SSO / OAuth — central auth service for commercial weighing tenants
+  - name: NEXT_PUBLIC_AUTH_API_URL
+    value: https://sso.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SSO_CLIENT_ID
+    value: truload-ui
+  - name: NEXT_PUBLIC_APP_URL
+    value: https://truload.codevertexitsolutions.com
 # No migrations needed for Next.js frontend
 migrations:
   enabled: false

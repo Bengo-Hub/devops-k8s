@@ -53,8 +53,17 @@ autoscaling:
 ingress:
   enabled: true
   ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
   hosts:
+    # Tenant-specific domain (Masterspace)
     - host: erp.masterspace.co.ke
+      paths:
+        - path: /
+          pathType: Prefix
+    # Platform owner domain (CodeVertex)
+    - host: erp.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
@@ -62,6 +71,9 @@ ingress:
     - hosts:
         - erp.masterspace.co.ke
       secretName: erp-masterspace-tls
+    - hosts:
+        - erp.codevertexitsolutions.com
+      secretName: erp-codevertex-tls
 envFromSecret: erp-ui-env
 # VPA configuration for UI
 # CRITICAL: Use "Off" mode to prevent VPA from recreating pods and causing downtime
