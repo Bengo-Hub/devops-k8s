@@ -56,4 +56,4 @@ spec:
           volumes:
             - name: valhalla-data
               persistentVolumeClaim:
-                claimName: valhalla-data
+                claimName: valhalla-media
