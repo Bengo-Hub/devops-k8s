@@ -1,7 +1,7 @@
 nameOverride: projects-ui
 fullnameOverride: projects-ui
 
-replicaCount: 1
+replicaCount: 0  # Disabled: Docker image not yet built. Set to 1 after first CI deploy.
 minReadySeconds: 30
 
 image:
