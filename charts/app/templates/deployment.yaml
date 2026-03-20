@@ -95,8 +95,8 @@ spec:
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
           securityContext:
-            runAsUser: {{ dig "securityContext" "runAsUser" 1000 .Values }}
-            runAsGroup: {{ dig "securityContext" "runAsGroup" 1000 .Values }}
+            runAsUser: {{ if .Values.securityContext }}{{ .Values.securityContext.runAsUser | default 1000 }}{{ else }}1000{{ end }}
+            runAsGroup: {{ if .Values.securityContext }}{{ .Values.securityContext.runAsGroup | default 1000 }}{{ else }}1000{{ end }}
         {{- end }}
         {{- if and .Values.migrations .Values.migrations.runOnStartup }}
         - name: wait-for-db
