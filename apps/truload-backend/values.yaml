@@ -60,6 +60,13 @@ ingress:
     # SSL redirect enabled - cert-manager creates separate solver ingress for ACME
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexitsolutions.com, https://kuraweightest.masterspace.co.ke, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Org-ID, X-Station-ID, X-Request-ID"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     # Axle load enforcement test domain (KuraWeigh API — road authority use case)
     - host: kuraweighapitest.masterspace.co.ke
@@ -96,8 +103,8 @@ env:
   # CORS: frontend origins allowed to call this API
   # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
   # Add enforcement tenant custom frontend domains here as they are onboarded
-  - name: CORS_ALLOWED_ORIGINS
-    value: "https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com"
+  - name: CORS__AllowedOrigins
+    value: "https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
     # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
     #   Auth__JwksUrl (if using env-based override)
     #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
