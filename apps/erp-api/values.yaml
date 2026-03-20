@@ -104,7 +104,13 @@ ingress:
     # NOTE: Static and media files are served by WhiteNoise/Django through the main path
     # configuration-snippet removed: nginx doesnt support nested location blocks in snippets
   hosts:
+    # Tenant-specific domain (Masterspace)
     - host: erpapi.masterspace.co.ke
+      paths:
+        - path: /
+          pathType: Prefix
+    # Platform owner domain (CodeVertex)
+    - host: erpapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
@@ -112,6 +118,9 @@ ingress:
     - hosts:
         - erpapi.masterspace.co.ke
       secretName: erpapi-masterspace-tls
+    - hosts:
+        - erpapi.codevertexitsolutions.com
+      secretName: erpapi-codevertex-tls
 envFromSecret: erp-api-env
 # ============================================================================
 # MIGRATIONS AND SEEDING

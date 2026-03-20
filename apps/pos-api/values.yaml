@@ -3,7 +3,9 @@ fullnameOverride: pos-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/pos-api
+
   tag: "9b40e5e5"
+
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -37,23 +39,35 @@ healthCheck:
 strategy:
   type: RollingUpdate
 env:
-  - name: POS_APP_ENV
+  # Standardized Go backend env vars — no service prefix (config.go namespace = "")
+  - name: APP_ENV
     value: production
-  - name: POS_HTTP_PORT
+  - name: HTTP_PORT
     value: "4000"
-  - name: POS_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: pos-api-secrets
         key: POSTGRES_URL
-  - name: POS_REDIS_ADDR
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: POS_NATS_URL
+  - name: NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
-  - name: POS_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  - name: POS_HTTP_ALLOWED_ORIGINS
+  - name: HTTP_ALLOWED_ORIGINS
     value: "https://pos.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+
+  # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
+  - name: AUTH_SERVICE_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: AUTH_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: AUTH_AUDIENCE
+    value: "codevertex"
+  - name: AUTH_JWKS_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+
 resources:
   limits:
     cpu: 500m
