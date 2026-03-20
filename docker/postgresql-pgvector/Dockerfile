@@ -1,23 +1,25 @@
-# Multi-stage Dockerfile: build pgvector + PostGIS with official PostgreSQL + Bitnami compatibility wrapper
-# This creates a Bitnami-compatible image using official postgres:17 as base
+# Multi-stage Dockerfile: build pgvector + PostGIS with official PostgreSQL
 # Extensions: pgvector (vector similarity), PostGIS (geospatial)
+# NOTE: PG_MAJOR must match the running cluster data directory version.
+# Current production: PG 16. Do NOT bump without running pg_upgrade first.
+
+ARG PG_MAJOR=16
 
 # ---------------------------
 # Stage 1 — build pgvector
 # ---------------------------
-FROM postgres:17 AS pgvector-builder
+FROM postgres:${PG_MAJOR} AS pgvector-builder
+ARG PG_MAJOR
 USER root
 
-# Install build dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     build-essential \
-    postgresql-server-dev-17 \
+    postgresql-server-dev-${PG_MAJOR} \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone and build pgvector
 ENV PGVECTOR_VERSION=v0.7.0
 RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector/pgvector.git /tmp/pgvector \
     && cd /tmp/pgvector \
@@ -25,22 +27,23 @@ RUN git clone --depth 1 --branch ${PGVECTOR_VERSION} https://github.com/pgvector
     && make install
 
 # ---------------------------
-# Stage 2 — Bitnami-compatible runtime with pgvector + PostGIS
+# Stage 2 — runtime with pgvector + PostGIS
 # ---------------------------
-FROM postgres:17
+FROM postgres:${PG_MAJOR}
+ARG PG_MAJOR
 
 USER root
 
-# Install PostGIS from Debian packages (matches postgres:17 base)
+# Install PostGIS from Debian packages
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    postgresql-17-postgis-3 \
-    postgresql-17-postgis-3-scripts \
+    postgresql-${PG_MAJOR}-postgis-3 \
+    postgresql-${PG_MAJOR}-postgis-3-scripts \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pgvector extension from builder
-COPY --from=pgvector-builder /usr/lib/postgresql/17/lib/vector.so /usr/lib/postgresql/17/lib/
-COPY --from=pgvector-builder /usr/share/postgresql/17/extension/vector* /usr/share/postgresql/17/extension/
+COPY --from=pgvector-builder /usr/lib/postgresql/${PG_MAJOR}/lib/vector.so /usr/lib/postgresql/${PG_MAJOR}/lib/
+COPY --from=pgvector-builder /usr/share/postgresql/${PG_MAJOR}/extension/vector* /usr/share/postgresql/${PG_MAJOR}/extension/
 
 # Create Bitnami-compatible directory structure
 RUN mkdir -p /bitnami/postgresql/data \
@@ -56,20 +59,16 @@ RUN mkdir -p /bitnami/postgresql/data \
 RUN ln -s /var/lib/postgresql/data /bitnami/postgresql/data/pgdata || true \
     && ln -s /var/run/postgresql /bitnami/postgresql/run || true
 
-# Create writable /var/run/postgresql for lock files
 RUN mkdir -p /var/run/postgresql \
     && chown -R postgres:postgres /var/run/postgresql \
     && chmod 2777 /var/run/postgresql
 
-# Ensure pgvector is properly owned
-RUN chown postgres:postgres /usr/lib/postgresql/17/lib/vector.so \
-    && chown postgres:postgres /usr/share/postgresql/17/extension/vector*
+# Ensure extensions are properly owned
+RUN chown postgres:postgres /usr/lib/postgresql/${PG_MAJOR}/lib/vector.so \
+    && chown postgres:postgres /usr/share/postgresql/${PG_MAJOR}/extension/vector*
 
-# Create init script to auto-enable extensions on new databases
-RUN echo '#!/bin/bash\nset -e\npsql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL\n    CREATE EXTENSION IF NOT EXISTS vector;\n    CREATE EXTENSION IF NOT EXISTS postgis;\nEOSQL' \
-    > /docker-entrypoint-initdb.d/10-create-extensions.sh \
-    && chmod +x /docker-entrypoint-initdb.d/10-create-extensions.sh
+# Init script: auto-enable extensions on NEW databases (docker-entrypoint-initdb.d
+# only runs when PGDATA is empty). For existing databases, run CREATE EXTENSION manually.
+COPY docker-entrypoint-initdb.d/ /docker-entrypoint-initdb.d/
 
 USER postgres
-
-# Default command inherited from postgres:17
