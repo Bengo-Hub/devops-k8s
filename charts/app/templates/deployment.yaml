@@ -12,13 +12,22 @@ spec:
   minReadySeconds: {{ .Values.minReadySeconds | default 30 }}
   {{- if .Values.strategy }}
   strategy:
-    {{- toYaml .Values.strategy | nindent 4 }}
+    type: {{ .Values.strategy.type | default "RollingUpdate" }}
+    {{- if ne (.Values.strategy.type | default "RollingUpdate") "Recreate" }}
+    rollingUpdate:
+      {{- if .Values.strategy.rollingUpdate }}
+      {{- toYaml .Values.strategy.rollingUpdate | nindent 6 }}
+      {{- else }}
+      maxSurge: 1
+      maxUnavailable: 0
+      {{- end }}
+    {{- end }}
   {{- else }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 0 # Prevent pod limit overflow during rollout
+      maxUnavailable: 0
   {{- end }}
   selector:
     matchLabels:
