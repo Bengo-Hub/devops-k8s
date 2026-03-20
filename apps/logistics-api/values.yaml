@@ -3,7 +3,7 @@ fullnameOverride: logistics-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "091c3cd7"
+  tag: "c0311059"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -67,7 +67,6 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-
 resources:
   limits:
     cpu: 500m
