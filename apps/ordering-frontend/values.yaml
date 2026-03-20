@@ -6,7 +6,7 @@ fullnameOverride: ordering-frontend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-frontend
-  tag: "3429d3ce"
+  tag: "7c8d7161"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
