@@ -29,16 +29,9 @@ if [[ -z "$SERVICE_NAME" ]]; then
     echo "  SERVICE_NAME=ordering-backend NAMESPACE=ordering ./create-service-secrets.sh"
     echo ""
     echo "Supported services:"
-    echo "  - auth"
-    echo "  - ordering"
-    echo "  - treasury"
-    echo "  - inventory"
-    echo "  - logistics"
-    echo "  - erp"
-    echo "  - subscriptions"
-    echo "  - projects"
-    echo "  - notifications"
-    echo "  - iot"
+    echo "  - auth, ordering, treasury, inventory, logistics, erp"
+    echo "  - subscriptions, projects, notifications, iot"
+    echo "  - truload, isp-billing, ticketing, cafe, pos"
     exit 1
 fi
 
@@ -111,9 +104,41 @@ if [[ -z "$NAMESPACE" ]]; then
         projects-ui)
             NAMESPACE="projects"
             ;;
+        # Subscription service — note: namespace is "subscriptions" (plural) but
+        # the Helm release/secret uses "subscription-api" (singular)
+        subscription-api)
+            NAMESPACE="subscriptions"
+            ;;
+        ticketing-api)
+            NAMESPACE="ticketing"
+            ;;
+        ticketing-ui)
+            NAMESPACE="ticketing"
+            ;;
+        truload-backend)
+            NAMESPACE="truload"
+            ;;
+        truload-frontend)
+            NAMESPACE="truload"
+            ;;
+        isp-billing-backend)
+            NAMESPACE="isp-billing"
+            ;;
+        isp-billing-frontend)
+            NAMESPACE="isp-billing"
+            ;;
+        cafe-website)
+            NAMESPACE="cafe"
+            ;;
+        rider-app)
+            NAMESPACE="logistics"
+            ;;
+        iot-service-api)
+            NAMESPACE="iot"
+            ;;
         *)
             # Try to extract namespace from service name
-            NAMESPACE=$(echo "$SERVICE_NAME" | sed 's/-service$//' | sed 's/-backend$//' | sed 's/-app$//')
+            NAMESPACE=$(echo "$SERVICE_NAME" | sed 's/-service$//' | sed 's/-backend$//' | sed 's/-app$//' | sed 's/-api$//' | sed 's/-ui$//' | sed 's/-frontend$//')
             ;;
     esac
 fi
@@ -246,10 +271,12 @@ else
     REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
 fi
 
-# Create the secret (standardized keys only: POSTGRES_URL, REDIS_*, SECRET_KEY, DATABASE_*)
-log_info "Creating secret ${SECRET_NAME} in namespace ${NAMESPACE}..."
+# Upsert standardized keys (POSTGRES_URL, REDIS_*, SECRET_KEY, DATABASE_*)
+# IMPORTANT: Uses patch to MERGE keys into existing secret, never replacing it.
+# This preserves service-specific keys (OAuth, seeding) added by provision.yml.
+log_info "Upserting standardized keys into ${SECRET_NAME} in namespace ${NAMESPACE}..."
 
-# Build array of secret literals
+# Build array of standardized key literals
 declare -a secret_literals=(
     "--from-literal=POSTGRES_URL=${POSTGRES_URL}"
     "--from-literal=SECRET_KEY=${APP_SECRET_KEY}"
@@ -264,14 +291,38 @@ declare -a secret_literals=(
     "--from-literal=REDIS_PASSWORD=${REDIS_PASSWORD}"
 )
 
-# Create secret with standardized literals (no service-specific duplicates)
-kubectl create secret generic "${SECRET_NAME}" \
-    --namespace="${NAMESPACE}" \
-    "${secret_literals[@]}" \
-    --dry-run=client -o yaml | kubectl apply -f -
+if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    # Secret exists — patch to merge standardized keys without losing existing keys
+    # Generate the new data as base64 and build a JSON patch
+    PATCH_JSON='{"data":{'
+    PATCH_JSON+="\"POSTGRES_URL\":\"$(echo -n "${POSTGRES_URL}" | base64 -w0)\","
+    PATCH_JSON+="\"SECRET_KEY\":\"$(echo -n "${APP_SECRET_KEY}" | base64 -w0)\","
+    PATCH_JSON+="\"DATABASE_HOST\":\"$(echo -n "${PG_HOST}" | base64 -w0)\","
+    PATCH_JSON+="\"DATABASE_PORT\":\"$(echo -n "${PG_PORT}" | base64 -w0)\","
+    PATCH_JSON+="\"DATABASE_NAME\":\"$(echo -n "${DB_NAME}" | base64 -w0)\","
+    PATCH_JSON+="\"DATABASE_USER\":\"$(echo -n "${DB_USER}" | base64 -w0)\","
+    PATCH_JSON+="\"DATABASE_PASSWORD\":\"$(echo -n "${DATABASE_PASSWORD}" | base64 -w0)\","
+    PATCH_JSON+="\"REDIS_URL\":\"$(echo -n "${REDIS_URL}" | base64 -w0)\","
+    PATCH_JSON+="\"REDIS_HOST\":\"$(echo -n "${REDIS_HOST}" | base64 -w0)\","
+    PATCH_JSON+="\"REDIS_PORT\":\"$(echo -n "${REDIS_PORT}" | base64 -w0)\","
+    PATCH_JSON+="\"REDIS_PASSWORD\":\"$(echo -n "${REDIS_PASSWORD}" | base64 -w0)\""
+    PATCH_JSON+='}}'
 
-if [ $? -eq 0 ]; then
-    log_success "Secret ${SECRET_NAME} created successfully in namespace ${NAMESPACE}"
+    kubectl patch secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+        --type merge -p "${PATCH_JSON}"
+    RESULT=$?
+    log_info "Patched existing secret (merged standardized keys, preserved service-specific keys)"
+else
+    # Secret does not exist — create it fresh
+    kubectl create secret generic "${SECRET_NAME}" \
+        --namespace="${NAMESPACE}" \
+        "${secret_literals[@]}"
+    RESULT=$?
+    log_info "Created new secret"
+fi
+
+if [ $RESULT -eq 0 ]; then
+    log_success "Secret ${SECRET_NAME} upserted successfully in namespace ${NAMESPACE}"
 else
     log_error "Failed to create secret"
     exit 1
