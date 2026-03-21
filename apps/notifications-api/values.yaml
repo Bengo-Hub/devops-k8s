@@ -103,9 +103,9 @@ env:
         key: POSTGRES_URL
   # Database connection pool settings (prevent connection exhaustion)
   - name: POSTGRES_MAX_OPEN_CONNS
-    value: "8"
+    value: "6"
   - name: POSTGRES_MAX_IDLE_CONNS
-    value: "4"
+    value: "3"
   - name: POSTGRES_CONN_MAX_LIFETIME
     value: "15m"
   - name: REDIS_ADDR

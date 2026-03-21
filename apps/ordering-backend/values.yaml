@@ -56,9 +56,9 @@ env:
         key: POSTGRES_URL # Standard key from devops-k8s (not ORDERING_POSTGRES_URL)
   # Database connection pool settings (prevent connection exhaustion)
   - name: POSTGRES_MAX_OPEN_CONNS
-    value: "10"
+    value: "8"
   - name: POSTGRES_MAX_IDLE_CONNS
-    value: "5"
+    value: "4"
   - name: POSTGRES_CONN_MAX_LIFETIME
     value: "15m"
   # Redis - standard keys (loaded via Process("", &cfg.Redis), tags are exact env var names)

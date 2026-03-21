@@ -59,7 +59,7 @@ env:
     value: "false"
   # Database connection pool settings (prevent connection exhaustion)
   - name: POSTGRES_MAX_OPEN_CONNS
-    value: "10" # Reduced from default 20 to prevent pool exhaustion
+    value: "8" # Reduced to fit within shared PG max_connections=100 budget
   - name: POSTGRES_MAX_IDLE_CONNS
     value: "3" # Reduced from default 5
   - name: POSTGRES_CONN_MAX_LIFETIME
@@ -157,7 +157,7 @@ env:
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"
   - name: AUTH_SUBSCRIPTION_BASE_URL
-    value: "http://subscriptions-api.subscription.svc.cluster.local:4000"
+    value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: AUTH_SUBSCRIPTION_TIMEOUT
     value: "5s"
   - name: AUTH_SUBSCRIPTION_API_KEY
