@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+data:
+  allow-snippet-annotations: "true"
+  # Auth-API JWTs with 247 permissions produce ~8.5KB tokens.
+  # Default 4k/8k buffers cause 502 on cookie-bearing requests (OAuth /authorize)
+  # and large response bodies (login/token endpoints).
+  proxy-buffer-size: "32k"
+  large-client-header-buffers: "4 32k"
