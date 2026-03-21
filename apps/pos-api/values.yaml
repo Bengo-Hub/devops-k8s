@@ -49,6 +49,12 @@ env:
         key: POSTGRES_URL
   - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: pos-api-secrets
+        key: REDIS_PASSWORD
+        optional: true
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
