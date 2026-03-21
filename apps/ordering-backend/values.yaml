@@ -61,10 +61,10 @@ env:
     value: "3"
   - name: ORDERING_DB_CONN_MAX_LIFETIME
     value: "15m"
-  # Messaging & Cache
-  - name: ORDERING_REDIS_ADDR
+  # Redis - standard keys (loaded via Process("", &cfg.Redis), tags are exact env var names)
+  - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
-  - name: ORDERING_REDIS_PASSWORD
+  - name: REDIS_PASSWORD
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
