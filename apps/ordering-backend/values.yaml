@@ -6,7 +6,7 @@ fullnameOverride: ordering-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "ccc99a68"
+  tag: "703a3218"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
