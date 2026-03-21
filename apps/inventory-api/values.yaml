@@ -55,7 +55,7 @@ env:
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://inventory.codevertexitsolutions.com,https://inventoryapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://inventory.codevertexitsolutions.com,https://inventoryapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com"
 resources:
   limits:
     cpu: 500m
@@ -91,7 +91,7 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
