@@ -47,6 +47,13 @@ env:
       secretKeyRef:
         name: pos-api-secrets
         key: POSTGRES_URL
+  # Database connection pool settings (prevent connection exhaustion)
+  - name: POSTGRES_MAX_OPEN_CONNS
+    value: "10"
+  - name: POSTGRES_MAX_IDLE_CONNS
+    value: "5"
+  - name: POSTGRES_CONN_MAX_LIFETIME
+    value: "15m"
   - name: REDIS_ADDR
     value: redis-master.infra.svc.cluster.local:6379
   - name: REDIS_PASSWORD
