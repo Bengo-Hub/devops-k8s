@@ -33,7 +33,7 @@ spec:
         # Service name overrides to match 'nats.messaging.svc.cluster.local'
         # The chart creates 'nats' service by default.
         
-        # Resource limits
+        # Resource limits and healthcheck override
         container:
             resources:
               requests:
@@ -42,6 +42,20 @@ spec:
               limits:
                 cpu: 500m
                 memory: 1Gi
+            # Override readiness probe to fix "failed to be ready after 1ms" warnings.
+            # The default nats-server check uses a 1ms timeout which fails under
+            # momentary CPU/GC pressure. Increase to 5s.
+            readinessProbe:
+              exec:
+                command:
+                  - nats-server
+                  - check
+                  - connection
+                  - --timeout=5s
+              initialDelaySeconds: 10
+              periodSeconds: 10
+              timeoutSeconds: 10
+              failureThreshold: 3
         
         # Disable reloader sidecar to fix "too many open files" error
         # Config reload can be done manually via kubectl rollout restart

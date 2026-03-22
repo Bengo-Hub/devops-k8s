@@ -63,7 +63,7 @@ env:
         key: REDIS_PASSWORD
         optional: true
   - name: EVENTS_NATS_URL
-    value: nats://nats.messaging.svc.cluster.local:4222
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   - name: STORAGE_ENDPOINT
     value: http://minio.storage.svc.cluster.local:9000
   - name: STORAGE_BUCKET

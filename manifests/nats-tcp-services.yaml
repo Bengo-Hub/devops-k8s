@@ -1,0 +1,16 @@
+# TCP Services ConfigMap for nginx-ingress to proxy NATS on port 4222.
+# NATS uses a binary TCP protocol (not HTTP), so standard HTTP ingress
+# cannot be used. This ConfigMap tells the nginx ingress controller to
+# forward external TCP port 4222 to the NATS service in the messaging namespace.
+#
+# Requires the ingress controller deployment to have:
+#   --tcp-services-configmap=ingress-nginx/tcp-services
+# and containerPort/hostPort 4222 exposed.
+# See: scripts/infrastructure/configure-ingress-controller.sh
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcp-services
+  namespace: ingress-nginx
+data:
+  "4222": "messaging/nats:4222"
