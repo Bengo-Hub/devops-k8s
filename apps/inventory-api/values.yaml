@@ -17,10 +17,9 @@ service:
 # Inventory-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
-  enabled: false # Ent auto-migrates on startup via Schema.Create()
+  enabled: false # Handled by entrypoint.sh (runs inventory-migrate on startup)
 seed:
-  enabled: true # Seed runs on app startup (idempotent, built into the service)
-  command: ["/app/seed"]
+  enabled: false # Handled by entrypoint.sh (runs inventory-seed on startup)
 healthCheck:
   enabled: true
   readiness:
