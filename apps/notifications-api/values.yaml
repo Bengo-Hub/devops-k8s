@@ -17,28 +17,12 @@ service:
 # ============================================================================
 # Notifications-api uses separate migrate/seed binaries in the Docker image
 # Binary names must match the Dockerfile output: /usr/local/bin/notifications-migrate, etc.
-# Migrations run as pre-install/pre-upgrade Helm hook (weight 0)
-# Seeds run as post-install/post-upgrade Helm hook (weight 5)
+# Migrations and seed are handled by entrypoint.sh on container startup.
+# No separate Helm hooks needed — entrypoint waits for DB, runs migrate, seeds, then starts server.
 migrations:
-  enabled: true
-  binaryName: notifications-migrate # Must match Dockerfile: /usr/local/bin/notifications-migrate
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
+  enabled: false # Handled by entrypoint.sh (runs notifications-migrate on startup)
 seed:
-  enabled: true
-  binaryName: notifications-seed # Must match Dockerfile: /usr/local/bin/notifications-seed
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
+  enabled: false # Handled by entrypoint.sh (runs notifications-seed on startup)
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
 # ============================================================================
