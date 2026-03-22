@@ -14,12 +14,11 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# Logistics-api currently does not have database migrations
-# Schema management will be added in future releases
+# Migrations and seed are handled by entrypoint.sh on container startup.
 migrations:
-  enabled: false # No migration support yet
+  enabled: false # Handled by entrypoint.sh (runs logistics-migrate on startup)
 seed:
-  enabled: false # No seed support yet
+  enabled: false # Handled by entrypoint.sh (runs logistics-seed on startup)
 healthCheck:
   enabled: true
   readiness:
