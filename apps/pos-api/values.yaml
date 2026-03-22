@@ -3,7 +3,7 @@ fullnameOverride: pos-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/pos-api
-  tag: "151fca19"
+  tag: "8c52023b"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
