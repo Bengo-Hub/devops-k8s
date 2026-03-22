@@ -105,47 +105,47 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   # Provider secrets (optional - create notifications-provider-secrets manually)
   # struct PROVIDERS + tag → NOTIFICATIONS_PROVIDERS_{TAG}
-  - name: NOTIFICATIONS_PROVIDERS_SENDGRID_API_KEY
+  - name: PROVIDERS_SENDGRID_API_KEY
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: sendgridApiKey
         optional: true
-  - name: NOTIFICATIONS_PROVIDERS_TWILIO_ACCOUNT_SID
+  - name: PROVIDERS_TWILIO_ACCOUNT_SID
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: twilioAccountSid
         optional: true
-  - name: NOTIFICATIONS_PROVIDERS_TWILIO_AUTH_TOKEN
+  - name: PROVIDERS_TWILIO_AUTH_TOKEN
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: twilioAuthToken
         optional: true
-  - name: NOTIFICATIONS_PROVIDERS_FCM_SERVICE_ACCOUNT
+  - name: PROVIDERS_FCM_SERVICE_ACCOUNT
     valueFrom:
       secretKeyRef:
         name: notifications-provider-secrets
         key: fcmServiceAccount
         optional: true
-  - name: NOTIFICATIONS_PROVIDERS_DEFAULT_EMAIL_SENDER
+  - name: PROVIDERS_DEFAULT_EMAIL_SENDER
     valueFrom:
       secretKeyRef:
         name: notifications-api-env
         key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
         optional: true
   # Observability
-  - name: NOTIFICATIONS_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Security JWT - struct SECURITY + tag → NOTIFICATIONS_SECURITY_{TAG}
-  - name: NOTIFICATIONS_SECURITY_REQUIRE_JWT
+  - name: SECURITY_REQUIRE_JWT
     value: "true"
-  - name: NOTIFICATIONS_SECURITY_JWKS_URL
+  - name: SECURITY_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-  - name: NOTIFICATIONS_SECURITY_JWT_ISSUER
+  - name: SECURITY_JWT_ISSUER
     value: "https://sso.codevertexitsolutions.com"
-  - name: NOTIFICATIONS_SECURITY_JWT_AUDIENCE
+  - name: SECURITY_JWT_AUDIENCE
     value: "codevertex"
 resources:
   limits:
