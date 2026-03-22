@@ -145,7 +145,7 @@ fi
 
 # Infer database name from service name if not provided
 if [[ -z "$DB_NAME" ]]; then
-    DB_NAME=$(echo "$SERVICE_NAME" | sed 's/-service$//' | sed 's/-backend$//' | sed 's/-app$//' | tr '-' '_')
+    DB_NAME=$(echo "$SERVICE_NAME" | sed 's/-service$//' | sed 's/-backend$//' | sed 's/-api$//' | sed 's/-app$//' | tr '-' '_')
 fi
 
 # Infer database user from database name if not provided
@@ -257,16 +257,25 @@ elif kubectl get secret redis -n infra >/dev/null 2>&1; then
     fi
 fi
 
-# Construct PostgreSQL URL
+# URL-encode a string for safe embedding in connection URIs (RFC 3986 userinfo).
+# Characters like ! @ : / ? # [ ] and others must be percent-encoded.
+url_encode_password() {
+    python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1" 2>/dev/null \
+    || printf '%s' "$1" | sed 's/!/%21/g; s/@/%40/g; s/:/%3A/g; s|/|%2F|g; s/?/%3F/g; s/#/%23/g'
+}
+
+# Construct PostgreSQL URL (password is percent-encoded for safe URL parsing by Go/pgx)
 if [[ -n "$DATABASE_PASSWORD" ]]; then
-    POSTGRES_URL="postgresql://${DB_USER}:${DATABASE_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
+    ENCODED_DB_PASSWORD=$(url_encode_password "$DATABASE_PASSWORD")
+    POSTGRES_URL="postgresql://${DB_USER}:${ENCODED_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
 else
     POSTGRES_URL="postgresql://${DB_USER}:CHANGE_ME@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
 fi
 
-# Construct Redis URL
+# Construct Redis URL (password is percent-encoded)
 if [[ -n "$REDIS_PASSWORD" ]]; then
-    REDIS_URL="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
+    ENCODED_REDIS_PASSWORD=$(url_encode_password "$REDIS_PASSWORD")
+    REDIS_URL="redis://:${ENCODED_REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
 else
     REDIS_URL="redis://${REDIS_HOST}:${REDIS_PORT}/0"
 fi
