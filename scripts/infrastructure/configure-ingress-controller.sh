@@ -71,6 +71,24 @@ if [ "$POD_HOSTNET" = "true" ]; then
     log_info "Checking ingress backends..."
     kubectl get ingress -A || true
     echo ""
+    # Even when hostNetwork is already configured, ensure TCP services are set up
+    log_info "Ensuring NATS TCP passthrough is configured..."
+    kubectl apply -f "${SCRIPT_DIR}/../../manifests/nats-tcp-services.yaml"
+
+    # Check if --tcp-services-configmap arg is already present
+    CURRENT_ARGS=$(kubectl get deployment ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null || echo "")
+    if [[ "$CURRENT_ARGS" != *"tcp-services-configmap"* ]]; then
+      log_info "Adding --tcp-services-configmap arg and port 4222 to ingress controller..."
+      kubectl patch deployment ingress-nginx-controller -n ingress-nginx --type='json' -p='[
+        {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--tcp-services-configmap=ingress-nginx/tcp-services"},
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 4222, "hostPort": 4222, "name": "nats-tcp", "protocol": "TCP"}}
+      ]'
+      log_info "Waiting for ingress controller to restart with NATS TCP support..."
+      kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=120s || true
+    else
+      log_success "TCP services ConfigMap already configured"
+    fi
+
     log_info "To force reconfiguration, set FORCE_RECONFIGURE=true"
     exit 0
   elif [ "$READY_PODS" -gt 1 ]; then
@@ -108,6 +126,16 @@ kubectl patch deployment ingress-nginx-controller \
   -n ingress-nginx \
   --type='merge' \
   -p='{"spec":{"template":{"spec":{"dnsPolicy":"ClusterFirstWithHostNet"}}}}'
+
+# Configure NATS TCP passthrough (port 4222)
+log_info "Applying NATS TCP services ConfigMap..."
+kubectl apply -f "${SCRIPT_DIR}/../../manifests/nats-tcp-services.yaml"
+
+log_info "Adding --tcp-services-configmap arg and port 4222 to ingress controller..."
+kubectl patch deployment ingress-nginx-controller -n ingress-nginx --type='json' -p='[
+  {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--tcp-services-configmap=ingress-nginx/tcp-services"},
+  {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 4222, "hostPort": 4222, "name": "nats-tcp", "protocol": "TCP"}}
+]' 2>/dev/null || log_info "TCP services args may already be present, continuing..."
 
 # Clean up any duplicate pods before waiting for rollout using centralized script
 log_info "Cleaning up any duplicate pods..."
@@ -148,8 +176,12 @@ echo "  - http://${VPS_IP} (and any domain pointing to this IP)"
 echo "  - https://${GRAFANA_DOMAIN}"
 echo "  - https://${ARGOCD_DOMAIN}"
 echo "  - https://<your-app-domains>"
+echo "  - nats://nats.codevertexitsolutions.com:4222 (NATS TCP passthrough)"
 echo ""
 log_info "Verify ingress resources:"
 echo "kubectl get ingress -A"
+echo ""
+log_info "Verify NATS TCP passthrough:"
+echo "kubectl get configmap tcp-services -n ingress-nginx -o yaml"
 echo ""
 
