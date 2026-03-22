@@ -1,0 +1,51 @@
+# NATS Monitoring HTTP Ingress
+# Exposes the NATS HTTP monitoring endpoint (port 8222) on nats.codevertexitsolutions.com.
+# Provides JSON endpoints: /varz, /connz, /subsz, /routez, /healthz, /jsz
+#
+# The NATS Helm chart service only exposes the client port (4222).
+# This manifest creates a dedicated Service targeting port 8222 and an Ingress for it.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats-monitoring
+  namespace: messaging
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: monitor
+      port: 8222
+      targetPort: 8222
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nats-monitoring
+  namespace: messaging
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - nats.codevertexitsolutions.com
+      secretName: nats-monitoring-tls
+  rules:
+    - host: nats.codevertexitsolutions.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nats-monitoring
+                port:
+                  number: 8222
