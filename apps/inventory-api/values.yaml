@@ -17,9 +17,10 @@ service:
 # Inventory-api currently does not have database migrations
 # Schema management will be added in future releases
 migrations:
-  enabled: false # No migration support yet
+  enabled: false # Ent auto-migrates on startup via Schema.Create()
 seed:
-  enabled: false # No seed support yet
+  enabled: true
+  command: ["/app/seed"]
 healthCheck:
   enabled: true
   readiness:
