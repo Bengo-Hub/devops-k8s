@@ -19,7 +19,7 @@ service:
 migrations:
   enabled: false # Ent auto-migrates on startup via Schema.Create()
 seed:
-  enabled: true
+  enabled: true # Seed runs on app startup (idempotent, built into the service)
   command: ["/app/seed"]
 healthCheck:
   enabled: true
