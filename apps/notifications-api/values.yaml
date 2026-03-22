@@ -94,7 +94,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://notifications.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://notifications.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
   # Database and Redis: uniform unprefixed keys (config namespace empty)
   - name: POSTGRES_URL
     valueFrom:
@@ -202,7 +202,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     # CORS: allow notifications-ui and other frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://notifications.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://pricing.codevertexitsolutions.com, https://books.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://notifications.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://pricing.codevertexitsolutions.com, https://books.codevertexitsolutions.com, https://theurbanloftcafe.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
