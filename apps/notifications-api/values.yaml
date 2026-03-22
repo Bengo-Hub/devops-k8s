@@ -69,17 +69,17 @@ progressDeadlineSeconds: 900 # 15 minutes for migrations and startup
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
-# Env var naming: NOTIFICATIONS_{STRUCT_FIELD}_{TAG}
-# Struct fields: APP, HTTP, POSTGRES, REDIS, EVENTS, PROVIDERS, TEMPLATES, SECURITY
+# Env var naming: tags are the full env var name (envconfig:"" on parent structs
+# suppresses struct field prefix). E.g. POSTGRES_URL, REDIS_ADDR, SECURITY_REQUIRE_JWT.
 env:
-  # App and HTTP (unprefixed; config namespace empty)
+  # App and HTTP
   - name: APP_ENV
     value: production
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://notifications.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
-  # Database and Redis: uniform unprefixed keys (config namespace empty)
+  # Database and Redis
   - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
@@ -104,7 +104,6 @@ env:
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   # Provider secrets (optional - create notifications-provider-secrets manually)
-  # struct PROVIDERS + tag → NOTIFICATIONS_PROVIDERS_{TAG}
   - name: PROVIDERS_SENDGRID_API_KEY
     valueFrom:
       secretKeyRef:
@@ -138,7 +137,7 @@ env:
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  # Security JWT - struct SECURITY + tag → NOTIFICATIONS_SECURITY_{TAG}
+  # Security JWT
   - name: SECURITY_REQUIRE_JWT
     value: "true"
   - name: SECURITY_JWKS_URL
