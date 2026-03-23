@@ -65,6 +65,11 @@ env:
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+  # Media upload configuration
+  - name: MEDIA_ROOT
+    value: "/data/media"
+  - name: MEDIA_URL_BASE
+    value: "https://inventoryapi.codevertexitsolutions.com"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
@@ -95,6 +100,12 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+persistence:
+  enabled: true
+  size: 5Gi
+  mountPath: /data/media
+  accessMode: ReadWriteOnce
+  storageClass: local-path
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -102,6 +113,7 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
