@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "90cb2f64"
+  tag: "472b6b8f"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
