@@ -42,14 +42,14 @@ progressDeadlineSeconds: 1200 # 20 minutes for migrations and startup (matches a
 # ============================================================================
 env:
   # Core Configuration
-  - name: ORDERING_APP_ENV
+  - name: APP_ENV
     value: production
-  - name: ORDERING_HTTP_PORT
+  - name: HTTP_PORT
     value: "4000"
-  - name: ORDERING_HTTP_ALLOWED_ORIGINS
+  - name: HTTP_ALLOWED_ORIGINS
     value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://theurbanloftcafe.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   # Database Configuration - uses standard keys from devops-k8s create-service-secrets.sh
-  - name: ORDERING_POSTGRES_URL
+  - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
@@ -76,77 +76,77 @@ env:
   - name: NATS_STREAM
     value: ordering
   # Observability
-  - name: ORDERING_OTLP_ENDPOINT
+  - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Auth Service (SSO) - User authentication and identity management
-  - name: ORDERING_AUTH_SERVICE_URL
+  - name: AUTH_SERVICE_URL
     # ============================================================================
     # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
     # ============================================================================
 
     value: "https://sso.codevertexitsolutions.com"
-  - name: ORDERING_AUTH_ISSUER
+  - name: AUTH_ISSUER
     value: "https://sso.codevertexitsolutions.com"
-  - name: ORDERING_AUTH_JWKS_URL
+  - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
-  - name: ORDERING_AUTH_AUDIENCE
+  - name: AUTH_AUDIENCE
     value: "codevertex"
-  - name: ORDERING_AUTH_SERVICE_API_KEY
+  - name: AUTH_SERVICE_API_KEY
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: AUTH_SERVICE_API_KEY
         optional: true
   # Treasury Service - Payment processing and refunds
-  - name: ORDERING_TREASURY_SERVICE_URL
+  - name: TREASURY_SERVICE_URL
     value: "https://booksapi.codevertexitsolutions.com"
-  - name: ORDERING_TREASURY_API_KEY
+  - name: TREASURY_API_KEY
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: TREASURY_API_KEY
         optional: true
-  - name: ORDERING_TREASURY_WEBHOOK_SECRET
+  - name: TREASURY_WEBHOOK_SECRET
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: TREASURY_WEBHOOK_SECRET
         optional: true
-  - name: ORDERING_TREASURY_REQUEST_TIMEOUT
+  - name: TREASURY_REQUEST_TIMEOUT
     value: "30s"
-  - name: ORDERING_MPESA_ENABLED
+  - name: MPESA_ENABLED
     value: "true"
-  - name: ORDERING_MPESA_CALLBACK_BASE_URL
+  - name: MPESA_CALLBACK_BASE_URL
     value: "https://orderingapi.codevertexitsolutions.com/api/v1/webhooks/mpesa"
   # Logistics Service - Delivery task management
-  - name: ORDERING_LOGISTICS_SERVICE_URL
+  - name: LOGISTICS_SERVICE_URL
     value: "https://logisticsapi.codevertexitsolutions.com"
-  - name: ORDERING_LOGISTICS_API_KEY
+  - name: LOGISTICS_API_KEY
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: LOGISTICS_API_KEY
         optional: true
-  - name: ORDERING_LOGISTICS_WEBHOOK_SECRET
+  - name: LOGISTICS_WEBHOOK_SECRET
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: LOGISTICS_WEBHOOK_SECRET
         optional: true
-  - name: ORDERING_LOGISTICS_REQUEST_TIMEOUT
+  - name: LOGISTICS_REQUEST_TIMEOUT
     value: "30s"
-  - name: ORDERING_LOGISTICS_WEBSOCKET_URL
+  - name: LOGISTICS_WEBSOCKET_URL
     value: "wss://logisticsapi.codevertexitsolutions.com/ws"
   # Inventory Service - Stock management
-  - name: ORDERING_INVENTORY_SERVICE_URL
+  - name: INVENTORY_SERVICE_URL
     value: "https://inventoryapi.codevertexitsolutions.com"
-  - name: ORDERING_INVENTORY_API_KEY
+  - name: INVENTORY_API_KEY
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: INVENTORY_API_KEY
         optional: true
-  - name: ORDERING_INVENTORY_REQUEST_TIMEOUT
+  - name: INVENTORY_REQUEST_TIMEOUT
     value: "10s"
   # Subscriptions Service - Subscription enforcement
   - name: SUBSCRIPTIONS_SERVICE_URL
@@ -154,32 +154,32 @@ env:
   - name: SUBSCRIPTIONS_REQUEST_TIMEOUT
     value: "10s"
   # Notifications Service - Email, SMS, Push notifications
-  - name: ORDERING_NOTIFICATIONS_SERVICE_URL
+  - name: NOTIFICATIONS_SERVICE_URL
     value: "https://notificationsapi.codevertexitsolutions.com"
-  - name: ORDERING_NOTIFICATIONS_API_KEY
+  - name: NOTIFICATIONS_API_KEY
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: NOTIFICATIONS_API_KEY
         optional: true
-  - name: ORDERING_NOTIFICATIONS_REQUEST_TIMEOUT
+  - name: NOTIFICATIONS_REQUEST_TIMEOUT
     value: "10s"
   # Superset - Business Intelligence & Analytics
-  - name: ORDERING_SUPERSET_BASE_URL
+  - name: SUPERSET_BASE_URL
     value: "https://superset.codevertexitsolutions.com"
-  - name: ORDERING_SUPERSET_ADMIN_USERNAME
+  - name: SUPERSET_ADMIN_USERNAME
     value: "admin"
-  - name: ORDERING_SUPERSET_ADMIN_PASSWORD
+  - name: SUPERSET_ADMIN_PASSWORD
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
         key: SUPERSET_ADMIN_PASSWORD
         optional: true
-  - name: ORDERING_SUPERSET_API_VERSION
+  - name: SUPERSET_API_VERSION
     value: "v1"
-  - name: ORDERING_SUPERSET_REQUEST_TIMEOUT
+  - name: SUPERSET_REQUEST_TIMEOUT
     value: "30s"
-  - name: ORDERING_SUPERSET_GUEST_TOKEN_TTL_MINUTES
+  - name: SUPERSET_GUEST_TOKEN_TTL_MINUTES
     value: "5"
 # ============================================================================
 # SECRET REFERENCE FOR HOOKS
