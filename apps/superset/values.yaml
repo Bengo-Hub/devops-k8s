@@ -322,7 +322,7 @@ supersetCeleryBeat:
 # ============================================================================
 # HIGH AVAILABILITY CONFIGURATION
 # ============================================================================
-podDisruptionBudget:
+pdb:
   enabled: true
   minAvailable: 1
 
