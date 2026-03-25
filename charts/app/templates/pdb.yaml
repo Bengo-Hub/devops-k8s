@@ -1,4 +1,4 @@
-{{- if (dig "pdb" "enabled" false .Values) }}
+{{- if and .Values.pdb .Values.pdb.enabled }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
