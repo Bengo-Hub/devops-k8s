@@ -1,4 +1,4 @@
-{{- if .Values.persistence.enabled }}
+{{- if and .Values.persistence .Values.persistence.enabled }}
 {{- $pvcName := printf "%s-media" (include "app.fullname" .) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
