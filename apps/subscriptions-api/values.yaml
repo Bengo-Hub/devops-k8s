@@ -10,7 +10,7 @@ image:
 service:
   type: ClusterIP
   port: 4000
-  targetPort: 4005
+  targetPort: 4000
 migrations:
   enabled: false
 seed:
@@ -45,7 +45,7 @@ env:
   - name: APP_ENV
     value: production
   - name: HTTP_PORT
-    value: "4005"
+    value: "4000"
   - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
@@ -69,7 +69,7 @@ env:
     value: "https://pricing.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pricingapi.codevertexitsolutions.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
   # API key validation — validates X-API-Key headers against auth-api (used for S2S calls from auth-api)
   - name: API_KEY_DB_URL
-    value: "http://auth-api.auth.svc.cluster.local:4101"
+    value: "http://auth-api.auth.svc.cluster.local:4000"
 resources:
   limits:
     cpu: 500m

@@ -25,8 +25,8 @@ autoscaling:
 # ============================================================================
 service:
   type: ClusterIP
-  port: 4101
-  targetPort: 4101
+  port: 4000
+  targetPort: 4000
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -44,7 +44,7 @@ env:
   - name: APP_ENV
     value: production
   - name: HTTP_PORT
-    value: "4101"
+    value: "4000"
   # Frontend UI URL for OAuth redirects
   - name: AUTH_UI_URL
     value: "https://accounts.codevertexitsolutions.com"
