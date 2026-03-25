@@ -75,6 +75,11 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   - name: NATS_STREAM
     value: ordering
+  # Media upload configuration
+  - name: MEDIA_ROOT
+    value: "/data/media"
+  - name: MEDIA_URL_BASE
+    value: "https://orderingapi.codevertexitsolutions.com"
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
@@ -274,6 +279,15 @@ ingress:
     - hosts:
         - orderingapi.codevertexitsolutions.com
       secretName: ordering-backend-tls
+# ============================================================================
+# PERSISTENCE (media uploads)
+# ============================================================================
+persistence:
+  enabled: true
+  size: 5Gi
+  mountPath: /data/media
+  accessMode: ReadWriteOnce
+  storageClass: local-path
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
