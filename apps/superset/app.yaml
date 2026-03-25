@@ -312,7 +312,7 @@ spec:
                 memory: 256Mi
           
           # Pod Disruption Budget for HA
-          podDisruptionBudget:
+          pdb:
             enabled: true
             minAvailable: 1
           
