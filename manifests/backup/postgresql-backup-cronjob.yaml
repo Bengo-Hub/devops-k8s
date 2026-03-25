@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgresql-backup
+  namespace: infra
+spec:
+  schedule: "0 2 * * *"  # Daily at 2am UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-backup
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_DIR="/backups"
+                  FILENAME="bengobox_${TIMESTAMP}.sql.gz"
+
+                  echo "Starting PostgreSQL backup at $(date)"
+                  pg_dumpall -h $PGHOST -U $PGUSER | gzip > "${BACKUP_DIR}/${FILENAME}"
+
+                  echo "Backup completed: ${FILENAME} ($(du -h ${BACKUP_DIR}/${FILENAME} | cut -f1))"
+
+                  # Cleanup backups older than 14 days
+                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +14 -delete
+                  echo "Cleanup completed. Remaining backups:"
+                  ls -lh ${BACKUP_DIR}/bengobox_*.sql.gz 2>/dev/null || echo "No backups found"
+              env:
+                - name: PGHOST
+                  value: "postgresql.infra.svc.cluster.local"
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-credentials
+                      key: username
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-credentials
+                      key: password
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: postgresql-backup-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-backup-pvc
+  namespace: infra
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
