@@ -204,6 +204,12 @@ celeryBeat:
     size: 1Mi
     storageClass: ""
 
+# Pod Disruption Budget
+pdb:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1  # Use either minAvailable or maxUnavailable, not both
+
 # KEDA ScaledObject configuration (queue-driven autoscaling)
 keda:
   enabled: false
