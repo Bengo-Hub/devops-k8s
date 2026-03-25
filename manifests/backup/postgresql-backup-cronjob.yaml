@@ -15,6 +15,11 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            # Run as non-root user with write access to backup PVC
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
           containers:
             - name: pg-backup
               image: postgres:16-alpine
@@ -27,14 +32,32 @@ spec:
                   BACKUP_DIR="/backups"
                   FILENAME="bengobox_${TIMESTAMP}.sql.gz"
 
+                  # Ensure backup dir is writable
+                  mkdir -p ${BACKUP_DIR}
+
                   echo "Starting PostgreSQL backup at $(date)"
                   pg_dumpall -h $PGHOST -U $PGUSER | gzip > "${BACKUP_DIR}/${FILENAME}"
 
-                  echo "Backup completed: ${FILENAME} ($(du -h ${BACKUP_DIR}/${FILENAME} | cut -f1))"
+                  SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
+                  echo "Backup completed: ${FILENAME} (${SIZE})"
 
-                  # Cleanup backups older than 14 days
-                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +14 -delete
-                  echo "Cleanup completed. Remaining backups:"
+                  # Cleanup backups older than 2 days
+                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +2 -delete
+                  echo "Cleanup completed (removed files older than 2 days)."
+
+                  # Generate manifest.json for auth-api backup listing endpoint
+                  echo '{"backups": [' > ${BACKUP_DIR}/manifest.json
+                  FIRST=true
+                  for f in $(ls -t ${BACKUP_DIR}/bengobox_*.sql.gz 2>/dev/null); do
+                    FNAME=$(basename "$f")
+                    FSIZE=$(du -h "$f" | cut -f1)
+                    FDATE=$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f" 2>/dev/null)
+                    if [ "$FIRST" = true ]; then FIRST=false; else echo ',' >> ${BACKUP_DIR}/manifest.json; fi
+                    echo "{\"filename\": \"${FNAME}\", \"size\": \"${FSIZE}\", \"created_at\": ${FDATE}}" >> ${BACKUP_DIR}/manifest.json
+                  done
+                  echo ']}' >> ${BACKUP_DIR}/manifest.json
+
+                  echo "Manifest updated. Available backups:"
                   ls -lh ${BACKUP_DIR}/bengobox_*.sql.gz 2>/dev/null || echo "No backups found"
               env:
                 - name: PGHOST
@@ -64,6 +87,7 @@ spec:
               persistentVolumeClaim:
                 claimName: postgresql-backup-pvc
 ---
+# PVC for backup storage (shared between CronJob and backup-server)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -74,4 +98,98 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 20Gi
+      storage: 5Gi
+---
+# Lightweight nginx server to serve backup files internally
+# Auth-api proxies requests to this service for authenticated platform admins
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backup-server
+  namespace: infra
+  labels:
+    app: backup-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backup-server
+  template:
+    metadata:
+      labels:
+        app: backup-server
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: backup-storage
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+          livenessProbe:
+            httpGet:
+              path: /manifest.json
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 30
+      volumes:
+        - name: backup-storage
+          persistentVolumeClaim:
+            claimName: postgresql-backup-pvc
+        - name: nginx-config
+          configMap:
+            name: backup-server-nginx-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-server-nginx-config
+  namespace: infra
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      server_name _;
+      root /usr/share/nginx/html;
+      autoindex off;
+
+      # Only allow manifest.json and .sql.gz files
+      location = /manifest.json {
+        add_header Content-Type application/json;
+      }
+      location ~ \.sql\.gz$ {
+        add_header Content-Disposition "attachment";
+        add_header Content-Type application/gzip;
+      }
+      location / {
+        return 404;
+      }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backup-server
+  namespace: infra
+spec:
+  selector:
+    app: backup-server
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
