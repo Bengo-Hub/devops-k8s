@@ -446,6 +446,6 @@ securityContext:
 # ============================================================================
 # POD DISRUPTION BUDGET
 # ============================================================================
-podDisruptionBudget:
+pdb:
   enabled: true
   minAvailable: 1
