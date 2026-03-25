@@ -13,7 +13,7 @@ image:
 service:
   type: ClusterIP
   port: 4000
-  targetPort: 4005
+  targetPort: 4000
 
 migrations:
   enabled: false
@@ -46,7 +46,7 @@ env:
   - name: APP_ENV
     value: production
   - name: HTTP_PORT
-    value: "4005"
+    value: "4000"
   - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
