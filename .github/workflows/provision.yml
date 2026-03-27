@@ -936,6 +936,19 @@ jobs:
           kubectl get applications -n argocd || true
           echo "::endgroup::"
 
+      - name: Provision PostgreSQL backup infrastructure
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        run: |
+          echo "::group::Provisioning PostgreSQL backup infrastructure"
+          echo "Applying CronJob, PVC, backup-server Deployment/Service..."
+          if [ -f manifests/backup/postgresql-backup-cronjob.yaml ]; then
+            kubectl apply -f manifests/backup/postgresql-backup-cronjob.yaml
+            echo "✅ PostgreSQL backup infrastructure applied"
+          else
+            echo "⚠️ manifests/backup/postgresql-backup-cronjob.yaml not found; skipping"
+          fi
+          echo "::endgroup::"
+
       - name: Install Vertical Pod Autoscaler (VPA) [Optional]
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 10
