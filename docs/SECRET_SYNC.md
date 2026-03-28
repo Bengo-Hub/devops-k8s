@@ -113,8 +113,8 @@ These secrets are for devops-k8s infrastructure only and should **NEVER** be syn
 - `KUBE_CONFIG` - Kubernetes config for cluster access (7540 chars, base64)
 - `SSH_PRIVATE_KEY` - SSH key for repo access (620 chars, base64)
 - `DOCKER_SSH_KEY` - SSH key for Docker deployments (620 chars, base64)
-- `SSH_HOST` - VPS host IP (94.16.119.213)
-- `SSH_USER` - VPS username (vertexhub)
+- `SSH_HOST` - VPS host IP (<VPS_IP_ADDRESS>)
+- `SSH_USER` - VPS username (<SSH_USERNAME>)
 
 **⚠️  Important**: The sync workflow will automatically **skip** these secrets if requested, preventing accidental exposure.
 
@@ -125,7 +125,7 @@ These secrets are used across most service repositories. **Always use these exac
 #### Docker Registry (Required for all services)
 - `REGISTRY_USERNAME` - Docker registry username
 - `REGISTRY_PASSWORD` - Docker registry password
-- `REGISTRY_EMAIL` - info@vertexhub.tech
+- `REGISTRY_EMAIL` - <REGISTRY_EMAIL>
 
 #### Git Access (Required for all services)
 - `GIT_TOKEN` - GitHub personal access token (note: at devops-k8s level this is named `GH_PAT`, but syncs as `GIT_TOKEN` to service repos)

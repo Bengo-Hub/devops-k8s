@@ -17,7 +17,7 @@ prometheus:
         memory: 2Gi
 
 grafana:
-  adminPassword: "changeme"
+  adminPassword: "<REPLACE_WITH_GRAFANA_PASSWORD>"
   persistence:
     enabled: true
     size: 10Gi
