@@ -34,7 +34,7 @@ spec:
 
         grafana:
           enabled: true
-          adminPassword: "changeme"
+          adminPassword: "<REPLACE_WITH_GRAFANA_PASSWORD>"
           persistence:
             enabled: true
             size: 10Gi

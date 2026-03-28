@@ -19,6 +19,13 @@ charts/**/tmpcharts/
 .env.*
 !.env.example
 
+# TLS/SSL keys
+*.pem
+*-key.pem
+
+# Local secrets
+KubeSecrets/
+
 # OS
 .DS_Store
 Thumbs.db
