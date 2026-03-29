@@ -63,11 +63,14 @@ spec:
                 - name: PGHOST
                   value: "postgresql.infra.svc.cluster.local"
                 - name: PGUSER
-                  value: "admin_user"
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-credentials
+                      key: username
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: postgresql
+                      name: postgresql-credentials
                       key: password
               volumeMounts:
                 - name: backup-storage
