@@ -55,6 +55,11 @@ env:
     value: https://pricingapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
     value: https://pricing.codevertexitsolutions.com
+  # Map and logistics URLs
+  - name: NEXT_PUBLIC_TILE_SERVER_URL
+    value: https://tiles.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_LOGISTICS_API_URL
+    value: https://logisticsapi.codevertexitsolutions.com/api/v1
   # Optional third-party integrations (from secret)
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:

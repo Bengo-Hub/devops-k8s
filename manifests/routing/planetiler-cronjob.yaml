@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planetiler-tile-refresh
+  namespace: logistics
+  labels:
+    app: tileserver
+    component: tile-generation
+spec:
+  # Run every Monday at 3 AM UTC (1 hour after Valhalla data refresh)
+  schedule: "0 3 * * 1"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200 # 2 hours max
+      template:
+        metadata:
+          labels:
+            app: tileserver
+            component: tile-generation
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: planetiler
+              image: ghcr.io/onthegomap/planetiler:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "=== Planetiler Tile Refresh: $(date) ==="
+
+                  OUTPUT="/data/tiles/kenya.mbtiles"
+                  TEMP="/data/tiles/kenya.mbtiles.tmp"
+                  mkdir -p /data/tiles
+
+                  echo "Generating Kenya vector tiles from Geofabrik OSM extract..."
+                  java -jar /app/planetiler.jar \
+                    --area=kenya \
+                    --download \
+                    --download-threads=2 \
+                    --fetch-wikidata \
+                    --output="$TEMP" \
+                    --force \
+                    --nodemap-type=array \
+                    --storage=ram \
+                    2>&1
+
+                  # Atomic swap — tileserver keeps serving old tiles until new ones are ready
+                  if [ -f "$TEMP" ] && [ -s "$TEMP" ]; then
+                    mv "$TEMP" "$OUTPUT"
+                    echo "=== Tile generation complete: $(du -h $OUTPUT | cut -f1) ==="
+                    echo "Restart tileserver to pick up new tiles:"
+                    echo "  kubectl rollout restart deployment/tileserver -n logistics"
+                  else
+                    echo "ERROR: Tile generation failed"
+                    rm -f "$TEMP"
+                    exit 1
+                  fi
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: 3Gi
+                limits:
+                  cpu: "4"
+                  memory: 6Gi
+              volumeMounts:
+                - name: tileserver-data
+                  mountPath: /data
+          volumes:
+            - name: tileserver-data
+              persistentVolumeClaim:
+                claimName: tileserver-data
