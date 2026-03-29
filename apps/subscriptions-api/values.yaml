@@ -3,7 +3,7 @@ fullnameOverride: subscription-api
 replicaCount: 1
 image:
   repository: docker.io/codevertex/subscriptions-api
-  tag: "c4d6c208"
+  tag: "bb875575"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
