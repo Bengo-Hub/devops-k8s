@@ -85,6 +85,8 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+  - name: AUTH_AUDIENCE
+    value: "codevertex"
 resources:
   limits:
     cpu: 500m
