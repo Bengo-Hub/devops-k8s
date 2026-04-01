@@ -3,7 +3,7 @@ fullnameOverride: logistics-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "b4dfc5fd"
+  tag: "51c362cc"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
