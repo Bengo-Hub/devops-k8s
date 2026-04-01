@@ -100,6 +100,14 @@ env:
   # Subscriptions-api base URL (commercial tenant subscription checks)
   - name: Subscriptions__ApiUrl
     value: "http://subscriptions-api.subscriptions.svc.cluster.local:8080"
+  # Database connection pool settings (prevent connection exhaustion on shared PG max_connections=100)
+  # Npgsql defaults to MaxPoolSize=100 which is far too high for shared PostgreSQL.
+  - name: Database__MaxPoolSize
+    value: "6"
+  - name: Database__MinPoolSize
+    value: "2"
+  - name: Database__ConnectionIdleLifetime
+    value: "60"
   # CORS: frontend origins allowed to call this API
   # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
   # Add enforcement tenant custom frontend domains here as they are onboarded

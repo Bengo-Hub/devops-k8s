@@ -179,6 +179,14 @@ env:
     value: /app/media/backups
   - name: MEDIA_ROOT
     value: /app/media
+  # Database connection pool settings (prevent connection exhaustion on shared PG max_connections=100)
+  # Django persistent connections: each Daphne thread + Celery worker holds 1 connection for CONN_MAX_AGE seconds.
+  # With Daphne (1 process) + Celery (4 workers) + Beat (1), max ~6 connections.
+  # Reduced from default 600s to 60s to release idle connections faster.
+  - name: DB_CONN_MAX_AGE
+    value: "60"
+  - name: DB_CONNECT_TIMEOUT
+    value: "10"
 # Enhanced HPA with custom metrics
 autoscalingCustomMetrics:
   enabled: false # Disabled - using basic HPA for now
