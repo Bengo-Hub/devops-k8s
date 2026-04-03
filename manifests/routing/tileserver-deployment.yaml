@@ -28,15 +28,19 @@ spec:
             - -c
             - |
               set -e
-              mkdir -p /data/tiles
               MBTILES="/data/tiles/kenya.mbtiles"
+              mkdir -p /data/tiles
 
               if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
-                echo "Tiles already exist at $MBTILES, skipping generation."
+                echo "Tiles already exist at $MBTILES ($(du -h $MBTILES | cut -f1)), skipping."
                 exit 0
               fi
 
+              # Remove any empty/corrupted mbtiles file
+              rm -f "$MBTILES"
+
               echo "Generating Kenya vector tiles from Geofabrik OSM extract..."
+              echo "This may take 10-30 minutes depending on resources."
               java -jar /app/planetiler.jar \
                 --area=kenya \
                 --download \
