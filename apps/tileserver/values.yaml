@@ -133,9 +133,14 @@ initContainers:
         MBTILES="/data/tiles/kenya.mbtiles"
         mkdir -p /data/tiles
 
-        if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
-          echo "Tiles already exist at $MBTILES ($(du -h $MBTILES | cut -f1)), skipping."
-          exit 0
+        # Skip only if file exists and is larger than 1MB (valid mbtiles)
+        if [ -f "$MBTILES" ]; then
+          SIZE=$(stat -c%s "$MBTILES" 2>/dev/null || echo 0)
+          if [ "$SIZE" -gt 1048576 ]; then
+            echo "Tiles already exist at $MBTILES ($(du -h $MBTILES | cut -f1)), skipping."
+            exit 0
+          fi
+          echo "Found corrupt/incomplete mbtiles ($SIZE bytes), regenerating..."
         fi
 
         rm -f "$MBTILES"
