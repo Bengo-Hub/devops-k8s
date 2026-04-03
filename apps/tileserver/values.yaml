@@ -141,7 +141,7 @@ initContainers:
         rm -f "$MBTILES"
         echo "Generating Kenya vector tiles from Geofabrik OSM extract..."
         echo "This may take 10-30 minutes depending on resources."
-        java -jar /app/planetiler.jar \
+        java -cp @/app/jib-classpath-file com.onthegomap.planetiler.Main \
           --area=kenya \
           --download \
           --download-threads=2 \
