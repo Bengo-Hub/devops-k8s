@@ -106,6 +106,13 @@ if [ "$CURRENT_REPLICAS" != "1" ]; then
   sleep 5
 fi
 
+# Set deployment strategy for hostNetwork (maxSurge=0 so old pod dies before new one starts)
+log_info "Setting deployment strategy for hostNetwork (Recreate-like rolling update)..."
+kubectl patch deployment ingress-nginx-controller \
+  -n ingress-nginx \
+  --type='merge' \
+  -p='{"spec":{"strategy":{"type":"RollingUpdate","rollingUpdate":{"maxSurge":0,"maxUnavailable":1}}}}'
+
 # Patch ingress controller to use hostNetwork
 log_info "Patching ingress controller to use hostNetwork..."
 kubectl patch deployment ingress-nginx-controller \
