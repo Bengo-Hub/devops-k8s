@@ -41,9 +41,9 @@ spec:
                   SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
                   echo "Backup completed: ${FILENAME} (${SIZE})"
 
-                  # Cleanup backups older than 2 days
-                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +2 -delete
-                  echo "Cleanup completed (removed files older than 2 days)."
+                  # Cleanup backups older than 6 days
+                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +6 -delete
+                  echo "Cleanup completed (removed files older than 6 days)."
 
                   # Generate manifest.json for auth-api backup listing endpoint
                   echo '{"backups": [' > ${BACKUP_DIR}/manifest.json
