@@ -27,7 +27,7 @@ data:
       },
       "styles": {
         "osm-bright": {
-          "style": "osm-bright-gl-style/style-local.json",
+          "style": "basic-preview/style.json",
           "tilejson": {
             "type": "overlay",
             "bounds": [33.9, -4.7, 41.9, 5.5]
