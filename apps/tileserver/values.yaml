@@ -146,14 +146,14 @@ initContainers:
         rm -f "$MBTILES"
         echo "Generating Kenya vector tiles from Geofabrik OSM extract..."
         echo "This may take 10-30 minutes depending on resources."
-        java -cp @/app/jib-classpath-file com.onthegomap.planetiler.Main \
+        java -Xmx4g -cp @/app/jib-classpath-file com.onthegomap.planetiler.Main \
           --area=kenya \
           --download \
           --download-threads=2 \
           --output="$MBTILES" \
           --force \
-          --nodemap-type=array \
-          --storage=ram \
+          --nodemap-type=sparsearray \
+          --storage=mmap \
           2>&1
 
         if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
