@@ -12,8 +12,8 @@ data:
       "options": {
         "paths": {
           "root": "",
-          "fonts": "fonts",
-          "styles": "styles",
+          "fonts": "/usr/src/app/node_modules/tileserver-gl-styles/fonts",
+          "styles": "/usr/src/app/node_modules/tileserver-gl-styles/styles",
           "mbtiles": "/data/tiles"
         },
         "serveAllFonts": true,
