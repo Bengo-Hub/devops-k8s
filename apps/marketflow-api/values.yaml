@@ -3,14 +3,12 @@
 # ============================================================================
 nameOverride: marketflow-api
 fullnameOverride: marketflow-api
-
 image:
   repository: docker.io/codevertex/marketflow-api
-  tag: "latest"
+  tag: "689ffda7"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 # ============================================================================
 # REPLICA AND SCALING
 # ============================================================================
@@ -21,7 +19,6 @@ autoscaling:
   maxReplicas: 2
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
-
 # ============================================================================
 # SERVICE
 # ============================================================================
@@ -29,7 +26,6 @@ service:
   type: ClusterIP
   port: 4000
   targetPort: 4000
-
 # ============================================================================
 # DEPLOYMENT STRATEGY
 # ============================================================================
@@ -40,7 +36,6 @@ strategy:
     maxUnavailable: 0
 minReadySeconds: 30
 progressDeadlineSeconds: 900
-
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
@@ -118,7 +113,6 @@ env:
     value: "nomic-embed-text"
   - name: MF_AI_EMBEDDING_DIM
     value: "768"
-
 # ============================================================================
 # MIGRATIONS
 # ============================================================================
@@ -126,7 +120,6 @@ migrations:
   enabled: false
 seed:
   enabled: false
-
 # ============================================================================
 # RESOURCES
 # ============================================================================
@@ -137,7 +130,6 @@ resources:
   limits:
     cpu: 1000m
     memory: 512Mi
-
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
@@ -167,7 +159,6 @@ healthCheck:
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 5
-
 # ============================================================================
 # INGRESS
 # ============================================================================
@@ -197,7 +188,6 @@ ingress:
     - hosts:
         - marketflowapi.codevertexitsolutions.com
       secretName: marketflow-api-tls
-
 # ============================================================================
 # MONITORING
 # ============================================================================
@@ -207,7 +197,6 @@ monitoring:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -218,7 +207,6 @@ serviceMonitor:
   selector:
     matchLabels:
       app: marketflow-api
-
 # ============================================================================
 # SECURITY
 # ============================================================================
@@ -227,6 +215,5 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   runAsNonRoot: true
-
 pdb:
   enabled: false
