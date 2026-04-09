@@ -1,0 +1,181 @@
+# ============================================================================
+# MarketFlow AI - RAG Chatbot Service (Groq + pgvector + compliance filter)
+# ============================================================================
+nameOverride: marketflow-ai
+fullnameOverride: marketflow-ai
+
+image:
+  repository: docker.io/codevertex/marketflow-ai
+  tag: "latest"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+
+replicaCount: 1
+autoscaling:
+  enabled: false
+
+service:
+  type: ClusterIP
+  port: 4001
+  targetPort: 4001
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 30
+progressDeadlineSeconds: 900
+
+env:
+  - name: APP_ENV
+    value: production
+  - name: HTTP_PORT
+    value: "4001"
+  - name: HTTP_ALLOWED_ORIGINS
+    value: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com"
+  # Database (shared with marketflow-api — same DB for pgvector queries)
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: POSTGRES_URL
+  - name: POSTGRES_MAX_OPEN_CONNS
+    value: "4"
+  - name: POSTGRES_MAX_IDLE_CONNS
+    value: "2"
+  # Redis
+  - name: REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: REDIS_PASSWORD
+        optional: true
+  - name: REDIS_NAMESPACE
+    value: marketflow-ai
+  # Security
+  - name: MF_SECURITY_REQUIRE_JWT
+    value: "true"
+  - name: MF_SECURITY_JWKS_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+  - name: MF_SECURITY_JWT_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: MF_SECURITY_JWT_AUDIENCE
+    value: "codevertex"
+  # Groq AI (Primary LLM)
+  - name: MF_AI_GROQ_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: GROQ_API_KEY
+        optional: true
+  - name: MF_AI_GROQ_BASE_URL
+    value: "https://api.groq.com/openai/v1"
+  - name: MF_AI_GROQ_ROUTER_MODEL
+    value: "llama-3.1-8b-instant"
+  - name: MF_AI_GROQ_MAIN_MODEL
+    value: "llama-3.3-70b-versatile"
+  - name: MF_AI_GROQ_FALLBACK_MODEL
+    value: "gemma2-9b-it"
+  # Ollama (Embeddings only)
+  - name: MF_AI_OLLAMA_URL
+    value: "http://ollama.marketflow.svc.cluster.local:11434"
+  - name: MF_AI_EMBEDDING_MODEL
+    value: "nomic-embed-text"
+  - name: MF_AI_EMBEDDING_DIM
+    value: "768"
+  # MarketFlow API
+  - name: MF_AI_MARKETFLOW_API_URL
+    value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+
+migrations:
+  enabled: false
+seed:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+healthCheck:
+  enabled: true
+  startup:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+  hosts:
+    - host: marketflowai.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - marketflowai.codevertexitsolutions.com
+      secretName: marketflow-ai-tls
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+
+serviceMonitor:
+  enabled: true
+  namespace: infra
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+
+pdb:
+  enabled: false
