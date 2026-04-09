@@ -1,4 +1,4 @@
-{{- if and .Values.keda.enabled .Values.keda.triggers }}
+{{- if and .Values.keda .Values.keda.enabled .Values.keda.triggers }}
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:

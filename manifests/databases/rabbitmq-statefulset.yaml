@@ -169,23 +169,35 @@ spec:
             cpu: 250m
             memory: 512Mi
           limits:
-            cpu: 500m
+            cpu: 1000m  # RabbitMQ needs burst CPU for Erlang VM + diagnostics
             memory: 1Gi
         volumeMounts:
         - name: config
           mountPath: /etc/rabbitmq
         - name: data
           mountPath: /var/lib/rabbitmq
-        livenessProbe:
+        # Startup probe: wait up to 10 min for RabbitMQ to fully boot
+        # (boot takes ~180s; this gives headroom for slow recovery)
+        startupProbe:
           exec:
             command:
             - rabbitmq-diagnostics
             - -q
             - ping
-          initialDelaySeconds: 120
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 30
+          failureThreshold: 60
+        # Liveness probe: only runs AFTER startup probe succeeds
+        # Uses a simple TCP check on AMQP port instead of diagnostics
+        # to avoid CPU contention that causes probe timeouts
+        livenessProbe:
+          tcpSocket:
+            port: 5672
           periodSeconds: 30
-          timeoutSeconds: 20
+          timeoutSeconds: 5
           failureThreshold: 6
+        # Readiness probe: check AMQP port connectivity
         readinessProbe:
           exec:
             command:
@@ -194,18 +206,8 @@ spec:
             - check_port_connectivity
           initialDelaySeconds: 10
           periodSeconds: 30
-          timeoutSeconds: 20
+          timeoutSeconds: 30
           failureThreshold: 3
-        startupProbe:
-          exec:
-            command:
-            - rabbitmq-diagnostics
-            - -q
-            - ping
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 20
-          failureThreshold: 30
       volumes:
       - name: config
         configMap:

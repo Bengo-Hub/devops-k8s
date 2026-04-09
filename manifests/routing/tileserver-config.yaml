@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tileserver-config
+  namespace: logistics
+  labels:
+    app: tileserver
+    component: map-tiles
+data:
+  config.json: |
+    {
+      "options": {
+        "paths": {
+          "root": "",
+          "fonts": "/usr/src/app/node_modules/tileserver-gl-styles/fonts",
+          "styles": "/usr/src/app/node_modules/tileserver-gl-styles/styles",
+          "mbtiles": "/data/tiles"
+        },
+        "serveAllFonts": true,
+        "maxScaleFactor": 3,
+        "maxSize": 2048,
+        "pbfAlias": "pbf",
+        "formatQuality": {
+          "jpeg": 80,
+          "webp": 80
+        }
+      },
+      "styles": {
+        "osm-bright": {
+          "style": "basic-preview/style.json",
+          "tilejson": {
+            "type": "overlay",
+            "bounds": [33.9, -4.7, 41.9, 5.5]
+          }
+        }
+      },
+      "data": {
+        "v3": {
+          "mbtiles": "kenya.mbtiles"
+        }
+      }
+    }

@@ -290,21 +290,22 @@ supersetWorker:
     limits:
       cpu: 750m
       memory: 1.5Gi
+  # Use a simple process check instead of celery inspect ping which times out
+  # under load and causes constant CrashLoopBackOff restarts
   livenessProbe:
     exec:
       command:
         - sh
         - -c
-        - celery -A superset.tasks.celery_app:app inspect ping -d celery@$HOSTNAME
-    initialDelaySeconds: 120
-    periodSeconds: 60
-    timeoutSeconds: 60
-    failureThreshold: 3
+        - pgrep -f "celery" > /dev/null
+    initialDelaySeconds: 180
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 5
+  # Disable HPA for workers - single node can't get CPU metrics from
+  # metrics-server reliably, causing FailedComputeMetricsReplicas errors
   autoscaling:
-    enabled: true
-    minReplicas: 1
-    maxReplicas: 2
-    targetCPUUtilizationPercentage: 70
+    enabled: false
 
 # ============================================================================
 # CELERY BEAT - SCHEDULED TASKS
