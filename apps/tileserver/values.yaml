@@ -36,6 +36,8 @@ progressDeadlineSeconds: 600
 # CONTAINER ARGS
 # ============================================================================
 args:
+  - "--config"
+  - "/data/config.json"
   - "--verbose"
   - "--port"
   - "8080"
@@ -117,6 +119,73 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
+# ============================================================================
+# INIT CONTAINER - Generate Kenya vector tiles via Planetiler
+# ============================================================================
+initContainers:
+  - name: generate-tiles
+    image: ghcr.io/onthegomap/planetiler:latest
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        MBTILES="/data/tiles/kenya.mbtiles"
+        mkdir -p /data/tiles
+
+        # Skip only if file exists and is larger than 1MB (valid mbtiles)
+        if [ -f "$MBTILES" ]; then
+          SIZE=$(stat -c%s "$MBTILES" 2>/dev/null || echo 0)
+          if [ "$SIZE" -gt 1048576 ]; then
+            echo "Tiles already exist at $MBTILES ($(du -h $MBTILES | cut -f1)), skipping."
+            exit 0
+          fi
+          echo "Found corrupt/incomplete mbtiles ($SIZE bytes), regenerating..."
+        fi
+
+        rm -f "$MBTILES"
+        echo "Generating Kenya vector tiles from Geofabrik OSM extract..."
+        echo "This may take 10-30 minutes depending on resources."
+        java -Xmx4g -cp @/app/jib-classpath-file com.onthegomap.planetiler.Main \
+          --area=kenya \
+          --download \
+          --download-threads=2 \
+          --output="$MBTILES" \
+          --force \
+          --nodemap-type=sparsearray \
+          --storage=mmap \
+          2>&1
+
+        if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
+          echo "Tile generation complete: $(du -h $MBTILES | cut -f1)"
+        else
+          echo "ERROR: Tile generation failed."
+          exit 1
+        fi
+    volumeMounts:
+      - name: media
+        mountPath: /data
+    resources:
+      requests:
+        cpu: "1"
+        memory: 3Gi
+      limits:
+        cpu: "4"
+        memory: 6Gi
+    securityContext:
+      runAsUser: 0
+      runAsNonRoot: false
+# ============================================================================
+# EXTRA VOLUMES - Mount tileserver config from ConfigMap
+# ============================================================================
+volumes:
+  - name: tileserver-config
+    configMap:
+      name: tileserver-config
+volumeMounts:
+  - name: tileserver-config
+    mountPath: /data/config.json
+    subPath: config.json
 # ============================================================================
 # SECURITY CONTEXT
 # ============================================================================

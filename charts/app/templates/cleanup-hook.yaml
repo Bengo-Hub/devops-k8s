@@ -1,6 +1,4 @@
-{{- if .Values.cleanup }}
-{{- if .Values.cleanup.enabled }}
-{{- if eq .Values.cleanup.enabled true }}
+{{- if and .Values.cleanup .Values.cleanup.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -142,6 +140,4 @@ roleRef:
   kind: Role
   name: {{ include "app.fullname" . }}-cleanup
   apiGroup: rbac.authorization.k8s.io
-{{- end }}
-{{- end }}
 {{- end }}

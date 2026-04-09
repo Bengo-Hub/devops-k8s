@@ -34,7 +34,7 @@ spec:
 
         grafana:
           enabled: true
-          adminPassword: "changeme"
+          adminPassword: "<REPLACE_WITH_GRAFANA_PASSWORD>"
           persistence:
             enabled: true
             size: 10Gi
@@ -92,6 +92,10 @@ spec:
             enabled: false
             patch:
               enabled: false
+          # Disable TLS for operator web server since admission webhook patch
+          # (which creates the prometheus-admission secret/cert) is disabled
+          tls:
+            enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: infra

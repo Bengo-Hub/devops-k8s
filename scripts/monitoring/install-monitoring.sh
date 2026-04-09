@@ -425,7 +425,7 @@ helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   -n "${MONITORING_NAMESPACE}" \
   -f "${TEMP_VALUES}" \
   ${HELM_EXTRA_OPTS} \
-  --set-string grafana.adminPassword=changeme \
+  --set-string grafana.adminPassword="${GRAFANA_ADMIN_PASSWORD:-<REPLACE_WITH_GRAFANA_PASSWORD>}" \
   --set-string grafana.ingress.enabled=true \
   --set-string grafana.ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/ssl-redirect=true \
   --set-string grafana.ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/force-ssl-redirect=true \

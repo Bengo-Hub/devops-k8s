@@ -22,7 +22,7 @@ spec:
             fsGroup: 999
           containers:
             - name: pg-backup
-              image: postgres:16-alpine
+              image: postgres:17-alpine
               command:
                 - /bin/sh
                 - -c
@@ -41,9 +41,9 @@ spec:
                   SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
                   echo "Backup completed: ${FILENAME} (${SIZE})"
 
-                  # Cleanup backups older than 2 days
-                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +2 -delete
-                  echo "Cleanup completed (removed files older than 2 days)."
+                  # Cleanup backups older than 6 days
+                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +6 -delete
+                  echo "Cleanup completed (removed files older than 6 days)."
 
                   # Generate manifest.json for auth-api backup listing endpoint
                   echo '{"backups": [' > ${BACKUP_DIR}/manifest.json
@@ -123,6 +123,13 @@ spec:
         runAsUser: 999
         runAsGroup: 999
         fsGroup: 999
+      initContainers:
+        - name: seed-manifest
+          image: busybox:1.36
+          command: ['sh', '-c', 'if [ ! -f /backups/manifest.json ]; then echo ''{"backups": []}'' > /backups/manifest.json; fi']
+          volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
       containers:
         - name: nginx
           image: nginx:1.27-alpine
@@ -134,6 +141,10 @@ spec:
               readOnly: true
             - name: nginx-config
               mountPath: /etc/nginx/conf.d
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
           resources:
             requests:
               cpu: 10m
@@ -145,7 +156,7 @@ spec:
             httpGet:
               path: /manifest.json
               port: 8080
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 30
       volumes:
         - name: backup-storage
@@ -154,6 +165,10 @@ spec:
         - name: nginx-config
           configMap:
             name: backup-server-nginx-config
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -273,7 +273,11 @@ spec:
               # Row level security
               ROW_LEVEL_SECURITY_ENABLED = True
           
-          # Celery workers for async query execution - optimized
+          # Celery workers for async query execution
+          # Uses pgrep probe instead of celery inspect ping which times out
+          # under load and causes constant CrashLoopBackOff restarts.
+          # HPA disabled - single node can't get CPU metrics reliably,
+          # causing FailedComputeMetricsReplicas errors and scaling to max.
           supersetWorker:
             enabled: true
             replicaCount: 1
@@ -289,16 +293,13 @@ spec:
                 command:
                   - sh
                   - -c
-                  - celery -A superset.tasks.celery_app:app inspect ping -d celery@$HOSTNAME
-              initialDelaySeconds: 120
-              periodSeconds: 60
-              timeoutSeconds: 60
-              failureThreshold: 3
+                  - pgrep -f celery > /dev/null
+              initialDelaySeconds: 180
+              periodSeconds: 30
+              timeoutSeconds: 10
+              failureThreshold: 5
             autoscaling:
-              enabled: true
-              minReplicas: 1
-              maxReplicas: 4
-              targetCPUUtilizationPercentage: 70
+              enabled: false
           
           # Celery beat for scheduled tasks - optimized
           supersetCeleryBeat:

@@ -57,11 +57,10 @@ spec:
               timeoutSeconds: 10
               failureThreshold: 3
         
-        # Disable reloader sidecar to fix "too many open files" error
-        # Config reload can be done manually via kubectl rollout restart
-        nats:
-          reloader:
-            enabled: false
+        # Disable reloader sidecar - causes "too many open files" on pods
+        # with large JetStream data. Config reload via kubectl rollout restart
+        reloader:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: messaging

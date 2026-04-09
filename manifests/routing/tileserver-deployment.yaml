@@ -20,52 +20,59 @@ spec:
         component: map-tiles
     spec:
       initContainers:
-        # Init container downloads Kenya tiles on first run
-        - name: download-tiles
-          image: alpine:3.20
+        # Generate Kenya MBTiles on first run via Planetiler
+        - name: generate-tiles
+          image: ghcr.io/onthegomap/planetiler:latest
           command:
             - /bin/sh
             - -c
             - |
               set -e
-              MBTILES="/data/kenya.mbtiles"
+              MBTILES="/data/tiles/kenya.mbtiles"
+              mkdir -p /data/tiles
+
               if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
-                echo "Tiles already exist, skipping download."
+                echo "Tiles already exist at $MBTILES ($(du -h $MBTILES | cut -f1)), skipping."
                 exit 0
               fi
 
-              echo "Installing wget..."
-              apk add --no-cache wget
+              # Remove any empty/corrupted mbtiles file
+              rm -f "$MBTILES"
 
-              echo "Downloading Kenya vector tiles..."
-              # Protomaps provides free PMTiles extracts per country
-              # For mbtiles, use Planetiler or OpenMapTiles
-              wget -q --show-progress -O "$MBTILES" \
-                "https://build.protomaps.com/20240101-kenya.pmtiles" \
-                2>&1 || true
+              echo "Generating Kenya vector tiles from Geofabrik OSM extract..."
+              echo "This may take 10-30 minutes depending on resources."
+              java -cp @/app/jib-classpath-file com.onthegomap.planetiler.Main \
+                --area=kenya \
+                --download \
+                --download-threads=2 \
+                --output="$MBTILES" \
+                --force \
+                --nodemap-type=array \
+                --storage=ram \
+                2>&1
 
-              if [ ! -f "$MBTILES" ] || [ ! -s "$MBTILES" ]; then
-                echo "WARNING: Could not download tiles. You need to manually provision tile data."
-                echo "Options:"
-                echo "  1. java -jar planetiler.jar --area=kenya --output=/data/kenya.mbtiles"
-                echo "  2. Download from https://data.maptiler.com/downloads/tileset/osm/africa/kenya/"
-                echo "Creating placeholder so pod starts..."
-                touch "$MBTILES"
+              if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
+                echo "Tile generation complete: $(du -h $MBTILES | cut -f1)"
+              else
+                echo "ERROR: Tile generation failed."
+                exit 1
               fi
           volumeMounts:
             - name: tileserver-data
               mountPath: /data
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: "1"
+              memory: 3Gi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: "4"
+              memory: 6Gi
       containers:
         - name: tileserver
           image: maptiler/tileserver-gl:latest
           args:
+            - --config
+            - /data/config.json
             - --verbose
             - --port
             - "8080"
@@ -83,6 +90,9 @@ spec:
           volumeMounts:
             - name: tileserver-data
               mountPath: /data
+            - name: tileserver-config
+              mountPath: /data/config.json
+              subPath: config.json
           readinessProbe:
             httpGet:
               path: /health
@@ -99,3 +109,6 @@ spec:
         - name: tileserver-data
           persistentVolumeClaim:
             claimName: tileserver-data
+        - name: tileserver-config
+          configMap:
+            name: tileserver-config

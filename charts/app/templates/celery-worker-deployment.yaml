@@ -1,4 +1,4 @@
-{{- if .Values.celeryWorker.enabled }}
+{{- if and .Values.celeryWorker .Values.celeryWorker.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
