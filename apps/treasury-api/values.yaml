@@ -81,6 +81,8 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_AUDIENCE
     value: "codevertex"
+  - name: HTTP_PUBLIC_BASE_URL
+    value: "https://booksapi.codevertexitsolutions.com"
 resources:
   limits:
     cpu: 1000m
