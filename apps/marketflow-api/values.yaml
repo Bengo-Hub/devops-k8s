@@ -53,9 +53,9 @@ env:
         name: marketflow-api-secrets
         key: POSTGRES_URL
   - name: POSTGRES_MAX_OPEN_CONNS
-    value: "8"
+    value: "4"
   - name: POSTGRES_MAX_IDLE_CONNS
-    value: "3"
+    value: "2"
   - name: POSTGRES_CONN_MAX_LIFETIME
     value: "15m"
   - name: POSTGRES_RUN_MIGRATIONS
