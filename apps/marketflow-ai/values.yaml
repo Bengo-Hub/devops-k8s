@@ -3,23 +3,19 @@
 # ============================================================================
 nameOverride: marketflow-ai
 fullnameOverride: marketflow-ai
-
 image:
   repository: docker.io/codevertex/marketflow-ai
-  tag: "latest"
+  tag: "0547f0d0"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 replicaCount: 1
 autoscaling:
   enabled: false
-
 service:
   type: ClusterIP
   port: 4001
   targetPort: 4001
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
@@ -27,7 +23,6 @@ strategy:
     maxUnavailable: 0
 minReadySeconds: 30
 progressDeadlineSeconds: 900
-
 env:
   - name: APP_ENV
     value: production
@@ -90,12 +85,10 @@ env:
   # MarketFlow API
   - name: MF_AI_MARKETFLOW_API_URL
     value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
-
 migrations:
   enabled: false
 seed:
   enabled: false
-
 resources:
   requests:
     cpu: 200m
@@ -103,7 +96,6 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
-
 healthCheck:
   enabled: true
   startup:
@@ -130,7 +122,6 @@ healthCheck:
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 5
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -155,14 +146,12 @@ ingress:
     - hosts:
         - marketflowai.codevertexitsolutions.com
       secretName: marketflow-ai-tls
-
 monitoring:
   enabled: true
   prometheus:
     enabled: true
     port: 9090
     path: /metrics
-
 serviceMonitor:
   enabled: true
   namespace: infra
@@ -170,12 +159,10 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
-
 securityContext:
   runAsUser: 1000
   runAsGroup: 1000
   fsGroup: 1000
   runAsNonRoot: true
-
 pdb:
   enabled: false
