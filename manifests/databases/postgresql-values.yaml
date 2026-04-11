@@ -1,5 +1,35 @@
 ## Bitnami PostgreSQL Helm Chart Values
 ## Custom image with pgvector extension
+##
+## ============================================================================
+## CONNECTION BUDGET (max_connections=200, ~5 reserved for superuser)
+## ============================================================================
+## Update this table when adding services or changing pool sizes.
+##
+## Service               | MaxOpen | Replicas(min/max) | Worst-Case
+## ----------------------|---------|-------------------|----------
+## auth-api              |    8    |      1 / 2        |    16
+## ordering-backend      |    8    |      1 / 2        |    16
+## inventory-api         |    8    |      1 / 1        |     8
+## logistics-api         |    8    |      1 / 1        |     8
+## pos-api               |    8    |      1 / 1        |     8
+## treasury-api          |    8    |      1 / 1        |     8
+## notifications-api     |    6    |      1 / 1        |     6
+## iot-api               |    6    |      1 / 1        |     6
+## projects-api          |    6    |      1 / 1        |     6
+## subscriptions-api     |    6    |      1 / 1        |     6
+## ticketing-api         |    6    |      1 / 1        |     6
+## marketflow-api        |    4    |      1 / 1        |     4
+## marketflow-ai         |    4    |      1 / 1        |     4
+## erp-api (Django)      |   ~6    |      1 / 3        |    18
+## truload-backend (.NET)|    6    |      1 / 1        |     6
+## isp-billing (Python)  |  3+2   |      1 / 1        |     5
+## superset (web+celery) |  3+2   |      1 / 1        |    15
+## PG superuser reserved |    -    |        -          |     5
+## ----------------------|---------|-------------------|----------
+## TOTAL                 |         |                   |   ~151
+## HEADROOM              |         |                   |   ~49
+## ============================================================================
 
 ## Global settings
 global:
