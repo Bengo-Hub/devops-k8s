@@ -89,7 +89,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 120
     periodSeconds: 15
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 20
   liveness:
     httpGet:
@@ -97,7 +97,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 600
     periodSeconds: 30
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 10
 # ============================================================================
 # INGRESS CONFIGURATION

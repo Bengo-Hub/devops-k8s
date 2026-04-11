@@ -38,7 +38,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 15
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 60 # 10 minutes total for startup (includes waiting for migrations)
   readiness:
     httpGet:
@@ -46,7 +46,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 20
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
   liveness:
     httpGet:
@@ -54,7 +54,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 60
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # ============================================================================
 # DEPLOYMENT STRATEGY

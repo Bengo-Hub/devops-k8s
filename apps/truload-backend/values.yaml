@@ -26,7 +26,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 3
   liveness:
     httpGet:
@@ -34,7 +34,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # Production resource limits for .NET API
 # Increased memory for EF Core migrations and seeding
