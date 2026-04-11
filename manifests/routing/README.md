@@ -1,192 +1,143 @@
-# Map Routing Infrastructure
+# Map & Routing Infrastructure
 
-Self-hosted OpenStreetMap routing stack for the logistics platform. Replaces paid Google Maps APIs with free, open-source alternatives.
+Self-hosted OpenStreetMap stack for the logistics platform. Replaces paid Google Maps APIs with free, open-source alternatives — zero per-request costs at any scale.
+
+## Architecture
+
+```
+Geofabrik (free OSM data)
+    │
+    ├─→ Planetiler ──→ kenya.mbtiles ──→ TileServer-GL ──→ tiles.codevertexitsolutions.com
+    │   (weekly CronJob)                  (vector tiles)     (MapLibre GL JS frontends)
+    │
+    └─→ Valhalla ──→ routing graph ──→ logistics-api ──→ routing.codevertexitsolutions.com
+        (auto-rebuild)                  (ETA, directions)    (tenant-scoped, rate-limited)
+```
 
 ## Components
 
-| Service | Purpose | Port | Subdomain | Managed By |
-|---------|---------|------|-----------|------------|
-| **Valhalla** | Routing engine (ETA, distance matrix, isochrones, map matching) | 8002 | `routing.codevertexitsolutions.com` | ArgoCD (`apps/valhalla/`) |
-| **TileServer-GL** | Vector map tile server for MapLibre frontends | 8080 | `tiles.codevertexitsolutions.com` | ArgoCD (`apps/tileserver/`) |
+| Service | Purpose | Port | Domain |
+|---------|---------|------|--------|
+| **TileServer-GL** | Vector tile server for MapLibre frontends | 8080 | `tiles.codevertexitsolutions.com` |
+| **Planetiler** | Generates OpenMapTiles mbtiles from OSM data | — | CronJob (weekly) |
+| **Valhalla** | Routing engine (ETA, distance matrix, isochrones) | 8002 | `routing.codevertexitsolutions.com` |
 
-## Data Source
+## Data Pipeline
 
-- **OpenStreetMap Kenya extract** from [Geofabrik](https://download.geofabrik.de/africa/kenya.html)
-- Auto-refreshed weekly (Monday 2AM UTC) via CronJob `valhalla-data-refresh`
-- Kenya PBF: ~326 MB, expands to ~2-3 GB Valhalla tiles
+Both tile and routing data come from **Geofabrik Kenya OSM extract** (free, updated daily):
 
-## Deployment (ArgoCD)
+| Job | Schedule | Source | Output |
+|-----|----------|--------|--------|
+| `planetiler-tile-refresh` | Monday 3 AM UTC | `geofabrik.de/africa/kenya-latest.osm.pbf` | `/data/tiles/kenya.mbtiles` (~200MB) |
+| `valhalla-data-refresh` | Monday 2 AM UTC | `geofabrik.de/africa/kenya-latest.osm.pbf` | Valhalla routing graph (~300MB) |
 
-Both services are managed via ArgoCD with auto-sync, selfHeal, and prune enabled. **Do not deploy manually** — changes to `apps/valhalla/values.yaml` or `apps/tileserver/values.yaml` trigger automatic sync.
+## Manifests
+
+```
+manifests/routing/
+├── kustomization.yaml
+├── README.md
+├── tileserver-pvc.yaml          # 5Gi PVC for mbtiles data
+├── tileserver-config.yaml       # TileServer-GL config (osm-bright style)
+├── tileserver-deployment.yaml   # TileServer-GL + Planetiler init container
+├── tileserver-service.yaml      # Service + Ingress (tiles.codevertexitsolutions.com)
+├── planetiler-cronjob.yaml      # Weekly tile regeneration
+├── valhalla-pvc.yaml            # 10Gi PVC for routing data
+├── valhalla-deployment.yaml     # Valhalla routing engine
+├── valhalla-service.yaml        # Service + Ingress (routing.codevertexitsolutions.com)
+└── valhalla-cronjob.yaml        # Weekly OSM data refresh
+```
+
+## First Deployment
+
+On first deployment, the tileserver init container runs Planetiler to generate Kenya tiles (~5-10 min). Subsequent restarts skip this if tiles exist.
 
 ```bash
-# Check sync status
-kubectl get applications -n argocd valhalla tileserver
+# Apply all manifests
+kubectl apply -k manifests/routing/
 
-# Force refresh (if stuck)
-kubectl patch application valhalla -n argocd --type=merge \
-  -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+# Watch tile generation progress on first run
+kubectl logs -f deployment/tileserver -n logistics -c init-tiles
 ```
 
-## Resource Requirements
+## Operations
 
-| Component | CPU Request | Memory Request | Memory Limit | Disk | HPA | VPA |
-|-----------|-----------|---------------|-------------|------|-----|-----|
-| Valhalla | 1 core | 3Gi | 5Gi | 10Gi | 1 replica (PVC) | Recommendation mode |
-| TileServer | 250m | 512Mi | 1Gi | 5Gi | Up to 2 replicas | Recommendation mode |
-
-## Valhalla API Reference
-
-Base URL: `https://routing.codevertexitsolutions.com` (external) or `http://valhalla.logistics.svc.cluster.local:8002` (internal)
-
-### Status / Health Check
-
-```
-GET /status
-```
-
-Returns version, available actions, and tileset timestamp.
-
-### Route
-
-```
-GET /route?json={"locations":[{"lat":-1.2864,"lon":36.8172},{"lat":-1.2635,"lon":36.8028}],"costing":"auto"}
-```
-
-**Costing modes:** `auto`, `bicycle`, `pedestrian`, `motor_scooter`, `motorcycle`
-
-Response includes: `trip.legs[].shape` (encoded polyline), `trip.summary.length` (km), `trip.summary.time` (seconds).
-
-### Distance Matrix (Sources to Targets)
-
-```
-GET /sources_to_targets?json={"sources":[{"lat":-1.2864,"lon":36.8172}],"targets":[{"lat":-1.2635,"lon":36.8028},{"lat":-1.2921,"lon":36.8219}],"costing":"auto"}
-```
-
-Returns N×M matrix of `distance` (km) and `time` (seconds).
-
-### Isochrone (Reachability)
-
-```
-GET /isochrone?json={"locations":[{"lat":-1.2864,"lon":36.8172}],"costing":"auto","contours":[{"time":15}]}
-```
-
-Returns GeoJSON polygon of area reachable within `time` minutes.
-
-### Locate (Map Matching)
-
-```
-GET /locate?json={"locations":[{"lat":-1.2864,"lon":36.8172}],"costing":"auto"}
-```
-
-Snaps coordinates to nearest road network.
-
-### Trace Route (GPS Track Matching)
-
-```
-POST /trace_route
-{"shape":[{"lat":-1.2864,"lon":36.8172},...],"costing":"auto","shape_match":"map_snap"}
-```
-
-Matches GPS traces to road network for accurate route reconstruction.
-
-### Optimized Route (TSP)
-
-```
-POST /optimized_route
-{"locations":[{"lat":-1.2864,"lon":36.8172},{"lat":-1.2635,"lon":36.8028},...],"costing":"auto"}
-```
-
-Solves the Travelling Salesman Problem for multiple delivery stops.
-
-### Height (Elevation)
-
-```
-GET /height?json={"shape":[{"lat":-1.2864,"lon":36.8172}],"range":true}
-```
-
-Returns elevation data for coordinates.
-
-## TileServer API Reference
-
-Base URL: `https://tiles.codevertexitsolutions.com` (external) or `http://tileserver.logistics.svc.cluster.local:8080` (internal)
-
-### Tile Endpoints
-
-| Endpoint | Format | Usage |
-|----------|--------|-------|
-| `/{style}/{z}/{x}/{y}.png` | Raster tiles | `<img>` tags, Leaflet |
-| `/data/{source}/{z}/{x}/{y}.pbf` | Vector tiles | MapLibre GL JS |
-| `/styles/{style}/style.json` | Style JSON | MapLibre style URL |
-| `/` | Viewer | Browser tile preview |
-
-### MapLibre Integration
-
-```javascript
-import { BengoMap } from '@bengo-hub/maps';
-
-<BengoMap
-  tileServerUrl="https://tiles.codevertexitsolutions.com"
-  routingApiUrl="https://logisticsapi.codevertexitsolutions.com/api/v1/{tenant}/routing"
-/>
-```
-
-## Logistics-API Integration
-
-The logistics-api wraps Valhalla with caching, rate limiting, and tenant scoping:
-
-| Logistics-API Endpoint | Valhalla Endpoint | Description |
-|----------------------|-------------------|-------------|
-| `GET /{tenant}/routing/route` | `/route` | Route with ETA + distance |
-| `GET /{tenant}/routing/eta` | `/route` | ETA only (minutes) |
-| `POST /{tenant}/routing/matrix` | `/sources_to_targets` | Distance/duration matrix |
-| `GET /{tenant}/routing/isochrone` | `/isochrone` | Reachability polygon |
-| `GET /{tenant}/routing/health` | `/status` | Provider health check |
-| `GET /api/v1/track/{code}` | — | Public tracking (no auth) |
-
-**Rate limits** per tenant plan (see `subscriptions-api` tier limits):
-- `routing_requests_per_day`: 100 (Starter) / 1000 (Growth) / 10000 (Professional)
-- `live_tracking_requests_per_day`: 500 / 5000 / unlimited
-- `map_loads_per_day`: 200 / 2000 / unlimited
-
-## Internal Access (from cluster services)
-
-```
-Valhalla:    http://valhalla.logistics.svc.cluster.local:8002
-TileServer:  http://tileserver.logistics.svc.cluster.local:8080
-```
-
-## Data Refresh
-
-The `valhalla-data-refresh` CronJob downloads fresh Kenya OSM data weekly (Monday 2AM UTC). After download, the Valhalla pod must be restarted to rebuild tiles:
+### Manual tile refresh
 
 ```bash
-# Check CronJob status
-kubectl get cronjobs -n logistics
+# Trigger Planetiler to regenerate tiles
+kubectl create job --from=cronjob/planetiler-tile-refresh tiles-manual -n logistics
 
-# Manual trigger
-kubectl create job --from=cronjob/valhalla-data-refresh valhalla-refresh-manual -n logistics
+# After completion, restart tileserver to load new tiles
+kubectl rollout restart deployment/tileserver -n logistics
+```
 
-# Restart Valhalla to rebuild tiles after data refresh
+### Manual Valhalla data refresh
+
+```bash
+kubectl create job --from=cronjob/valhalla-data-refresh valhalla-manual -n logistics
 kubectl rollout restart deployment/valhalla -n logistics
 ```
 
-## Adding More Countries
+### Check status
 
-Edit `apps/valhalla/values.yaml` env `tile_urls` to add comma-separated PBF URLs:
-
-```yaml
-env:
-  - name: tile_urls
-    value: "https://download.geofabrik.de/africa/kenya-latest.osm.pbf,https://download.geofabrik.de/africa/uganda-latest.osm.pbf"
+```bash
+kubectl get pods -n logistics -l part-of=map-services
+kubectl get cronjobs -n logistics
 ```
 
-Increase memory limits proportionally (~1-2GB per country).
+## Tile API
 
-## PostgreSQL Extensions
+Base URL: `https://tiles.codevertexitsolutions.com`
+Internal: `http://tileserver.logistics.svc.cluster.local:8080`
 
-The shared PostgreSQL cluster (`infra/postgresql`) includes:
-- **PostGIS 3.6.2** — Geospatial queries (delivery zones, proximity search)
-- **pgvector 0.7.4** — Vector similarity search (address embeddings)
+| Endpoint | Format | Usage |
+|----------|--------|-------|
+| `/styles/osm-bright/style.json` | Style JSON | MapLibre style URL |
+| `/data/v3/{z}/{x}/{y}.pbf` | Vector tiles | MapLibre GL JS |
+| `/styles/osm-bright/{z}/{x}/{y}.png` | Raster tiles | Fallback / `<img>` |
+| `/health` | JSON | Health check |
 
-Enabled on `postgres` and `logistics` databases. Use `CREATE EXTENSION IF NOT EXISTS postgis;` on new databases.
+### MapLibre Integration
+
+```tsx
+import { MapProvider, MapContainer } from '@bengo-hub/maps';
+
+<MapProvider
+  tileServerUrl="https://tiles.codevertexitsolutions.com"
+  apiBaseUrl="https://logisticsapi.codevertexitsolutions.com/api/v1"
+  authToken={jwt}
+>
+  <MapContainer center={[36.82, -1.29]} zoom={13} />
+</MapProvider>
+```
+
+## Valhalla API
+
+Base URL: `https://routing.codevertexitsolutions.com`
+Internal: `http://valhalla.logistics.svc.cluster.local:8002`
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /route?json={...}` | Turn-by-turn routing |
+| `GET /sources_to_targets?json={...}` | Distance/time matrix |
+| `GET /isochrone?json={...}` | Reachability polygon |
+| `GET /locate?json={...}` | Snap to road |
+| `POST /optimized_route` | Multi-stop optimization (TSP) |
+| `GET /status` | Health / version check |
+
+**Costing modes:** `auto`, `bicycle`, `pedestrian`, `motor_scooter`, `motorcycle`
+
+## Adding Countries
+
+1. Update `planetiler-cronjob.yaml` — change `--area=kenya` to `--area=kenya,uganda`
+2. Update `valhalla-deployment.yaml` — add PBF URLs to `tile_urls`
+3. Increase PVC sizes and memory limits proportionally (~1-2GB per country)
+
+## Resource Requirements
+
+| Component | CPU Req | Mem Req | Mem Limit | Disk |
+|-----------|---------|---------|-----------|------|
+| TileServer | 250m | 512Mi | 1Gi | 5Gi (tiles) |
+| Planetiler (Job) | 1 | 3Gi | 6Gi | shared PVC |
+| Valhalla | 1 | 3Gi | 5Gi | 10Gi |
