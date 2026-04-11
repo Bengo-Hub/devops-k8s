@@ -1,10 +1,11 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: tileserver-data
+  name: tileserver-tiles
   namespace: logistics
   labels:
     app: tileserver
+    component: map-tiles
 spec:
   accessModes:
     - ReadWriteOnce
