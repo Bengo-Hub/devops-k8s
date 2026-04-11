@@ -81,8 +81,8 @@ metrics:
       memory: "64Mi"
       cpu: "50m"
     limits:
-      memory: "128Mi"
-      cpu: "100m"
+      memory: "256Mi"
+      cpu: "200m"
 
 ## Sentinel (if using replication for HA)
 sentinel:
