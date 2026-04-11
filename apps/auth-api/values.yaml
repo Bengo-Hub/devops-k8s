@@ -59,7 +59,7 @@ env:
     value: "false"
   # Database connection pool settings (prevent connection exhaustion)
   - name: POSTGRES_MAX_OPEN_CONNS
-    value: "8" # Reduced to fit within shared PG max_connections=100 budget
+    value: "8" # Conservative to fit within shared PG max_connections=200 budget
   - name: POSTGRES_MAX_IDLE_CONNS
     value: "3" # Reduced from default 5
   - name: POSTGRES_CONN_MAX_LIFETIME

@@ -100,7 +100,7 @@ env:
   # Subscriptions-api base URL (commercial tenant subscription checks)
   - name: Subscriptions__ApiUrl
     value: "http://subscriptions-api.subscriptions.svc.cluster.local:8080"
-  # Database connection pool settings (prevent connection exhaustion on shared PG max_connections=100)
+  # Database connection pool settings (prevent connection exhaustion on shared PG max_connections=200)
   # Npgsql defaults to MaxPoolSize=100 which is far too high for shared PostgreSQL.
   - name: Database__MaxPoolSize
     value: "6"
