@@ -1,22 +1,18 @@
 nameOverride: marketflow-ui
 fullnameOverride: marketflow-ui
-
 image:
   repository: docker.io/codevertex/marketflow-ui
-  tag: "latest"
+  tag: "f928d94c"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 replicaCount: 1
 autoscaling:
   enabled: false
-
 service:
   type: ClusterIP
   port: 3000
   targetPort: 3000
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
@@ -24,7 +20,6 @@ strategy:
     maxUnavailable: 0
 minReadySeconds: 15
 progressDeadlineSeconds: 600
-
 env:
   - name: NEXT_PUBLIC_API_URL
     value: "https://marketflowapi.codevertexitsolutions.com"
@@ -36,12 +31,10 @@ env:
     value: "marketflow-ui"
   - name: NEXT_PUBLIC_APP_URL
     value: "https://marketflow.codevertexitsolutions.com"
-
 migrations:
   enabled: false
 seed:
   enabled: false
-
 resources:
   requests:
     cpu: 50m
@@ -49,7 +42,6 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
-
 healthCheck:
   enabled: true
   startup:
@@ -73,7 +65,6 @@ healthCheck:
     initialDelaySeconds: 15
     periodSeconds: 20
     failureThreshold: 5
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -91,15 +82,12 @@ ingress:
     - hosts:
         - marketflow.codevertexitsolutions.com
       secretName: marketflow-ui-tls
-
 monitoring:
   enabled: false
-
 securityContext:
   runAsUser: 1001
   runAsGroup: 1001
   fsGroup: 1001
   runAsNonRoot: true
-
 pdb:
   enabled: false
