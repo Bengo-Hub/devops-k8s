@@ -134,6 +134,19 @@ env:
         name: notifications-api-env
         key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
         optional: true
+  # Service URLs for email links (override tenant website for specific services)
+  - name: NOTIFICATIONS_ORDERING_APP_URL
+    value: "https://ordersapp.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_RIDER_APP_URL
+    value: "https://riderapp.codevertexitsolutions.com/"
+  - name: NOTIFICATIONS_SSO_UI_URL
+    value: "https://accounts.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_TREASURY_APP_URL
+    value: "https://books.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_POS_APP_URL
+    value: "https://pos.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_LOGISTICS_APP_URL
+    value: "https://logistics.codevertexitsolutions.com"
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
