@@ -38,11 +38,11 @@ healthCheck:
 # Production resource limits for Vue UI
 resources:
   requests:
-    cpu: 100m # Balanced for 12-core server
-    memory: 256Mi
+    cpu: 50m
+    memory: 128Mi
   limits:
-    cpu: 500m
-    memory: 768Mi
+    cpu: 200m
+    memory: 256Mi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: false
