@@ -57,11 +57,11 @@ env:
         key: NEXT_PUBLIC_SENTRY_DSN
         optional: true
 resources:
-  limits:
-    cpu: 500m
-    memory: 768Mi
   requests:
-    cpu: 100m
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
     memory: 256Mi
 autoscaling:
   enabled: false

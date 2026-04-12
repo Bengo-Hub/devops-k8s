@@ -75,12 +75,12 @@ env:
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://inventory.codevertexitsolutions.com,https://inventoryapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com"
 resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
   limits:
     cpu: 500m
     memory: 512Mi
-  requests:
-    cpu: 50m # Minimal - service not actively used
-    memory: 128Mi
 autoscaling:
   enabled: true
   minReplicas: 1

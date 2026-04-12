@@ -29,11 +29,11 @@ healthCheck:
 # Production resource limits for Next.js
 resources:
   requests:
-    cpu: 30m # Further reduced - service not actively used
-    memory: 96Mi
+    cpu: 50m
+    memory: 128Mi
   limits:
     cpu: 200m
-    memory: 192Mi
+    memory: 256Mi
 # Horizontal autoscaling
 autoscaling:
   enabled: false

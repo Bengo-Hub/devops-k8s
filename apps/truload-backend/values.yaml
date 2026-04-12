@@ -40,11 +40,11 @@ healthCheck:
 # Increased memory for EF Core migrations and seeding
 resources:
   requests:
-    cpu: 200m # Priority service — increased for .NET API + EF Core
-    memory: 512Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 500m
+    memory: 512Mi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: false
