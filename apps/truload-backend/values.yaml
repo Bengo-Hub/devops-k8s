@@ -2,7 +2,7 @@ nameOverride: truload-backend
 fullnameOverride: truload-backend
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: 9bd863a5
+  tag: 0297fe27
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
