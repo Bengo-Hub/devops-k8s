@@ -150,7 +150,7 @@ extraPersistentVolumeClaims:
 # Additional volume mounts for backup storage
 volumeMounts:
   - name: backup-storage
-    mountPath: /var/backups/truload
+    mountPath: /app/backups/truload
 volumes:
   - name: backup-storage
     persistentVolumeClaim:
@@ -162,18 +162,18 @@ initContainers:
     command: ['sh', '-c']
     args:
       - |
-        echo "Initializing backup directory: /var/backups/truload"
-        mkdir -p /var/backups/truload
-        chmod -R 775 /var/backups/truload 2>/dev/null || true
-        if [ -w "/var/backups/truload" ]; then
+        echo "Initializing backup directory: /app/backups/truload"
+        mkdir -p /app/backups/truload
+        chmod -R 775 /app/backups/truload 2>/dev/null || true
+        if [ -w "/app/backups/truload" ]; then
           echo "Backup directory is writable"
         else
           echo "Warning: Backup directory may not be writable"
-          ls -la /var/backups/truload || true
+          ls -la /app/backups/truload || true
         fi
     volumeMounts:
       - name: backup-storage
-        mountPath: /var/backups/truload
+        mountPath: /app/backups/truload
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001
