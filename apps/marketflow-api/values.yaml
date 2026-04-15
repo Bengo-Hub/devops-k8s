@@ -87,6 +87,15 @@ env:
     value: "codevertex"
   - name: MF_SECURITY_AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
+  # 32-byte base64 key used to encrypt ProviderSetting secrets at rest.
+  # Must be populated before any provider_configure call with secret_keys;
+  # rotation requires re-encrypting existing rows.
+  - name: MF_SECURITY_ENCRYPTION_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-api-secrets
+        key: ENCRYPTION_KEY
+        optional: true
   - name: MF_META_VERIFY_TOKEN
     valueFrom:
       secretKeyRef:
