@@ -1,6 +1,8 @@
 # Daily cluster maintenance CronJob - runs at 3:00 AM UTC
 # Cleans up: failed/stuck pods, stale ReplicaSets, completed Jobs,
-# old Completed pods, and unused container images on the node.
+# old Completed pods, unused container images on the node, and
+# Evicted pods across all namespaces. Also reports (list-only,
+# no deletion) orphan PVCs that are not mounted by any Pod.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -68,7 +70,7 @@ spec:
               # 1. FAILED PODS (all namespaces)
               # -------------------------------------------------------
               echo ""
-              echo "[1/9] Cleaning up Failed pods..."
+              echo "[1/11] Cleaning up Failed pods..."
               kubectl get pods --all-namespaces --field-selector=status.phase=Failed \
                 -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null | \
               while read NS POD; do
@@ -80,7 +82,7 @@ spec:
               # -------------------------------------------------------
               # 2. IMAGE PULL ERRORS (>10 min old)
               # -------------------------------------------------------
-              echo "[2/9] Cleaning up ImagePullBackOff/ErrImagePull pods..."
+              echo "[2/11] Cleaning up ImagePullBackOff/ErrImagePull pods..."
               kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '
                 .items[] | select(
                   .status.containerStatuses != null and
@@ -97,7 +99,7 @@ spec:
               # -------------------------------------------------------
               # 3. CRASHLOOPBACKOFF PODS (>15 min old)
               # -------------------------------------------------------
-              echo "[3/9] Cleaning up CrashLoopBackOff pods (>15min)..."
+              echo "[3/11] Cleaning up CrashLoopBackOff pods (>15min)..."
               kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '
                 .items[] | select(
                   .status.containerStatuses != null and
@@ -114,7 +116,7 @@ spec:
               # -------------------------------------------------------
               # 4. STUCK PENDING / CONTAINERCREATING / CONFIG ERROR (>30 min)
               # -------------------------------------------------------
-              echo "[4/9] Cleaning up stuck Pending/ContainerCreating pods (>30min)..."
+              echo "[4/11] Cleaning up stuck Pending/ContainerCreating pods (>30min)..."
               kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '
                 .items[] | select(
                   (
@@ -139,7 +141,7 @@ spec:
               # -------------------------------------------------------
               # 5. STUCK TERMINATING PODS (>5 min)
               # -------------------------------------------------------
-              echo "[5/9] Cleaning up stuck Terminating pods..."
+              echo "[5/11] Cleaning up stuck Terminating pods..."
               kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '
                 .items[] | select(
                   .metadata.deletionTimestamp != null and
@@ -155,7 +157,7 @@ spec:
               # -------------------------------------------------------
               # 6. COMPLETED PODS (>1 hour old, all namespaces)
               # -------------------------------------------------------
-              echo "[6/9] Cleaning up old Completed pods..."
+              echo "[6/11] Cleaning up old Completed pods..."
               kubectl get pods --all-namespaces --field-selector=status.phase=Succeeded \
                 -o json 2>/dev/null | jq -r '
                 .items[] | select(
@@ -170,7 +172,7 @@ spec:
               # -------------------------------------------------------
               # 7. COMPLETED / FAILED JOBS (>24 hours old)
               # -------------------------------------------------------
-              echo "[7/9] Cleaning up old completed/failed Jobs..."
+              echo "[7/11] Cleaning up old completed/failed Jobs..."
               kubectl get jobs --all-namespaces -o json 2>/dev/null | jq -r '
                 .items[] | select(
                   (.status.completionTime != null and
@@ -195,7 +197,7 @@ spec:
               # 8. STALE REPLICASETS (0 desired, 0 current replicas)
               # Uses awk on tabular output instead of JSON parsing for speed
               # -------------------------------------------------------
-              echo "[8/9] Cleaning up stale ReplicaSets (0/0 replicas)..."
+              echo "[8/11] Cleaning up stale ReplicaSets (0/0 replicas)..."
               kubectl get rs --all-namespaces --no-headers 2>/dev/null | \
                 awk '$3==0 && $4==0 {print $1, $2}' | while read NS RS; do
                 [ -z "$NS" ] && continue
@@ -206,7 +208,7 @@ spec:
               # -------------------------------------------------------
               # 9. STALE ACME HTTP SOLVER PODS (>2 hours)
               # -------------------------------------------------------
-              echo "[9/9] Cleaning up stale ACME solver pods (>2h)..."
+              echo "[9/11] Cleaning up stale ACME solver pods (>2h)..."
               kubectl get pods --all-namespaces -l acme.cert-manager.io/http01-solver=true \
                 -o json 2>/dev/null | jq -r '
                 .items[] | select(
@@ -217,6 +219,43 @@ spec:
                 echo "  Deleting stale ACME solver $NS/$POD"
                 kubectl delete pod "$POD" -n "$NS" --grace-period=0 2>/dev/null || true
               done
+
+              # -------------------------------------------------------
+              # 10. EVICTED PODS (all namespaces)
+              # -------------------------------------------------------
+              echo "[10/11] Cleaning up Evicted pods..."
+              kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '
+                .items[] | select(.status.reason == "Evicted") |
+                "\(.metadata.namespace) \(.metadata.name)"
+              ' 2>/dev/null | while read NS POD; do
+                [ -z "$NS" ] && continue
+                echo "  Deleting evicted $NS/$POD"
+                kubectl delete pod "$POD" -n "$NS" --grace-period=0 --force 2>/dev/null || true
+              done
+
+              # -------------------------------------------------------
+              # 11. ORPHAN PVCs (list-only — no deletion)
+              # -------------------------------------------------------
+              echo "[11/11] Reporting orphan PVCs (no Pod mount)..."
+              MOUNTED=$(kubectl get pods --all-namespaces -o json 2>/dev/null | jq -r '
+                .items[] | .metadata.namespace as $ns |
+                (.spec.volumes // [])[] |
+                select(.persistentVolumeClaim != null) |
+                "\($ns)/\(.persistentVolumeClaim.claimName)"
+              ' 2>/dev/null | sort -u)
+              ORPHANS=$(kubectl get pvc --all-namespaces -o json 2>/dev/null | jq -r '
+                .items[] | "\(.metadata.namespace)/\(.metadata.name)"
+              ' 2>/dev/null | while read PVC; do
+                if ! echo "$MOUNTED" | grep -Fxq "$PVC"; then
+                  echo "$PVC"
+                fi
+              done)
+              if [ -z "$ORPHANS" ]; then
+                echo "  No orphan PVCs found"
+              else
+                echo "  Orphan PVCs (review manually; NOT auto-deleted):"
+                echo "$ORPHANS" | while read PVC; do echo "    - $PVC"; done
+              fi
 
               # -------------------------------------------------------
               # SUMMARY
@@ -266,6 +305,9 @@ rules:
 - apiGroups: ["apps"]
   resources: ["replicasets"]
   verbs: ["get", "list", "delete"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list"]
 ---
 # ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
