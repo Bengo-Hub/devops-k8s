@@ -1,0 +1,25 @@
+{{- if and .Values.httpScaledObject .Values.httpScaledObject.enabled }}
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "app.name" . }}
+spec:
+  hosts:
+    - {{ (index .Values.ingress.hosts 0).host | quote }}
+  scaleTargetRef:
+    name: {{ include "app.fullname" . }}
+    kind: Deployment
+    apiVersion: apps/v1
+    service: {{ include "app.fullname" . }}
+    port: {{ .Values.service.port }}
+  replicas:
+    min: {{ .Values.httpScaledObject.minReplicas | default 0 }}
+    max: {{ .Values.httpScaledObject.maxReplicas | default 3 }}
+  scalingMetric:
+    requestRate:
+      granularity: {{ .Values.httpScaledObject.scalingMetric.requestRate.granularity | default "1s" | quote }}
+      targetValue: {{ .Values.httpScaledObject.scalingMetric.requestRate.targetValue | default 100 }}
+      window: {{ .Values.httpScaledObject.scalingMetric.requestRate.window | default "1m" | quote }}
+{{- end }}
