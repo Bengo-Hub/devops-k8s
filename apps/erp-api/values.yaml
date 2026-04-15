@@ -64,11 +64,11 @@ healthCheck:
 # INCREASED RESOURCES: 20-30min rollout indicates insufficient CPU for migrations
 resources:
   requests:
-    cpu: 500m # Right-sized: migrations run in init container, not main app
-    memory: 1.5Gi # Right-sized: steady-state usage is ~1Gi, burst to limit
+    cpu: 200m
+    memory: 512Mi
   limits:
-    cpu: 2000m # Allow burst for peak load
-    memory: 4Gi # Allow burst for complex queries
+    cpu: 1000m
+    memory: 1Gi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true

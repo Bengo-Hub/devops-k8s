@@ -5,7 +5,7 @@ nameOverride: marketflow-ai
 fullnameOverride: marketflow-ai
 image:
   repository: docker.io/codevertex/marketflow-ai
-  tag: "67cd5477"
+  tag: "c1b62c03"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -75,9 +75,9 @@ env:
     value: "llama-3.3-70b-versatile"
   - name: MF_AI_GROQ_FALLBACK_MODEL
     value: "gemma2-9b-it"
-  # Ollama (Embeddings only)
+  # Ollama (shared pod: embeddings + tool-calling LLM fallback)
   - name: MF_AI_OLLAMA_URL
-    value: "http://ollama.marketflow.svc.cluster.local:11434"
+    value: "http://ollama.shared-infra.svc.cluster.local:11434"
   - name: MF_AI_EMBEDDING_MODEL
     value: "nomic-embed-text"
   - name: MF_AI_EMBEDDING_DIM
@@ -85,17 +85,32 @@ env:
   # MarketFlow API
   - name: MF_AI_MARKETFLOW_API_URL
     value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+  # Agentic RAG
+  - name: MF_AI_AGENT_ENABLED
+    value: "true"
+  - name: MF_AI_AGENT_MAX_ITERS
+    value: "5"
+  - name: MF_AI_TAVILY_URL
+    value: "https://api.tavily.com"
+  - name: MF_AI_TAVILY_DAILY_CAP
+    value: "20"
+  - name: MF_AI_TAVILY_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: tavily-api-key
+        optional: true
 migrations:
   enabled: false
 seed:
   enabled: false
 resources:
   requests:
-    cpu: 200m
-    memory: 512Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 500m
+    memory: 512Mi
 healthCheck:
   enabled: true
   startup:
@@ -104,7 +119,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 30
   readiness:
     httpGet:
@@ -112,7 +127,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 15
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
   liveness:
     httpGet:
@@ -120,7 +135,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 ingress:
   enabled: true

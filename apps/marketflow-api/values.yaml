@@ -5,7 +5,7 @@ nameOverride: marketflow-api
 fullnameOverride: marketflow-api
 image:
   repository: docker.io/codevertex/marketflow-api
-  tag: "73bfdb95"
+  tag: "905edcf8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -100,7 +100,7 @@ env:
         optional: true
   # AI / LLM
   - name: MF_AI_OLLAMA_URL
-    value: "http://ollama.marketflow.svc.cluster.local:11434"
+    value: "http://ollama.shared-infra.svc.cluster.local:11434"
   - name: MF_AI_OLLAMA_MODEL
     value: "llama3.1:8b"
   - name: MF_AI_CLAUDE_API_KEY
@@ -113,6 +113,31 @@ env:
     value: "nomic-embed-text"
   - name: MF_AI_EMBEDDING_DIM
     value: "768"
+  # ── Worker sidecar env (NATS consumer runs inside the same pod) ────────────
+  - name: NATS_URL
+    value: "nats://nats.messaging.svc.cluster.local:4222"
+  - name: NATS_STREAM
+    value: "MARKETFLOW"
+  - name: WORKER_HTTP_PORT
+    value: "4002"
+  - name: SCHEDULER_INTERVAL_SECONDS
+    value: "60"
+  - name: SCHEDULER_BATCH_SIZE
+    value: "50"
+  - name: MF_WORKER_API_URL
+    value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+  - name: MF_WORKER_OLLAMA_URL
+    value: "http://ollama.shared-infra.svc.cluster.local:11434"
+  - name: MF_WORKER_EMBEDDING_MODEL
+    value: "nomic-embed-text"
+  - name: NOTIFICATIONS_URL
+    value: "http://notifications-api.default.svc.cluster.local:4000"
+  - name: NOTIFICATIONS_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-api-secrets
+        key: NOTIFICATIONS_API_KEY
+        optional: true
 # ============================================================================
 # MIGRATIONS
 # ============================================================================
@@ -125,10 +150,10 @@ seed:
 # ============================================================================
 resources:
   requests:
-    cpu: 150m
+    cpu: 100m
     memory: 256Mi
   limits:
-    cpu: 1000m
+    cpu: 500m
     memory: 512Mi
 # ============================================================================
 # HEALTH CHECKS
@@ -141,7 +166,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 15
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 60
   readiness:
     httpGet:
@@ -149,7 +174,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 20
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
   liveness:
     httpGet:
@@ -157,7 +182,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 60
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # ============================================================================
 # INGRESS

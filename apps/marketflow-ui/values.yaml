@@ -1,0 +1,93 @@
+nameOverride: marketflow-ui
+fullnameOverride: marketflow-ui
+image:
+  repository: docker.io/codevertex/marketflow-ui
+  tag: "6c76ed31"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+replicaCount: 1
+autoscaling:
+  enabled: false
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 15
+progressDeadlineSeconds: 600
+env:
+  - name: NEXT_PUBLIC_API_URL
+    value: "https://marketflowapi.codevertexitsolutions.com"
+  - name: NEXT_PUBLIC_AI_API_URL
+    value: "https://marketflowai.codevertexitsolutions.com"
+  - name: NEXT_PUBLIC_AUTH_API_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: NEXT_PUBLIC_SSO_CLIENT_ID
+    value: "marketflow-ui"
+  - name: NEXT_PUBLIC_APP_URL
+    value: "https://marketflow.codevertexitsolutions.com"
+migrations:
+  enabled: false
+seed:
+  enabled: false
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+healthCheck:
+  enabled: true
+  startup:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 30
+  readiness:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 5
+  liveness:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    failureThreshold: 5
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: marketflow.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - marketflow.codevertexitsolutions.com
+      secretName: marketflow-ui-tls
+monitoring:
+  enabled: false
+securityContext:
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  runAsNonRoot: true
+pdb:
+  enabled: false

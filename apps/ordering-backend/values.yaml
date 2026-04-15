@@ -6,7 +6,7 @@ fullnameOverride: ordering-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "475ebf19"
+  tag: "a74ad499"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -234,7 +234,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
   liveness:
     httpGet:
@@ -242,18 +242,18 @@ healthCheck:
       port: http
     initialDelaySeconds: 120
     periodSeconds: 30
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
 resources:
   requests:
-    cpu: 200m
-    memory: 512Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 500m
+    memory: 512Mi
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================

@@ -19,9 +19,14 @@ spec:
         app: tileserver
         component: map-tiles
     spec:
+      # Generate Kenya tiles on first run if not present
       initContainers:
+<<<<<<< Updated upstream
         # Generate Kenya MBTiles on first run via Planetiler
         - name: generate-tiles
+=======
+        - name: init-tiles
+>>>>>>> Stashed changes
           image: ghcr.io/onthegomap/planetiler:latest
           command:
             - /bin/sh
@@ -32,6 +37,7 @@ spec:
               mkdir -p /data/tiles
 
               if [ -f "$MBTILES" ] && [ -s "$MBTILES" ]; then
+<<<<<<< Updated upstream
                 echo "Tiles already exist at $MBTILES ($(du -h $MBTILES | cut -f1)), skipping."
                 exit 0
               fi
@@ -60,6 +66,27 @@ spec:
           volumeMounts:
             - name: tileserver-data
               mountPath: /data
+=======
+                SIZE=$(stat -c%s "$MBTILES" 2>/dev/null || echo 0)
+                if [ "$SIZE" -gt 1000000 ]; then
+                  echo "Kenya tiles exist ($(du -h $MBTILES | cut -f1)), skipping generation."
+                  exit 0
+                fi
+              fi
+
+              echo "First run — generating Kenya vector tiles with Planetiler..."
+              java -jar /app/planetiler.jar \
+                --area=kenya \
+                --download \
+                --download-threads=2 \
+                --output="$MBTILES" \
+                --force \
+                --nodemap-type=array \
+                --storage=ram \
+                2>&1
+
+              echo "Tile generation complete: $(du -h $MBTILES | cut -f1)"
+>>>>>>> Stashed changes
           resources:
             requests:
               cpu: "1"
@@ -67,12 +94,22 @@ spec:
             limits:
               cpu: "4"
               memory: 6Gi
+<<<<<<< Updated upstream
+=======
+          volumeMounts:
+            - name: tileserver-tiles
+              mountPath: /data/tiles
+>>>>>>> Stashed changes
       containers:
         - name: tileserver
           image: maptiler/tileserver-gl:latest
           args:
             - --config
+<<<<<<< Updated upstream
             - /data/config.json
+=======
+            - /config/config.json
+>>>>>>> Stashed changes
             - --verbose
             - --port
             - "8080"
@@ -88,16 +125,25 @@ spec:
               cpu: "1"
               memory: 1Gi
           volumeMounts:
+<<<<<<< Updated upstream
             - name: tileserver-data
               mountPath: /data
             - name: tileserver-config
               mountPath: /data/config.json
               subPath: config.json
+=======
+            - name: tileserver-tiles
+              mountPath: /data/tiles
+              readOnly: true
+            - name: tileserver-config
+              mountPath: /config
+              readOnly: true
+>>>>>>> Stashed changes
           readinessProbe:
             httpGet:
               path: /health
               port: 8080
-            initialDelaySeconds: 15
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
@@ -106,9 +152,13 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 30
       volumes:
-        - name: tileserver-data
+        - name: tileserver-tiles
           persistentVolumeClaim:
+<<<<<<< Updated upstream
             claimName: tileserver-data
+=======
+            claimName: tileserver-tiles
+>>>>>>> Stashed changes
         - name: tileserver-config
           configMap:
             name: tileserver-config

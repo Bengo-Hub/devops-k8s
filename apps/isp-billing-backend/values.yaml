@@ -353,11 +353,11 @@ env:
 # ============================================================================
 resources:
   requests:
-    cpu: 200m
-    memory: 512Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 500m
+    memory: 512Mi
 # ============================================================================
 # HEALTH CHECKS (FastAPI serves /health, NOT /healthz)
 # ============================================================================
@@ -384,7 +384,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # ============================================================================
 # INGRESS CONFIGURATION
