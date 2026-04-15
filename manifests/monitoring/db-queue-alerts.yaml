@@ -29,16 +29,16 @@ spec:
       annotations:
         summary: "Redis memory usage above 85%"
         description: "Evictions/latency likely. Scale vertically or enable replication/sentinel."
-  - name: rabbitmq.queues
+  - name: nats.jetstream
     rules:
-    - alert: RabbitMQQueueBacklog
+    - alert: NATSJetStreamLag
       expr: |
-        sum(rabbitmq_queue_messages_ready) > 1000
+        max(nats_consumer_num_pending) > 1000
       for: 10m
       labels:
         severity: warning
       annotations:
-        summary: "RabbitMQ backlog > 1000 messages"
-        description: "Scale Celery workers via KEDA or investigate consumers."
+        summary: "NATS JetStream consumer backlog > 1000 messages"
+        description: "Investigate slow consumers or scale workers via KEDA."
 
 
