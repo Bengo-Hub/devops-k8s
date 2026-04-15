@@ -187,6 +187,14 @@ env:
     value: "60"
   - name: DB_CONNECT_TIMEOUT
     value: "10"
+  # Explicit Django connection pool ceiling so Daphne (1) + Celery workers (4) + Beat (1)
+  # never exceed the shared PG max_connections=200 budget under load.
+  - name: DB_POOL_MIN_CONNS
+    value: "1"
+  - name: DB_POOL_MAX_CONNS
+    value: "10"
+  - name: DB_POOL_TIMEOUT
+    value: "30"
 # Enhanced HPA with custom metrics
 autoscalingCustomMetrics:
   enabled: false # Disabled - using basic HPA for now
