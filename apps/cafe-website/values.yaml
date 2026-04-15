@@ -4,7 +4,7 @@ replicaCount: 1
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/cafe-website
-  tag: "efb4351b"
+  tag: "69ebae49"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -21,7 +21,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 3
   liveness:
     httpGet:
@@ -29,7 +29,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 15
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 3
 strategy:
   type: RollingUpdate
@@ -56,12 +56,12 @@ env:
 envFromSecret: cafe-website-env
 # Resource constraints optimized for Next.js app
 resources:
-  limits:
-    cpu: 1000m
-    memory: 512Mi
   requests:
     cpu: 50m
     memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
 # Disable autoscaling for single instance
 autoscaling:
   enabled: false

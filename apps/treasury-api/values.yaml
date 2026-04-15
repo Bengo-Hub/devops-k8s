@@ -84,11 +84,11 @@ env:
   - name: HTTP_PUBLIC_BASE_URL
     value: "https://booksapi.codevertexitsolutions.com"
 resources:
-  limits:
-    cpu: 1000m
-    memory: 1Gi
   requests:
-    cpu: 150m # Balanced for 12-core server
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
     memory: 512Mi
 autoscaling:
   enabled: true

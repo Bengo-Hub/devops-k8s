@@ -71,12 +71,12 @@ env:
   - name: API_KEY_DB_URL
     value: "http://auth-api.auth.svc.cluster.local:4000"
 resources:
-  limits:
-    cpu: 500m
-    memory: 512Mi
   requests:
     cpu: 100m
     memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 autoscaling:
   enabled: true
   minReplicas: 1

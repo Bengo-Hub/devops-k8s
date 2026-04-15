@@ -2,7 +2,7 @@ nameOverride: truload-backend
 fullnameOverride: truload-backend
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: e8fb5483
+  tag: 0441f21b
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -26,7 +26,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 3
   liveness:
     httpGet:
@@ -34,17 +34,17 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # Production resource limits for .NET API
 # Increased memory for EF Core migrations and seeding
 resources:
   requests:
-    cpu: 200m # Priority service — increased for .NET API + EF Core
-    memory: 512Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 500m
+    memory: 512Mi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: false
@@ -150,7 +150,7 @@ extraPersistentVolumeClaims:
 # Additional volume mounts for backup storage
 volumeMounts:
   - name: backup-storage
-    mountPath: /var/backups/truload
+    mountPath: /app/backups/truload
 volumes:
   - name: backup-storage
     persistentVolumeClaim:
@@ -162,18 +162,18 @@ initContainers:
     command: ['sh', '-c']
     args:
       - |
-        echo "Initializing backup directory: /var/backups/truload"
-        mkdir -p /var/backups/truload
-        chmod -R 775 /var/backups/truload 2>/dev/null || true
-        if [ -w "/var/backups/truload" ]; then
+        echo "Initializing backup directory: /app/backups/truload"
+        mkdir -p /app/backups/truload
+        chmod -R 775 /app/backups/truload 2>/dev/null || true
+        if [ -w "/app/backups/truload" ]; then
           echo "Backup directory is writable"
         else
           echo "Warning: Backup directory may not be writable"
-          ls -la /var/backups/truload || true
+          ls -la /app/backups/truload || true
         fi
     volumeMounts:
       - name: backup-storage
-        mountPath: /var/backups/truload
+        mountPath: /app/backups/truload
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001

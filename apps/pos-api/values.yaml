@@ -3,7 +3,7 @@ fullnameOverride: pos-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/pos-api
-  tag: "d72fc095"
+  tag: "0e86af28"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -78,12 +78,12 @@ env:
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
 resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
   limits:
     cpu: 500m
     memory: 512Mi
-  requests:
-    cpu: 50m # Minimal - service not actively used
-    memory: 128Mi
 autoscaling:
   enabled: true
   minReplicas: 1

@@ -4,7 +4,7 @@ replicaCount: 1
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/inventory-ui
-  tag: "3c5d91aa"
+  tag: "9027a421"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -47,11 +47,11 @@ env:
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
     value: https://pricing.codevertexitsolutions.com
 resources:
-  limits:
-    cpu: 500m
-    memory: 768Mi
   requests:
-    cpu: 100m
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
     memory: 256Mi
 autoscaling:
   enabled: false

@@ -4,7 +4,7 @@ replicaCount: 1
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/pos-ui
-  tag: "ed657ff0"
+  tag: "c9cf2aae"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -57,11 +57,11 @@ env:
         key: sentryDsn
         optional: true
 resources:
-  limits:
-    cpu: 500m
-    memory: 768Mi
   requests:
-    cpu: 100m # Balanced for 12-core server
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
     memory: 256Mi
 autoscaling:
   enabled: false

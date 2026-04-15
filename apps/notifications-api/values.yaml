@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)
   repository: docker.io/codevertex/notifications-api
-  tag: "f709fdf1"
+  tag: "7ec7c91a"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -38,7 +38,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 15
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 60 # 10 minutes total for startup (includes waiting for migrations)
   readiness:
     httpGet:
@@ -46,7 +46,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 20
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
   liveness:
     httpGet:
@@ -54,7 +54,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 60
     periodSeconds: 20
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # ============================================================================
 # DEPLOYMENT STRATEGY
@@ -134,6 +134,19 @@ env:
         name: notifications-api-env
         key: NOTIFICATIONS_DEFAULT_EMAIL_SENDER
         optional: true
+  # Service URLs for email links (override tenant website for specific services)
+  - name: NOTIFICATIONS_ORDERING_APP_URL
+    value: "https://ordersapp.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_RIDER_APP_URL
+    value: "https://riderapp.codevertexitsolutions.com/"
+  - name: NOTIFICATIONS_SSO_UI_URL
+    value: "https://accounts.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_TREASURY_APP_URL
+    value: "https://books.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_POS_APP_URL
+    value: "https://pos.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_LOGISTICS_APP_URL
+    value: "https://logistics.codevertexitsolutions.com"
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
@@ -147,11 +160,11 @@ env:
   - name: SECURITY_JWT_AUDIENCE
     value: "codevertex"
 resources:
-  limits:
-    cpu: 1000m
-    memory: 1Gi
   requests:
-    cpu: 150m # Balanced for 12-core server
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
     memory: 512Mi
 autoscaling:
   enabled: false

@@ -6,7 +6,7 @@ fullnameOverride: notifications-ui
 # ============================================================================
 image:
   repository: docker.io/codevertex/notifications-ui
-  tag: "0fc07ece"
+  tag: "83164e80"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -64,11 +64,11 @@ env:
 # ============================================================================
 resources:
   requests:
-    cpu: 100m
-    memory: 256Mi
+    cpu: 50m
+    memory: 128Mi
   limits:
-    cpu: 500m
-    memory: 768Mi
+    cpu: 200m
+    memory: 256Mi
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================

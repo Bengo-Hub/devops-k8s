@@ -9,10 +9,12 @@ resources:
   - valhalla-deployment.yaml
   - valhalla-service.yaml
   - valhalla-cronjob.yaml
-  # TileServer GL
+  # TileServer GL + Planetiler tile generation
   - tileserver-pvc.yaml
+  - tileserver-config.yaml
   - tileserver-deployment.yaml
   - tileserver-service.yaml
+  - planetiler-cronjob.yaml
 
 commonLabels:
   managed-by: kustomize

@@ -278,11 +278,11 @@ volumes:
 # ============================================================================
 resources:
   requests:
-    cpu: 150m # Balanced for 12-core server - critical service
+    cpu: 100m
     memory: 256Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 500m
+    memory: 512Mi
 # ============================================================================
 # HEALTH CHECKS
 # ============================================================================
@@ -301,7 +301,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 30
     periodSeconds: 10
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
   liveness:
     httpGet:
@@ -309,7 +309,7 @@ healthCheck:
       port: http
     initialDelaySeconds: 120
     periodSeconds: 30
-    timeoutSeconds: 5
+    timeoutSeconds: 10
     failureThreshold: 5
 # ============================================================================
 # INGRESS CONFIGURATION
