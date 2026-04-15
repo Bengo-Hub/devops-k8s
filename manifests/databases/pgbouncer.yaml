@@ -57,7 +57,7 @@ spec:
       priorityClassName: db-critical
       containers:
         - name: pgbouncer
-          image: bitnami/pgbouncer:1.23.1
+          image: edoburu/pgbouncer:v1.25.1-p0
           imagePullPolicy: IfNotPresent
           ports:
             - name: pgbouncer
@@ -67,6 +67,8 @@ spec:
               value: postgresql.infra.svc.cluster.local
             - name: DB_PORT
               value: "5432"
+            - name: LISTEN_PORT
+              value: "6432"
             - name: AUTH_TYPE
               value: scram-sha-256
             - name: POOL_MODE
@@ -76,10 +78,7 @@ spec:
             - name: DEFAULT_POOL_SIZE
               value: "20"
             - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgresql
-                  key: username
+              value: admin_user
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -87,8 +86,8 @@ spec:
                   key: password
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
               cpu: 500m
               memory: 256Mi
