@@ -75,9 +75,9 @@ env:
     value: "llama-3.3-70b-versatile"
   - name: MF_AI_GROQ_FALLBACK_MODEL
     value: "gemma2-9b-it"
-  # Ollama (Embeddings only)
+  # Ollama (shared pod: embeddings + tool-calling LLM fallback)
   - name: MF_AI_OLLAMA_URL
-    value: "http://ollama.marketflow.svc.cluster.local:11434"
+    value: "http://ollama.shared-infra.svc.cluster.local:11434"
   - name: MF_AI_EMBEDDING_MODEL
     value: "nomic-embed-text"
   - name: MF_AI_EMBEDDING_DIM
@@ -85,6 +85,21 @@ env:
   # MarketFlow API
   - name: MF_AI_MARKETFLOW_API_URL
     value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+  # Agentic RAG
+  - name: MF_AI_AGENT_ENABLED
+    value: "true"
+  - name: MF_AI_AGENT_MAX_ITERS
+    value: "5"
+  - name: MF_AI_TAVILY_URL
+    value: "https://api.tavily.com"
+  - name: MF_AI_TAVILY_DAILY_CAP
+    value: "20"
+  - name: MF_AI_TAVILY_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: tavily-api-key
+        optional: true
 migrations:
   enabled: false
 seed:
