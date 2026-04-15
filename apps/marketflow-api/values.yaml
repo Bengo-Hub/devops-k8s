@@ -85,6 +85,14 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: MF_SECURITY_JWT_AUDIENCE
     value: "codevertex"
+  - name: MF_SECURITY_AUTH_SERVICE_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: MF_META_VERIFY_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-api-secrets
+        key: META_VERIFY_TOKEN
+        optional: true
   # Meta Marketing API
   - name: MF_META_APP_ID
     valueFrom:

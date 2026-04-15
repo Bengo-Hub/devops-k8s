@@ -100,6 +100,14 @@ env:
         name: marketflow-ai-secrets
         key: tavily-api-key
         optional: true
+  # Platform API key for service-to-service calls to marketflow-api
+  # (agent book_meeting tool). Issued by auth-api /admin/api-keys.
+  - name: MF_AI_MARKETFLOW_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: marketflow-api-key
+        optional: true
 migrations:
   enabled: false
 seed:
