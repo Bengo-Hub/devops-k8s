@@ -5,7 +5,7 @@ nameOverride: marketflow-api
 fullnameOverride: marketflow-api
 image:
   repository: docker.io/codevertex/marketflow-api
-  tag: "02601776"
+  tag: "ed6db139"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
