@@ -64,11 +64,11 @@ healthCheck:
 # INCREASED RESOURCES: 20-30min rollout indicates insufficient CPU for migrations
 resources:
   requests:
-    cpu: 200m
-    memory: 512Mi
+    cpu: 300m
+    memory: 768Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 1500m
+    memory: 1536Mi
 # Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: true

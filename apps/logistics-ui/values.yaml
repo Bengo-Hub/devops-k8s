@@ -89,3 +89,14 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
+# KEDA HTTP scale-to-zero: set enabled=true once ingress is wired to
+# the keda-http-interceptor service. See docs/autoscaling-scale-to-zero.md.
+httpScaledObject:
+  enabled: false
+  minReplicas: 0
+  maxReplicas: 3
+  scalingMetric:
+    requestRate:
+      granularity: "1s"
+      targetValue: 50
+      window: "1m"
