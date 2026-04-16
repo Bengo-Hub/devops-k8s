@@ -49,3 +49,13 @@ spec:
       kind: CustomResourceDefinition
       jsonPointers:
         - /metadata/annotations
+    # The chart doesn't expose an env-override hook, so we patch the
+    # interceptor live (KEDA_CONDITION_WAIT_TIMEOUT=120s for Next.js
+    # cold starts) and tell ArgoCD to leave env + replicas alone.
+    - group: apps
+      kind: Deployment
+      name: keda-add-ons-http-interceptor
+      namespace: infra
+      jsonPointers:
+        - /spec/replicas
+        - /spec/template/spec/containers/0/env
