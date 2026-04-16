@@ -1,6 +1,6 @@
 # Cluster optimization — 2026-04-15
 
-Single-node k3s on Contabo (12 vCPU / 47Gi / 484Gi). Changes below rebalance resources, remove dead weight, and wire autoscaling closer to the DigitalOcean/AWS pattern (HPA + VPA + KEDA scale-to-zero).
+Single-node k3s on Contabo (12 vCPU / 47Gi / 484Gi). Changes below rebalance resources, remove dead weight, and tune autoscaling (HPA + VPA). A KEDA HTTP scale-to-zero pilot was attempted and then reverted on 2026-04-16 — the KEDA HTTP add-on chart 0.10.0 didn't expose `conditionWaitTimeout` via values, so first-request cold starts 502'd and couldn't be reliably raised. Notes left here so the next attempt knows what blocked us.
 
 ## Changes in this repo
 
@@ -21,19 +21,6 @@ Single-node k3s on Contabo (12 vCPU / 47Gi / 484Gi). Changes below rebalance res
 - truload-backend: req 100m/256Mi → **200m/512Mi**, lim 500m/512Mi → **1000m/1Gi**.
 
 **HPA enabled (min=1, max=2, CPU 70%)** on: inventory-api, logistics-api, iot-api, pos-api, projects-api, subscriptions-api, ticketing-api, treasury-api, notifications-api, isp-billing-backend, marketflow-api, truload-backend.
-
-**KEDA HTTP scale-to-zero stubs** added (disabled by default) to every idle UI: auth-ui, cafe-website, erp-ui, inventory-ui, isp-billing-frontend, logistics-ui, marketflow-ui, notifications-ui, ordering-frontend, pos-ui, projects-ui, subscriptions-ui, ticketing-ui, treasury-ui, truload-frontend. Flip `httpScaledObject.enabled: true` after pointing the UI's ingress backend at the `keda-add-ons-http-interceptor-proxy` service (see section below).
-
-## Enabling scale-to-zero for a UI (DO/AWS-style)
-
-KEDA HTTP add-on is already installed (`apps/keda-http/`). For a UI to scale to zero:
-
-1. Set `httpScaledObject.enabled: true` in `apps/<ui>/values.yaml`.
-2. Update the UI's ingress so nginx routes to the interceptor, not the Service directly. The chart's `ingress.yaml` currently sets `service.name` to the deployment's own service. You have two options:
-   - **Preferred**: set `ingress.backend.service.name: keda-add-ons-http-interceptor-proxy` (namespace `infra`) with port `8080` for that UI's ingress. The interceptor buffers the first request, scales the deployment up, then proxies.
-   - **Alternative**: keep ingress direct and use KEDA's `HTTPScaledObject` without scale-to-zero (min=1). You still get request-rate-based scaling.
-
-Start with one low-traffic UI (e.g., `treasury-ui`), verify cold-start latency, then roll out.
 
 ## Cluster-side actions you need to run (SSH)
 
