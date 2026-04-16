@@ -12,7 +12,10 @@ metadata:
 data:
   pgbouncer.ini: |
     [databases]
-    * = host=postgresql.infra.svc.cluster.local port=5432
+    ; auth_dbname forces pgbouncer to run auth_query against 'postgres'
+    ; db (where pgbouncer schema lives), regardless of which db the
+    ; client is trying to reach.
+    * = host=postgresql.infra.svc.cluster.local port=5432 auth_dbname=postgres
 
     [pgbouncer]
     listen_addr = 0.0.0.0
