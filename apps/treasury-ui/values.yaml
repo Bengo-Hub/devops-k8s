@@ -59,8 +59,11 @@ autoscaling:
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
+# Chart-managed ingress disabled: traffic is routed via the
+# keda-http-interceptor bridge in manifests/keda-http/treasury-ui.yaml
+# (scale-to-zero pilot). See docs/keda-scale-to-zero-2026-04-16.md.
 ingress:
-  enabled: true
+  enabled: false
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -89,14 +92,11 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-# KEDA HTTP scale-to-zero: set enabled=true once ingress is wired to
-# the keda-http-interceptor service. See docs/autoscaling-scale-to-zero.md.
+# KEDA HTTP scale-to-zero pilot (treasury-ui was the first UI rolled over).
+# HTTPScaledObject + ExternalName bridge service + ingress routing live in
+# manifests/keda-http/treasury-ui.yaml so ArgoCD keeps them in sync.
+# This chart-level flag is left disabled; the chart's own ingress template
+# is NOT used — the ingress in manifests/keda-http/treasury-ui.yaml routes
+# directly to the keda-interceptor bridge.
 httpScaledObject:
   enabled: false
-  minReplicas: 0
-  maxReplicas: 3
-  scalingMetric:
-    requestRate:
-      granularity: "1s"
-      targetValue: 50
-      window: "1m"
