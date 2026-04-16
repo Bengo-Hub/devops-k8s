@@ -82,3 +82,10 @@ Revert `ingress.enabled: true` in the UI's values.yaml, delete the three objects
   kubectl rollout restart deploy/keda-add-ons-http-interceptor -n infra
   kubectl rollout restart deploy/keda-add-ons-http-external-scaler -n infra
   ```
+- **nginx ingress + ExternalName service**: nginx caches the resolved upstream, which can cause 502s after scale-from-zero. Add `nginx.ingress.kubernetes.io/service-upstream: "true"` to the ingress to force per-request DNS resolution of the bridge service. (Already applied on live ingresses; follow-up to bake this into `manifests/keda-http/*.yaml`.)
+- **Cold-start timeout = 20s, not configurable via chart 0.10.0**: the `KEDA_CONDITION_WAIT_TIMEOUT` env var is hard-coded in the chart's interceptor Deployment template. Next.js cold starts often exceed 20s, so the first request after idle returns 502. A browser retry (or a client that automatically retries 5xx) lands on the warmed pod and succeeds. Workarounds:
+  - Set `min: 1` on the HTTPScaledObject (keeps one warm pod always, no true scale-to-zero but still request-rate scaling)
+  - Pre-warm via an external pinger that hits `/healthz` every N minutes
+  - Wait for the keda-add-ons-http chart to expose the timeout (tracked upstream)
+- **ACME HTTP-01 challenge**: when the chart-managed ingress is disabled and the standalone ingress routes to the interceptor, cert-manager's HTTP-01 solver adds its own higher-precedence Ingress for `/.well-known/acme-challenge/<token>` automatically, so certificate issuance/renewal still works. No action needed.
+- **Pre-existing image pull failures** (projects-ui:latest, ticketing-ui:latest, truload-docs:latest): these tags don't exist on the registry. KEDA wiring is correct; fixing the tags is an app-team concern.

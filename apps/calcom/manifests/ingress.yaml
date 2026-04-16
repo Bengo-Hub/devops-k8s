@@ -11,6 +11,9 @@ metadata:
     # so nginx doesn't time out waiting for the first response.
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # Force per-request DNS resolution of the ExternalName bridge so
+    # nginx doesn't cache a stale/unreachable endpoint.
+    nginx.ingress.kubernetes.io/service-upstream: "true"
 spec:
   ingressClassName: nginx
   tls:
