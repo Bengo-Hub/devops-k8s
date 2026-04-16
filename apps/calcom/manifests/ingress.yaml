@@ -7,6 +7,10 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Cold-start on scale-from-zero can take 45-90s. Extend read timeout
+    # so nginx doesn't time out waiting for the first response.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
 spec:
   ingressClassName: nginx
   tls:
@@ -20,7 +24,10 @@ spec:
           - path: /
             pathType: Prefix
             backend:
+              # Route through KEDA HTTP interceptor (see http-scaled.yaml)
+              # for scale-to-zero. Keeping the deployment at 0 replicas
+              # when idle saves ~512Mi RAM + a full Next.js worker.
               service:
-                name: calcom
+                name: keda-http-interceptor
                 port:
-                  number: 80
+                  number: 8080

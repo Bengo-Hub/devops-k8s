@@ -107,8 +107,8 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=DATABASE_PASSWORD="${DATABASE_PASSWORD}" \
     --from-literal=DATABASE_USER="superset_user" \
     --from-literal=DATABASE_DB="superset" \
-    --from-literal=DATABASE_HOST="postgresql.infra.svc.cluster.local" \
-    --from-literal=DATABASE_PORT="5432" \
+    --from-literal=DATABASE_HOST="pgbouncer.infra.svc.cluster.local" \
+    --from-literal=DATABASE_PORT="6432" \
     --from-literal=SECRET_KEY="${SECRET_KEY}" \
     --from-literal=SUPERSET_SECRET_KEY="${SECRET_KEY}" \
     --from-literal=ADMIN_USERNAME="${ADMIN_USERNAME}" \
@@ -122,8 +122,8 @@ kubectl create secret generic "${SECRET_NAME}" \
     --from-literal=SUPERSET_DB_PASSWORD="${DATABASE_PASSWORD}" \
     --from-literal=DB_USER="superset_user" \
     --from-literal=DB_PASS="${DATABASE_PASSWORD}" \
-    --from-literal=DB_HOST="postgresql.infra.svc.cluster.local" \
-    --from-literal=DB_PORT="5432" \
+    --from-literal=DB_HOST="pgbouncer.infra.svc.cluster.local" \
+    --from-literal=DB_PORT="6432" \
     --from-literal=DB_NAME="superset"
 
 if [ $? -eq 0 ]; then

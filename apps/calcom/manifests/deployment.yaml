@@ -34,17 +34,22 @@ spec:
               value: "https://calendar.codevertexitsolutions.com"
             - name: NEXT_PUBLIC_API_V2_URL
               value: "https://calendar.codevertexitsolutions.com/api/v2"
-            # Database — uses the shared infra PostgreSQL instance with its own schema.
+            # Database — runtime traffic goes through PgBouncer (see
+            # apps/calcom/README.md). DATABASE_URL must include
+            # ?pgbouncer=true so Prisma uses simple query protocol
+            # (transaction-mode pooling breaks prepared statements).
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: calcom-secrets
                   key: DATABASE_URL
+            # DATABASE_DIRECT_URL bypasses pgbouncer — required by Prisma
+            # migrations (DDL) which transaction-mode pooling blocks.
             - name: DATABASE_DIRECT_URL
               valueFrom:
                 secretKeyRef:
                   name: calcom-secrets
-                  key: DATABASE_URL
+                  key: DATABASE_DIRECT_URL
             # Required Cal.com secrets
             - name: NEXTAUTH_SECRET
               valueFrom:

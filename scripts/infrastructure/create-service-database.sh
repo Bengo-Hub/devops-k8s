@@ -22,6 +22,10 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Configuration
+# This script connects DIRECTLY to postgresql (not pgbouncer) because
+# transaction-mode pooling blocks CREATE DATABASE / CREATE ROLE DDL.
+# Application runtime connections still go through pgbouncer — only
+# one-shot DDL bootstraps come through here.
 PG_NAMESPACE=${PG_NAMESPACE:-infra}
 PG_HOST=${PG_HOST:-postgresql.infra.svc.cluster.local}
 PG_PORT=${PG_PORT:-5432}

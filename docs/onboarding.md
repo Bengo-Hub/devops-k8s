@@ -66,8 +66,10 @@ metadata:
 type: Opaque
 stringData:
   # Database (if using automated setup, these will be auto-populated)
-  # Note: Shared databases (PostgreSQL, Redis, RabbitMQ) are deployed in the 'infra' namespace
-  DATABASE_URL: "postgresql://postgres:PASSWORD@postgresql.infra.svc.cluster.local:5432/mydb"
+  # Note: Shared databases (PostgreSQL, Redis) are in the 'infra' namespace.
+  # Runtime connections go through PgBouncer (transaction pooler, port 6432).
+  # Messaging is NATS/JetStream — RabbitMQ was removed on 2026-04-15.
+  DATABASE_URL: "postgresql://postgres:PASSWORD@pgbouncer.infra.svc.cluster.local:6432/mydb"
   REDIS_URL: "redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0"
   
   # App-specific variables

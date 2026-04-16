@@ -5,6 +5,8 @@ This guide covers setting up shared database infrastructure for all services in 
 
 > **📖 Per-Service Database Setup**: This guide includes complete per-service database setup details. Each service has its own unique database on the shared PostgreSQL instance, managed using a common admin user.
 
+> **🔌 Connection path (2026-04-16 onward)**: application runtime connections go through **PgBouncer** at `pgbouncer.infra.svc.cluster.local:6432`, not postgresql directly. See [`pgbouncer-migration-2026-04-16.md`](pgbouncer-migration-2026-04-16.md). The example URLs below that still reference `postgresql.infra.svc.cluster.local:5432` are kept for **one-shot DDL tasks** (database creation, role grants, schema migrations) where transaction-mode pooling is incompatible — in those cases bypass pgbouncer by exporting `PG_HOST=postgresql.infra.svc.cluster.local PG_PORT=5432` before running the tooling.
+
 Database Architecture
 --------------------
 

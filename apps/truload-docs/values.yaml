@@ -11,8 +11,11 @@ service:
   port: 80
   targetPort: 80
 
+# Chart-managed ingress disabled: traffic routes through the
+# keda-http-interceptor bridge in manifests/keda-http/truload-docs.yaml
+# (scale-to-zero). See docs/keda-scale-to-zero-2026-04-16.md.
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod

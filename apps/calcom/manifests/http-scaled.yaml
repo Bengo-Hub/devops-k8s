@@ -1,0 +1,46 @@
+---
+# KEDA HTTP scale-to-zero for Cal.com. Bursty workload — most FBO hours
+# have no bookings. Cold start ~45-90s (Prisma init + Next.js SSR);
+# interceptor buffers the first request. See apps/calcom/README.md.
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: calcom
+  namespace: calcom
+  labels:
+    app: calcom
+spec:
+  hosts:
+    - calendar.codevertexitsolutions.com
+  scaleTargetRef:
+    name: calcom
+    kind: Deployment
+    apiVersion: apps/v1
+    service: calcom
+    port: 80
+  replicas:
+    min: 0
+    max: 2
+  scalingMetric:
+    requestRate:
+      granularity: "1s"
+      targetValue: 30
+      window: "1m"
+---
+# ExternalName bridge so the ingress in this namespace can target the
+# interceptor-proxy service in infra ns (k8s Ingress backends are
+# same-namespace only).
+apiVersion: v1
+kind: Service
+metadata:
+  name: keda-http-interceptor
+  namespace: calcom
+  labels:
+    app: keda-http-bridge
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.infra.svc.cluster.local
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

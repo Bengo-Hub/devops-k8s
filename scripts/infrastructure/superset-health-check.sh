@@ -219,10 +219,10 @@ log_info "Testing database connectivity..."
 if kubectl get pods -n "${NAMESPACE}" -l app="${APP_NAME}" --field-selector=status.phase=Running | grep -q Running; then
     POD=$(kubectl get pods -n "${NAMESPACE}" -l app="${APP_NAME}" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
     
-    if kubectl exec -n "${NAMESPACE}" "${POD}" -- timeout 5 nc -zv postgresql.infra.svc.cluster.local 5432 >/dev/null 2>&1; then
-        log_success "Database connectivity: OK"
+    if kubectl exec -n "${NAMESPACE}" "${POD}" -- timeout 5 nc -zv pgbouncer.infra.svc.cluster.local 6432 >/dev/null 2>&1; then
+        log_success "Database connectivity (via pgbouncer): OK"
     else
-        log_error "Database connectivity: FAILED"
+        log_error "Database connectivity (pgbouncer): FAILED"
         HEALTH_STATUS=1
     fi
     
