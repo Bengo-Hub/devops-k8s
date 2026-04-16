@@ -197,8 +197,12 @@ log_info "Generating secure passwords..."
 
 # Database password - Priority: POSTGRES_PASSWORD env > cluster secret > generate
 PG_NAMESPACE=${PG_NAMESPACE:-infra}
-PG_HOST=${PG_HOST:-postgresql.infra.svc.cluster.local}
-PG_PORT=${PG_PORT:-5432}
+# Default host/port now point at PgBouncer (transaction pooler) instead of
+# postgresql directly. Every app connects through pgbouncer to multiplex onto
+# ~20 real PG backends. To bypass pgbouncer for a one-off task, export
+# PG_HOST=postgresql.infra.svc.cluster.local PG_PORT=5432 before running.
+PG_HOST=${PG_HOST:-pgbouncer.infra.svc.cluster.local}
+PG_PORT=${PG_PORT:-6432}
 
 # Try to get password - Priority: POSTGRES_PASSWORD env > admin-user-password secret > postgres-password secret
 # CRITICAL: Service users now use POSTGRES_PASSWORD (master password) for consistency
