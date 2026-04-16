@@ -113,7 +113,7 @@ spec:
             items:
               - key: userlist.txt
                 path: userlist.txt
-            defaultMode: 0400
+            defaultMode: 0444
 ---
 apiVersion: v1
 kind: Service
