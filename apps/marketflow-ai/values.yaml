@@ -5,7 +5,7 @@ nameOverride: marketflow-ai
 fullnameOverride: marketflow-ai
 image:
   repository: docker.io/codevertex/marketflow-ai
-  tag: "b9849641"
+  tag: "1913de8a"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
