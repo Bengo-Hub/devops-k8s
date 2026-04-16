@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: calcom
+  namespace: calcom
+  labels:
+    app: calcom
+spec:
+  type: ClusterIP
+  selector:
+    app: calcom
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http

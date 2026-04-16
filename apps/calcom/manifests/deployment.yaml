@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calcom
+  namespace: calcom
+  labels:
+    app: calcom
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: calcom
+  template:
+    metadata:
+      labels:
+        app: calcom
+    spec:
+      containers:
+        - name: calcom
+          image: calcom/cal.com:v4.5.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: production
+            # Public URL and NextAuth configuration
+            - name: NEXT_PUBLIC_WEBAPP_URL
+              value: "https://calendar.codevertexitsolutions.com"
+            - name: NEXTAUTH_URL
+              value: "https://calendar.codevertexitsolutions.com"
+            - name: NEXT_PUBLIC_API_V2_URL
+              value: "https://calendar.codevertexitsolutions.com/api/v2"
+            # Database — uses the shared infra PostgreSQL instance with its own schema.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: DATABASE_URL
+            - name: DATABASE_DIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: DATABASE_URL
+            # Required Cal.com secrets
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: NEXTAUTH_SECRET
+            - name: CALENDSO_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: CALENDSO_ENCRYPTION_KEY
+            - name: CRON_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: CRON_API_KEY
+                  optional: true
+            # Email — reuse the platform notifications SendGrid/Brevo via SMTP.
+            - name: EMAIL_FROM
+              value: "noreply@codevertexitsolutions.com"
+            - name: EMAIL_SERVER_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: EMAIL_SERVER_HOST
+                  optional: true
+            - name: EMAIL_SERVER_PORT
+              value: "587"
+            - name: EMAIL_SERVER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: EMAIL_SERVER_USER
+                  optional: true
+            - name: EMAIL_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: calcom-secrets
+                  key: EMAIL_SERVER_PASSWORD
+                  optional: true
+            # Feature flags aligned with the MVP use case.
+            - name: NEXT_PUBLIC_DISABLE_SIGNUP
+              value: "true"
+            - name: NEXT_PUBLIC_TELEMETRY_KEY
+              value: ""
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
