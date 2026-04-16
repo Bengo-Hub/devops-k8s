@@ -103,11 +103,8 @@ autoscaling:
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================
-# Chart-managed ingress disabled: traffic routes through the
-# keda-http-interceptor bridge in manifests/keda-http/isp-billing-frontend.yaml
-# (scale-to-zero). See docs/keda-scale-to-zero-2026-04-16.md.
 ingress:
-  enabled: false
+  enabled: true
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -142,14 +139,3 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-# KEDA HTTP scale-to-zero: set enabled=true once ingress is wired to
-# the keda-http-interceptor service. See docs/autoscaling-scale-to-zero.md.
-httpScaledObject:
-  enabled: false
-  minReplicas: 0
-  maxReplicas: 3
-  scalingMetric:
-    requestRate:
-      granularity: "1s"
-      targetValue: 50
-      window: "1m"
