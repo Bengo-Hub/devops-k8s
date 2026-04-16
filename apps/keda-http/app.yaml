@@ -24,15 +24,14 @@ spec:
           replicas:
             min: 1
             max: 1
-          # Default KEDA_CONDITION_WAIT_TIMEOUT is 20s — too short for
-          # Next.js cold starts (~30-60s). Bumped to 120s so the first
-          # request successfully waits for the pod to come up instead of
-          # 502-ing.
-          additionalEnvVars:
-            - name: KEDA_CONDITION_WAIT_TIMEOUT
-              value: "120s"
-            - name: KEDA_RESPONSE_HEADER_TIMEOUT
-              value: "30s"
+          # Default conditionWaitTimeout is 20s — too short for Next.js
+          # cold starts (~30-60s). Bumped to 120s so the first request
+          # successfully waits for scale-up instead of 502-ing.
+          # responseHeaderTimeout 500ms default is also too tight for
+          # SSR responses.
+          keda:
+            conditionWaitTimeout: "120s"
+            responseHeaderTimeout: "30s"
         scaler:
           replicas: 1
   destination:
@@ -50,13 +49,3 @@ spec:
       kind: CustomResourceDefinition
       jsonPointers:
         - /metadata/annotations
-    # The chart doesn't expose an env-override hook, so we patch the
-    # interceptor live (KEDA_CONDITION_WAIT_TIMEOUT=120s for Next.js
-    # cold starts) and tell ArgoCD to leave env + replicas alone.
-    - group: apps
-      kind: Deployment
-      name: keda-add-ons-http-interceptor
-      namespace: infra
-      jsonPointers:
-        - /spec/replicas
-        - /spec/template/spec/containers/0/env
