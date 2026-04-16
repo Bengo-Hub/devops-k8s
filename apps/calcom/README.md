@@ -41,19 +41,11 @@ Cal.com deployment at `https://calendar.codevertexitsolutions.com`. Used as the 
 
 | File | Purpose |
 |------|---------|
-| `namespace.yaml`   | Creates the `calcom` namespace |
-| `deployment.yaml`  | Single-replica rolling (Recreate strategy keeps DB migrations safe) |
-| `service.yaml`     | ClusterIP exposing port 80 → 3000 |
-| `ingress.yaml`     | HTTPS at `calendar.codevertexitsolutions.com`; routes to the keda-http-interceptor bridge (scale-to-zero) |
-| `http-scaled.yaml` | HTTPScaledObject + ExternalName bridge so replicas drop to 0 when idle. First request cold-starts the pod (expect ~45-90s due to Prisma init). |
-| `app.yaml`         | ArgoCD Application pointing at `apps/calcom/manifests` |
-
-## Scale-to-zero notes
-
-Cal.com is bursty (meetings are booked and canceled sparingly) so scale-to-zero is a solid fit. Caveats:
-- **Cold start ~45-90s** on first request (Next.js SSR + Prisma client init + DB warmup). The KEDA interceptor buffers the first request; the user sees extended load time rather than an error.
-- **Webhooks** (`BOOKING_CREATED`, etc. from calendar.codevertexitsolutions.com → marketflowapi) go *out*, so they still fire even if no incoming traffic has warmed the pod.
-- **Reminder cron** (`CRON_API_KEY`) needs an external scheduler to hit `/api/cron/*` endpoints on a schedule. Each cron hit wakes the pod; between hits it can scale to zero.
+| `namespace.yaml` | Creates the `calcom` namespace |
+| `deployment.yaml` | Single-replica rolling (Recreate strategy keeps DB migrations safe) |
+| `service.yaml`    | ClusterIP exposing port 80 → 3000 |
+| `ingress.yaml`    | HTTPS at `calendar.codevertexitsolutions.com` with Let's Encrypt |
+| `app.yaml`        | ArgoCD Application pointing at `apps/calcom/manifests` |
 
 ## Integration with MarketFlow
 
