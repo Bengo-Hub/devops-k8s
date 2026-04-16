@@ -52,6 +52,9 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Force per-request DNS resolution of the ExternalName bridge so
+    # nginx doesn't cache a stale/unreachable endpoint.
+    nginx.ingress.kubernetes.io/service-upstream: "true"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "90"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "90"
 spec:
