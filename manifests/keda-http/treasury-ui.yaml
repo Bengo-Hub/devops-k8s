@@ -1,0 +1,78 @@
+---
+# KEDA HTTP scale-to-zero pilot: treasury-ui.
+# Three objects:
+#   1. HTTPScaledObject — tells KEDA to scale the treasury-ui deployment
+#      based on request rate at books.codevertexitsolutions.com. Scales
+#      between 0 and 2; after ~5 min with no traffic, replicas drop to 0.
+#   2. ExternalName Service — bridge so this namespace's Ingress can
+#      target the keda interceptor proxy service in infra namespace.
+#   3. Ingress — overrides the chart-managed ingress (disabled in
+#      apps/treasury-ui/values.yaml), points directly at the bridge.
+apiVersion: http.keda.sh/v1alpha1
+kind: HTTPScaledObject
+metadata:
+  name: treasury-ui
+  namespace: treasury
+  labels:
+    app: treasury-ui
+spec:
+  hosts:
+    - books.codevertexitsolutions.com
+  scaleTargetRef:
+    name: treasury-ui
+    kind: Deployment
+    apiVersion: apps/v1
+    service: treasury-ui
+    port: 80
+  replicas:
+    min: 0
+    max: 2
+  scalingMetric:
+    requestRate:
+      granularity: "1s"
+      targetValue: 50
+      window: "1m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keda-http-interceptor
+  namespace: treasury
+  labels:
+    app: keda-http-bridge
+spec:
+  type: ExternalName
+  externalName: keda-add-ons-http-interceptor-proxy.infra.svc.cluster.local
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: treasury-ui
+  namespace: treasury
+  labels:
+    app: treasury-ui
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: books.codevertexitsolutions.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keda-http-interceptor
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - books.codevertexitsolutions.com
+      secretName: treasury-ui-tls
