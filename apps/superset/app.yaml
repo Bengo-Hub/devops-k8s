@@ -189,8 +189,11 @@ spec:
           # This uses the chart's built-in support for external databases
           supersetNode:
             connections:
-              db_host: "postgresql.infra.svc.cluster.local"
-              db_port: "5432"
+              # Route through PgBouncer (transaction pooler in infra ns).
+              # To bypass (e.g. for DDL that transaction-mode blocks),
+              # temporarily flip to postgresql.infra.svc.cluster.local:5432.
+              db_host: "pgbouncer.infra.svc.cluster.local"
+              db_port: "6432"
               db_user: "superset_user"
               db_name: "superset"
               redis_host: "redis-master.infra.svc.cluster.local"

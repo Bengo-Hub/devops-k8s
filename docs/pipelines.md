@@ -412,12 +412,13 @@ Create a corresponding `TriggerAuthentication` in the app namespace pointing to 
 
 ### Connecting to Shared Databases/Brokers
 
-- **PostgreSQL, Redis, RabbitMQ** are deployed to the `infra` namespace as shared infrastructure.
+- **PostgreSQL, Redis, NATS/JetStream** are deployed to shared namespaces as shared infrastructure. RabbitMQ was decommissioned on 2026-04-15.
 - **Important**: While the database services are shared, each service has its own **unique database** on the PostgreSQL instance.
 - Service DNS (same for all services):
-  - PostgreSQL: `postgresql.infra.svc.cluster.local:5432`
+  - **PgBouncer (primary runtime)**: `pgbouncer.infra.svc.cluster.local:6432`
+  - PostgreSQL (direct, for DDL bootstrap only): `postgresql.infra.svc.cluster.local:5432`
   - Redis: `redis-master.infra.svc.cluster.local:6379`
-  - RabbitMQ: `rabbitmq.infra.svc.cluster.local:5672`
+  - NATS: `nats.messaging.svc.cluster.local:4222`
 - **Database naming**: Each service uses its own database name (e.g., `cafe`, `erp`, `treasury`, `notifications`) on the shared PostgreSQL service.
 - Set these connection strings in your app secrets/env and align pools/timeouts; HPA will scale app pods while PriorityClass ensures DBs stay scheduled under pressure.
 

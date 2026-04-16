@@ -631,24 +631,8 @@ jobs:
           echo "✅ Each service will create its own database during deployment"
           echo "::endgroup::"
       
-      - name: Install RabbitMQ (Shared Infrastructure)
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
-        timeout-minutes: 15
-        env:
-          # Use POSTGRES_PASSWORD as master password, fallback to RABBITMQ_PASSWORD
-          RABBITMQ_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || secrets.RABBITMQ_PASSWORD }}
-          RABBITMQ_NAMESPACE: ${{ env.DB_NAMESPACE }}
-          ENABLE_CLEANUP: ${{ env.ENABLE_CLEANUP }}
-        run: |
-          echo "::group::Installing RabbitMQ (Shared Infrastructure in ${RABBITMQ_NAMESPACE} namespace)"
-          echo "Installing RabbitMQ as shared infrastructure..."
-          echo "Namespace: ${RABBITMQ_NAMESPACE}"
-          echo "This step will skip installation if RabbitMQ is already installed and healthy"
-          echo "Note: This may take 5-10 minutes for first installation"
-          ./scripts/infrastructure/install-rabbitmq.sh
-          echo "✅ RabbitMQ check/install complete in ${RABBITMQ_NAMESPACE} namespace"
-          echo "✅ All services can use shared RabbitMQ instance"
-          echo "::endgroup::"
+      # RabbitMQ was decommissioned on 2026-04-15 — NATS/JetStream handles
+      # all messaging. See docs/cluster-optimization-2026-04-15.md.
 
       - name: Create Superset Database and Secrets (Pre-ArgoCD Bootstrap)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'

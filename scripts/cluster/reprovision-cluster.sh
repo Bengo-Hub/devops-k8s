@@ -91,13 +91,13 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     "${INFRA_DIR}/install-redis.sh"
     echo ""
     
-    # 4. RabbitMQ
-    echo -e "${BLUE}[4/10] Installing RabbitMQ...${NC}"
-    export RABBITMQ_NAMESPACE=${DB_NAMESPACE:-infra}
-    "${INFRA_DIR}/install-rabbitmq.sh"
+    # 4. RabbitMQ — decommissioned on 2026-04-15. NATS/JetStream (apps/nats/)
+    # handles all messaging. Step left as a numbered slot so the progress
+    # counter stays aligned with older docs.
+    echo -e "${BLUE}[4/10] RabbitMQ — removed (NATS handles messaging)${NC}"
     echo ""
-    
-    # 4. Ingress Controller
+
+    # 5. Ingress Controller
     echo -e "${BLUE}[5/10] Configuring ingress controller...${NC}"
     "${INFRA_DIR}/configure-ingress-controller.sh"
     echo ""

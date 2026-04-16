@@ -4,14 +4,16 @@ Cal.com deployment at `https://calendar.codevertexitsolutions.com`. Used as the 
 
 ## Prerequisites
 
-1. Create the `calcom` database in the shared infra Postgres:
+1. Create the `calcom` database in the shared infra Postgres. **Connect directly to postgresql (not pgbouncer) for DDL:**
    ```sql
+   -- psql postgres://admin_user:PASS@postgresql.infra.svc.cluster.local:5432/postgres
    CREATE DATABASE calcom OWNER calcom_user;
    GRANT ALL PRIVILEGES ON DATABASE calcom TO calcom_user;
    ```
-2. Provision the secret `calcom-secrets` in the `calcom` namespace:
+2. Provision the secret `calcom-secrets` in the `calcom` namespace. **Runtime connections go through PgBouncer with `?pgbouncer=true`** so Prisma disables prepared statements (transaction-mode pooling is incompatible with Prisma's default prepared-statement behaviour; the flag makes Prisma use simple query protocol).
    ```
-   DATABASE_URL              postgresql://calcom_user:PASS@postgresql.infra.svc.cluster.local:5432/calcom
+   DATABASE_URL              postgresql://calcom_user:PASS@pgbouncer.infra.svc.cluster.local:6432/calcom?pgbouncer=true
+   DATABASE_DIRECT_URL       postgresql://calcom_user:PASS@postgresql.infra.svc.cluster.local:5432/calcom   # used only for Prisma migrations
    NEXTAUTH_SECRET           32-byte base64
    CALENDSO_ENCRYPTION_KEY   32-byte base64 (used for OAuth token encryption)
    CRON_API_KEY              random 32-byte string (for reminder cron)
@@ -23,21 +25,35 @@ Cal.com deployment at `https://calendar.codevertexitsolutions.com`. Used as the 
    ```
    kubectl create ns calcom
    kubectl -n calcom create secret generic calcom-secrets \
-     --from-literal=DATABASE_URL=… \
+     --from-literal=DATABASE_URL="postgresql://calcom_user:PASS@pgbouncer.infra.svc.cluster.local:6432/calcom?pgbouncer=true" \
+     --from-literal=DATABASE_DIRECT_URL="postgresql://calcom_user:PASS@postgresql.infra.svc.cluster.local:5432/calcom" \
      --from-literal=NEXTAUTH_SECRET=$(openssl rand -base64 32) \
      --from-literal=CALENDSO_ENCRYPTION_KEY=$(openssl rand -base64 32) \
      --from-literal=CRON_API_KEY=$(openssl rand -hex 32)
+   ```
+   Grant `pgbouncer_auth` lookup on the new role so the pooler can authenticate calcom_user (one-time):
+   ```
+   kubectl exec -n infra postgresql-0 -c postgresql -- psql -U admin_user -d postgres -c \
+     "-- calcom_user SCRAM hash is looked up by pgbouncer.user_lookup (already in place). No extra grant needed."
    ```
 
 ## Manifests
 
 | File | Purpose |
 |------|---------|
-| `namespace.yaml` | Creates the `calcom` namespace |
-| `deployment.yaml` | Single-replica rolling (Recreate strategy keeps DB migrations safe) |
-| `service.yaml`    | ClusterIP exposing port 80 → 3000 |
-| `ingress.yaml`    | HTTPS at `calendar.codevertexitsolutions.com` with Let's Encrypt |
-| `app.yaml`        | ArgoCD Application pointing at `apps/calcom/manifests` |
+| `namespace.yaml`   | Creates the `calcom` namespace |
+| `deployment.yaml`  | Single-replica rolling (Recreate strategy keeps DB migrations safe) |
+| `service.yaml`     | ClusterIP exposing port 80 → 3000 |
+| `ingress.yaml`     | HTTPS at `calendar.codevertexitsolutions.com`; routes to the keda-http-interceptor bridge (scale-to-zero) |
+| `http-scaled.yaml` | HTTPScaledObject + ExternalName bridge so replicas drop to 0 when idle. First request cold-starts the pod (expect ~45-90s due to Prisma init). |
+| `app.yaml`         | ArgoCD Application pointing at `apps/calcom/manifests` |
+
+## Scale-to-zero notes
+
+Cal.com is bursty (meetings are booked and canceled sparingly) so scale-to-zero is a solid fit. Caveats:
+- **Cold start ~45-90s** on first request (Next.js SSR + Prisma client init + DB warmup). The KEDA interceptor buffers the first request; the user sees extended load time rather than an error.
+- **Webhooks** (`BOOKING_CREATED`, etc. from calendar.codevertexitsolutions.com → marketflowapi) go *out*, so they still fire even if no incoming traffic has warmed the pod.
+- **Reminder cron** (`CRON_API_KEY`) needs an external scheduler to hit `/api/cron/*` endpoints on a schedule. Each cron hit wakes the pod; between hits it can scale to zero.
 
 ## Integration with MarketFlow
 
