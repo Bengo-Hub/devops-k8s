@@ -3,7 +3,7 @@ fullnameOverride: truload-docs
 
 image:
   repository: docker.io/codevertex/truload-docs
-  tag: e0f11816
+  tag: 5ce23239
   pullPolicy: IfNotPresent
 
 service:
