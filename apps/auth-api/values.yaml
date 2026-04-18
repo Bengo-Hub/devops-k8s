@@ -368,6 +368,7 @@ securityContext:
 # ============================================================================
 pdb:
   enabled: true
+  minAvailable: null
   maxUnavailable: 1
 # ============================================================================
 # POD AFFINITY - DISTRIBUTE PODS ACROSS NODES
