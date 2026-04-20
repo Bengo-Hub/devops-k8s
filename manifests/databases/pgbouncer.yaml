@@ -15,6 +15,17 @@ data:
     ; auth_dbname forces pgbouncer to run auth_query against 'postgres'
     ; db (where pgbouncer schema lives), regardless of which db the
     ; client is trying to reach.
+    ; Per-database pool_size overrides for heavy-traffic services.
+    ; Keeps them from starving lighter services and prevents connection exhaustion
+    ; on PostgreSQL max_connections=200 (15+ services × pool_size).
+    truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=20
+    ordering = host=postgresql.infra.svc.cluster.local port=5432 dbname=ordering auth_dbname=postgres pool_size=15
+    erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=erp auth_dbname=postgres pool_size=20
+    auth = host=postgresql.infra.svc.cluster.local port=5432 dbname=auth auth_dbname=postgres pool_size=15
+    logistics = host=postgresql.infra.svc.cluster.local port=5432 dbname=logistics auth_dbname=postgres pool_size=10
+    notifications = host=postgresql.infra.svc.cluster.local port=5432 dbname=notifications auth_dbname=postgres pool_size=8
+    treasury = host=postgresql.infra.svc.cluster.local port=5432 dbname=treasury auth_dbname=postgres pool_size=10
+    subscriptions = host=postgresql.infra.svc.cluster.local port=5432 dbname=subscriptions auth_dbname=postgres pool_size=8
     * = host=postgresql.infra.svc.cluster.local port=5432 auth_dbname=postgres
 
     [pgbouncer]
@@ -34,13 +45,25 @@ data:
     # Transaction-mode pooling. PgBouncer 1.21+ supports server-side
     # prepared statements in transaction mode via max_prepared_statements.
     pool_mode = transaction
-    max_client_conn = 2000
-    default_pool_size = 20
-    reserve_pool_size = 5
-    reserve_pool_timeout = 3
+    max_client_conn = 3000
+    default_pool_size = 10
+    reserve_pool_size = 10
+    reserve_pool_timeout = 2
     server_idle_timeout = 120
     server_lifetime = 1800
     max_prepared_statements = 100
+
+    # Fast failure on DB outage — prevents services hanging for minutes.
+    # server_login_retry: how long to cache failed login before retrying (default 15s).
+    # Reduced to 3s so services recover quickly after PostgreSQL restarts.
+    server_login_retry = 3
+    # query_wait_timeout: max time a query waits for a pool connection (default 120s).
+    # Reduced so slow queries fail fast instead of backing up the pool.
+    query_wait_timeout = 30
+    # server_connect_timeout: max time to wait for a new server connection.
+    server_connect_timeout = 10
+    # client_idle_timeout: disconnect idle client connections to free pool slots.
+    client_idle_timeout = 120
 
     log_connections = 0
     log_disconnections = 0

@@ -37,21 +37,22 @@ healthCheck:
     timeoutSeconds: 10
     failureThreshold: 5
 # Production resource limits for .NET API
-# Increased memory for EF Core migrations and seeding
+# Weighing workflows (station load, tolerance lookup, weight capture) require consistent
+# CPU without throttling. 2 CPU limit gives headroom for concurrent weighing sessions.
 resources:
   requests:
-    cpu: 200m
+    cpu: 300m
     memory: 512Mi
   limits:
-    cpu: 1000m
-    memory: 1Gi
-# Horizontal autoscaling based on CPU and memory
+    cpu: 2000m
+    memory: 2Gi
+# Horizontal autoscaling — scale faster (min 2 always warm, max 4)
 autoscaling:
   enabled: true
-  minReplicas: 1
-  maxReplicas: 2
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 80
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 75
 ingress:
   enabled: true
   ingressClassName: nginx

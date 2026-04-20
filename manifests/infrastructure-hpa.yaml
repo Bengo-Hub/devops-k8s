@@ -1,5 +1,7 @@
 ---
-# VPA for PostgreSQL — vertical scaling for the StatefulSet
+# VPA for PostgreSQL — recommendation-only. NEVER auto-evict a database StatefulSet.
+# Auto mode caused periodic PostgreSQL evictions (~90s downtime) which cascaded to
+# PgBouncer caching server_login_retry errors, taking down ALL services cluster-wide.
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
@@ -11,7 +13,7 @@ spec:
     kind: StatefulSet
     name: postgresql
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: "Off"
   resourcePolicy:
     containerPolicies:
       - containerName: postgresql
@@ -25,7 +27,8 @@ spec:
           - cpu
           - memory
 ---
-# VPA for Redis — StatefulSet, HPA doesn't apply. Let VPA right-size the single primary.
+# VPA for Redis — recommendation-only. Auto mode caused 300+ restarts cascading
+# to ordering-backend rate-limiter context deadline exceeded errors.
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
@@ -37,7 +40,7 @@ spec:
     kind: StatefulSet
     name: redis-master
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: "Off"
   resourcePolicy:
     containerPolicies:
       - containerName: redis
