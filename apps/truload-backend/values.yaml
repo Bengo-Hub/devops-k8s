@@ -121,12 +121,13 @@ env:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# TruLoad-backend is a .NET application
-# EF Core migrations are typically handled in application startup code
+# Migrations are applied at application startup via db.Database.Migrate() in
+# Program.cs, using a direct PostgreSQL connection (bypassing PgBouncer).
+# The Helm pre-install/pre-upgrade migration Job is disabled — it is not needed.
 migrations:
-  enabled: false # .NET EF Core handles migrations on startup
+  enabled: false
 seed:
-  enabled: false # Seeding handled in application code if needed
+  enabled: false
 # Pod securityContext so media and backup PVCs are writable by app (uid 1001 in Dockerfile)
 securityContext:
   runAsUser: 1001
