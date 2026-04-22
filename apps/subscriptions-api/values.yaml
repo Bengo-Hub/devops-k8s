@@ -3,7 +3,7 @@ fullnameOverride: subscription-api
 replicaCount: 1
 image:
   repository: docker.io/codevertex/subscriptions-api
-  tag: "a7e8b93f"
+  tag: "fb26610d"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -70,6 +70,14 @@ env:
   # API key validation — validates X-API-Key headers against auth-api (used for S2S calls from auth-api)
   - name: API_KEY_DB_URL
     value: "http://auth-api.auth.svc.cluster.local:4000"
+  - name: TREASURY_API_URL
+    value: "https://booksapi.codevertexitsolutions.com"
+  - name: TREASURY_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: subscription-api-secrets
+        key: TREASURY_API_KEY
+        optional: true
 resources:
   requests:
     cpu: 100m
