@@ -103,13 +103,13 @@ env:
         key: AUTH_SERVICE_API_KEY
         optional: true
   # Treasury Service - Payment processing and refunds
-  - name: TREASURY_SERVICE_URL
+  - name: TREASURY_API_URL
     value: "https://booksapi.codevertexitsolutions.com"
-  - name: TREASURY_API_KEY
+  - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
         name: ordering-backend-secrets
-        key: TREASURY_API_KEY
+        key: INTERNAL_SERVICE_KEY
         optional: true
   - name: TREASURY_WEBHOOK_SECRET
     valueFrom:

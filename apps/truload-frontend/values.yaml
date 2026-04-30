@@ -89,6 +89,10 @@ env:
     value: truload-ui
   - name: NEXT_PUBLIC_APP_URL
     value: https://truload.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_TREASURY_API_URL
+    value: https://booksapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_TREASURY_UI_URL
+    value: https://books.codevertexitsolutions.com
 # No migrations needed for Next.js frontend
 migrations:
   enabled: false

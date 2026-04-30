@@ -141,6 +141,8 @@ env:
     value: "https://riderapp.codevertexitsolutions.com/"
   - name: NOTIFICATIONS_SSO_UI_URL
     value: "https://accounts.codevertexitsolutions.com"
+  - name: TREASURY_API_URL
+    value: "https://booksapi.codevertexitsolutions.com"
   - name: NOTIFICATIONS_TREASURY_APP_URL
     value: "https://books.codevertexitsolutions.com"
   - name: NOTIFICATIONS_POS_APP_URL
