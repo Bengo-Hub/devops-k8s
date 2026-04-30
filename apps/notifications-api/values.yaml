@@ -152,6 +152,9 @@ env:
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Auth-service URL for API key validation (enables S2S X-API-Key auth alongside JWT)
+  - name: SECURITY_API_KEY_DB_URL
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   # Shared S2S key — validates inbound requests from other services
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
