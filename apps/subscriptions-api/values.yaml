@@ -72,11 +72,11 @@ env:
     value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: TREASURY_API_URL
     value: "https://booksapi.codevertexitsolutions.com"
-  - name: TREASURY_API_KEY
+  - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
         name: subscription-api-secrets
-        key: TREASURY_API_KEY
+        key: INTERNAL_SERVICE_KEY
         optional: true
 resources:
   requests:

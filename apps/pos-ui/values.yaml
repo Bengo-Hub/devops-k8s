@@ -44,6 +44,10 @@ env:
     value: https://pricingapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
     value: https://pricing.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_TREASURY_API_URL
+    value: https://booksapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_TREASURY_UI_URL
+    value: https://books.codevertexitsolutions.com
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
