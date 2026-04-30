@@ -160,11 +160,12 @@ env:
     value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: AUTH_SUBSCRIPTION_TIMEOUT
     value: "5s"
-  - name: AUTH_SUBSCRIPTION_API_KEY
+  # Shared S2S key — auth-api reads this to call subscriptions-api for JWT enrichment
+  - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
         name: auth-api-secrets
-        key: PLATFORM_API_KEY
+        key: INTERNAL_SERVICE_KEY
         optional: true
   # Seed env vars — auth-seed runs inside entrypoint.sh on every pod startup
   - name: SEED_ADMIN_PASSWORD
@@ -184,12 +185,6 @@ env:
       secretKeyRef:
         name: auth-api-secrets
         key: DEFAULT_TENANT_SLUG
-        optional: true
-  - name: PLATFORM_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: PLATFORM_API_KEY
         optional: true
 # ============================================================================
 # DATABASE SETUP, MIGRATIONS AND SEEDING
@@ -236,11 +231,11 @@ seed:
           key: SEED_ADMIN_PASSWORD
           optional: true
     # If set, seed uses this as the platform API key instead of generating one
-    - name: PLATFORM_API_KEY
+    - name: INTERNAL_SERVICE_KEY
       valueFrom:
         secretKeyRef:
           name: auth-api-secrets
-          key: PLATFORM_API_KEY
+          key: INTERNAL_SERVICE_KEY
           optional: true
     - name: SEED_ADMIN_EMAIL
       valueFrom:

@@ -96,15 +96,10 @@ env:
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
   - name: AUTH_AUDIENCE
     value: "codevertex"
-  - name: AUTH_SERVICE_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: ordering-backend-secrets
-        key: AUTH_SERVICE_API_KEY
-        optional: true
   # Treasury Service - Payment processing and refunds
   - name: TREASURY_API_URL
     value: "https://booksapi.codevertexitsolutions.com"
+  # Shared S2S key — one key used for all outbound service calls (auth, treasury, logistics, inventory, notifications, subscriptions)
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
@@ -126,12 +121,6 @@ env:
   # Logistics Service - Delivery task management
   - name: LOGISTICS_SERVICE_URL
     value: "https://logisticsapi.codevertexitsolutions.com"
-  - name: LOGISTICS_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: ordering-backend-secrets
-        key: LOGISTICS_API_KEY
-        optional: true
   - name: LOGISTICS_WEBHOOK_SECRET
     valueFrom:
       secretKeyRef:
@@ -145,12 +134,6 @@ env:
   # Inventory Service - Stock management
   - name: INVENTORY_SERVICE_URL
     value: "https://inventoryapi.codevertexitsolutions.com"
-  - name: INVENTORY_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: ordering-backend-secrets
-        key: INVENTORY_API_KEY
-        optional: true
   - name: INVENTORY_REQUEST_TIMEOUT
     value: "10s"
   # Subscriptions Service - Subscription enforcement
@@ -161,12 +144,6 @@ env:
   # Notifications Service - Email, SMS, Push notifications
   - name: NOTIFICATIONS_SERVICE_URL
     value: "https://notificationsapi.codevertexitsolutions.com"
-  - name: NOTIFICATIONS_API_KEY
-    valueFrom:
-      secretKeyRef:
-        name: ordering-backend-secrets
-        key: NOTIFICATIONS_API_KEY
-        optional: true
   - name: NOTIFICATIONS_REQUEST_TIMEOUT
     value: "10s"
   # Superset - Business Intelligence & Analytics
