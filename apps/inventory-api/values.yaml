@@ -72,6 +72,13 @@ env:
     value: "https://inventoryapi.codevertexitsolutions.com"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Shared S2S key — validates inbound requests from other services (ordering, pos, etc.)
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: inventory-api-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://inventory.codevertexitsolutions.com,https://inventoryapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com"
 resources:

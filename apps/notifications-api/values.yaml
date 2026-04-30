@@ -152,6 +152,13 @@ env:
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Shared S2S key — validates inbound requests from other services
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: notifications-api-env
+        key: INTERNAL_SERVICE_KEY
+        optional: true
   # Security JWT
   - name: SECURITY_REQUIRE_JWT
     value: "true"
