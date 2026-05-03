@@ -83,6 +83,8 @@ env:
     value: "codevertex"
   - name: HTTP_PUBLIC_BASE_URL
     value: "https://booksapi.codevertexitsolutions.com"
+  - name: HTTP_UI_BASE_URL
+    value: "https://books.codevertexitsolutions.com"
   # Pre-shared key for trusted backend-to-backend calls (all services use INTERNAL_SERVICE_KEY).
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
