@@ -83,9 +83,7 @@ env:
     value: "codevertex"
   - name: HTTP_PUBLIC_BASE_URL
     value: "https://booksapi.codevertexitsolutions.com"
-  # Pre-shared key for trusted backend-to-backend calls (ordering-backend, subscriptions-api, etc.)
-  # Set INTERNAL_SERVICE_KEY in treasury-api-secrets to the same value as TREASURY_API_KEY in
-  # ordering-backend-secrets, subscriptions-api-secrets, and notifications-api-secrets.
+  # Pre-shared key for trusted backend-to-backend calls (all services use INTERNAL_SERVICE_KEY).
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
