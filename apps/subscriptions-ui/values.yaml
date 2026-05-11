@@ -4,7 +4,7 @@ replicaCount: 1
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/subscriptions-ui
-  tag: "6af34558"
+  tag: "5513e464"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
