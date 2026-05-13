@@ -1,0 +1,143 @@
+# Codevertex Website — Production Helm Values
+# Next.js 16 marketing & academy site
+# Namespace: codevertex | Domain: codevertexitsolutions.com
+nameOverride: codevertex-website
+fullnameOverride: codevertex-website
+# ============================================================================
+# IMAGE CONFIGURATION
+# NOTE: image.tag is updated by build.sh only — never edit manually
+# ============================================================================
+image:
+  repository: docker.io/codevertex/codevertex-website
+  tag: "latest"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 1
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 15
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# Sensitive vars come from K8s secret (codevertex-website-secrets):
+#   DATABASE_URL        — pgbouncer URL (?pgbouncer=true) for Next.js runtime
+#   DIRECT_DATABASE_URL — direct postgres URL for Prisma migrations (entrypoint.sh)
+#   ANTHROPIC_API_KEY   — Vera AI chatbot
+# NEXT_PUBLIC_* are baked at Docker build time — listed here for documentation only.
+# ============================================================================
+envFromSecret: codevertex-website-secrets
+env:
+  # Treasury integration
+  - name: NEXT_PUBLIC_TREASURY_TENANT
+    value: codevertex
+  - name: NEXT_PUBLIC_TREASURY_PAY_URL
+    value: https://books.codevertexitsolutions.com/pay
+  # SSO link
+  - name: NEXT_PUBLIC_SSO_URL
+    value: https://accounts.codevertexitsolutions.com
+  # Application URL
+  - name: NEXT_PUBLIC_APP_URL
+    value: https://codevertexitsolutions.com
+  # Node environment
+  - name: NODE_ENV
+    value: production
+# ============================================================================
+# HEALTH CHECKS
+# GET /healthz returns 200 {"status":"ok"}
+# ============================================================================
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 6
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+# ============================================================================
+# RESOURCE LIMITS AND REQUESTS
+# ============================================================================
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 384Mi
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Cache static assets at ingress level
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+  hosts:
+    - host: codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: www.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - codevertexitsolutions.com
+        - www.codevertexitsolutions.com
+      secretName: codevertex-website-tls
+# ============================================================================
+# MONITORING
+# ============================================================================
+monitoring:
+  enabled: false
+serviceMonitor:
+  enabled: false
+# ============================================================================
+# VPA — Recommendation-only mode (observe before enforcing)
+# ============================================================================
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Off"
+  minCPU: 50m
+  maxCPU: 500m
+  minMemory: 128Mi
+  maxMemory: 1Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+  recommendationMode: true
