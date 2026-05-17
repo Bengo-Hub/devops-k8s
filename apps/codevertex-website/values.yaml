@@ -60,6 +60,9 @@ env:
   # Application URL
   - name: NEXT_PUBLIC_APP_URL
     value: https://codevertexitsolutions.com
+  # Notifications service (S2S email)
+  - name: NOTIFICATIONS_API_URL
+    value: http://notifications-api.notifications.svc.cluster.local
   # Node environment
   - name: NODE_ENV
     value: production
