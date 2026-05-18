@@ -21,7 +21,7 @@ data:
     truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=20
     kuraweigh = host=postgresql.infra.svc.cluster.local port=5432 dbname=kuraweigh auth_dbname=postgres pool_size=10
     ordering = host=postgresql.infra.svc.cluster.local port=5432 dbname=ordering auth_dbname=postgres pool_size=15
-    erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=erp auth_dbname=postgres pool_size=20
+    bengo_erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=bengo_erp auth_dbname=postgres pool_size=20
     auth = host=postgresql.infra.svc.cluster.local port=5432 dbname=auth auth_dbname=postgres pool_size=15
     logistics = host=postgresql.infra.svc.cluster.local port=5432 dbname=logistics auth_dbname=postgres pool_size=10
     notifications = host=postgresql.infra.svc.cluster.local port=5432 dbname=notifications auth_dbname=postgres pool_size=8
