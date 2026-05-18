@@ -63,7 +63,7 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexitsolutions.com, https://kuraweigh.kura.go.ke, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexitsolutions.com, https://kuraweigh.kura.go.ke, https://kuraweightest.masterspace.co.ke, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Org-ID, X-Station-ID, X-Request-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
@@ -105,7 +105,7 @@ env:
   # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
   # Add enforcement tenant custom frontend domains here as they are onboarded
   - name: CORS__AllowedOrigins
-    value: "https://kuraweigh.kura.go.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
+    value: "https://kuraweigh.kura.go.ke,https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
     # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
     # The connection string is injected at runtime via the truload-backend-env K8s secret.
     # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...
