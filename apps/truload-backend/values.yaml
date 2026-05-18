@@ -106,6 +106,10 @@ env:
   # Add enforcement tenant custom frontend domains here as they are onboarded
   - name: CORS__AllowedOrigins
     value: "https://kuraweigh.kura.go.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
+  # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
+  # The connection string is injected at runtime via the truload-backend-env K8s secret.
+  # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...
+  # to the secret. Leave unset to use the shared truload DB (default for all other tenants).
     # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
     #   Auth__JwksUrl (if using env-based override)
     #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
