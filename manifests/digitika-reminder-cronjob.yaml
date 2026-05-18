@@ -1,0 +1,63 @@
+# Digitika Installment Reminder CronJob
+# Runs daily at 8:00 AM UTC (11:00 AM EAT) in the codevertex namespace.
+# Calls POST /api/admin/installments/send-reminders on the codevertex-website service,
+# which finds all installments due within 3 days and sends reminder emails via notifications-api.
+# Auth: INTERNAL_SERVICE_KEY from codevertex-website-secrets.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: digitika-installment-reminder
+  namespace: codevertex
+  labels:
+    app: digitika-reminder
+spec:
+  schedule: "0 8 * * *"  # Daily at 8:00 AM UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      activeDeadlineSeconds: 180
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: digitika-reminder
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: reminder
+            image: curlimages/curl:8.6.0
+            command:
+            - sh
+            - -c
+            - |
+              echo "=== Digitika Installment Reminders — $(date -u '+%Y-%m-%d %H:%M UTC') ==="
+              RESPONSE=$(curl -sf -w "\n%{http_code}" \
+                -X POST \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
+                http://codevertex-website.codevertex.svc.cluster.local/api/admin/installments/send-reminders)
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | head -n -1)
+              echo "HTTP $HTTP_CODE: $BODY"
+              if [ "$HTTP_CODE" != "200" ]; then
+                echo "ERROR: Reminder job failed with HTTP $HTTP_CODE"
+                exit 1
+              fi
+              echo "=== Done ==="
+            env:
+            - name: INTERNAL_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: codevertex-website-secrets
+                  key: INTERNAL_SERVICE_KEY
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                cpu: 50m
+                memory: 64Mi
