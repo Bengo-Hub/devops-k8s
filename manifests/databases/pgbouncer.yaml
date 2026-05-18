@@ -19,6 +19,7 @@ data:
     ; Keeps them from starving lighter services and prevents connection exhaustion
     ; on PostgreSQL max_connections=200 (15+ services × pool_size).
     truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=20
+    kuraweigh = host=postgresql.infra.svc.cluster.local port=5432 dbname=kuraweigh auth_dbname=postgres pool_size=10
     ordering = host=postgresql.infra.svc.cluster.local port=5432 dbname=ordering auth_dbname=postgres pool_size=15
     erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=erp auth_dbname=postgres pool_size=20
     auth = host=postgresql.infra.svc.cluster.local port=5432 dbname=auth auth_dbname=postgres pool_size=15
@@ -26,6 +27,15 @@ data:
     notifications = host=postgresql.infra.svc.cluster.local port=5432 dbname=notifications auth_dbname=postgres pool_size=8
     treasury = host=postgresql.infra.svc.cluster.local port=5432 dbname=treasury auth_dbname=postgres pool_size=10
     subscriptions = host=postgresql.infra.svc.cluster.local port=5432 dbname=subscriptions auth_dbname=postgres pool_size=8
+    inventory = host=postgresql.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=8
+    marketflow = host=postgresql.infra.svc.cluster.local port=5432 dbname=marketflow auth_dbname=postgres pool_size=8
+    pos = host=postgresql.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=10
+    isp_billing = host=postgresql.infra.svc.cluster.local port=5432 dbname=isp_billing auth_dbname=postgres pool_size=8
+    projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=6
+    ticketing = host=postgresql.infra.svc.cluster.local port=5432 dbname=ticketing auth_dbname=postgres pool_size=6
+    codevertex = host=postgresql.infra.svc.cluster.local port=5432 dbname=codevertex auth_dbname=postgres pool_size=6
+    iot = host=postgresql.infra.svc.cluster.local port=5432 dbname=iot auth_dbname=postgres pool_size=6
+    superset = host=postgresql.infra.svc.cluster.local port=5432 dbname=superset auth_dbname=postgres pool_size=8
     * = host=postgresql.infra.svc.cluster.local port=5432 auth_dbname=postgres
 
     [pgbouncer]
