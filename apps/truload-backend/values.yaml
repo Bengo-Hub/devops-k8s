@@ -98,7 +98,7 @@ env:
   - name: Database__MaxPoolSize
     value: "6"
   - name: Database__MinPoolSize
-    value: "2"
+    value: "0"
   - name: Database__ConnectionIdleLifetime
     value: "60"
   # CORS: frontend origins allowed to call this API
