@@ -52,8 +52,8 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    # Axle load enforcement test domain (KuraWeigh — road authority use case)
-    - host: kuraweightest.masterspace.co.ke
+    # Axle load enforcement domain (KuraWeigh — road authority use case)
+    - host: kuraweigh.kura.go.ke
       paths:
         - path: /
           pathType: Prefix
@@ -68,9 +68,9 @@ ingress:
           #     - path: /
           #       pathType: Prefix
   tls:
-    # Axle load enforcement test TLS
+    # Axle load enforcement TLS
     - hosts:
-        - kuraweightest.masterspace.co.ke
+        - kuraweigh.kura.go.ke
       secretName: kuraweigh-frontend-tls
     # Commercial tenant TLS (cert-manager auto-issues)
     - hosts:

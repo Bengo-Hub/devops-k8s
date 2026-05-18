@@ -63,26 +63,18 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexitsolutions.com, https://kuraweightest.masterspace.co.ke, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexitsolutions.com, https://kuraweigh.kura.go.ke, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Org-ID, X-Station-ID, X-Request-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    # Axle load enforcement test domain (KuraWeigh API — road authority use case)
-    - host: kuraweighapitest.masterspace.co.ke
-      paths:
-        - path: /
-          pathType: Prefix
     # Production backend domain (serves all tenants — commercial and enforcement)
     - host: truloadapi.codevertexitsolutions.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - hosts:
-        - kuraweighapitest.masterspace.co.ke
-      secretName: kuraweigh-api-tls
     - hosts:
         - truloadapi.codevertexitsolutions.com
       secretName: truload-api-tls
@@ -113,7 +105,7 @@ env:
   # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
   # Add enforcement tenant custom frontend domains here as they are onboarded
   - name: CORS__AllowedOrigins
-    value: "https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
+    value: "https://kuraweigh.kura.go.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
     # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
     #   Auth__JwksUrl (if using env-based override)
     #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
