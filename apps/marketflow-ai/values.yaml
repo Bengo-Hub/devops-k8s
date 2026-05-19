@@ -108,6 +108,15 @@ env:
         name: marketflow-ai-secrets
         key: marketflow-api-key
         optional: true
+  # Anthropic Claude — third-tier LLM fallback when all Groq models fail
+  - name: MF_AI_CLAUDE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: ANTHROPIC_API_KEY
+        optional: true
+  - name: MF_AI_CLAUDE_MODEL
+    value: "claude-haiku-4-5-20251001"
 migrations:
   enabled: false
 seed:
@@ -158,7 +167,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://codevertexitsolutions.com,https://www.codevertexitsolutions.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key, X-Widget-Mode"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
   hosts:
     - host: marketflowai.codevertexitsolutions.com
