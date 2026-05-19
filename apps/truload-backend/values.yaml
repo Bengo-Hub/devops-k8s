@@ -106,6 +106,16 @@ env:
   # Add enforcement tenant custom frontend domains here as they are onboarded
   - name: CORS__AllowedOrigins
     value: "https://kuraweigh.kura.go.ke,https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
+  # Notifications-api integration — override appsettings.json defaults
+  - name: NotificationService__BaseUrl
+    value: "http://notifications-api.notifications.svc.cluster.local:4000"
+  - name: NotificationService__TenantId
+    value: "kura"
+  - name: NotificationService__ApiKey
+    valueFrom:
+      secretKeyRef:
+        name: truload-backend-env
+        key: INTERNAL_SERVICE_KEY
     # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
     # The connection string is injected at runtime via the truload-backend-env K8s secret.
     # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...
