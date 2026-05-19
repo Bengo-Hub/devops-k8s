@@ -2,7 +2,7 @@ nameOverride: truload-backend
 fullnameOverride: truload-backend
 image:
   repository: docker.io/codevertex/truload-backend
-  tag: "2ac14d8f"
+  tag: "fbe1543b"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -116,15 +116,15 @@ env:
       secretKeyRef:
         name: truload-backend-env
         key: INTERNAL_SERVICE_KEY
-    # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
-    # The connection string is injected at runtime via the truload-backend-env K8s secret.
-    # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...
-    # to the secret. Leave unset to use the shared truload DB (default for all other tenants).
-    # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
-    #   Auth__JwksUrl (if using env-based override)
-    #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
-    #   Subscriptions__ServiceJwt   — service-to-service JWT for subscriptions-api
-    #   Treasury__WebhookSecret     — HMAC secret for treasury webhook verification
+        # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
+        # The connection string is injected at runtime via the truload-backend-env K8s secret.
+        # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...
+        # to the secret. Leave unset to use the shared truload DB (default for all other tenants).
+        # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
+        #   Auth__JwksUrl (if using env-based override)
+        #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
+        #   Subscriptions__ServiceJwt   — service-to-service JWT for subscriptions-api
+        #   Treasury__WebhookSecret     — HMAC secret for treasury webhook verification
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
