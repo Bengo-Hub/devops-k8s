@@ -94,6 +94,11 @@ env:
     value: "https://api.tavily.com"
   - name: MF_AI_TAVILY_DAILY_CAP
     value: "20"
+  # Prefer Tavily for web_search — Google CSE returns 403 (Custom Search API
+  # not enabled in the GCP project). Switch back to "google" after enabling
+  # the Custom Search JSON API at console.cloud.google.com.
+  - name: MF_AI_WEB_SEARCH_PROVIDER
+    value: "tavily"
   - name: MF_AI_TAVILY_API_KEY
     valueFrom:
       secretKeyRef:
