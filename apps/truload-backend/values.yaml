@@ -116,6 +116,10 @@ env:
       secretKeyRef:
         name: truload-backend-env
         key: INTERNAL_SERVICE_KEY
+  # Public-facing API URL used to build absolute logo URLs in emails.
+  # Must be the full origin without trailing slash.
+  - name: NotificationService__PublicBaseUrl
+    value: "https://truloadapi.codevertexitsolutions.com"
 # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
 # The connection string is injected at runtime via the truload-backend-env K8s secret.
 # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...
