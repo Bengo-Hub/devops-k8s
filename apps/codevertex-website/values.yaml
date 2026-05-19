@@ -66,6 +66,9 @@ env:
   # NATS JetStream for domain event publishing (digitika_consumer handles emails when set)
   - name: EVENTS_NATS_URL
     value: nats://nats.messaging.svc.cluster.local:4222
+  # MarketFlow AI proxy — Vera chatbot server-side calls
+  - name: MARKETFLOW_AI_URL
+    value: https://marketflowai.codevertexitsolutions.com
   # Node environment
   - name: NODE_ENV
     value: production

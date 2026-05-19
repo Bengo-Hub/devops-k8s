@@ -29,7 +29,7 @@ env:
   - name: HTTP_PORT
     value: "4001"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com"
+    value: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://codevertexitsolutions.com,https://www.codevertexitsolutions.com"
   # Database (shared with marketflow-api — same DB for pgvector queries)
   - name: POSTGRES_URL
     valueFrom:
@@ -156,9 +156,9 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://codevertexitsolutions.com,https://www.codevertexitsolutions.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
   hosts:
     - host: marketflowai.codevertexitsolutions.com
