@@ -107,10 +107,10 @@ env:
   - name: CORS__AllowedOrigins
     value: "https://kuraweigh.kura.go.ke,https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
   # Notifications-api integration — override appsettings.json defaults
+  # TenantId is resolved dynamically from the logged-in user's organisation (ITenantContext),
+  # so only BaseUrl and ApiKey need to be set here.
   - name: NotificationService__BaseUrl
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
-  - name: NotificationService__TenantId
-    value: "kura"
   - name: NotificationService__ApiKey
     valueFrom:
       secretKeyRef:
