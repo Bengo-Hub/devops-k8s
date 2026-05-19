@@ -105,6 +105,14 @@ env:
         name: marketflow-ai-secrets
         key: tavily-api-key
         optional: true
+  # Shared internal service key — used by query_service_data tool to query
+  # any registered Codevertex microservice (ordering, treasury, codevertex-website, etc.)
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
   # Platform API key for service-to-service calls to marketflow-api
   # (agent book_meeting tool). Issued by auth-api /admin/api-keys.
   - name: MF_AI_MARKETFLOW_API_KEY
