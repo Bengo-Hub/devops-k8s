@@ -101,6 +101,12 @@ env:
     value: "0"
   - name: Database__ConnectionIdleLifetime
     value: "60"
+  # Direct PostgreSQL host for migrations (bypasses PgBouncer — EF Core advisory locks need a
+  # persistent session that PgBouncer transaction-mode pooling doesn't support).
+  - name: Database__DirectHost
+    value: "postgresql.infra.svc.cluster.local"
+  - name: Database__DirectPort
+    value: "5432"
   # CORS: frontend origins allowed to call this API
   # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
   # Add enforcement tenant custom frontend domains here as they are onboarded
