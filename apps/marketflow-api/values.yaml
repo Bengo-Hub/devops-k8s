@@ -143,12 +143,29 @@ env:
     value: "50"
   - name: MF_WORKER_API_URL
     value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+  - name: MF_WORKER_AI_URL
+    value: "http://marketflow-ai.marketflow.svc.cluster.local:4001"
+  - name: MF_WORKER_TICKETING_URL
+    value: "http://ticketing-api.ticketing.svc.cluster.local:4009"
   - name: MF_WORKER_OLLAMA_URL
     value: "http://ollama.shared-infra.svc.cluster.local:11434"
   - name: MF_WORKER_EMBEDDING_MODEL
     value: "nomic-embed-text"
   - name: NOTIFICATIONS_URL
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
+  # Cross-service CRM S2S URLs (Sprint 11)
+  - name: MF_CROSS_ORDERING_URL
+    value: "http://ordering-backend.ordering.svc.cluster.local:4000"
+  - name: MF_CROSS_POS_URL
+    value: "http://pos-api.pos.svc.cluster.local:4000"
+  - name: MF_CROSS_TREASURY_URL
+    value: "http://treasury-api.finance.svc.cluster.local:4000"
+  - name: MF_CROSS_INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-api-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
   # Shared S2S key — used for outbound calls to notifications-api and subscriptions-api
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
