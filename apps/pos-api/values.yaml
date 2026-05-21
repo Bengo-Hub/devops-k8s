@@ -78,6 +78,15 @@ env:
         key: INTERNAL_SERVICE_KEY
         optional: true
   # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
+  # S2S service URLs — values injected by CI/CD; placeholders only here
+  - name: INVENTORY_SERVICE_URL
+    value: "https://inventoryapi.codevertexitsolutions.com"
+  - name: TREASURY_SERVICE_URL
+    value: "https://booksapi.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_SERVICE_URL
+    value: "https://notificationsapi.codevertexitsolutions.com"
+  - name: ORDERING_SERVICE_URL
+    value: "https://orderingapi.codevertexitsolutions.com"
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_ISSUER
@@ -123,7 +132,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://theurbanloftcafe.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
