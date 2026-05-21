@@ -1,21 +1,17 @@
 nameOverride: ticketing-ui
 fullnameOverride: ticketing-ui
-
 replicaCount: 1
 minReadySeconds: 30
-
 image:
   repository: docker.io/codevertex/ticketing-ui
-  tag: "latest"
+  tag: "0ec711a9"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 healthCheck:
   enabled: true
   readiness:
@@ -34,13 +30,11 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 3
     failureThreshold: 3
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 env:
   - name: NEXT_PUBLIC_API_URL
     value: https://ticketingapi.codevertexitsolutions.com
@@ -58,7 +52,6 @@ env:
         name: ticketing-ui-secrets
         key: sentryDsn
         optional: true
-
 resources:
   requests:
     cpu: 50m
@@ -66,14 +59,12 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -90,13 +81,10 @@ ingress:
     - hosts:
         - ticketing.codevertexitsolutions.com
       secretName: ticketing-ui-tls
-
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # VPA configuration for UI - recommendation-only mode
 verticalPodAutoscaling:
   enabled: true
