@@ -12,8 +12,8 @@ image:
 
 service:
   type: ClusterIP
-  port: 4000
-  targetPort: 4000
+  port: 4009
+  targetPort: 4009
 
 migrations:
   enabled: false
@@ -46,7 +46,7 @@ env:
   - name: APP_ENV
     value: production
   - name: HTTP_PORT
-    value: "4000"
+    value: "4009"
   - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
@@ -72,6 +72,25 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Auth service (JWT validation, JWKS, OTP)
+  - name: AUTH_SERVICE_URL
+    value: https://auth.codevertexitsolutions.com
+  - name: AUTH_ISSUER
+    value: bengobox-auth
+  - name: AUTH_AUDIENCE
+    value: bengobox-ticketing
+  # Notifications S2S
+  - name: NOTIFICATIONS_SERVICE_URL
+    value: http://notifications-api.notifications.svc.cluster.local:4003
+  # Shared S2S key (single key for all internal service calls)
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ticketing-api-secrets
+        key: INTERNAL_SERVICE_KEY
+  # CORS allowed origins
+  - name: HTTP_ALLOWED_ORIGINS
+    value: "https://ticketing.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3009"
 
 resources:
   requests:
@@ -113,7 +132,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://ticketing.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Tenant-ID, X-API-Key, X-OTP-Token"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
