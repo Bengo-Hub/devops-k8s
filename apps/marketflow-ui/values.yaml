@@ -2,7 +2,7 @@ nameOverride: marketflow-ui
 fullnameOverride: marketflow-ui
 image:
   repository: docker.io/codevertex/marketflow-ui
-  tag: "8073cea8"
+  tag: "bb11dd30"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
