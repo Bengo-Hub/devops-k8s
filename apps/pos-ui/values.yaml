@@ -60,6 +60,12 @@ env:
         name: pos-ui-secrets
         key: sentryDsn
         optional: true
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: pos-ui-secrets
+        key: internalServiceKey
+        optional: false
 resources:
   requests:
     cpu: 50m
