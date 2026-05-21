@@ -1,7 +1,7 @@
 nameOverride: ticketing-ui
 fullnameOverride: ticketing-ui
 
-replicaCount: 0  # Disabled: Docker image not yet built. Set to 1 after first CI deploy.
+replicaCount: 1
 minReadySeconds: 30
 
 image:
@@ -44,6 +44,12 @@ strategy:
 env:
   - name: NEXT_PUBLIC_API_URL
     value: https://ticketingapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SSO_URL
+    value: https://sso.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SSO_CLIENT_ID
+    value: ticketing-ui
+  - name: NEXT_PUBLIC_AUTH_API_URL
+    value: https://auth.codevertexitsolutions.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
     value: https://notifications.codevertexitsolutions.com
   - name: NEXT_PUBLIC_SENTRY_DSN
