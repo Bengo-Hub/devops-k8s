@@ -27,13 +27,13 @@ healthCheck:
   enabled: true
   readiness:
     httpGet:
-      path: /api/v1/healthz
+      path: /readyz
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
-      path: /api/v1/healthz
+      path: /healthz
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20
@@ -78,6 +78,20 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Auth / JWKS
+  - name: AUTH_SERVICE_URL
+    value: https://sso.codevertexitsolutions.com
+  - name: AUTH_ISSUER
+    value: https://sso.codevertexitsolutions.com
+  - name: AUTH_AUDIENCE
+    value: codevertex
+  - name: AUTH_JWKS_URL
+    value: https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json
+  - name: AUTH_ENABLE_API_KEY_AUTH
+    value: "true"
+  # CORS allowed origins
+  - name: HTTP_ALLOWED_ORIGINS
+    value: "https://projects.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3005"
 
 resources:
   requests:
