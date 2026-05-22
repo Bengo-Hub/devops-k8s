@@ -15,7 +15,7 @@ migrations:
   enabled: false
 seed:
   enabled: true
-  binaryName: seed
+  binaryName: subscription-seed
   resources:
     requests:
       cpu: 100m
