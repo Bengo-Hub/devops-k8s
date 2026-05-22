@@ -54,7 +54,10 @@ env:
     value: https://pricing.codevertexitsolutions.com
   - name: NEXT_PUBLIC_POS_UI_URL
     value: https://pos.codevertexitsolutions.com
+  - name: POS_API_URL
+    value: https://posapi.codevertexitsolutions.com
 # Use envFromSecret for all other environment variables (consistent with erp-ui)
+# POS_API_KEY is set via cafe-website-env sealed secret
 envFromSecret: cafe-website-env
 # Resource constraints optimized for Next.js app
 resources:
