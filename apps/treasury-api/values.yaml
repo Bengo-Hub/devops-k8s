@@ -85,6 +85,10 @@ env:
     value: "https://booksapi.codevertexitsolutions.com"
   - name: HTTP_UI_BASE_URL
     value: "https://books.codevertexitsolutions.com"
+  - name: INVENTORY_API_URL
+    value: "http://inventory-api.inventory.svc.cluster.local:4000"
+  - name: LOGISTICS_API_URL
+    value: "http://logistics-api.logistics.svc.cluster.local:4000"
   # Pre-shared key for trusted backend-to-backend calls (all services use INTERNAL_SERVICE_KEY).
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
