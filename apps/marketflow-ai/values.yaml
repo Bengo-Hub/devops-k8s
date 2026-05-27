@@ -180,7 +180,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://codevertexitsolutions.com,https://www.codevertexitsolutions.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key, X-Widget-Mode"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key, X-Widget-Mode, X-Widget-Persona"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
   hosts:
     - host: marketflowai.codevertexitsolutions.com
