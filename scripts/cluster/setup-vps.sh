@@ -160,7 +160,8 @@ echo ""
 
 echo -e "${BLUE}Step 6: Setting hostname...${NC}"
 CLUSTER_NAME=${CLUSTER_NAME:-mss-prod}
-EXPECTED_HOSTNAME="${CLUSTER_NAME}-master"
+NODE_ROLE=${NODE_ROLE:-master}
+EXPECTED_HOSTNAME="${CLUSTER_NAME}-${NODE_ROLE}"
 CURRENT_HOSTNAME=$(hostname)
 
 if [ "$CURRENT_HOSTNAME" = "$EXPECTED_HOSTNAME" ]; then
@@ -180,12 +181,18 @@ fi
 echo ""
 
 echo -e "${BLUE}Step 7: Configuring firewall...${NC}"
+# Determine required ports by node role
+if [ "${NODE_ROLE}" = "master" ]; then
+    REQUIRED_RULES="22/tcp 80/tcp 443/tcp 6443/tcp 2379:2380/tcp 10250/tcp 10251/tcp 10252/tcp 10255/tcp"
+else
+    # Worker nodes: kubelet + NodePort range (no etcd/API server/scheduler/controller ports)
+    REQUIRED_RULES="22/tcp 10250/tcp 30000:32767/tcp"
+fi
+
 if command -v ufw &> /dev/null; then
     # Check if firewall is already configured
     UFW_STATUS=$(ufw status 2>/dev/null | head -1 || echo "inactive")
     if echo "$UFW_STATUS" | grep -q "Status: active"; then
-        # Check if required rules exist
-        REQUIRED_RULES="22/tcp 80/tcp 443/tcp 6443/tcp 2379:2380/tcp 10250/tcp 10251/tcp 10252/tcp 10255/tcp"
         ALL_RULES_EXIST=true
         for rule in $REQUIRED_RULES; do
             if ! ufw status | grep -q "$rule"; then
@@ -193,38 +200,50 @@ if command -v ufw &> /dev/null; then
                 break
             fi
         done
-        
+
         if [ "$ALL_RULES_EXIST" = true ]; then
             echo -e "${GREEN}✓ Firewall already configured with required rules${NC}"
         else
             echo -e "${BLUE}Adding missing firewall rules...${NC}"
-            ufw allow 22/tcp       # SSH
-            ufw allow 80/tcp       # HTTP
-            ufw allow 443/tcp      # HTTPS
-            ufw allow 6443/tcp     # Kubernetes API
-            ufw allow 2379:2380/tcp # etcd
-            ufw allow 10250/tcp    # Kubelet
-            ufw allow 10251/tcp    # kube-scheduler
-            ufw allow 10252/tcp    # kube-controller
-            ufw allow 10255/tcp    # Read-only Kubelet
+            if [ "${NODE_ROLE}" = "master" ]; then
+                ufw allow 22/tcp            # SSH
+                ufw allow 80/tcp            # HTTP
+                ufw allow 443/tcp           # HTTPS
+                ufw allow 6443/tcp          # Kubernetes API
+                ufw allow 2379:2380/tcp     # etcd
+                ufw allow 10250/tcp         # Kubelet
+                ufw allow 10251/tcp         # kube-scheduler
+                ufw allow 10252/tcp         # kube-controller
+                ufw allow 10255/tcp         # Read-only Kubelet
+            else
+                ufw allow 22/tcp            # SSH
+                ufw allow 10250/tcp         # Kubelet
+                ufw allow 30000:32767/tcp   # NodePort services
+            fi
             echo -e "${GREEN}✓ Firewall rules added${NC}"
         fi
     else
         echo -e "${BLUE}Configuring firewall...${NC}"
-    ufw --force disable 2>/dev/null || true
-    ufw default deny incoming
-    ufw default allow outgoing
-    ufw allow 22/tcp       # SSH
-    ufw allow 80/tcp       # HTTP
-    ufw allow 443/tcp      # HTTPS
-    ufw allow 6443/tcp     # Kubernetes API
-    ufw allow 2379:2380/tcp # etcd
-    ufw allow 10250/tcp    # Kubelet
-    ufw allow 10251/tcp    # kube-scheduler
-    ufw allow 10252/tcp    # kube-controller
-    ufw allow 10255/tcp    # Read-only Kubelet
-    ufw --force enable
-    echo -e "${GREEN}✓ Firewall configured${NC}"
+        ufw --force disable 2>/dev/null || true
+        ufw default deny incoming
+        ufw default allow outgoing
+        if [ "${NODE_ROLE}" = "master" ]; then
+            ufw allow 22/tcp            # SSH
+            ufw allow 80/tcp            # HTTP
+            ufw allow 443/tcp           # HTTPS
+            ufw allow 6443/tcp          # Kubernetes API
+            ufw allow 2379:2380/tcp     # etcd
+            ufw allow 10250/tcp         # Kubelet
+            ufw allow 10251/tcp         # kube-scheduler
+            ufw allow 10252/tcp         # kube-controller
+            ufw allow 10255/tcp         # Read-only Kubelet
+        else
+            ufw allow 22/tcp            # SSH
+            ufw allow 10250/tcp         # Kubelet
+            ufw allow 30000:32767/tcp   # NodePort services
+        fi
+        ufw --force enable
+        echo -e "${GREEN}✓ Firewall configured${NC}"
     fi
 else
     echo -e "${YELLOW}⚠️  UFW not found, skipping firewall configuration${NC}"
