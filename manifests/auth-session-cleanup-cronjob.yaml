@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: auth-session-cleanup
+  namespace: auth
+  labels:
+    app: auth-session-cleanup
+    component: maintenance
+spec:
+  schedule: "0 * * * *"  # Every hour — keeps expired session count low without hammering the DB
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      activeDeadlineSeconds: 300
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: auth-session-cleanup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          containers:
+            - name: session-cleanup
+              image: docker.io/codevertex/auth-api:latest
+              imagePullPolicy: Always
+              command: ["/app/auth-session-cleanup"]
+              env:
+                - name: SESSION_CLEANUP_LOG_ENV
+                  value: "production"
+                - name: POSTGRES_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: auth-api-secrets
+                      key: POSTGRES_URL
+                # Minimal config needed — only DB connection
+                - name: JWT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: auth-api-secrets
+                      key: JWT_SECRET
+                      optional: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+          imagePullSecrets:
+            - name: registry-credentials

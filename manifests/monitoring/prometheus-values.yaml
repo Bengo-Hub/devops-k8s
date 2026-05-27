@@ -1,6 +1,12 @@
 prometheus:
   prometheusSpec:
-    retention: 30d
+    # Reduced from 30d to 15d — halves write pressure and disk usage.
+    # At current scrape volume, 15d stores ~10-12Gi of metrics (well within 20Gi PVC).
+    retention: 15d
+    # Scrape every 30s instead of 15s — halves CPU usage (was 721m, target <400m).
+    # Non-critical services benefit from reduced scrape frequency.
+    scrapeInterval: "30s"
+    evaluationInterval: "30s"
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -26,10 +32,12 @@ grafana:
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 256Mi
     limits:
       cpu: 500m
-      memory: 512Mi
+      # Increased from 512Mi — actual usage is 877Mi which exceeds the old 512Mi limit.
+      # Grafana was running over limit due to dashboard caching and plugin state.
+      memory: 1536Mi
   # Additional security and performance settings
   securityContext:
     runAsUser: 472

@@ -35,8 +35,16 @@ spec:
                   # Ensure backup dir is writable
                   mkdir -p ${BACKUP_DIR}
 
+                  # Check available disk space before backup (abort if <500MB free)
+                  AVAIL=$(df -m ${BACKUP_DIR} | awk 'NR==2{print $4}')
+                  if [ "$AVAIL" -lt 500 ]; then
+                    echo "ERROR: Only ${AVAIL}MB available in backup dir — aborting backup to prevent disk full"
+                    exit 1
+                  fi
+                  echo "Disk space OK: ${AVAIL}MB available"
+
                   echo "Starting PostgreSQL backup at $(date)"
-                  pg_dumpall -h $PGHOST -U $PGUSER | gzip > "${BACKUP_DIR}/${FILENAME}"
+                  pg_dumpall -h $PGHOST -U $PGUSER | gzip -9 > "${BACKUP_DIR}/${FILENAME}"
 
                   SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
                   echo "Backup completed: ${FILENAME} (${SIZE})"
@@ -62,16 +70,15 @@ spec:
               env:
                 - name: PGHOST
                   value: "postgresql.infra.svc.cluster.local"
+                # PostgreSQL admin user = admin_user (set via POSTGRES_USER in Bitnami chart)
                 - name: PGUSER
-                  valueFrom:
-                    secretKeyRef:
-                      name: postgresql-credentials
-                      key: username
+                  value: "admin_user"
+                # Secret name is 'postgresql' (Bitnami chart default), key is 'admin-user-password'
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: postgresql-credentials
-                      key: password
+                      name: postgresql
+                      key: admin-user-password
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backups
@@ -88,6 +95,12 @@ spec:
                 claimName: postgresql-backup-pvc
 ---
 # PVC for backup storage (shared between CronJob and backup-server)
+# NOTE: local-path storage class does NOT support in-place resize.
+# To expand on a running cluster:
+#   1. kubectl delete deployment backup-server -n infra
+#   2. kubectl delete pvc postgresql-backup-pvc -n infra  (loses existing backups)
+#   3. kubectl apply -f manifests/backup/postgresql-backup-cronjob.yaml
+#   4. ArgoCD will recreate the PVC at 20Gi and redeploy the backup server
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -98,7 +111,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 20Gi
 ---
 # Lightweight nginx server to serve backup files internally
 # Auth-api proxies requests to this service for authenticated platform admins
