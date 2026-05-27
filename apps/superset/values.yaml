@@ -260,7 +260,6 @@ configOverrides:
         'allow_headers': ['*'],
         'resources': ['*'],
         'origins': [
-            'https://kuraweightest.masterspace.co.ke',
             'http://localhost:3000'
         ]
     }
@@ -292,9 +291,11 @@ configOverrides:
 supersetWorker:
   enabled: true
   replicaCount: 1
+  # Limit Celery to 2 concurrent processes (default: os.cpu_count()=12, causing 496m CPU usage).
+  command: ["/bin/sh", "-c", ". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker --concurrency=2 -Ofair -l INFO"]
   resources:
     requests:
-      cpu: 150m   # Single worker sufficient for current analytics load
+      cpu: 150m
       memory: 384Mi
     limits:
       cpu: 750m

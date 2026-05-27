@@ -195,6 +195,12 @@ initContainers:
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001
+# ============================================================================
+# POD DISRUPTION BUDGET
+# ============================================================================
+pdb:
+  enabled: true
+  maxUnavailable: 1
 # VPA configuration - DISABLED due to metrics-server issues causing eviction loop
 verticalPodAutoscaling:
   enabled: false

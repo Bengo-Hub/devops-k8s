@@ -254,7 +254,6 @@ spec:
                   'allow_headers': ['*'],
                   'resources': ['*'],
                   'origins': [
-                      'https://kuraweightest.masterspace.co.ke',
                       'http://localhost:3000'
                   ]
               }
@@ -284,6 +283,9 @@ spec:
           supersetWorker:
             enabled: true
             replicaCount: 1
+            # Limit Celery worker to 2 concurrent processes.
+            # Default is os.cpu_count() (12 on this node) causing 496m CPU usage.
+            command: ["/bin/sh", "-c", ". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker --concurrency=2 -Ofair -l INFO"]
             resources:
               requests:
                 cpu: 100m

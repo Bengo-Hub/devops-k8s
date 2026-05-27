@@ -1,0 +1,113 @@
+# NATS JetStream Stream Retention Enforcement
+#
+# Runs every 6 hours to ensure all application streams have consistent
+# retention policies. Prevents JetStream PVC (10Gi) from filling up.
+#
+# Policy: MaxAge=7 days, MaxBytes=2GiB per stream.
+# DLQ streams: MaxAge=14 days (longer retention for failed-event investigation).
+#
+# Streams managed:
+#   auth, ordering, logistics, inventory, treasury, pos, notifications,
+#   subscriptions, projects, iot, ticketing, marketflow
+#   + DLQ variants: logistics-dlq, treasury-dlq, inventory-dlq, pos-dlq,
+#                   projects-dlq, iot-dlq
+#
+# NOTE: This job uses "nats stream update" which only changes retention settings,
+# it does NOT delete or recreate streams. Safe to run on a live cluster.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nats-stream-retention
+  namespace: messaging
+  labels:
+    app: nats-stream-retention
+    component: maintenance
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      activeDeadlineSeconds: 300
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: nats-stream-retention
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: nats-cli
+              image: natsio/nats-box:0.14.5
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  NATS_URL="nats://nats.messaging.svc.cluster.local:4222"
+                  MAX_AGE="7d"
+                  MAX_BYTES="2147483648"   # 2GiB
+                  DLQ_MAX_AGE="14d"
+                  DLQ_MAX_BYTES="536870912"  # 512MiB — DLQ should be small
+
+                  echo "=== NATS Stream Retention Enforcement ($(date -u)) ==="
+                  echo "Policy: MaxAge=${MAX_AGE}, MaxBytes=${MAX_BYTES} bytes"
+                  echo ""
+
+                  # Update or create stream with retention policy
+                  apply_retention() {
+                    local STREAM="$1"
+                    local SUBJECTS="$2"
+                    local AGE="$3"
+                    local BYTES="$4"
+
+                    echo "Processing stream: ${STREAM} (subjects: ${SUBJECTS})"
+                    if nats --server="${NATS_URL}" stream info "${STREAM}" > /dev/null 2>&1; then
+                      nats --server="${NATS_URL}" stream edit "${STREAM}" \
+                        --max-age="${AGE}" \
+                        --max-bytes="${BYTES}" \
+                        --ack \
+                        2>&1 || echo "  WARN: Could not update ${STREAM} — may need manual review"
+                      echo "  Updated: ${STREAM}"
+                    else
+                      echo "  Stream ${STREAM} does not exist yet — will be created by the application on next startup"
+                    fi
+                  }
+
+                  # Application streams (7d retention, 2GiB max)
+                  apply_retention "auth"           "auth.>"                   "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "ordering"        "ordering.>"              "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "logistics"       "logistics.>"             "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "inventory"       "inventory.>"             "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "treasury"        "treasury.>"              "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "pos"             "pos.>"                   "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "notifications"   "notifications.>"         "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "subscription"    "subscription.>"          "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "projects"        "projects.>"              "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "iot"             "iot.>"                   "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "ticketing"       "ticketing.>"             "${MAX_AGE}" "${MAX_BYTES}"
+                  apply_retention "marketflow"      "marketflow.>"            "${MAX_AGE}" "${MAX_BYTES}"
+
+                  # DLQ streams (14d retention, 512MiB — less frequent, kept longer for debugging)
+                  apply_retention "logistics-dlq"   "logistics.dlq.>"         "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
+                  apply_retention "treasury-dlq"    "treasury.dlq.>"          "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
+                  apply_retention "inventory-dlq"   "inventory.dlq.>"         "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
+                  apply_retention "pos-dlq"         "pos.dlq.>"               "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
+                  apply_retention "projects-dlq"    "projects.dlq.>"          "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
+                  apply_retention "iot-dlq"         "iot.dlq.>"               "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
+
+                  echo ""
+                  echo "=== Stream Status After Update ==="
+                  nats --server="${NATS_URL}" stream ls 2>/dev/null || true
+                  echo "=== Done ==="
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi

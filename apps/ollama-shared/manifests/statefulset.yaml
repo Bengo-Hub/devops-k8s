@@ -64,8 +64,11 @@ spec:
               value: "2"
             - name: OLLAMA_MAX_LOADED_MODELS
               value: "2"
+            # Reduced from 24h — models reload in ~30s when called next.
+            # Frees ~5Gi RAM during idle periods (e.g. overnight, weekends).
+            # Keep above 2h so hourly MarketFlow nurture sequences don't trigger reload.
             - name: OLLAMA_KEEP_ALIVE
-              value: "24h"
+              value: "4h"
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
