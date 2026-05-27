@@ -54,6 +54,13 @@ env:
       secretKeyRef:
         name: auth-api-secrets
         key: POSTGRES_URL
+  # Direct PostgreSQL URL for migrate/seed (bypasses PgBouncer transaction mode)
+  - name: POSTGRES_MIGRATE_URL
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: POSTGRES_MIGRATE_URL
+        optional: true
   # Migrations run via entrypoint.sh (auth-migrate), not the server; keep false here
   - name: POSTGRES_RUN_MIGRATIONS
     value: "false"
