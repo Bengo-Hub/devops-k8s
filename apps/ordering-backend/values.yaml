@@ -6,7 +6,7 @@ fullnameOverride: ordering-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "4e928393"
+  tag: "15797260"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -295,7 +295,7 @@ serviceMonitor:
 # ============================================================================
 pdb:
   enabled: true
-  minAvailable: null   # override chart default (minAvailable: 1) — only one field may be set
+  minAvailable: null # override chart default (minAvailable: 1) — only one field may be set
   maxUnavailable: 1
 # ============================================================================
 # SECURITY CONFIGURATION
