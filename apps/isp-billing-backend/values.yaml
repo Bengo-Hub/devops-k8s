@@ -448,4 +448,5 @@ securityContext:
 # ============================================================================
 pdb:
   enabled: true
+  minAvailable: null   # override chart default (minAvailable: 1) — only one field may be set
   maxUnavailable: 1
