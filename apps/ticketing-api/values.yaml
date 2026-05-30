@@ -81,7 +81,7 @@ env:
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Auth service (JWT validation, JWKS, OTP)
   - name: AUTH_SERVICE_URL
-    value: https://auth.codevertexitsolutions.com
+    value: https://sso.codevertexitsolutions.com
   - name: AUTH_ISSUER
     value: bengobox-auth
   - name: AUTH_AUDIENCE
