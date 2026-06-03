@@ -3,7 +3,7 @@ fullnameOverride: iot-api
 replicaCount: 1
 image:
   repository: docker.io/codevertex/iot-api
-  tag: "b149d7f7"
+  tag: "19b75e7c"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
