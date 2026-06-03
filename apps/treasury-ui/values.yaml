@@ -49,7 +49,7 @@ env:
   - name: MARKETFLOW_API_URL
     value: https://marketflowapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_TREASURY_API_URL
-    value: https://treasuryapi.codevertexitsolutions.com
+    value: https://booksapi.codevertexitsolutions.com
 resources:
   requests:
     cpu: 50m
