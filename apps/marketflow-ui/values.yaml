@@ -38,7 +38,7 @@ env:
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
     value: "https://pricingapi.codevertexitsolutions.com"
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_URL
-    value: "https://subscriptionsapi.codevertexitsolutions.com"
+    value: "https://pricingapi.codevertexitsolutions.com"
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
     value: "https://pricing.codevertexitsolutions.com"
   - name: INTERNAL_SERVICE_KEY
