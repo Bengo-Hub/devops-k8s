@@ -200,7 +200,8 @@ env:
   # SSO + subscription gating are CONFIGURED but gated OFF until the SSO cutover is done
   # (register an erp OAuth client in auth-api + set erp-ui VITE_SSO_* + verify login).
   - name: SSO_ENABLED
-    value: "false"
+    value: "true"
+  # Kept off: enabling would block HR mutations for tenants without an active sub.
   - name: SUBSCRIPTION_GATING_ENABLED
     value: "false"
   # Events gated OFF until the outbox drainer runs (scale erp-api-app-celery-worker > 0
