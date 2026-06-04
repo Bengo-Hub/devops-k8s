@@ -166,7 +166,7 @@ env:
   - name: AUTH_WEBAUTHN_RP_DISPLAY_NAME
     value: "Codevertex Platform"
   - name: AUTH_WEBAUTHN_RP_ORIGINS
-    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://inventory.codevertexitsolutions.com,https://ordering.codevertexitsolutions.com,https://logistics.codevertexitsolutions.com,https://riderapp.codevertexitsolutions.com,https://marketflow.codevertexitsolutions.com,https://ticketing.codevertexitsolutions.com"
+    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://inventory.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://logistics.codevertexitsolutions.com,https://riderapp.codevertexitsolutions.com,https://marketflow.codevertexitsolutions.com,https://ticketing.codevertexitsolutions.com"
   # Subscription Service Integration — JWT enrichment with plan/features/limits
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"

@@ -79,7 +79,7 @@ env:
   - name: MEDIA_URL_BASE
     value: "https://logisticsapi.codevertexitsolutions.com"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,https://riderapp.codevertexitsolutions.com,http://localhost:3001,https://logistics.codevertexitsolutions.com,https://theurbanloftcafe.com"
+    value: "https://ordersapp.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,https://riderapp.codevertexitsolutions.com,http://localhost:3001,https://logistics.codevertexitsolutions.com,https://theurbanloftcafe.com"
   # Routing engine (Valhalla in-cluster)
   - name: ROUTING_PRIMARY_URL
     value: "http://valhalla.logistics.svc.cluster.local:8002"
