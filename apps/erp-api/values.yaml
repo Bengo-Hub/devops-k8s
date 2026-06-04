@@ -203,10 +203,10 @@ env:
   # Kept off: enabling would block HR mutations for tenants without an active sub.
   - name: SUBSCRIPTION_GATING_ENABLED
     value: "false"
-  # Events gated OFF until the outbox drainer runs (scale erp-api-app-celery-worker > 0
-  # or add a drain_outbox CronJob); enabling without a drainer just queues outbox rows.
+  # Events ON: the dedicated drain_outbox + consume_events workers below publish/consume
+  # the outbox (payroll.processed → treasury GL; treasury.payroll.disbursed → mark paid).
   - name: EVENTS_ENABLED
-    value: "false"
+    value: "true"
   - name: EVENTS_SOURCE_SERVICE
     value: "erp"
   - name: EVENTS_NATS_URL
@@ -283,6 +283,30 @@ celeryWorker:
     periodSeconds: 30
     timeoutSeconds: 30 # INCREASED: celery inspect ping can be slow
     failureThreshold: 5 # More tolerance for transient failures
+# NATS event workers (transactional outbox drainer + JetStream consumer).
+# Required for the payroll → treasury GL loop: drain publishes erp.payroll.processed,
+# consume receives treasury.payroll.disbursed to mark payslips paid.
+eventWorkers:
+  - name: outbox-drainer
+    enabled: true
+    replicaCount: 1
+    command: ["python", "manage.py", "drain_outbox", "--loop", "--interval", "5"]
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  - name: event-consumer
+    enabled: true
+    replicaCount: 1
+    command: ["python", "manage.py", "consume_events"]
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
 # Celery Beat scheduler for periodic tasks
 celeryBeat:
   enabled: true

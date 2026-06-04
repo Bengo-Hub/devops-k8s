@@ -1,0 +1,54 @@
+{{- /*
+Generic long-running event workers (e.g. NATS outbox drainer / consumer).
+Rendered only when an app declares `.Values.eventWorkers` — other apps are unaffected.
+Each item: { name, enabled, command: [..], replicaCount?, resources?, env? }.
+*/ -}}
+{{- if .Values.eventWorkers }}
+{{- range .Values.eventWorkers }}
+{{- if .enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" $ }}-{{ .name }}
+  labels:
+    app: {{ include "app.fullname" $ }}-{{ .name }}
+    chart: {{ include "app.chart" $ }}
+    component: event-worker
+spec:
+  replicas: {{ .replicaCount | default 1 }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ include "app.fullname" $ }}-{{ .name }}
+      component: event-worker
+  template:
+    metadata:
+      labels:
+        app: {{ include "app.fullname" $ }}-{{ .name }}
+        component: event-worker
+    spec:
+      {{- if $.Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $.Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .name }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: {{ .command | toJson }}
+          {{- if $.Values.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ $.Values.envFromSecret }}
+          {{- end }}
+          {{- if .env }}
+          env:
+            {{- toYaml .env | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml (.resources | default (dict "requests" (dict "cpu" "50m" "memory" "128Mi") "limits" (dict "memory" "256Mi"))) | nindent 12 }}
+{{- end }}
+{{- end }}
+{{- end }}
