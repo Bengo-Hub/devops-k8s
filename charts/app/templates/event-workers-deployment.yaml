@@ -43,9 +43,14 @@ spec:
             - secretRef:
                 name: {{ $.Values.envFromSecret }}
           {{- end }}
-          {{- if .env }}
+          {{- if or $.Values.env .env }}
           env:
-            {{- toYaml .env | nindent 12 }}
+            {{- with $.Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           resources:
             {{- toYaml (.resources | default (dict "requests" (dict "cpu" "50m" "memory" "128Mi") "limits" (dict "memory" "256Mi"))) | nindent 12 }}
