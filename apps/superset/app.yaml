@@ -285,14 +285,17 @@ spec:
             replicaCount: 1
             # Limit Celery worker to 2 concurrent processes.
             # Default is os.cpu_count() (12 on this node) causing 496m CPU usage.
-            command: ["/bin/sh", "-c", ". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker --concurrency=2 -Ofair -l INFO"]
+            # --max-tasks-per-child recycles each worker process after 10 tasks so
+            # leaked memory is reclaimed; without it the worker grows past its limit
+            # and is OOMKilled (exit 137) every ~6 min -> thousands of restarts.
+            command: ["/bin/sh", "-c", ". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker --concurrency=2 --max-tasks-per-child=10 -Ofair -l INFO"]
             resources:
               requests:
                 cpu: 100m
                 memory: 256Mi
               limits:
                 cpu: 500m
-                memory: 1Gi
+                memory: 2Gi
             livenessProbe:
               exec:
                 command:
