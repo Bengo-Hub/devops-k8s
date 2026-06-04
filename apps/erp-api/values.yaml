@@ -195,6 +195,38 @@ env:
     value: "10"
   - name: DB_POOL_TIMEOUT
     value: "30"
+
+  # ── Microservice integration config (decomposition/conformance) ──
+  # SSO + subscription gating are CONFIGURED but gated OFF until the SSO cutover is done
+  # (register an erp OAuth client in auth-api + set erp-ui VITE_SSO_* + verify login).
+  - name: SSO_ENABLED
+    value: "false"
+  - name: SUBSCRIPTION_GATING_ENABLED
+    value: "false"
+  # Events gated OFF until the outbox drainer runs (scale erp-api-app-celery-worker > 0
+  # or add a drain_outbox CronJob); enabling without a drainer just queues outbox rows.
+  - name: EVENTS_ENABLED
+    value: "false"
+  - name: EVENTS_SOURCE_SERVICE
+    value: "erp"
+  - name: EVENTS_NATS_URL
+    value: "nats://nats.messaging.svc.cluster.local:4222"
+  # auth-api (SSO) — public issuer/JWKS (note the /api/v1/ JWKS path) + audience.
+  - name: AUTH_API_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: AUTH_JWKS_URL
+    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+  - name: AUTH_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: AUTH_AUDIENCE
+    value: "codevertex"
+  # S2S owner-service URLs (cluster-local). INTERNAL_SERVICE_KEY comes from erp-api-env.
+  - name: TREASURY_API_URL
+    value: "http://treasury-api.treasury.svc.cluster.local:4000"
+  - name: INVENTORY_API_URL
+    value: "http://inventory-api.inventory.svc.cluster.local:4000"
+  - name: NOTIFICATIONS_API_URL
+    value: "http://notifications-api.notifications.svc.cluster.local:4000"
 # Enhanced HPA with custom metrics
 autoscalingCustomMetrics:
   enabled: false # Disabled - using basic HPA for now
