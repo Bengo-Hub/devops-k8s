@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/erp-api
-  tag: "806562d6" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
+  tag: "fc00d827" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -195,7 +195,6 @@ env:
     value: "10"
   - name: DB_POOL_TIMEOUT
     value: "30"
-
   # ── Microservice integration config (decomposition/conformance) ──
   # SSO + subscription gating are CONFIGURED but gated OFF until the SSO cutover is done
   # (register an erp OAuth client in auth-api + set erp-ui VITE_SSO_* + verify login).
