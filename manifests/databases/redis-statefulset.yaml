@@ -219,24 +219,15 @@ spec:
             cpu: 50m
             memory: 64Mi
           limits:
-            cpu: 100m
+            cpu: 150m
             memory: 128Mi
-        livenessProbe:
-          httpGet:
-            path: /metrics
-            port: http-metrics
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 5
-        readinessProbe:
-          httpGet:
-            path: /metrics
-            port: http-metrics
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 5
+        # No liveness/readiness probes on the metrics sidecar. A probe that
+        # scrapes /metrics (CPU-throttled at this limit) was timing out under
+        # load: liveness killed the exporter (618 restarts, fatal exit 1), and
+        # the readiness probe gated the whole redis-master pod -> the redis
+        # Service dropped its endpoint and apps intermittently lost their cache
+        # connection. The redis container's own redis-cli ping probes already
+        # gate pod health correctly; the exporter must not.
       
       volumes:
       - name: config
