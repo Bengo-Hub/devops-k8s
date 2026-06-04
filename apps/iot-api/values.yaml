@@ -19,14 +19,17 @@ envFromSecret: iot-api-secrets
 healthCheck:
   enabled: true
   readiness:
+    # /readyz and /healthz are registered at the router root (public). The
+    # /api/v1/* group is behind RequireAuth, so probing /api/v1/healthz returns
+    # 401 and the kubelet kills the pod -> CrashLoopBackOff.
     httpGet:
-      path: /api/v1/healthz
+      path: /readyz
       port: http
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     httpGet:
-      path: /api/v1/healthz
+      path: /healthz
       port: http
     initialDelaySeconds: 30
     periodSeconds: 20

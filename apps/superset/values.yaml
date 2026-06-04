@@ -292,14 +292,17 @@ supersetWorker:
   enabled: true
   replicaCount: 1
   # Limit Celery to 2 concurrent processes (default: os.cpu_count()=12, causing 496m CPU usage).
-  command: ["/bin/sh", "-c", ". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker --concurrency=2 -Ofair -l INFO"]
+  # --max-tasks-per-child recycles each worker process after N tasks so leaked
+  # memory is reclaimed; without it the worker grows past its limit and is
+  # OOMKilled (exit 137) every ~6 min -> thousands of restarts churning the node.
+  command: ["/bin/sh", "-c", ". /app/pythonpath/superset_bootstrap.sh; celery --app=superset.tasks.celery_app:app worker --concurrency=2 --max-tasks-per-child=10 -Ofair -l INFO"]
   resources:
     requests:
       cpu: 150m
       memory: 384Mi
     limits:
       cpu: 750m
-      memory: 1.5Gi
+      memory: 2Gi
   # Use a simple process check instead of celery inspect ping which times out
   # under load and causes constant CrashLoopBackOff restarts
   livenessProbe:
