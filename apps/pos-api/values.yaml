@@ -94,6 +94,9 @@ env:
     value: "https://notificationsapi.codevertexitsolutions.com"
   - name: ORDERING_SERVICE_URL
     value: "https://orderingapi.codevertexitsolutions.com"
+  # MarketFlow CRM — customer single source of truth (upsert crm_contact_id from loyalty/client flows)
+  - name: MARKETFLOW_API_URL
+    value: "https://marketflowapi.codevertexitsolutions.com"
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_ISSUER
