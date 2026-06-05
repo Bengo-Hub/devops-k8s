@@ -148,6 +148,9 @@ env:
     value: "https://pricingapi.codevertexitsolutions.com"
   - name: SUBSCRIPTIONS_REQUEST_TIMEOUT
     value: "10s"
+  # MarketFlow CRM - customer single source of truth (upsert crm_contact_id at checkout)
+  - name: MARKETFLOW_API_URL
+    value: "https://marketflowapi.codevertexitsolutions.com"
   # Notifications Service - Email, SMS, Push notifications
   - name: NOTIFICATIONS_SERVICE_URL
     value: "https://notificationsapi.codevertexitsolutions.com"
