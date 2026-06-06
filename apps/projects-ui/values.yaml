@@ -1,21 +1,17 @@
 nameOverride: projects-ui
 fullnameOverride: projects-ui
-
-replicaCount: 0  # Disabled: Docker image not yet built. Set to 1 after first CI deploy.
+replicaCount: 0 # Disabled: Docker image not yet built. Set to 1 after first CI deploy.
 minReadySeconds: 30
-
 image:
   repository: docker.io/codevertex/projects-ui
-  tag: "latest"
+  tag: "6ddd1387"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-
 service:
   type: ClusterIP
   port: 80
   targetPort: 3000
-
 healthCheck:
   enabled: true
   readiness:
@@ -34,13 +30,11 @@ healthCheck:
     periodSeconds: 15
     timeoutSeconds: 3
     failureThreshold: 3
-
 strategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-
 env:
   - name: NEXT_PUBLIC_API_URL
     value: https://projectsapi.codevertexitsolutions.com
@@ -58,7 +52,6 @@ env:
         name: projects-ui-secrets
         key: sentryDsn
         optional: true
-
 resources:
   requests:
     cpu: 50m
@@ -66,14 +59,12 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
-
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -90,13 +81,10 @@ ingress:
     - hosts:
         - projects.codevertexitsolutions.com
       secretName: projects-ui-tls
-
 monitoring:
   enabled: false
-
 serviceMonitor:
   enabled: false
-
 # VPA configuration for UI - recommendation-only mode
 verticalPodAutoscaling:
   enabled: true
