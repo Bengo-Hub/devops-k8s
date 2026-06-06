@@ -3,7 +3,7 @@ fullnameOverride: inventory-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/inventory-api
-  tag: "12dc2028"
+  tag: "1e4e223e"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
