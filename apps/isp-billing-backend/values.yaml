@@ -8,7 +8,7 @@ fullnameOverride: isp-billing-backend
 # ============================================================================
 image:
   repository: docker.io/codevertex/isp-billing-backend
-  tag: "14403f5b"
+  tag: "b0c897ed"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -448,5 +448,5 @@ securityContext:
 # ============================================================================
 pdb:
   enabled: true
-  minAvailable: null   # override chart default (minAvailable: 1) — only one field may be set
+  minAvailable: null # override chart default (minAvailable: 1) — only one field may be set
   maxUnavailable: 1
