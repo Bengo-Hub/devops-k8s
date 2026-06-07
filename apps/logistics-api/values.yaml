@@ -3,7 +3,7 @@ fullnameOverride: logistics-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "2a8b49cd"
+  tag: "bba313ff"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -36,7 +36,7 @@ healthCheck:
 strategy:
   type: RollingUpdate
   rollingUpdate:
-    maxSurge: 0       # terminate old pod (release NATS push-durable bindings) before new subscribes
+    maxSurge: 0 # terminate old pod (release NATS push-durable bindings) before new subscribes
     maxUnavailable: 1
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
