@@ -4,12 +4,17 @@
 # Uses the admin_user (postgresql secret) to connect directly to each DB.
 #
 # Cleanup policy:
-#   outbox_events (published):  DELETE after 7 days
-#   outbox_events (failed):     DELETE after 7 days (failed = exhausted retries, not useful)
+#   outbox_events (PUBLISHED):  DELETE after 7 days (belt-and-braces; shared-events
+#                               now prunes on publish, but cleans any legacy rows)
+#   outbox_events (FAILED):     DELETE after 7 days (kept briefly for troubleshooting)
 #   Logistics telemetry_points: DELETE after 90 days
 #   IoT telemetry_data, device_heartbeats, command_history: DELETE after 90 days
 #   MarketFlow chat_sessions:   DELETE after 90 days
-#   MarketFlow audit_logs:      DELETE after 180 days
+#   audit_logs (all services):  DELETE after 30 days (1-month retention policy)
+#
+# NOTE: outbox status filters use UPPER(status) because shared-events writes
+# 'PENDING'/'PUBLISHED'/'FAILED' (uppercase). A previous lowercase filter never
+# matched, so published/failed rows were never pruned.
 #
 # Safe by design:
 #   - Connects via direct PostgreSQL (not PgBouncer) to avoid transaction-mode limits on DELETE
@@ -77,8 +82,8 @@ spec:
                   # Delete published events older than 7 days
                   # Delete failed events older than 7 days (exhausted retries)
                   # ─────────────────────────────────────────────────────────
-                  OUTBOX_SQL_PUBLISHED="WITH deleted AS (DELETE FROM outbox_events WHERE status = 'published' AND published_at < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
-                  OUTBOX_SQL_FAILED="WITH deleted AS (DELETE FROM outbox_events WHERE status = 'failed' AND created_at < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
+                  OUTBOX_SQL_PUBLISHED="WITH deleted AS (DELETE FROM outbox_events WHERE UPPER(status) = 'PUBLISHED' AND published_at < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
+                  OUTBOX_SQL_FAILED="WITH deleted AS (DELETE FROM outbox_events WHERE UPPER(status) = 'FAILED' AND COALESCE(last_attempt_at, created_at) < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
 
                   for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects iot marketflow ticketing; do
                     # Check if outbox_events table exists before running
@@ -115,8 +120,17 @@ spec:
                   run_sql "marketflow" "chat_sessions >90d" \
                     "WITH deleted AS (DELETE FROM chat_sessions WHERE created_at < NOW() - INTERVAL '90 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
 
-                  run_sql "marketflow" "audit_logs >180d" \
-                    "WITH deleted AS (DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '180 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
+                  # ─────────────────────────────────────────────────────────
+                  # AUDIT LOG CLEANUP (all service databases)
+                  # 1-month retention policy: audit logs are dropped after 30 days.
+                  # ─────────────────────────────────────────────────────────
+                  AUDIT_SQL="WITH deleted AS (DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
+                  for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects iot marketflow ticketing; do
+                    HAS_TABLE=$(psql $CONN_OPTS -d "$DB" -At -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_logs'" 2>/dev/null)
+                    if [ "$HAS_TABLE" = "1" ]; then
+                      run_sql "$DB" "audit_logs >30d" "$AUDIT_SQL"
+                    fi
+                  done
 
                   # ─────────────────────────────────────────────────────────
                   # AUTH SESSION CLEANUP (redundant backup in case CronJob fails)
