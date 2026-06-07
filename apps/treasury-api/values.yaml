@@ -35,6 +35,9 @@ healthCheck:
     periodSeconds: 15
 strategy:
   type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 0       # terminate old pod (release NATS push-durable bindings) before new subscribes
+    maxUnavailable: 1
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
