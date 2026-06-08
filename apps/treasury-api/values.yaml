@@ -3,7 +3,7 @@ fullnameOverride: treasury-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/treasury-api
-  tag: "340e4179"
+  tag: "0491d6ce"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
