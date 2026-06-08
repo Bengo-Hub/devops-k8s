@@ -99,6 +99,8 @@ env:
     value: "http://inventory-api.inventory.svc.cluster.local:4000"
   - name: LOGISTICS_API_URL
     value: "http://logistics-api.logistics.svc.cluster.local:4000"
+  - name: MARKETFLOW_API_URL
+    value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
   # Pre-shared key for trusted backend-to-backend calls (all services use INTERNAL_SERVICE_KEY).
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
