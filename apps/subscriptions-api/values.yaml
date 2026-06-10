@@ -87,6 +87,12 @@ env:
         name: subscription-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
+  # Platform VAT rate for platform->tenant subscription invoices. Set to 0 to disable VAT:
+  # the platform owner is not VAT-registered (turnover below the KE registration threshold).
+  # Tenant-issued invoices are unaffected — tenants manage their own tax codes.
+  # See subscriptions-api internal/config/config.go PLATFORM_VAT_RATE (code default 16).
+  - name: PLATFORM_VAT_RATE
+    value: "0"
 resources:
   requests:
     cpu: 100m
