@@ -15,3 +15,11 @@ data:
   # and large response bodies (login/token endpoints).
   proxy-buffer-size: "32k"
   large-client-header-buffers: "4 32k"
+  # Compression: the Next.js standalone servers (pos-ui, ordering-frontend, all UIs)
+  # ship JS/CSS uncompressed, which is costly over the long RTT to East-Africa clients.
+  # The official controller image (v1.8.1) has no brotli module, so use built-in gzip.
+  # Compresses every proxied text/JS/CSS/JSON response cluster-wide (~70% smaller).
+  use-gzip: "true"
+  gzip-level: "6"
+  gzip-min-length: "256"
+  gzip-types: "application/javascript application/x-javascript application/json application/manifest+json application/xml application/rss+xml application/vnd.ms-fontobject image/svg+xml text/css text/plain text/javascript text/xml"
