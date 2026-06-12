@@ -13,11 +13,12 @@ image:
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 1
+# Baseline used only when autoscaling is disabled; HPA (below) governs live replicas.
+replicaCount: 2
 autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 2
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 # ============================================================================
@@ -103,13 +104,15 @@ healthCheck:
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
+# Next.js SSR/RSC server: raised headroom so concurrent customers don't throttle
+# a single 500m pod; HA via HPA (above).
 resources:
   requests:
-    cpu: 50m
-    memory: 128Mi
-  limits:
-    cpu: 500m
+    cpu: 100m
     memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
 # ============================================================================
 # INGRESS CONFIGURATION
 # ============================================================================

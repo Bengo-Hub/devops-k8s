@@ -1,6 +1,7 @@
 nameOverride: pos-ui
 fullnameOverride: pos-ui
-replicaCount: 1
+# Baseline used only when autoscaling is disabled; HPA (below) governs live replicas.
+replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/pos-ui
@@ -66,17 +67,19 @@ env:
         name: pos-ui-secrets
         key: internalServiceKey
         optional: false
+# Next.js SSR/RSC server: a single 500m/256Mi pod throttles under concurrent
+# terminals and cold-starts slowly on deploy. Raised headroom + HA via HPA.
 resources:
   requests:
-    cpu: 50m
-    memory: 128Mi
-  limits:
-    cpu: 500m
+    cpu: 100m
     memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
 autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 1
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 ingress:
