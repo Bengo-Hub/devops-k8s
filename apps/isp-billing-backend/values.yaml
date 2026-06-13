@@ -320,6 +320,9 @@ env:
     value: "8728"
   - name: MIKROTIK_TIMEOUT
     value: "10"
+  # ── VPN overlay (remote Winbox / management) ──
+  - name: VPN_DOMAIN
+    value: "vpn.codevertexitsolutions.com"
   # ── Rate Limiting ──
   - name: RATE_LIMIT_ENABLED
     value: "true"
