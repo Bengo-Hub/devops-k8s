@@ -303,6 +303,29 @@ env:
         name: isp-billing-backend-secrets
         key: SMTP_PASSWORD
         optional: true
+  # ── WireGuard VPN overlay (router management tunnel) ──
+  # WG_ENDPOINT / WG_SUBNET are non-secret config. WG_SERVER_PUBLIC_KEY and
+  # WG_PEER_SYNC_TOKEN are written into the isp-billing-backend-secrets Secret
+  # by apps/wireguard/setup.sh (idempotent) — the server PRIVATE key never
+  # leaves the wg-server-keys Secret in ns vpn. Both secret refs are optional
+  # so the backend boots fine before the WG setup script has run (VPN
+  # enrollment is simply disabled until WG_SERVER_PUBLIC_KEY is present).
+  - name: WG_ENDPOINT
+    value: "vpn.codevertexitsolutions.com:51820"
+  - name: WG_SUBNET
+    value: "10.8.0.0/16"
+  - name: WG_SERVER_PUBLIC_KEY
+    valueFrom:
+      secretKeyRef:
+        name: isp-billing-backend-secrets
+        key: WG_SERVER_PUBLIC_KEY
+        optional: true
+  - name: WG_PEER_SYNC_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: isp-billing-backend-secrets
+        key: WG_PEER_SYNC_TOKEN
+        optional: true
   # ── MikroTik RouterOS ──
   - name: MIKROTIK_DEFAULT_USERNAME
     valueFrom:
