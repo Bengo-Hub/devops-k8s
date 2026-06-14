@@ -22,6 +22,16 @@ spec:
         app.kubernetes.io/name: wireguard
         app.kubernetes.io/component: server
     spec:
+      # hostNetwork is REQUIRED for remote winbox-over-VPN: the reconcile loop's
+      # per-router DNAT (WG_WINBOX_DNAT in PREROUTING: <node>:<winbox_port> ->
+      # <tunnel_ip>:8291) and the tunnel return MASQUERADE (POSTROUTING -o wg0)
+      # are interface/port-scoped and only take effect in the NODE's network
+      # namespace. In the pod netns they were unreachable from external clients,
+      # so WinBox to vpn.<domain>:<winbox_port> just hung. With hostNetwork the
+      # rules hit the node's tables and wg0 + UDP 51820 bind natively on the node.
+      # Single-node cluster; the vpn namespace already enforces privileged PSA.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       # Single-node cluster: pin nothing special, but tolerate control-plane
       # taints since k3s often runs workloads on the server node.
       tolerations:
