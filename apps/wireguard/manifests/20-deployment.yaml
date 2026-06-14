@@ -31,10 +31,18 @@ spec:
         - key: node-role.kubernetes.io/master
           operator: Exists
           effect: NoSchedule
-      securityContext:
-        sysctls:
-          - name: net.ipv4.ip_forward
-            value: "1"
+      initContainers:
+        # Enable IP forwarding imperatively. A pod-level
+        # securityContext.sysctls[net.ipv4.ip_forward] is an "unsafe" sysctl the
+        # kubelet rejects (SysctlForbidden) unless node-allowlisted, which was
+        # spawning thousands of failed pods. A privileged init sets it in the
+        # pod netns (shared with the wg container) without needing the allowlist.
+        - name: init-ip-forward
+          image: ghcr.io/linuxserver/wireguard:1.0.20210914-r4-ls45
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "sysctl -w net.ipv4.ip_forward=1 && sysctl -w net.ipv4.conf.all.src_valid_mark=1 || true"]
+          securityContext:
+            privileged: true
       containers:
         # ── WG server: brings up wg0 + runs the reconcile loop ──
         - name: wireguard
