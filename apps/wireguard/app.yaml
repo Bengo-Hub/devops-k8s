@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wireguard
+  namespace: argocd
+  annotations:
+    # Deploy early (before the apps that depend on the tunnel) but the wg-server-keys
+    # Secret is created out-of-band by apps/wireguard/setup.sh (it holds the server
+    # PRIVATE key + peer-sync token and is intentionally NOT in git).
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: apps/wireguard/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vpn
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    # The wg-server-keys Secret is created by setup.sh (private key + sync token);
+    # never let ArgoCD prune or diff it.
+    - group: ""
+      kind: Secret
+      name: wg-server-keys
+      jsonPointers:
+        - /data

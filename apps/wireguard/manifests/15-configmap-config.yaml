@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wg-reconcile-config
+  namespace: vpn
+  labels:
+    app.kubernetes.io/name: wireguard
+    app.kubernetes.io/component: reconcile
+data:
+  # Backend base URL the WG reconcile loop pulls the authoritative peer list
+  # from (GET {BACKEND_URL}/api/v1/vpn/peers). Non-secret.
+  BACKEND_URL: "https://ispbillingapi.codevertexitsolutions.com"

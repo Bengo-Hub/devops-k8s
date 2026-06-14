@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wg-reconcile
+  namespace: vpn
+  labels:
+    app.kubernetes.io/name: wireguard
+    app.kubernetes.io/component: reconcile
+data:
+  # ──────────────────────────────────────────────────────────────────────────
+  # entrypoint.sh — brings up wg0 from the server private key (mounted Secret),
+  # enables IP forwarding, then hands off to the reconcile loop.
+  # ──────────────────────────────────────────────────────────────────────────
+  entrypoint.sh: |
+    #!/bin/sh
+    set -eu
+
+    WG_IF="wg0"
+    WG_ADDRESS="${WG_ADDRESS:-10.8.0.1/16}"
+    WG_LISTEN_PORT="${WG_LISTEN_PORT:-51820}"
+    KEY_DIR="/etc/wireguard/keys"
+
+    echo "[wg] starting WireGuard server interface ${WG_IF} (${WG_ADDRESS}:${WG_LISTEN_PORT})"
+
+    if [ ! -f "${KEY_DIR}/privatekey" ]; then
+      echo "[wg] FATAL: ${KEY_DIR}/privatekey not found (is the wg-server-keys Secret mounted?)" >&2
+      exit 1
+    fi
+
+    # Enable forwarding so the backend pod can reach 10.8.0.0/16 via this node.
+    sysctl -w net.ipv4.ip_forward=1 || echo "[wg] WARN: could not set ip_forward (may already be on)"
+
+    # (Re)create the interface idempotently.
+    ip link del "${WG_IF}" 2>/dev/null || true
+    ip link add "${WG_IF}" type wireguard
+    wg set "${WG_IF}" listen-port "${WG_LISTEN_PORT}" private-key "${KEY_DIR}/privatekey"
+    ip address add "${WG_ADDRESS}" dev "${WG_IF}" 2>/dev/null || true
+    ip link set "${WG_IF}" up
+
+    echo "[wg] interface up:"
+    wg show "${WG_IF}" || true
+
+    echo "[wg] handing off to reconcile loop"
+    exec /scripts/reconcile.sh
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # reconcile.sh — every RECONCILE_INTERVAL seconds, pull the authoritative
+  # peer list from the backend and converge wg peers + per-router winbox DNAT.
+  # Idempotent: only adds/removes what changed. Never touches private keys.
+  # ──────────────────────────────────────────────────────────────────────────
+  reconcile.sh: |
+    #!/bin/sh
+    set -u
+
+    WG_IF="wg0"
+    INTERVAL="${RECONCILE_INTERVAL:-30}"
+    BACKEND_URL="${BACKEND_URL:?BACKEND_URL must be set}"
+    PEERS_URL="${BACKEND_URL%/}/api/v1/vpn/peers"
+    DNAT_CHAIN="WG_WINBOX_DNAT"
+
+    if [ -z "${WG_PEER_SYNC_TOKEN:-}" ]; then
+      echo "[reconcile] FATAL: WG_PEER_SYNC_TOKEN not set" >&2
+      exit 1
+    fi
+
+    # Ensure our custom DNAT chain exists and is hooked into PREROUTING once.
+    ensure_chain() {
+      iptables -t nat -nL "${DNAT_CHAIN}" >/dev/null 2>&1 || iptables -t nat -N "${DNAT_CHAIN}"
+      iptables -t nat -C PREROUTING -j "${DNAT_CHAIN}" 2>/dev/null || \
+        iptables -t nat -I PREROUTING -j "${DNAT_CHAIN}"
+      # MASQUERADE return traffic onto the tunnel so router replies come back.
+      iptables -t nat -C POSTROUTING -o "${WG_IF}" -j MASQUERADE 2>/dev/null || \
+        iptables -t nat -A POSTROUTING -o "${WG_IF}" -j MASQUERADE
+    }
+
+    echo "[reconcile] polling ${PEERS_URL} every ${INTERVAL}s"
+    ensure_chain
+
+    while true; do
+      RESP="$(curl -fsS --max-time 10 -H "Authorization: Bearer ${WG_PEER_SYNC_TOKEN}" "${PEERS_URL}" 2>/dev/null || echo '')"
+      if [ -z "${RESP}" ]; then
+        echo "[reconcile] WARN: empty/failed peer fetch; keeping current state"
+        sleep "${INTERVAL}"
+        continue
+      fi
+
+      # Parse with jq into a stable, line-oriented form: "<pubkey> <allowed_ips> <tunnel_ip> <winbox_port>"
+      DESIRED="$(echo "${RESP}" | jq -r '.peers[] | [.public_key, .allowed_ips, .tunnel_ip, (.winbox_port // "")] | join(" ")' 2>/dev/null || echo '')"
+
+      # ── Converge WG peers ──
+      # Desired pubkeys
+      DESIRED_KEYS="$(echo "${DESIRED}" | awk '{print $1}' | sort -u | sed '/^$/d')"
+      # Currently-configured pubkeys
+      CURRENT_KEYS="$(wg show "${WG_IF}" peers 2>/dev/null | sort -u | sed '/^$/d')"
+
+      # Remove peers no longer desired
+      for k in ${CURRENT_KEYS}; do
+        if ! echo "${DESIRED_KEYS}" | grep -qx "${k}"; then
+          echo "[reconcile] removing stale peer ${k}"
+          wg set "${WG_IF}" peer "${k}" remove || true
+        fi
+      done
+
+      # Add / update desired peers and their winbox DNAT
+      # Rebuild the DNAT chain from scratch each pass (cheap + always correct).
+      iptables -t nat -F "${DNAT_CHAIN}" 2>/dev/null || true
+      echo "${DESIRED}" | sed '/^$/d' | while read -r PUBKEY ALLOWED TUNNEL_IP WINBOX_PORT; do
+        [ -z "${PUBKEY}" ] && continue
+        wg set "${WG_IF}" peer "${PUBKEY}" allowed-ips "${ALLOWED}" || \
+          echo "[reconcile] WARN: failed to set peer ${PUBKEY}"
+        # Per-router winbox DNAT: vpn:<winbox_port> -> <tunnel_ip>:8291
+        if [ -n "${WINBOX_PORT}" ] && [ -n "${TUNNEL_IP}" ]; then
+          iptables -t nat -A "${DNAT_CHAIN}" -p tcp --dport "${WINBOX_PORT}" \
+            -j DNAT --to-destination "${TUNNEL_IP}:8291" 2>/dev/null || \
+            echo "[reconcile] WARN: failed DNAT ${WINBOX_PORT} -> ${TUNNEL_IP}:8291"
+        fi
+      done
+
+      echo "[reconcile] applied $(echo "${DESIRED_KEYS}" | sed '/^$/d' | wc -l) peer(s)"
+      sleep "${INTERVAL}"
+    done
