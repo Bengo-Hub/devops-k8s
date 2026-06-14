@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wireguard
+  namespace: vpn
+  labels:
+    app.kubernetes.io/name: wireguard
+    app.kubernetes.io/component: server
+spec:
+  # Single replica: the node-level hostPort UDP 51820 + the wg0 kernel interface
+  # are node-singletons. Do NOT scale > 1 on a single node.
+  replicas: 1
+  strategy:
+    # Recreate (not RollingUpdate): two pods cannot both bind hostPort 51820.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wireguard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wireguard
+        app.kubernetes.io/component: server
+    spec:
+      # Single-node cluster: pin nothing special, but tolerate control-plane
+      # taints since k3s often runs workloads on the server node.
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      securityContext:
+        sysctls:
+          - name: net.ipv4.ip_forward
+            value: "1"
+      containers:
+        # ── WG server: brings up wg0 + runs the reconcile loop ──
+        - name: wireguard
+          image: ghcr.io/linuxserver/wireguard:1.0.20210914-r4-ls45
+          imagePullPolicy: IfNotPresent
+          command: ["/scripts/entrypoint.sh"]
+          env:
+            - name: WG_ADDRESS
+              value: "10.8.0.1/16"
+            - name: WG_LISTEN_PORT
+              value: "51820"
+            - name: RECONCILE_INTERVAL
+              value: "30"
+            # Backend base URL the reconcile loop pulls the peer list from.
+            - name: BACKEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: wg-reconcile-config
+                  key: BACKEND_URL
+            # Shared bearer token authenticating GET /api/v1/vpn/peers.
+            - name: WG_PEER_SYNC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: wg-server-keys
+                  key: WG_PEER_SYNC_TOKEN
+          ports:
+            # Stable public UDP port on the node (single-node cluster).
+            - name: wireguard
+              containerPort: 51820
+              hostPort: 51820
+              protocol: UDP
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - SYS_MODULE
+          volumeMounts:
+            - name: wg-keys
+              mountPath: /etc/wireguard/keys
+              readOnly: true
+            - name: reconcile-scripts
+              mountPath: /scripts
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "wg show wg0 >/dev/null 2>&1"]
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "ip link show wg0 >/dev/null 2>&1"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: wg-keys
+          secret:
+            secretName: wg-server-keys
+            items:
+              - key: privatekey
+                path: privatekey
+        - name: reconcile-scripts
+          configMap:
+            name: wg-reconcile
+            defaultMode: 0755
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
