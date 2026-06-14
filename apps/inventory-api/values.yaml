@@ -39,6 +39,18 @@ strategy:
   rollingUpdate:
     maxSurge: 0 # terminate old pod (release NATS push-durable bindings) before new subscribes
     maxUnavailable: 1
+# Pod security context: the inventory-api image ships a built-in non-root user
+# "app" (uid 100 / gid 101). Pin runAsUser/runAsGroup to it so the init-media
+# init container (which derives its UID from .Values.securityContext, defaulting
+# to 1000) creates the /data/media subtree owned by the SAME user the app runs
+# as — otherwise init scaffolds dirs as 1000:1000 that the app (100) cannot write.
+# fsGroup makes the media PVC group-owned by 101 and group-writable, so every
+# uploaded file (and the per-tenant media/images/<tenant-slug>/items/ tree) stays
+# consistently readable/writable across pod restarts.
+securityContext:
+  runAsUser: 100
+  runAsGroup: 101
+  fsGroup: 101
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
