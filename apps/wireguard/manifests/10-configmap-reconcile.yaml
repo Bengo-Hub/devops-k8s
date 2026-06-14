@@ -30,6 +30,18 @@ data:
     # Enable forwarding so the backend pod can reach 10.8.0.0/16 via this node.
     sysctl -w net.ipv4.ip_forward=1 || echo "[wg] WARN: could not set ip_forward (may already be on)"
 
+    # CRITICAL: match the NODE's iptables backend. Ubuntu 24.04 / this k3s node use
+    # iptables-nft, but this image defaults to iptables-legacy — rules written via
+    # legacy live in a separate table the node's nft datapath NEVER consults, so the
+    # winbox DNAT silently never applies. Point iptables at the nft variant and drop
+    # any stale legacy WG nat rules left from a previous (legacy) run.
+    ln -sf /sbin/iptables-nft /sbin/iptables 2>/dev/null || true
+    ln -sf /sbin/ip6tables-nft /sbin/ip6tables 2>/dev/null || true
+    iptables-legacy -t nat -D PREROUTING -j WG_WINBOX_DNAT 2>/dev/null || true
+    iptables-legacy -t nat -F WG_WINBOX_DNAT 2>/dev/null || true
+    iptables-legacy -t nat -X WG_WINBOX_DNAT 2>/dev/null || true
+    iptables-legacy -t nat -D POSTROUTING -o wg0 -j MASQUERADE 2>/dev/null || true
+
     # (Re)create the interface idempotently.
     ip link del "${WG_IF}" 2>/dev/null || true
     ip link add "${WG_IF}" type wireguard
@@ -57,6 +69,8 @@ data:
     BACKEND_URL="${BACKEND_URL:?BACKEND_URL must be set}"
     PEERS_URL="${BACKEND_URL%/}/api/v1/vpn/peers"
     DNAT_CHAIN="WG_WINBOX_DNAT"
+    WG_SUBNET="${WG_SUBNET:-10.8.0.0/16}"
+    WG_PORT="${WG_LISTEN_PORT:-51820}"
 
     if [ -z "${WG_PEER_SYNC_TOKEN:-}" ]; then
       echo "[reconcile] FATAL: WG_PEER_SYNC_TOKEN not set" >&2
@@ -71,6 +85,17 @@ data:
       # MASQUERADE return traffic onto the tunnel so router replies come back.
       iptables -t nat -C POSTROUTING -o "${WG_IF}" -j MASQUERADE 2>/dev/null || \
         iptables -t nat -A POSTROUTING -o "${WG_IF}" -j MASQUERADE
+      # FORWARD policy is DROP (Calico/k8s). Explicitly allow forwarding to/from the
+      # tunnel subnet so the DNAT'd winbox (node:<port> -> 10.8.0.x:8291) is actually
+      # routed out wg0 and its replies come back. Inserted at the top of FORWARD.
+      iptables -C FORWARD -d "${WG_SUBNET}" -j ACCEPT 2>/dev/null || \
+        iptables -I FORWARD -d "${WG_SUBNET}" -j ACCEPT
+      iptables -C FORWARD -s "${WG_SUBNET}" -j ACCEPT 2>/dev/null || \
+        iptables -I FORWARD -s "${WG_SUBNET}" -j ACCEPT
+      # Accept the WG handshake on the node itself, so no manual ufw rule is needed
+      # (inserted at the top of INPUT, ahead of any ufw/default drop).
+      iptables -C INPUT -p udp --dport "${WG_PORT}" -j ACCEPT 2>/dev/null || \
+        iptables -I INPUT -p udp --dport "${WG_PORT}" -j ACCEPT
     }
 
     echo "[reconcile] polling ${PEERS_URL} every ${INTERVAL}s"

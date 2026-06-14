@@ -102,5 +102,22 @@ else
   info "To apply manually: APPLY_MANIFESTS=true $0"
 fi
 
+# ── 5. Node firewall (ufw) ──
+# The WG handshake (UDP 51820) is INPUT to the node and must be allowed. Run this
+# ON the node (ufw is node-local). The winbox-over-VPN TCP path (node:<winbox_port>
+# -> DNAT -> 10.8.0.x:8291) is handled IN-CLUSTER by the WG reconcile loop, which
+# sets the nft DNAT + FORWARD/INPUT accepts itself — so no manual ufw rule is
+# needed for the winbox TCP ports. We still open the handshake port here so a fresh
+# node is reachable even before the reconcile loop's INPUT rule is applied.
+if command -v ufw >/dev/null 2>&1; then
+  info "ufw: allowing WireGuard handshake 51820/udp"
+  ufw allow 51820/udp comment 'codevertex wireguard handshake' || warn "ufw allow 51820/udp failed (run as root on the node)"
+  # Optional: pre-open the winbox port range too (the reconcile FORWARD rule already
+  # covers the DNAT path; this is belt-and-suspenders for stricter setups).
+  ufw allow 51000:59999/tcp comment 'codevertex winbox-over-vpn' || warn "ufw allow winbox range failed"
+else
+  info "ufw not found on this host; skipping (run setup.sh on the node, or rely on the WG reconcile loop's nft rules)."
+fi
+
 info "Done. Server pubkey: ${WG_PUB}"
 info "Verify: kubectl -n ${VPN_NS} get pods,svc; kubectl -n ${VPN_NS} exec deploy/wireguard -- wg show"
