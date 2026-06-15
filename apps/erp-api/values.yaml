@@ -1,93 +1,81 @@
+nameOverride: erp-api
+fullnameOverride: erp-api
+replicaCount: 1
+minReadySeconds: 30
 image:
   repository: docker.io/codevertex/erp-api
-  tag: "fc9ee186" # Rolled back due to hyperframe Python 3.11 compatibility issue in b3ebdc66
+  tag: "fc9ee186"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-# Pod-level security context - CRITICAL for PVC permissions
-# fsGroup ensures mounted volumes are writable by app user (UID 1000)
-securityContext:
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
-  runAsNonRoot: true
-# Deployment strategy for zero-downtime updates
-replicaCount: 1
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 4000
+# ============================================================================
+# MIGRATIONS AND SEEDING
+# ============================================================================
+# Go ERP: Ent (Atlas) migrations + RBAC seed are applied OUT-OF-BAND by the
+# repo build.sh (idempotent one-off Jobs against the existing bengo_erp DB /
+# `erp` schema). The Go server does NOT auto-migrate in prod. Django-era init
+# containers (migrations/seed) are therefore disabled here.
+migrations:
+  enabled: false # Go: handled idempotently by build.sh (cmd/migrate, schema erp)
+seed:
+  enabled: false # Go: handled idempotently by build.sh (cmd/seed, RBAC upsert)
+# Strategy for zero-downtime updates
 strategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-service:
-  port: 80
-  targetPort: 4000
-minReadySeconds: 60
-# Health check configuration for Django API
-# Adjusted for migration execution time (can take 5-10 minutes on first deploy)
-# INCREASED STARTUP TIME: Migrations can take 5-10 minutes even with better resources
-# REDUCED READINESS: If app is ready, health checks should be quick (< 1 minute)
+# Pod security context: the erp-api Go image ships a non-root user "app".
+securityContext:
+  runAsNonRoot: true
+# ============================================================================
+# HEALTH CHECKS (Go server: /healthz liveness, /readyz readiness)
+# ============================================================================
+# No migration waits — the Go binary starts in seconds (migrations run as
+# separate one-off Jobs, not in the pod).
 healthCheck:
   enabled: true
   startup:
     httpGet:
-      path: /api/v1/core/health/
+      path: /readyz
       port: http
-    # Allow time for migrations + cold starts
-    # With idle db: ~30s, with migrations: 5-10min (first pod only)
-    initialDelaySeconds: 60 # Reduced: migrations run in init container, not in app
-    periodSeconds: 20
-    timeoutSeconds: 10
-    failureThreshold: 25 # Allow ~500s total (60 + 20*25) for slow migrations
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30 # ~155s budget for cold start / DB connect
   readiness:
     httpGet:
-      path: /api/v1/core/health/
+      path: /readyz
       port: http
-    # Once migrations are done, readiness should be fast
-    initialDelaySeconds: 120 # Give app time to initialize after migrations complete
-    periodSeconds: 15 # More frequent checks for faster responsiveness
-    timeoutSeconds: 10
-    failureThreshold: 4 # Fail after ~180s (120 + 15*4) if still not ready
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   liveness:
     httpGet:
-      path: /api/v1/core/health/
+      path: /healthz
       port: http
-    initialDelaySeconds: 180 # App should be stable by now
-    periodSeconds: 30
-    timeoutSeconds: 15
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
     failureThreshold: 5
-# Production resource limits for Django API with large ERP schema
-# This app requires high memory due to:
-# - 30+ Django apps with complex models
-# - Heavy migrations (300+ tables)
-# - Real-time WebSocket connections
-# - Async task processing
-# INCREASED RESOURCES: 20-30min rollout indicates insufficient CPU for migrations
 resources:
   requests:
-    cpu: 300m
-    memory: 768Mi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 1500m
-    memory: 1536Mi
-# Horizontal autoscaling based on CPU and memory
+    cpu: 1000m
+    memory: 768Mi
 autoscaling:
   enabled: true
-  minReplicas: 1 # Single server — HA not meaningful, scale up under load
-  maxReplicas: 3 # Reasonable burst capacity for single node
+  minReplicas: 1
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
-  scaleDown:
-    stabilizationWindowSeconds: 300
-    policies:
-      - type: Percent
-        value: 50
-        periodSeconds: 60
-  scaleUp:
-    stabilizationWindowSeconds: 60
-    policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 30
 ingress:
   enabled: true
   ingressClassName: nginx
@@ -95,14 +83,8 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # WebSocket support for Django Channels (payroll real-time updates)
-    nginx.ingress.kubernetes.io/websocket-services: erp-api-app
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     # Large file uploads for documents, receipts, etc.
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    # NOTE: Static and media files are served by WhiteNoise/Django through the main path
-    # configuration-snippet removed: nginx doesnt support nested location blocks in snippets
   hosts:
     # Tenant-specific domain (Masterspace)
     - host: erpapi.masterspace.co.ke
@@ -121,98 +103,48 @@ ingress:
     - hosts:
         - erpapi.codevertexitsolutions.com
       secretName: erpapi-codevertex-tls
+# Load standardized keys (POSTGRES_URL, INTERNAL_SERVICE_KEY, REDIS_URL, etc.)
+# from the pre-existing erp-api-env secret.
 envFromSecret: erp-api-env
-# ============================================================================
-# MIGRATIONS AND SEEDING
-# ============================================================================
-# ERP-API Django migrations strategy:
-# 1. Migrations run in init container BEFORE main app starts
-# 2. Uses idempotent `migrate --noinput` (safe to run multiple times)
-# 3. Each pod waits for migrations to complete before starting app
-# 4. Heavy migrations (300+ tables) require 3-6Gi memory
-# 5. Fixed: Migration failures were causing pods to fail health checks
-migrations:
-  enabled: true # Enable init container for reliable migrations
-  runOnStartup: true # Wait for migrations to complete before app starts
-  resources:
-    requests:
-      cpu: 500m # Right-sized for migration init container
-      memory: 2Gi # Sufficient for Django schema migrations
-    limits:
-      cpu: 2000m # Allow burst during heavy migrations
-      memory: 4Gi # Prevent OOM during complex migrations
-# Seeding configuration
-seed:
-  enabled: true # Enable seed data creation via Django management command
-  command: # Custom management command for initial data (must be an array)
-    - python
-    - manage.py
-    - seed_initial # Production-safe seeding: superuser, roles, taxes, ESS settings
-  runAfterMigrations: true # Run seeds only after migrations complete
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-# ServiceMonitor configuration (requires Prometheus Operator)
+# ServiceMonitor / monitoring (Prometheus Operator CRDs not installed)
 serviceMonitor:
-  enabled: false # Disabled - Prometheus Operator CRDs not installed
-  namespace: infra
-  interval: 30s
-  scrapeTimeout: 10s
-  labels:
-    release: prometheus
-# Persistent storage for media uploads and backups
-# Backups are stored in /app/media/backups subdirectory
+  enabled: false
+monitoring:
+  enabled: false
+# Persistent storage for media uploads
 persistence:
   enabled: true
   size: 20Gi
   mountPath: /app/media
   accessMode: ReadWriteOnce
   storageClass: local-path
-# Environment variables for the application
-# BACKUP_ROOT points to shared storage within the media PVC
+# ============================================================================
+# ENVIRONMENT VARIABLES (Go config; namespace = "" so no service prefix)
+# ============================================================================
+# POSTGRES_URL + INTERNAL_SERVICE_KEY + REDIS_URL come from the erp-api-env
+# secret (envFromSecret above). The Go config appends search_path=erp via
+# DB_SCHEMA — DB creds are never hardcoded here.
 env:
-  - name: BACKUP_ROOT
-    value: /app/media/backups
+  - name: APP_ENV
+    value: production
+  - name: HTTP_PORT
+    value: "4000"
+  # Go ERP lives in the dedicated `erp` Postgres schema on the bengo_erp DB.
+  - name: DB_SCHEMA
+    value: "erp"
+  - name: REDIS_ADDR
+    value: "redis-master.infra.svc.cluster.local:6379"
   - name: MEDIA_ROOT
-    value: /app/media
-  # Database connection pool settings (prevent connection exhaustion on shared PG max_connections=200)
-  # Django persistent connections: each Daphne thread + Celery worker holds 1 connection for CONN_MAX_AGE seconds.
-  # With Daphne (1 process) + Celery (4 workers) + Beat (1), max ~6 connections.
-  # Reduced from default 600s to 60s to release idle connections faster.
-  - name: DB_CONN_MAX_AGE
-    value: "60"
-  - name: DB_CONNECT_TIMEOUT
-    value: "10"
-  # Explicit Django connection pool ceiling so Daphne (1) + Celery workers (4) + Beat (1)
-  # never exceed the shared PG max_connections=200 budget under load.
-  - name: DB_POOL_MIN_CONNS
-    value: "1"
-  - name: DB_POOL_MAX_CONNS
-    value: "10"
-  - name: DB_POOL_TIMEOUT
-    value: "30"
-  # ── Microservice integration config (decomposition/conformance) ──
-  # SSO + subscription gating are CONFIGURED but gated OFF until the SSO cutover is done
-  # (register an erp OAuth client in auth-api + set erp-ui VITE_SSO_* + verify login).
-  - name: SSO_ENABLED
-    value: "true"
-  # Kept off: enabling would block HR mutations for tenants without an active sub.
-  - name: SUBSCRIPTION_GATING_ENABLED
-    value: "false"
-  # Events ON: the dedicated drain_outbox + consume_events workers below publish/consume
-  # the outbox (payroll.processed → treasury GL; treasury.payroll.disbursed → mark paid).
+    value: "/app/media"
+  # ── NATS events: the Go server runs the outbox poller + JetStream consumers in-process ──
   - name: EVENTS_ENABLED
     value: "true"
   - name: EVENTS_SOURCE_SERVICE
     value: "erp"
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222"
-  # auth-api (SSO) — public issuer/JWKS (note the /api/v1/ JWKS path) + audience.
-  - name: AUTH_API_URL
+  # ── Auth (SSO) — JWKS/issuer/audience for JWT validation ──
+  - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
@@ -220,106 +152,21 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_AUDIENCE
     value: "codevertex"
-  # S2S owner-service URLs (cluster-local). INTERNAL_SERVICE_KEY comes from erp-api-env.
-  - name: TREASURY_API_URL
+  # ── S2S owner-service URLs (cluster-local). INTERNAL_SERVICE_KEY from erp-api-env. ──
+  - name: TREASURY_SERVICE_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
-  - name: INVENTORY_API_URL
-    value: "http://inventory-api.inventory.svc.cluster.local:4000"
-  - name: NOTIFICATIONS_API_URL
+  - name: NOTIFICATIONS_SERVICE_URL
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
-# Enhanced HPA with custom metrics
-autoscalingCustomMetrics:
-  enabled: false # Disabled - using basic HPA for now
-  # Custom metrics for intelligent scaling (requires metrics adapter)
-  customMetrics:
-    - type: Pods
-      metricName: bengoerp_api_http_requests_per_second
-      targetType: AverageValue
-      targetAverageValue: 50
-    - type: Pods
-      metricName: bengoerp_api_db_query_duration_seconds
-      targetType: AverageValue
-      targetAverageValue: 1.0
-    - type: Pods
-      metricName: bengoerp_api_active_users
-      targetType: AverageValue
-      targetAverageValue: 100
-# Production-ready VPA configuration (DISABLED to prevent pod evictions during migrations)
+  - name: HTTP_ALLOWED_ORIGINS
+    value: "https://erp.masterspace.co.ke,https://erpapi.masterspace.co.ke,https://erp.codevertexitsolutions.com"
+# VPA (recommendation-only)
 verticalPodAutoscaling:
-  enabled: false # DISABLED - VPA was causing pod evictions during migrations
-  updateMode: "Off" # Off to prevent disruption
-  minCPU: 500m
-  maxCPU: 3000m
-  minMemory: 3Gi
-  maxMemory: 6Gi
+  enabled: true
+  updateMode: "Off"
+  minCPU: 100m
+  maxCPU: 2000m
+  minMemory: 256Mi
+  maxMemory: 2Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
-  recommendationMode: false # Apply recommendations automatically in production
-# Celery Worker configuration for async task processing
-celeryWorker:
-  enabled: true
-  replicaCount: 1
-  minReadySeconds: 30
-  app: ProcureProKEAPI
-  logLevel: info
-  concurrency: 4 # Optimized for 12-core server
-  maxTasksPerChild: 100
-  resources:
-    requests:
-      cpu: 200m # Right-sized for async task processing
-      memory: 512Mi # Sufficient for Django worker with 4 concurrent tasks
-    limits:
-      cpu: 1000m # Allow burst for heavy tasks
-      memory: 1.5Gi # Prevent OOM during batch processing
-  livenessProbe:
-    enabled: true
-    initialDelaySeconds: 90 # Allow time for worker to start and connect to broker
-    periodSeconds: 60
-    timeoutSeconds: 30 # INCREASED: celery inspect ping can be slow
-    failureThreshold: 5 # More tolerance for transient failures
-  readinessProbe:
-    enabled: true
-    initialDelaySeconds: 60 # Worker should be ready faster than liveness
-    periodSeconds: 30
-    timeoutSeconds: 30 # INCREASED: celery inspect ping can be slow
-    failureThreshold: 5 # More tolerance for transient failures
-# NATS event workers (transactional outbox drainer + JetStream consumer).
-# Required for the payroll → treasury GL loop: drain publishes erp.payroll.processed,
-# consume receives treasury.payroll.disbursed to mark payslips paid.
-eventWorkers:
-  - name: outbox-drainer
-    enabled: true
-    replicaCount: 1
-    command: ["python", "manage.py", "drain_outbox", "--loop", "--interval", "5"]
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        memory: 256Mi
-  - name: event-consumer
-    enabled: true
-    replicaCount: 1
-    command: ["python", "manage.py", "consume_events"]
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        memory: 256Mi
-# Celery Beat scheduler for periodic tasks
-celeryBeat:
-  enabled: true
-  minReadySeconds: 30
-  app: ProcureProKEAPI
-  logLevel: info
-  scheduler: django_celery_beat.schedulers:DatabaseScheduler
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  persistence:
-    enabled: false
+  recommendationMode: true
