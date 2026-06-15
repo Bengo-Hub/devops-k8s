@@ -374,6 +374,39 @@ env:
         optional: true
   - name: HEALTH_CHECK_INTERVAL
     value: "30"
+  # ── Microservice integration (SSO / treasury / subscriptions / notifications / NATS) ──
+  # Shared S2S key (copied from the shared INTERNAL_SERVICE_KEY into this secret).
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: isp-billing-backend-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
+  # SSO (central auth-api). Local login remains dual-run.
+  - name: SSO_ISSUER
+    value: "https://sso.codevertexitsolutions.com"
+  - name: SSO_AUDIENCE
+    value: "isp-billing-ui"
+  # S2S internal service URLs (cluster-local).
+  - name: TREASURY_API_URL
+    value: "http://treasury-api.treasury.svc.cluster.local:4000"
+  - name: TREASURY_PAY_PAGE_URL
+    value: "https://books.codevertexitsolutions.com/pay"
+  - name: SUBSCRIPTIONS_API_URL
+    value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
+  - name: NOTIFICATIONS_API_URL
+    value: "http://notifications-api.notifications.svc.cluster.local:4000"
+  # NATS JetStream (events). Inert until the image ships nats-py; consumer is a
+  # separate Deployment (python -m app.events.consumer).
+  - name: NATS_URL
+    value: "nats://nats.messaging.svc.cluster.local:4222"
+  # Notification delivery via notifications-api (falls back to direct provider on error).
+  - name: USE_CENTRAL_NOTIFICATIONS
+    value: "true"
+  # Treasury-only customer payments: kept OFF until the demo reset + per-ISP payout
+  # recipients are in place (then the treasury-only image makes this moot).
+  - name: USE_TREASURY_PAYMENTS
+    value: "false"
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
