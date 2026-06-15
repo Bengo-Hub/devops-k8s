@@ -132,6 +132,24 @@ celeryBeat:
       cpu: 200m
       memory: 256Mi
 # ============================================================================
+# EVENT WORKERS (NATS JetStream durable consumer)
+# ============================================================================
+# Standalone process subscribing to treasury.payment.succeeded / auth.user.* /
+# tenant.created. Reuses the app image + env (NATS_URL + INTERNAL_SERVICE_KEY).
+# Inert if NATS_URL is unset; the treasury polling path remains the fallback.
+eventWorkers:
+  - name: nats-consumer
+    enabled: true
+    command: ["python", "-m", "app.events.consumer"]
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+# ============================================================================
 # ENVIRONMENT VARIABLES — bulk secret injection
 # ============================================================================
 envFromSecret: isp-billing-backend-secrets
