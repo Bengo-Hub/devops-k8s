@@ -29,9 +29,13 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-# Pod security context: the erp-api Go image ships a non-root user "app".
+# Pod security context: the erp-api Go (alpine) image ships non-root user "app" = uid 100/gid 101.
+# Must specify a NUMERIC runAsUser (matching inventory-api) — runAsNonRoot:true alone fails with
+# "image has non-numeric user (app), cannot verify user is non-root".
 securityContext:
-  runAsNonRoot: true
+  runAsUser: 100
+  runAsGroup: 101
+  fsGroup: 101
 # ============================================================================
 # HEALTH CHECKS (Go server: /healthz liveness, /readyz readiness)
 # ============================================================================
