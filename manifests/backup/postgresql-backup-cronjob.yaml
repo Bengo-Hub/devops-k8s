@@ -44,14 +44,18 @@ spec:
                   echo "Disk space OK: ${AVAIL}MB available"
 
                   echo "Starting PostgreSQL backup at $(date)"
+                  # Platform DR backup: pg_dumpall captures ALL cluster databases (every
+                  # per-service DB on the shared postgresql-0) plus globals/roles.
                   pg_dumpall -h $PGHOST -U $PGUSER | gzip -9 > "${BACKUP_DIR}/${FILENAME}"
 
                   SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
                   echo "Backup completed: ${FILENAME} (${SIZE})"
 
-                  # Cleanup backups older than 6 days
-                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +6 -delete
-                  echo "Cleanup completed (removed files older than 6 days)."
+                  # Retention churn: delete dump files older than BACKUP_RETENTION_DAYS
+                  # (default 4, mirroring the per-service tenant-scoped backup churn).
+                  RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-4}
+                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
+                  echo "Cleanup completed (removed dumps older than ${RETENTION_DAYS} days)."
 
                   # Generate manifest.json for auth-api backup listing endpoint
                   echo '{"backups": [' > ${BACKUP_DIR}/manifest.json
@@ -68,6 +72,10 @@ spec:
                   echo "Manifest updated. Available backups:"
                   ls -lh ${BACKUP_DIR}/bengobox_*.sql.gz 2>/dev/null || echo "No backups found"
               env:
+                # Retention window for the platform DR dumps (days). Default 4, matching the
+                # per-service tenant-scoped backup churn (BACKUP_RETENTION_DAYS).
+                - name: BACKUP_RETENTION_DAYS
+                  value: "4"
                 - name: PGHOST
                   value: "postgresql.infra.svc.cluster.local"
                 # PostgreSQL admin user = admin_user (set via POSTGRES_USER in Bitnami chart)
