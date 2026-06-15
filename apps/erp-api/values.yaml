@@ -133,9 +133,6 @@ env:
     value: production
   - name: HTTP_PORT
     value: "4000"
-  # Go ERP lives in the dedicated `erp` Postgres schema on the bengo_erp DB.
-  - name: DB_SCHEMA
-    value: "erp"
   # Connect DIRECTLY to postgresql (NOT pgbouncer): pgbouncer transaction pooling resets the
   # per-session search_path (breaks the erp schema) + breaks prepared statements. DB_USER/
   # DB_PASSWORD/DB_NAME come from the erp-api-env secret (envFromSecret); we only override the host.
