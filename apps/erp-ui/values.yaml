@@ -1,41 +1,64 @@
+nameOverride: erp-ui
+fullnameOverride: erp-ui
+replicaCount: 1
+minReadySeconds: 30
 image:
   repository: docker.io/codevertex/erp-ui
-  tag: 557802a4
+  tag: "557802a4" # CI bumps this on merge to main
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-# Deployment strategy for zero-downtime updates
-# maxUnavailable: 0 ensures old pods stay until new ones are ready
-replicaCount: 1
-minReadySeconds: 30
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+# Next.js standalone server serves /healthz (src/app/healthz/route.ts).
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
 strategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-service:
-  port: 80
-  targetPort: 3000
-# Health check configuration for Vue UI
-healthCheck:
-  enabled: true
-  readiness:
-    httpGet:
-      path: /health
-      port: http
-    initialDelaySeconds: 10
-    periodSeconds: 10
-    timeoutSeconds: 10
-    failureThreshold: 3
-  liveness:
-    httpGet:
-      path: /health
-      port: http
-    initialDelaySeconds: 30
-    periodSeconds: 15
-    timeoutSeconds: 10
-    failureThreshold: 3
-# Production resource limits for Vue UI
+# Runtime env (NEXT_PUBLIC_* are baked at build via Dockerfile ARGs; these are
+# kept for any server-side reads and parity with the build args).
+env:
+  - name: NEXT_PUBLIC_API_URL
+    value: https://erpapi.masterspace.co.ke
+  - name: NEXT_PUBLIC_SSO_URL
+    value: https://sso.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_AUTH_API_URL
+    value: https://sso.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
+    value: https://pricingapi.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_TREASURY_UI_URL
+    value: https://books.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_INVENTORY_UI_URL
+    value: https://inventory.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_POS_UI_URL
+    value: https://pos.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_ORDERING_UI_URL
+    value: https://ordersapp.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
+    value: https://pricing.codevertexitsolutions.com
+  - name: NEXT_PUBLIC_AUTH_UI_URL
+    value: https://accounts.codevertexitsolutions.com
 resources:
   requests:
     cpu: 50m
@@ -43,7 +66,6 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
-# Horizontal autoscaling based on CPU and memory
 autoscaling:
   enabled: false
   minReplicas: 1
@@ -56,6 +78,7 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
     # Tenant-specific domain (Masterspace)
     - host: erp.masterspace.co.ke
@@ -74,10 +97,10 @@ ingress:
     - hosts:
         - erp.codevertexitsolutions.com
       secretName: erp-codevertex-tls
-envFromSecret: erp-ui-env
-# VPA configuration for UI
-# CRITICAL: Use "Off" mode to prevent VPA from recreating pods and causing downtime
-# VPA will still provide recommendations via kubectl describe vpa but won't act on them
+monitoring:
+  enabled: false
+serviceMonitor:
+  enabled: false
 verticalPodAutoscaling:
   enabled: true
   updateMode: "Off"
@@ -88,8 +111,3 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-# Monitoring configuration - disable for frontend UI (no metrics endpoint)
-monitoring:
-  enabled: false
-serviceMonitor:
-  enabled: false
