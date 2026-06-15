@@ -418,13 +418,8 @@ env:
   # separate Deployment (python -m app.events.consumer).
   - name: NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222"
-  # Notification delivery via notifications-api (falls back to direct provider on error).
-  - name: USE_CENTRAL_NOTIFICATIONS
-    value: "true"
-  # Treasury-only customer payments: kept OFF until the demo reset + per-ISP payout
-  # recipients are in place (then the treasury-only image makes this moot).
-  - name: USE_TREASURY_PAYMENTS
-    value: "false"
+  # (USE_CENTRAL_NOTIFICATIONS / USE_TREASURY_PAYMENTS flags removed — notifications-api
+  #  delivery + treasury payments are now unconditional in the service.)
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
 # ============================================================================
