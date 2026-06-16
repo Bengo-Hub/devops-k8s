@@ -150,7 +150,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://theurbanloftcafe.com, https://books.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
     # SSE: the notifications stream needs nginx to stop buffering and not cut the long-lived
