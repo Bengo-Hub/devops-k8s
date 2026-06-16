@@ -409,7 +409,7 @@ env:
   - name: TREASURY_API_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: TREASURY_PAY_PAGE_URL
-    value: "https://books.codevertexitsolutions.com/pay"
+    value: "https://books.codevertexitsolutions.com"
   - name: SUBSCRIPTIONS_API_URL
     value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: NOTIFICATIONS_API_URL
