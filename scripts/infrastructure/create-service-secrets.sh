@@ -242,6 +242,25 @@ else
     log_info "Generated new app SECRET_KEY"
 fi
 
+# ENCRYPTION_SALT — stable salt for isp-billing's at-rest config encryption
+# (router credentials, etc.). Without a fixed salt the app generates a random one
+# on every restart, so anything encrypted by one pod becomes undecryptable after a
+# restart. Read-existing-first so it NEVER rotates once set (rotating it would
+# orphan previously-encrypted data). Scoped to isp-billing-backend only.
+APP_ENCRYPTION_SALT=""
+if [[ "${SERVICE_NAME}" == "isp-billing-backend" ]]; then
+    EXISTING_ENCRYPTION_SALT=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.ENCRYPTION_SALT}" 2>/dev/null | base64 -d || echo "")
+    if [[ -n "${ENCRYPTION_SALT:-}" ]]; then
+        APP_ENCRYPTION_SALT="$ENCRYPTION_SALT"
+    elif [[ -n "${EXISTING_ENCRYPTION_SALT:-}" ]]; then
+        log_info "Retrieved existing ENCRYPTION_SALT from cluster (preserved)"
+        APP_ENCRYPTION_SALT="$EXISTING_ENCRYPTION_SALT"
+    else
+        APP_ENCRYPTION_SALT=$(openssl rand -hex 32)
+        log_info "Generated new ENCRYPTION_SALT for isp-billing-backend"
+    fi
+fi
+
 # Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
 # CRITICAL: Redis now uses POSTGRES_PASSWORD (master password) for consistency
 REDIS_PASSWORD=""
@@ -303,6 +322,10 @@ declare -a secret_literals=(
     "--from-literal=REDIS_PORT=${REDIS_PORT}"
     "--from-literal=REDIS_PASSWORD=${REDIS_PASSWORD}"
 )
+# isp-billing-backend: include the stable ENCRYPTION_SALT (see above).
+if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
+    secret_literals+=("--from-literal=ENCRYPTION_SALT=${APP_ENCRYPTION_SALT}")
+fi
 
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Secret exists — patch to merge standardized keys without losing existing keys
@@ -319,6 +342,9 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     PATCH_JSON+="\"REDIS_HOST\":\"$(echo -n "${REDIS_HOST}" | base64 -w0)\","
     PATCH_JSON+="\"REDIS_PORT\":\"$(echo -n "${REDIS_PORT}" | base64 -w0)\","
     PATCH_JSON+="\"REDIS_PASSWORD\":\"$(echo -n "${REDIS_PASSWORD}" | base64 -w0)\""
+    if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
+        PATCH_JSON+=",\"ENCRYPTION_SALT\":\"$(echo -n "${APP_ENCRYPTION_SALT}" | base64 -w0)\""
+    fi
     PATCH_JSON+='}}'
 
     kubectl patch secret "${SECRET_NAME}" -n "${NAMESPACE}" \
