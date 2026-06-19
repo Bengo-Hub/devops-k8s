@@ -261,6 +261,34 @@ if [[ "${SERVICE_NAME}" == "isp-billing-backend" ]]; then
     fi
 fi
 
+# CREDENTIAL_ENCRYPTION_KEY — stable AES-256 key (base64 of 32 bytes) for at-rest
+# credential/token encryption in the Go services that support a UI-configurable
+# key. Resolution in-app is DB-first; this env var is the FALLBACK. Read-existing-
+# first so it NEVER rotates once set (rotating would silently fall decryption back
+# to older candidate keys). Each service reads a differently-named env var.
+APP_ENC_KEY_VAR=""
+case "${SERVICE_NAME}" in
+    treasury-api)      APP_ENC_KEY_VAR="TREASURY_GATEWAY_ENCRYPTION_KEY" ;;
+    ordering-backend)  APP_ENC_KEY_VAR="GOOGLE_TOKEN_ENCRYPTION_KEY" ;;
+    marketflow-api)    APP_ENC_KEY_VAR="MF_SECURITY_ENCRYPTION_KEY" ;;
+    notifications-api) APP_ENC_KEY_VAR="SECURITY_ENCRYPTION_KEY" ;;
+esac
+APP_ENC_KEY_VALUE=""
+if [[ -n "${APP_ENC_KEY_VAR}" ]]; then
+    EXISTING_ENC_KEY=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.${APP_ENC_KEY_VAR}}" 2>/dev/null | base64 -d || echo "")
+    OVERRIDE_ENC_KEY="${!APP_ENC_KEY_VAR:-}"   # allow explicit override via same-named env var
+    if [[ -n "${OVERRIDE_ENC_KEY}" ]]; then
+        APP_ENC_KEY_VALUE="${OVERRIDE_ENC_KEY}"
+        log_info "Using provided ${APP_ENC_KEY_VAR} from environment"
+    elif [[ -n "${EXISTING_ENC_KEY}" ]]; then
+        log_info "Retrieved existing ${APP_ENC_KEY_VAR} from cluster (preserved)"
+        APP_ENC_KEY_VALUE="${EXISTING_ENC_KEY}"
+    else
+        APP_ENC_KEY_VALUE=$(openssl rand -base64 32)
+        log_info "Generated new ${APP_ENC_KEY_VAR} for ${SERVICE_NAME}"
+    fi
+fi
+
 # Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
 # CRITICAL: Redis now uses POSTGRES_PASSWORD (master password) for consistency
 REDIS_PASSWORD=""
@@ -326,6 +354,10 @@ declare -a secret_literals=(
 if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
     secret_literals+=("--from-literal=ENCRYPTION_SALT=${APP_ENCRYPTION_SALT}")
 fi
+# Go services with UI-configurable credential encryption: include the stable key.
+if [[ -n "${APP_ENC_KEY_VAR}" && -n "${APP_ENC_KEY_VALUE}" ]]; then
+    secret_literals+=("--from-literal=${APP_ENC_KEY_VAR}=${APP_ENC_KEY_VALUE}")
+fi
 
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Secret exists — patch to merge standardized keys without losing existing keys
@@ -344,6 +376,9 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     PATCH_JSON+="\"REDIS_PASSWORD\":\"$(echo -n "${REDIS_PASSWORD}" | base64 -w0)\""
     if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
         PATCH_JSON+=",\"ENCRYPTION_SALT\":\"$(echo -n "${APP_ENCRYPTION_SALT}" | base64 -w0)\""
+    fi
+    if [[ -n "${APP_ENC_KEY_VAR}" && -n "${APP_ENC_KEY_VALUE}" ]]; then
+        PATCH_JSON+=",\"${APP_ENC_KEY_VAR}\":\"$(echo -n "${APP_ENC_KEY_VALUE}" | base64 -w0)\""
     fi
     PATCH_JSON+='}}'
 
