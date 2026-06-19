@@ -270,7 +270,8 @@ APP_ENC_KEY_VAR=""
 case "${SERVICE_NAME}" in
     treasury-api)      APP_ENC_KEY_VAR="TREASURY_GATEWAY_ENCRYPTION_KEY" ;;
     ordering-backend)  APP_ENC_KEY_VAR="GOOGLE_TOKEN_ENCRYPTION_KEY" ;;
-    marketflow-api)    APP_ENC_KEY_VAR="MF_SECURITY_ENCRYPTION_KEY" ;;
+    # marketflow's deployment maps secret data-key ENCRYPTION_KEY -> env MF_SECURITY_ENCRYPTION_KEY.
+    marketflow-api)    APP_ENC_KEY_VAR="ENCRYPTION_KEY" ;;
     notifications-api) APP_ENC_KEY_VAR="SECURITY_ENCRYPTION_KEY" ;;
 esac
 APP_ENC_KEY_VALUE=""
