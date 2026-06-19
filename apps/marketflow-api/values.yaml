@@ -52,13 +52,6 @@ env:
       secretKeyRef:
         name: marketflow-api-secrets
         key: POSTGRES_URL
-  # Provider-secret encryption key (AES-256-GCM). DB-first in-app; env fallback.
-  - name: MF_SECURITY_ENCRYPTION_KEY
-    valueFrom:
-      secretKeyRef:
-        name: marketflow-api-secrets
-        key: MF_SECURITY_ENCRYPTION_KEY
-        optional: true
   # Direct PostgreSQL URL for migrate/seed (bypasses PgBouncer transaction mode)
   - name: POSTGRES_MIGRATE_URL
     valueFrom:
