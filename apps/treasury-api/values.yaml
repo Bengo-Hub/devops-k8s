@@ -49,6 +49,15 @@ env:
       secretKeyRef:
         name: treasury-api-secrets
         key: POSTGRES_URL
+  # Credential-encryption key (AES-256-GCM). In-app resolution is DB-first
+  # (platform service_config); this env var is the fallback. optional so the
+  # pod still starts if the key is not yet provisioned.
+  - name: TREASURY_GATEWAY_ENCRYPTION_KEY
+    valueFrom:
+      secretKeyRef:
+        name: treasury-api-secrets
+        key: TREASURY_GATEWAY_ENCRYPTION_KEY
+        optional: true
   # Direct PostgreSQL URL for migrate/seed (bypasses PgBouncer transaction mode)
   - name: POSTGRES_MIGRATE_URL
     valueFrom:
