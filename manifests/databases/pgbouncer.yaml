@@ -18,24 +18,25 @@ data:
     ; Per-database pool_size overrides for heavy-traffic services.
     ; Keeps them from starving lighter services and prevents connection exhaustion
     ; on PostgreSQL max_connections=200 (15+ services × pool_size).
-    truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=20
-    kuraweigh = host=postgresql.infra.svc.cluster.local port=5432 dbname=kuraweigh auth_dbname=postgres pool_size=10
-    ordering = host=postgresql.infra.svc.cluster.local port=5432 dbname=ordering auth_dbname=postgres pool_size=15
-    bengo_erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=bengo_erp auth_dbname=postgres pool_size=20
-    auth = host=postgresql.infra.svc.cluster.local port=5432 dbname=auth auth_dbname=postgres pool_size=15
-    logistics = host=postgresql.infra.svc.cluster.local port=5432 dbname=logistics auth_dbname=postgres pool_size=10
-    notifications = host=postgresql.infra.svc.cluster.local port=5432 dbname=notifications auth_dbname=postgres pool_size=8
-    treasury = host=postgresql.infra.svc.cluster.local port=5432 dbname=treasury auth_dbname=postgres pool_size=10
-    subscriptions = host=postgresql.infra.svc.cluster.local port=5432 dbname=subscriptions auth_dbname=postgres pool_size=8
-    inventory = host=postgresql.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=8
-    marketflow = host=postgresql.infra.svc.cluster.local port=5432 dbname=marketflow auth_dbname=postgres pool_size=8
-    pos = host=postgresql.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=10
-    isp_billing = host=postgresql.infra.svc.cluster.local port=5432 dbname=isp_billing auth_dbname=postgres pool_size=8
-    projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=6
-    ticketing = host=postgresql.infra.svc.cluster.local port=5432 dbname=ticketing auth_dbname=postgres pool_size=6
-    codevertex = host=postgresql.infra.svc.cluster.local port=5432 dbname=codevertex auth_dbname=postgres pool_size=6
-    iot = host=postgresql.infra.svc.cluster.local port=5432 dbname=iot auth_dbname=postgres pool_size=6
-    superset = host=postgresql.infra.svc.cluster.local port=5432 dbname=superset auth_dbname=postgres pool_size=8
+    ; INCREASED: Hangfire (truload) now has larger pool due to recurring job load.
+    truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=40
+    kuraweigh = host=postgresql.infra.svc.cluster.local port=5432 dbname=kuraweigh auth_dbname=postgres pool_size=15
+    ordering = host=postgresql.infra.svc.cluster.local port=5432 dbname=ordering auth_dbname=postgres pool_size=20
+    bengo_erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=bengo_erp auth_dbname=postgres pool_size=25
+    auth = host=postgresql.infra.svc.cluster.local port=5432 dbname=auth auth_dbname=postgres pool_size=18
+    logistics = host=postgresql.infra.svc.cluster.local port=5432 dbname=logistics auth_dbname=postgres pool_size=15
+    notifications = host=postgresql.infra.svc.cluster.local port=5432 dbname=notifications auth_dbname=postgres pool_size=10
+    treasury = host=postgresql.infra.svc.cluster.local port=5432 dbname=treasury auth_dbname=postgres pool_size=12
+    subscriptions = host=postgresql.infra.svc.cluster.local port=5432 dbname=subscriptions auth_dbname=postgres pool_size=10
+    inventory = host=postgresql.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=10
+    marketflow = host=postgresql.infra.svc.cluster.local port=5432 dbname=marketflow auth_dbname=postgres pool_size=10
+    pos = host=postgresql.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=12
+    isp_billing = host=postgresql.infra.svc.cluster.local port=5432 dbname=isp_billing auth_dbname=postgres pool_size=10
+    projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=8
+    ticketing = host=postgresql.infra.svc.cluster.local port=5432 dbname=ticketing auth_dbname=postgres pool_size=8
+    codevertex = host=postgresql.infra.svc.cluster.local port=5432 dbname=codevertex auth_dbname=postgres pool_size=8
+    iot = host=postgresql.infra.svc.cluster.local port=5432 dbname=iot auth_dbname=postgres pool_size=8
+    superset = host=postgresql.infra.svc.cluster.local port=5432 dbname=superset auth_dbname=postgres pool_size=10
     * = host=postgresql.infra.svc.cluster.local port=5432 auth_dbname=postgres
 
     [pgbouncer]
@@ -54,12 +55,13 @@ data:
 
     # Transaction-mode pooling. PgBouncer 1.21+ supports server-side
     # prepared statements in transaction mode via max_prepared_statements.
+    # TUNED: Increased pool sizes to prevent exhaustion under Hangfire recurring job load.
     pool_mode = transaction
-    max_client_conn = 3000
-    default_pool_size = 10
-    reserve_pool_size = 10
+    max_client_conn = 5000
+    default_pool_size = 15
+    reserve_pool_size = 15
     reserve_pool_timeout = 2
-    server_idle_timeout = 120
+    server_idle_timeout = 300
     server_lifetime = 1800
     max_prepared_statements = 100
 
@@ -68,12 +70,13 @@ data:
     # Reduced to 3s so services recover quickly after PostgreSQL restarts.
     server_login_retry = 3
     # query_wait_timeout: max time a query waits for a pool connection (default 120s).
-    # Reduced so slow queries fail fast instead of backing up the pool.
-    query_wait_timeout = 30
+    # Increased from 30s to 60s to allow Hangfire jobs time to acquire connections.
+    query_wait_timeout = 60
     # server_connect_timeout: max time to wait for a new server connection.
     server_connect_timeout = 10
     # client_idle_timeout: disconnect idle client connections to free pool slots.
-    client_idle_timeout = 120
+    # Increased from 120s to 300s to reduce false disconnects on long-running Hangfire jobs.
+    client_idle_timeout = 300
 
     log_connections = 0
     log_disconnections = 0
