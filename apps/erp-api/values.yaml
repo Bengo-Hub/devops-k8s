@@ -89,6 +89,10 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # Large file uploads for documents, receipts, etc.
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # Edge rate limiting (outer guard; the app also enforces per-tenant/per-endpoint limits
+    # via Redis). Matches the peer services (auth 20/100, ordering 50/200).
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-connections: "150"
   hosts:
     # Tenant-specific domain (Masterspace)
     - host: erpapi.masterspace.co.ke
@@ -167,6 +171,22 @@ env:
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://erp.masterspace.co.ke,https://erpapi.masterspace.co.ke,https://erp.codevertexitsolutions.com"
+  # ── Distributed rate limiting (Redis sliding-window). Per-tenant general budget + stricter
+  # per-endpoint limits on money paths (payroll/backups/fx). Fails open if Redis is down. ──
+  - name: RATE_LIMIT_ENABLED
+    value: "true"
+  - name: RATE_LIMIT_REQUESTS_PER_MINUTE
+    value: "120"
+  - name: RATE_LIMIT_REQUESTS_PER_HOUR
+    value: "3000"
+  - name: RATE_LIMIT_PAYMENT_PER_MINUTE
+    value: "20"
+  - name: RATE_LIMIT_AUTH_PER_MINUTE
+    value: "10"
+  - name: RATE_LIMIT_BURST_MULTIPLIER
+    value: "1.5"
+  - name: RATE_LIMIT_KEY_PREFIX
+    value: "rl:erp:"
 # VPA (recommendation-only)
 verticalPodAutoscaling:
   enabled: true
