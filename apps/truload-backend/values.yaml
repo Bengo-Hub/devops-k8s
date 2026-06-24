@@ -102,15 +102,16 @@ env:
   - name: Database__ConnectionIdleLifetime
     value: "60"
   # Hangfire background job connection pool settings (separate from EF Core pools).
-  # Hangfire jobs (pesaflow-invoice-sync, report-schedule-runner, etc.) need sufficient
-  # connections to handle concurrent job execution without starving request-scoped connections.
-  # NOTE: If using a separate direct PostgreSQL connection for Hangfire (recommended),
-  # set ConnectionStrings__HangfireConnection in the truload-backend-env K8s secret.
-  # Otherwise, uses DefaultConnection (PgBouncer) with these pool settings.
+  # Hangfire now connects DIRECTLY to PostgreSQL (bypassing PgBouncer) because its
+  # advisory locks / prepared statements are incompatible with transaction-mode pooling
+  # (caused "jobparameter_pkey" duplicate errors + recurring jobs being disabled).
+  # Because these are direct connections counting against PostgreSQL max_connections,
+  # keep the pool SMALL: worst-case = HangfireMaxPoolSize × replicas.
+  # To override entirely, set ConnectionStrings__HangfireConnection in the secret.
   - name: Database__HangfireMaxPoolSize
-    value: "25"
+    value: "8"
   - name: Database__HangfireMinPoolSize
-    value: "5"
+    value: "1"
   # Direct PostgreSQL host for migrations (bypasses PgBouncer — EF Core advisory locks need a
   # persistent session that PgBouncer transaction-mode pooling doesn't support).
   - name: Database__DirectHost
