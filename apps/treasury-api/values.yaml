@@ -3,7 +3,7 @@ fullnameOverride: treasury-api
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/treasury-api
-  tag: "bc9df69d"
+  tag: "65a940eb"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -196,7 +196,6 @@ ingress:
     - hosts:
         - booksapi.codevertexitsolutions.com
       secretName: treasury-api-tls
-
 pdb:
   enabled: true
   minAvailable: 1
