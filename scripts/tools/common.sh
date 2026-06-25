@@ -210,70 +210,10 @@ safe_delete_resource() {
     fi
 }
 
-# Check if Helm release exists and handle based on cleanup mode
-# Returns: "upgrade" if should upgrade, "install" if should install fresh, "skip" if should skip
-helm_release_action() {
-    local release_name=$1
-    local namespace=${2:-default}
-    
-    if ! helm -n "$namespace" status "$release_name" >/dev/null 2>&1; then
-        # Release doesn't exist - always install
-        echo "install"
-        return
-    fi
-    
-    if is_cleanup_mode; then
-        # Cleanup mode: uninstall and reinstall
-        echo "reinstall"
-    else
-        # Non-cleanup mode: upgrade existing
-        echo "upgrade"
-    fi
-}
-
-# =============================================================================
-# HELM INSTALLATION HELPERS
-# =============================================================================
-
-# Install or upgrade Helm release based on cleanup mode
-helm_install_or_upgrade() {
-    local release_name=$1
-    local chart=$2
-    local namespace=$3
-    shift 3
-    local helm_args=("$@")
-    
-    local action=$(helm_release_action "$release_name" "$namespace")
-    
-    case "$action" in
-        "reinstall")
-            log_info "Cleanup mode: Uninstalling existing release '$release_name'..."
-            helm uninstall "$release_name" -n "$namespace" --wait 2>/dev/null || true
-            log_info "Installing fresh release '$release_name'..."
-            helm install "$release_name" "$chart" \
-                -n "$namespace" \
-                "${helm_args[@]}" \
-                --timeout=10m \
-                --wait
-            ;;
-        "upgrade")
-            log_info "Upgrading existing release '$release_name'..."
-            helm upgrade "$release_name" "$chart" \
-                -n "$namespace" \
-                "${helm_args[@]}" \
-                --timeout=10m \
-                --wait
-            ;;
-        "install")
-            log_info "Installing new release '$release_name'..."
-            helm install "$release_name" "$chart" \
-                -n "$namespace" \
-                "${helm_args[@]}" \
-                --timeout=10m \
-                --wait
-            ;;
-    esac
-}
+# NOTE: helm_release_action() and helm_install_or_upgrade() were removed on
+# 2026-06-25 — they were unused dead code (no script called them; the real
+# install paths live in database-utils.sh and the per-component install scripts
+# which use `helm upgrade --install` directly).
 
 # =============================================================================
 # WAIT FUNCTIONS
@@ -443,8 +383,7 @@ ensure_cert_manager() {
 export -f log_info log_success log_warning log_error log_step log_section
 export -f check_kubectl ensure_helm ensure_jq ensure_storage_class
 export -f add_helm_repo ensure_namespace
-export -f is_cleanup_mode should_delete_and_recreate safe_delete_resource helm_release_action
-export -f helm_install_or_upgrade
+export -f is_cleanup_mode should_delete_and_recreate safe_delete_resource
 export -f wait_for_resource wait_for_pods wait_for_statefulset
 export -f check_cluster_health
 export -f get_script_dir generate_password base64_encode base64_decode
