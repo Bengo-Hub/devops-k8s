@@ -2,7 +2,10 @@
 ## Custom image with pgvector extension
 ##
 ## ============================================================================
-## CONNECTION BUDGET (max_connections=200, ~5 reserved for superuser)
+## CONNECTION BUDGET (max_connections=300, ~5 reserved for superuser)
+## NOTE: app-side MaxOpen below is the budget INTO pgbouncer; the binding ceiling is pgbouncer
+## sum(pool_size)+reserve INTO PostgreSQL (see pgbouncer.yaml). truload runs 2-4 replicas and
+## Hangfire now uses a direct (non-pgbouncer) connection (pool 8/replica).
 ## ============================================================================
 ## Update this table when adding services or changing pool sizes.
 ##
@@ -73,8 +76,11 @@ primary:
     storageClass: ""  # Use default storage class
   
   ## PostgreSQL tuning
+  ## max_connections raised 200->300: the fleet (15+ services + replicas) plus Hangfire's
+  ## direct connections exceeded 200 under load. pgbouncer sum(pool_size) stays well under this;
+  ## requires a PostgreSQL restart to take effect.
   extendedConfiguration: |
-    max_connections = 200
+    max_connections = 300
     shared_buffers = 1GB
     effective_cache_size = 3GB
     work_mem = 4MB
