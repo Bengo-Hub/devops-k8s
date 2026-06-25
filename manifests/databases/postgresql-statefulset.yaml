@@ -169,7 +169,9 @@ spec:
       containers:
       - name: postgresql
         image: docker.io/codevertex/postgresql-pgvector:latest
-        imagePullPolicy: Always
+        # IfNotPresent: avoid re-pulling the large pgvector image on every restart (that added
+        # ~5-6 min of DB downtime on a roll). Deliberate upgrades should bump the tag/digest.
+        imagePullPolicy: IfNotPresent
         ports:
         - name: postgresql
           containerPort: 5432
