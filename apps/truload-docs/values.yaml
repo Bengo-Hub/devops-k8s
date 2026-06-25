@@ -42,10 +42,9 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# TEMPORARY: 2->1 to free ~100m CPU on the saturated node so truload-backend (which went
-# 0/2 Pending after a rollout) can schedule. Docs is non-essential and still serves at 1.
-# Restore to 2 once node CPU capacity is added.
-replicaCount: 1
+# TEMPORARY: 0 replicas (non-essential docs site) to free ~200m CPU on the saturated node so
+# the downed truload-backend can schedule. Restore to 2 once node CPU capacity is added.
+replicaCount: 0
 
 pdb:
   enabled: true
