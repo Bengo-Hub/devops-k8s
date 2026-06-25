@@ -38,8 +38,10 @@ resources:
     memory: 512Mi
 # Horizontal autoscaling — min 2 to distribute SSR load across replicas
 autoscaling:
+  # TEMPORARY: minReplicas 2->1 to let the rollout fit on the CPU-saturated node
+  # (see truload-backend note). RESTORE to 2 once capacity is added.
   enabled: true
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 4
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
