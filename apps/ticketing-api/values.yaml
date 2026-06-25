@@ -91,7 +91,7 @@ env:
     value: "https://ticketing.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3009"
 resources:
   requests:
-    cpu: 100m
+    cpu: 50m
     memory: 256Mi
   limits:
     cpu: 500m

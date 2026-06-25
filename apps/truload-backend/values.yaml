@@ -45,19 +45,15 @@ resources:
     # can't schedule and the backend went 0/2 (Pending) after a rollout. 100m fits in the free
     # headroom; the limit stays 2000m so it still bursts for weighing workloads. Revisit once
     # node capacity is added (with the minReplicas:2 HA restore).
-    cpu: 100m
+    cpu: 50m
     memory: 512Mi
   limits:
     cpu: 2000m
     memory: 2Gi
-# Horizontal autoscaling — scale faster (min 2 always warm, max 4)
+# Horizontal autoscaling — min 2 always warm (HA), max 4
 autoscaling:
-  # TEMPORARY: minReplicas 2->1. The node is at ~99% CPU requests, so two pods of the new
-  # revision can't co-schedule and the rollout deadlocks. At 1 replica the maxSurge:0 rollout
-  # can terminate the old pod first and the new one schedules in the freed CPU, letting fixes
-  # deploy. RESTORE to 2 (HA) once node CPU capacity is added — see HA rule [[ha-min-2-pods-and-pdb]].
   enabled: true
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 4
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
@@ -214,22 +210,20 @@ initContainers:
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001
-# Rollout strategy: the shared node sits at ~99% CPU requests, so a surge pod
-# (chart default maxSurge:1) can't be scheduled and rollouts stall (FailedScheduling:
-# Insufficient cpu). maxSurge:0 frees an old pod's CPU request before scheduling the
-# new one, so updates proceed within the existing allocation.
+# Rollout strategy: surge-first (maxUnavailable:0, maxSurge:1) — a NEW pod must be Ready
+# before any OLD pod is terminated, so rollouts never drop below the desired count and
+# never serve 503s. Requires node headroom (provided by fleet-wide CPU-request right-sizing).
 strategy:
   type: RollingUpdate
   rollingUpdate:
-    maxSurge: 0
-    maxUnavailable: 1
+    maxSurge: 1
+    maxUnavailable: 0
 # ============================================================================
 # POD DISRUPTION BUDGET
 # ============================================================================
 pdb:
   enabled: true
-  minAvailable: null # override chart default (minAvailable: 1) — only one field may be set
-  maxUnavailable: 1
+  minAvailable: 1 # keep >=1 pod available during voluntary disruptions (drains)
 # VPA configuration - DISABLED due to metrics-server issues causing eviction loop
 verticalPodAutoscaling:
   enabled: false

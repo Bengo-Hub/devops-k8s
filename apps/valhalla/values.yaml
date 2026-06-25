@@ -66,7 +66,9 @@ persistence:
 # ============================================================================
 resources:
   requests:
-    cpu: "1"
+    # Right-sized 1->300m: routing is intermittent and the limit (4) lets it burst on demand.
+    # Frees ~700m on the shared node for balanced headroom across services.
+    cpu: "300m"
     memory: 3Gi
   limits:
     cpu: "4"

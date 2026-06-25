@@ -81,7 +81,7 @@ env:
     value: http://otel-collector.infra.svc.cluster.local:4317
 resources:
   requests:
-    cpu: 100m
+    cpu: 50m
     memory: 256Mi
   limits:
     cpu: 500m

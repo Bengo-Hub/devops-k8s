@@ -36,15 +36,13 @@ ingress:
 
 resources:
   requests:
-    cpu: 100m
+    cpu: 50m
     memory: 128Mi
   limits:
     cpu: 500m
     memory: 512Mi
 
-# TEMPORARY: 0 replicas (non-essential docs site) to free ~200m CPU on the saturated node so
-# the downed truload-backend can schedule. Restore to 2 once node CPU capacity is added.
-replicaCount: 0
+replicaCount: 2
 
 pdb:
   enabled: true
