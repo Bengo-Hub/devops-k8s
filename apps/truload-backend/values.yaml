@@ -41,11 +41,10 @@ healthCheck:
 # CPU without throttling. 2 CPU limit gives headroom for concurrent weighing sessions.
 resources:
   requests:
-    # CPU request reduced 300m->100m: the node is CPU-request-saturated (~98%), so a 300m pod
-    # can't schedule and the backend went 0/2 (Pending) after a rollout. 100m fits in the free
-    # headroom; the limit stays 2000m so it still bursts for weighing workloads. Revisit once
-    # node capacity is added (with the minReplicas:2 HA restore).
-    cpu: 50m
+    # Right-sized to ~actual usage (the .NET API runs ~70-80m with migrations/serving). 50m was
+    # too low → HPA saw >150% utilisation and maxed to 4 replicas; 150m keeps utilisation ~50%
+    # so it stays at the 2-replica baseline. Limit 2000m still bursts for weighing workloads.
+    cpu: 150m
     memory: 512Mi
   limits:
     cpu: 2000m

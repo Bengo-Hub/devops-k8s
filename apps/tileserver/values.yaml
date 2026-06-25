@@ -167,8 +167,11 @@ initContainers:
         mountPath: /data
     resources:
       requests:
-        cpu: "1"
-        memory: 3Gi
+        # initContainer (one-time tile generation). K8s reserves max(init, main) for the pod's
+        # whole life, so a 1-core/3Gi init request idly held ~1 core + 3Gi. Right-sized down;
+        # it still bursts to the 4-core / 6Gi limit during the actual build.
+        cpu: "150m"
+        memory: 1Gi
       limits:
         cpu: "4"
         memory: 6Gi
