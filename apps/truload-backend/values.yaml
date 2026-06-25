@@ -41,7 +41,11 @@ healthCheck:
 # CPU without throttling. 2 CPU limit gives headroom for concurrent weighing sessions.
 resources:
   requests:
-    cpu: 300m
+    # CPU request reduced 300m->100m: the node is CPU-request-saturated (~98%), so a 300m pod
+    # can't schedule and the backend went 0/2 (Pending) after a rollout. 100m fits in the free
+    # headroom; the limit stays 2000m so it still bursts for weighing workloads. Revisit once
+    # node capacity is added (with the minReplicas:2 HA restore).
+    cpu: 100m
     memory: 512Mi
   limits:
     cpu: 2000m
