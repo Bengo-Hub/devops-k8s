@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/treasury-ui
-  tag: "67afdd5d"
+  tag: "bfafb579"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -93,7 +93,6 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-
 pdb:
   enabled: true
   minAvailable: 1
