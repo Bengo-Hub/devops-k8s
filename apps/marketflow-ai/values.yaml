@@ -9,7 +9,7 @@ image:
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
-replicaCount: 1
+replicaCount: 2
 autoscaling:
   enabled: false
 service:

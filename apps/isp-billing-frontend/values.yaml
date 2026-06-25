@@ -6,7 +6,7 @@ fullnameOverride: isp-billing-frontend
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
-replicaCount: 1
+replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/isp-billing-frontend
