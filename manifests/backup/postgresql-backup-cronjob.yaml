@@ -102,24 +102,12 @@ spec:
               persistentVolumeClaim:
                 claimName: postgresql-backup-pvc
 ---
-# PVC for backup storage (shared between CronJob and backup-server)
-# NOTE: local-path storage class does NOT support in-place resize.
-# To expand on a running cluster:
-#   1. kubectl delete deployment backup-server -n infra
-#   2. kubectl delete pvc postgresql-backup-pvc -n infra  (loses existing backups)
-#   3. kubectl apply -f manifests/backup/postgresql-backup-cronjob.yaml
-#   4. ArgoCD will recreate the PVC at 20Gi and redeploy the backup server
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgresql-backup-pvc
-  namespace: infra
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
+# The backup-storage PVC (postgresql-backup-pvc) lives in a SEPARATE file:
+#   manifests/backup/postgresql-backup-pvc.yaml
+# It is intentionally not in this file because `local-path` PVCs are non-resizable,
+# so re-applying it after a size change fails. The provision workflow creates that
+# PVC create-once (only when absent). This file holds only safely re-appliable
+# resources (CronJob, Deployment, ConfigMap, Service).
 ---
 # Lightweight nginx server to serve backup files internally
 # Auth-api proxies requests to this service for authenticated platform admins

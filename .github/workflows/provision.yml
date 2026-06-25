@@ -920,16 +920,34 @@ jobs:
           kubectl get applications -n argocd || true
           echo "::endgroup::"
 
-      - name: Provision PostgreSQL backup infrastructure
+      - name: Provision PostgreSQL backup infrastructure (idempotent)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         run: |
           echo "::group::Provisioning PostgreSQL backup infrastructure"
-          echo "Applying CronJob, PVC, backup-server Deployment/Service..."
-          if [ -f manifests/backup/postgresql-backup-cronjob.yaml ]; then
-            kubectl apply -f manifests/backup/postgresql-backup-cronjob.yaml
+          PVC_FILE=manifests/backup/postgresql-backup-pvc.yaml
+          MANIFEST=manifests/backup/postgresql-backup-cronjob.yaml
+
+          # PVC: create-once only. The cluster's local-path storage class cannot
+          # resize PVCs, so re-applying an existing PVC whose size differs from the
+          # manifest fails with "forbidden: only dynamically provisioned pvc can be
+          # resized". Guard the apply so provisioning stays idempotent.
+          if [ -f "$PVC_FILE" ]; then
+            if kubectl get pvc postgresql-backup-pvc -n infra >/dev/null 2>&1; then
+              echo "✓ PVC postgresql-backup-pvc already exists — leaving as-is (local-path is non-resizable)"
+            else
+              kubectl apply -f "$PVC_FILE"
+              echo "✅ Created PVC postgresql-backup-pvc"
+            fi
+          else
+            echo "⚠️ $PVC_FILE not found; skipping PVC"
+          fi
+
+          # Remaining resources (CronJob, Deployment, ConfigMap, Service) are safely re-appliable.
+          if [ -f "$MANIFEST" ]; then
+            kubectl apply -f "$MANIFEST"
             echo "✅ PostgreSQL backup infrastructure applied"
           else
-            echo "⚠️ manifests/backup/postgresql-backup-cronjob.yaml not found; skipping"
+            echo "⚠️ $MANIFEST not found; skipping"
           fi
           echo "::endgroup::"
 

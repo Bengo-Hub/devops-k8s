@@ -1,0 +1,28 @@
+# PVC for backup storage (shared between the postgresql-backup CronJob and the backup-server).
+#
+# IDEMPOTENCY NOTE — DO NOT bump `storage` and expect a re-apply to resize it:
+#   The cluster's `local-path` storage class is a hostPath provisioner with
+#   allowVolumeExpansion=false, so PVCs cannot be resized in place. `kubectl apply`
+#   of a changed size emits a "forbidden: only dynamically provisioned pvc can be
+#   resized" patch error. The provision workflow therefore creates this PVC ONLY if
+#   it is absent (create-once) and never re-applies an existing one.
+#
+#   local-path also IGNORES the requested size — actual capacity is the node's disk.
+#   The CronJob aborts a backup if <500MB is free, so disk-full is self-guarded.
+#   `storage` here is kept equal to the live PVC (5Gi) purely to avoid spurious drift.
+#
+# To genuinely grow it (destroys existing dumps):
+#   kubectl delete deployment backup-server -n infra
+#   kubectl delete pvc postgresql-backup-pvc -n infra
+#   edit storage below, then: kubectl apply -f manifests/backup/postgresql-backup-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-backup-pvc
+  namespace: infra
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
