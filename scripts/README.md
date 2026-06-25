@@ -182,7 +182,6 @@ source "${SCRIPT_DIR}/../tools/common.sh"
 
 **Helm Management:**
 - `add_helm_repo <name> <url>` - Add Helm repository
-- `helm_install_or_upgrade <release> <chart> <namespace> [args...]` - Install/upgrade with cleanup mode support
 
 **Namespace Management:**
 - `ensure_namespace <namespace>` - Create namespace if it doesn't exist
@@ -196,7 +195,6 @@ source "${SCRIPT_DIR}/../tools/common.sh"
 - `is_cleanup_mode` - Check if cleanup mode is active
 - `should_delete_and_recreate <type> <name> <namespace>` - Check if resource should be recreated
 - `safe_delete_resource <type> <name> <namespace>` - Delete resource only in cleanup mode
-- `helm_release_action <release> <namespace>` - Get Helm action (install/upgrade/reinstall)
 
 **Utilities:**
 - `check_cluster_health` - Check cluster readiness and pending pods
