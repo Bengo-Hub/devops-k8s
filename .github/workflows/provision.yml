@@ -16,6 +16,16 @@ on:
         default: false
         type: boolean
 
+# Serialize provisioning: this workflow mutates a single shared cluster via
+# helm/kubectl, so concurrent runs would race (e.g. competing `helm upgrade
+# --install` on the same release, or simultaneous `kubectl apply` of the same
+# secret). cancel-in-progress: false keeps the running provision alive (avoids
+# leaving a half-applied helm release / pending lock) while collapsing the queue
+# to at most one pending run — GitHub auto-cancels older pending runs in the group.
+concurrency:
+  group: provision-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   provision:
     runs-on: ubuntu-latest
