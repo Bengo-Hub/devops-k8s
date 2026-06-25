@@ -48,8 +48,12 @@ resources:
     memory: 2Gi
 # Horizontal autoscaling — scale faster (min 2 always warm, max 4)
 autoscaling:
+  # TEMPORARY: minReplicas 2->1. The node is at ~99% CPU requests, so two pods of the new
+  # revision can't co-schedule and the rollout deadlocks. At 1 replica the maxSurge:0 rollout
+  # can terminate the old pod first and the new one schedules in the freed CPU, letting fixes
+  # deploy. RESTORE to 2 (HA) once node CPU capacity is added — see HA rule [[ha-min-2-pods-and-pdb]].
   enabled: true
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 4
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
