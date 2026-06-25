@@ -206,6 +206,15 @@ initContainers:
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001
+# Rollout strategy: the shared node sits at ~99% CPU requests, so a surge pod
+# (chart default maxSurge:1) can't be scheduled and rollouts stall (FailedScheduling:
+# Insufficient cpu). maxSurge:0 frees an old pod's CPU request before scheduling the
+# new one, so updates proceed within the existing allocation.
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
 # ============================================================================
 # POD DISRUPTION BUDGET
 # ============================================================================

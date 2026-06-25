@@ -120,6 +120,13 @@ monitoring:
   enabled: false
 serviceMonitor:
   enabled: false
+# Rollout strategy: node is CPU-request-saturated, so a surge pod can't schedule
+# (FailedScheduling: Insufficient cpu). maxSurge:0 rolls within existing allocation.
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
 pdb:
   enabled: true
   minAvailable: 1
