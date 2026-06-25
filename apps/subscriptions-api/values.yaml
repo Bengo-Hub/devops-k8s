@@ -3,7 +3,7 @@ fullnameOverride: subscription-api
 replicaCount: 1
 image:
   repository: docker.io/codevertex/subscriptions-api
-  tag: "b42ca14a"
+  tag: "8b594d88"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -142,7 +142,6 @@ ingress:
     - hosts:
         - pricingapi.codevertexitsolutions.com
       secretName: subscription-api-tls
-
 pdb:
   enabled: true
   minAvailable: 1
