@@ -140,6 +140,32 @@ spec:
         fsGroup: 999
         runAsUser: 999
         runAsNonRoot: true
+      # Ensure max_connections=300 in the persisted $PGDATA/postgresql.conf BEFORE postgres starts.
+      # The mounted configmap (override.conf=300) is never read because PGDATA's postgresql.conf
+      # is authoritative and its `include` was commented out — a plain restart can't change it.
+      # This initContainer edits the authoritative file on the PVC so the change is durable.
+      initContainers:
+      - name: ensure-max-connections
+        image: docker.io/codevertex/postgresql-pgvector:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - |
+          CONF=/var/lib/postgresql/data/pgdata/postgresql.conf
+          if [ -f "$CONF" ]; then
+            sed -i 's/^[# ]*max_connections[[:space:]]*=.*/max_connections = 300/' "$CONF"
+            echo "ensure-max-connections: set max_connections=300 in $CONF"
+            grep -i '^max_connections' "$CONF" || true
+          else
+            echo "ensure-max-connections: $CONF not present yet (fresh init) — main container will create it"
+          fi
+        securityContext:
+          runAsUser: 999
+          runAsNonRoot: true
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
       containers:
       - name: postgresql
         image: docker.io/codevertex/postgresql-pgvector:latest
@@ -167,7 +193,8 @@ spec:
               key: postgres-password
         resources:
           requests:
-            cpu: 1000m
+            # Right-sized 1000m->300m: actual CPU usage is ~150m; bursts to the 4000m limit.
+            cpu: 300m
             memory: 3Gi
           limits:
             cpu: 4000m
