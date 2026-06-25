@@ -142,3 +142,7 @@ ingress:
     - hosts:
         - pricingapi.codevertexitsolutions.com
       secretName: subscription-api-tls
+
+pdb:
+  enabled: true
+  minAvailable: 1

@@ -166,3 +166,7 @@ ingress:
     - hosts:
         - posapi.codevertexitsolutions.com
       secretName: posapi-tls
+
+pdb:
+  enabled: true
+  minAvailable: 1

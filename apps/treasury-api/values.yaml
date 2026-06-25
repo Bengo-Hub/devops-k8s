@@ -196,3 +196,7 @@ ingress:
     - hosts:
         - booksapi.codevertexitsolutions.com
       secretName: treasury-api-tls
+
+pdb:
+  enabled: true
+  minAvailable: 1

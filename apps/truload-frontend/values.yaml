@@ -120,3 +120,7 @@ monitoring:
   enabled: false
 serviceMonitor:
   enabled: false
+
+pdb:
+  enabled: true
+  minAvailable: 1

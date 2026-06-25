@@ -137,3 +137,7 @@ ingress:
     - hosts:
         - ticketingapi.codevertexitsolutions.com
       secretName: ticketing-api-tls
+
+pdb:
+  enabled: true
+  minAvailable: 1

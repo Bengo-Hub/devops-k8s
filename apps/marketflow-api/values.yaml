@@ -283,4 +283,5 @@ securityContext:
   fsGroup: 1000
   runAsNonRoot: true
 pdb:
-  enabled: false
+  enabled: true
+  minAvailable: 1

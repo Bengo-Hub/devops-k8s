@@ -143,3 +143,7 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
+
+pdb:
+  enabled: true
+  minAvailable: 1

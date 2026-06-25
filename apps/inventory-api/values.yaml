@@ -159,3 +159,7 @@ ingress:
     - hosts:
         - inventoryapi.codevertexitsolutions.com
       secretName: inventoryapi-tls
+
+pdb:
+  enabled: true
+  minAvailable: 1
