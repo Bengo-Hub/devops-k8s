@@ -5,7 +5,7 @@ image:
   repository: docker.io/codevertex/truload-docs
   # Quote the tag: all-numeric SHAs (e.g. 37768722) are otherwise parsed as a
   # YAML number and rendered in scientific notation (3.7768722e+07) -> InvalidImageName.
-  tag: c5298530
+  tag: ca968c81
   pullPolicy: IfNotPresent
 
 service:
