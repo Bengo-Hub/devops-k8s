@@ -68,7 +68,7 @@ migrations:
   ttlSecondsAfterFinished: 300
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m
@@ -88,7 +88,7 @@ seed:
   ttlSecondsAfterFinished: 300
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m
@@ -102,7 +102,7 @@ celeryWorker:
   command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m
@@ -429,7 +429,7 @@ env:
 # ============================================================================
 resources:
   requests:
-    cpu: 100m
+    cpu: 50m
     memory: 256Mi
   limits:
     cpu: 500m

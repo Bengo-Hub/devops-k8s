@@ -31,17 +31,15 @@ healthCheck:
 # Next.js SSR can burst to 500m+ CPU per request; 1000m limit prevents throttle.
 resources:
   requests:
-    cpu: 100m
+    cpu: 50m
     memory: 256Mi
   limits:
     cpu: 1000m
     memory: 512Mi
 # Horizontal autoscaling — min 2 to distribute SSR load across replicas
 autoscaling:
-  # TEMPORARY: minReplicas 2->1 to let the rollout fit on the CPU-saturated node
-  # (see truload-backend note). RESTORE to 2 once capacity is added.
   enabled: true
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 4
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 75
@@ -122,13 +120,12 @@ monitoring:
   enabled: false
 serviceMonitor:
   enabled: false
-# Rollout strategy: node is CPU-request-saturated, so a surge pod can't schedule
-# (FailedScheduling: Insufficient cpu). maxSurge:0 rolls within existing allocation.
+# Rollout strategy: surge-first (new pod Ready before old terminates) — no 503s during rollout.
 strategy:
   type: RollingUpdate
   rollingUpdate:
-    maxSurge: 0
-    maxUnavailable: 1
+    maxSurge: 1
+    maxUnavailable: 0
 pdb:
   enabled: true
   minAvailable: 1

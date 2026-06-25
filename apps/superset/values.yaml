@@ -39,7 +39,7 @@ autoscaling:
 # ============================================================================
 resources:
   requests:
-    cpu: 300m   # Right-sized: analytics not primary workload
+    cpu: 150m   # Right-sized: analytics not primary workload (bursts to 1500m via limit)
     memory: 768Mi
   limits:
     cpu: 1500m
@@ -327,7 +327,7 @@ supersetCeleryBeat:
   enabled: true
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m

@@ -55,7 +55,7 @@ persistence:
 # ============================================================================
 resources:
   requests:
-    cpu: 250m
+    cpu: 120m
     memory: 512Mi
   limits:
     cpu: "1"
