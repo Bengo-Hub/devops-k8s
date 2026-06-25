@@ -16,10 +16,13 @@ data:
     ; db (where pgbouncer schema lives), regardless of which db the
     ; client is trying to reach.
     ; Per-database pool_size overrides for heavy-traffic services.
-    ; Keeps them from starving lighter services and prevents connection exhaustion
-    ; on PostgreSQL max_connections=200 (15+ services × pool_size).
-    ; INCREASED: Hangfire (truload) now has larger pool due to recurring job load.
-    truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=40
+    ; Keeps them from starving lighter services and prevents connection exhaustion.
+    ; CONNECTION BUDGET: keep sum(pool_size) + reserve_pool_size well under PostgreSQL
+    ; max_connections (now 300) less ~5 superuser-reserved. max_db_connections (below) is a
+    ; hard per-db backstop so no single db can exhaust the server.
+    ; truload reduced 40->15: Hangfire now uses a DIRECT (non-pgbouncer) connection, so the
+    ; pgbouncer pool no longer carries recurring-job load.
+    truload = host=postgresql.infra.svc.cluster.local port=5432 dbname=truload auth_dbname=postgres pool_size=15
     kuraweigh = host=postgresql.infra.svc.cluster.local port=5432 dbname=kuraweigh auth_dbname=postgres pool_size=15
     ordering = host=postgresql.infra.svc.cluster.local port=5432 dbname=ordering auth_dbname=postgres pool_size=20
     bengo_erp = host=postgresql.infra.svc.cluster.local port=5432 dbname=bengo_erp auth_dbname=postgres pool_size=25
@@ -61,6 +64,10 @@ data:
     default_pool_size = 15
     reserve_pool_size = 15
     reserve_pool_timeout = 2
+    # Hard per-database backstop: no single db can open more than this many server
+    # connections regardless of pool_size, so a runaway service can't exhaust
+    # PostgreSQL's max_connections and starve other tenants.
+    max_db_connections = 30
     server_idle_timeout = 300
     server_lifetime = 1800
     max_prepared_statements = 100

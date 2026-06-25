@@ -66,13 +66,13 @@ data:
     # Basic PostgreSQL configuration
     listen_addresses = '*'
     port = 5432
-    max_connections = 200
+    max_connections = 300
     
     # Include additional configuration files (exclude postgresql.conf to avoid recursion)
     include '/etc/postgresql/conf.d/override.conf'
   override.conf: |
     # PostgreSQL Performance Tuning
-    max_connections = 200
+    max_connections = 300
     shared_buffers = 3GB  # 25% of 12Gi limit
     effective_cache_size = 9GB  # 75% of 12Gi limit
     work_mem = 32MB
