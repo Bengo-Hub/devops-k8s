@@ -13,7 +13,7 @@ image:
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 1
+replicaCount: 2
 autoscaling:
   enabled: false
   minReplicas: 1

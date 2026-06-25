@@ -1,6 +1,6 @@
 nameOverride: auth-ui
 fullnameOverride: auth-ui
-replicaCount: 1
+replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/auth-ui

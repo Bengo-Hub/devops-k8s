@@ -1,6 +1,6 @@
 nameOverride: cafe-website
 fullnameOverride: cafe-website
-replicaCount: 1
+replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/cafe-website
