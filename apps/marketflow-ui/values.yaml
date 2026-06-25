@@ -106,4 +106,5 @@ securityContext:
   fsGroup: 1001
   runAsNonRoot: true
 pdb:
-  enabled: false
+  enabled: true
+  minAvailable: 1

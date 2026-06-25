@@ -127,3 +127,7 @@ ingress:
     - hosts:
         - iot.codevertexitsolutions.com
       secretName: iot-api-tls
+
+pdb:
+  enabled: true
+  minAvailable: 1

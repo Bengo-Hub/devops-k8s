@@ -250,4 +250,5 @@ securityContext:
 # POD DISRUPTION BUDGET
 # ============================================================================
 pdb:
-  enabled: false
+  enabled: true
+  minAvailable: 1

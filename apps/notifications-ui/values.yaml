@@ -104,3 +104,7 @@ ingress:
     - secretName: notifications-ui-tls
       hosts:
         - notifications.codevertexitsolutions.com
+
+pdb:
+  enabled: true
+  minAvailable: 1

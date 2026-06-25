@@ -153,3 +153,7 @@ ingress:
         - projectsapi.codevertexitsolutions.com
       secretName: projects-api-tls
 
+
+pdb:
+  enabled: true
+  minAvailable: 1

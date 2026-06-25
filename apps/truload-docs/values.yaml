@@ -43,3 +43,7 @@ resources:
     memory: 512Mi
 
 replicaCount: 2
+
+pdb:
+  enabled: true
+  minAvailable: 1
