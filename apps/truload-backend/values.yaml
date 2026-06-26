@@ -41,15 +41,20 @@ healthCheck:
 # CPU without throttling. 2 CPU limit gives headroom for concurrent weighing sessions.
 resources:
   requests:
-    # Right-sized to ~actual usage (the .NET API runs ~70-80m with migrations/serving). 50m was
-    # too low → HPA saw >150% utilisation and maxed to 4 replicas; 150m keeps utilisation ~50%
-    # so it stays at the 2-replica baseline. Limit 2000m still bursts for weighing workloads.
+    # CPU right-sized to ~actual usage (~70-80m); 150m keeps CPU utilisation ~50% at the
+    # 2-replica baseline. Limit 2000m bursts for weighing workloads.
     cpu: 150m
-    memory: 512Mi
+    # Memory raised 512Mi→1Gi: the .NET runtime holds a sticky ~350Mi/pod working set, so at
+    # 512Mi the memory HPA saw ~68% across 4 pods and could never consolidate to 2 (doing so
+    # pushed util >100%), pinning truload-backend at 4 replicas even during low traffic. With a
+    # 1Gi request the 2-replica baseline sits well under the 75% target, so the service idles at
+    # min 2 during low traffic and scales to 4 only under real load. Baseline reservation is
+    # unchanged (2×1Gi == the old 4×512Mi), freeing two pod slots + headroom at idle.
+    memory: 1Gi
   limits:
     cpu: 2000m
     memory: 2Gi
-# Horizontal autoscaling — min 2 always warm (HA), max 4
+# Horizontal autoscaling — min 2 always warm (HA), max 4; idles at 2 during low traffic.
 autoscaling:
   enabled: true
   minReplicas: 2
