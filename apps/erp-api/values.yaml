@@ -164,9 +164,12 @@ env:
     value: "https://sso.codevertexitsolutions.com"
   - name: AUTH_AUDIENCE
     value: "codevertex"
-  # ── S2S owner-service URLs (cluster-local). INTERNAL_SERVICE_KEY from erp-api-env. ──
+  # ── S2S owner-service URLs. INTERNAL_SERVICE_KEY from erp-api-env. ──
+  # Treasury via the public ingress (matches notifications-api/pos-api/ordering/
+  # subscriptions). The direct ClusterIP bypasses the ingress + KEDA
+  # http-interceptor and fails when treasury-api is scaled-to-zero / mid-restart.
   - name: TREASURY_SERVICE_URL
-    value: "http://treasury-api.treasury.svc.cluster.local:4000"
+    value: "https://booksapi.codevertexitsolutions.com"
   - name: NOTIFICATIONS_SERVICE_URL
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
   - name: HTTP_ALLOWED_ORIGINS
