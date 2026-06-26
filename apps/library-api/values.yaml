@@ -1,0 +1,157 @@
+nameOverride: library-api
+fullnameOverride: library-api
+replicaCount: 2 # HA: min 2 replicas + PDB to avoid rollout/drain 503s
+image:
+  repository: docker.io/codevertex/library-api
+  tag: "latest"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+service:
+  type: ClusterIP
+  port: 4010
+  targetPort: 4010
+# Migrations + seed are handled by entrypoint.sh (library-migrate / library-seed on startup)
+migrations:
+  enabled: false
+seed:
+  enabled: false
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0 # zero-downtime; HA replicas keep serving during rollout
+# The image ships a non-root "app" user (uid 100 / gid 101). Pin the media PVC
+# group ownership so uploaded covers/e-books stay readable/writable across restarts.
+securityContext:
+  runAsUser: 100
+  runAsGroup: 101
+  fsGroup: 101
+env:
+  - name: APP_ENV
+    value: production
+  - name: HTTP_PORT
+    value: "4010"
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: library-api-secrets
+        key: POSTGRES_URL
+  - name: POSTGRES_MIGRATE_URL
+    valueFrom:
+      secretKeyRef:
+        name: library-api-secrets
+        key: POSTGRES_MIGRATE_URL
+        optional: true
+  - name: POSTGRES_MAX_OPEN_CONNS
+    value: "8"
+  - name: POSTGRES_MAX_IDLE_CONNS
+    value: "4"
+  - name: POSTGRES_CONN_MAX_LIFETIME
+    value: "15m"
+  - name: REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: library-api-secrets
+        key: REDIS_PASSWORD
+        optional: true
+  - name: EVENTS_NATS_URL
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+  - name: MEDIA_ROOT
+    value: "/data/media"
+  - name: EBOOK_ROOT
+    value: "/data/media/ebooks"
+  - name: MEDIA_URL_BASE
+    value: "https://libraryapi.codevertexitsolutions.com"
+  - name: AUTH_SERVICE_URL
+    value: "https://sso.codevertexitsolutions.com"
+  - name: TREASURY_SERVICE_URL
+    value: "https://booksapi.codevertexitsolutions.com"
+  - name: NOTIFICATIONS_SERVICE_URL
+    value: "https://notificationsapi.codevertexitsolutions.com"
+  - name: SUBSCRIPTIONS_SERVICE_URL
+    value: "https://pricingapi.codevertexitsolutions.com"
+  - name: OTLP_ENDPOINT
+    value: http://otel-collector.infra.svc.cluster.local:4317
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: library-api-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
+  - name: HTTP_ALLOWED_ORIGINS
+    value: "https://library.codevertexitsolutions.com,https://libraryapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+serviceMonitor:
+  enabled: true
+  namespace: infra
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+persistence:
+  enabled: true
+  size: 10Gi # covers + e-book files
+  mountPath: /data/media
+  accessMode: ReadWriteOnce
+  storageClass: local-path
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://library.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "300"
+  hosts:
+    - host: libraryapi.codevertexitsolutions.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - libraryapi.codevertexitsolutions.com
+      secretName: libraryapi-tls
+pdb:
+  enabled: true
+  minAvailable: 1
