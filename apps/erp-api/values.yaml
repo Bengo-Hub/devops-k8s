@@ -4,7 +4,7 @@ replicaCount: 1
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/erp-api
-  tag: "df1f8ae2"
+  tag: "43575ad1"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
