@@ -39,8 +39,10 @@ strategy:
 # Runtime env (NEXT_PUBLIC_* are baked at build via Dockerfile ARGs; these are
 # kept for any server-side reads and parity with the build args).
 env:
+  # Platform backend only (NOT a tenant host). The browser derives per-tenant from the
+  # UI host (erp.<domain> → erpapi.<domain>); this value is the SSR/fallback default.
   - name: NEXT_PUBLIC_API_URL
-    value: https://erpapi.masterspace.co.ke
+    value: https://erpapi.codevertexitsolutions.com
   - name: NEXT_PUBLIC_SSO_URL
     value: https://sso.codevertexitsolutions.com
   - name: NEXT_PUBLIC_AUTH_API_URL
