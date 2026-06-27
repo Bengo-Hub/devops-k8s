@@ -6,7 +6,7 @@ fullnameOverride: ordering-frontend
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-frontend
-  tag: "39a27ee1"
+  tag: "ae8ac927"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -152,7 +152,6 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-
 pdb:
   enabled: true
   minAvailable: 1
