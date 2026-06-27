@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/logistics-ui
-  tag: "b7fba568"
+  tag: "a4b05ac8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -89,7 +89,6 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-
 pdb:
   enabled: true
   minAvailable: 1
