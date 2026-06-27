@@ -40,7 +40,7 @@ spec:
           command: ["celery"]
           args:
             - "-A"
-            - "{{ .Values.celeryBeat.app | default "ProcureProKEAPI" }}"
+            - "{{ .Values.celeryBeat.app | required "celeryBeat.app is required when celeryBeat is enabled" }}"
             - "beat"
             - "--loglevel={{ .Values.celeryBeat.logLevel | default "info" }}"
             {{- if .Values.celeryBeat.scheduler }}
