@@ -57,6 +57,10 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.celeryBeat.resources | nindent 12 }}
+          {{- if and .Values.celeryBeat.readinessProbe .Values.celeryBeat.readinessProbe.enabled }}
+          # celery beat is a singleton scheduler with NO Service/traffic, so a readiness
+          # probe is unnecessary; opt-in only. (The old default used `ps aux`, which fails
+          # on slim images lacking procps -> pod stuck 0/1 even though beat runs fine.)
           readinessProbe:
             exec:
               command:
@@ -65,6 +69,7 @@ spec:
                 - "ps aux | grep 'celery' | grep 'beat' | grep -v 'grep'"
             initialDelaySeconds: 15
             periodSeconds: 30
+          {{- end }}
           {{- if and .Values.celeryBeat.persistence .Values.celeryBeat.persistence.enabled }}
           volumeMounts:
             - name: celerybeat-schedule
