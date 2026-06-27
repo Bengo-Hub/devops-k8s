@@ -43,7 +43,9 @@ spec:
             - "{{ .Values.celeryBeat.app | default "ProcureProKEAPI" }}"
             - "beat"
             - "--loglevel={{ .Values.celeryBeat.logLevel | default "info" }}"
-            - "--scheduler={{ .Values.celeryBeat.scheduler | default "django_celery_beat.schedulers:DatabaseScheduler" }}"
+            {{- if .Values.celeryBeat.scheduler }}
+            - "--scheduler={{ .Values.celeryBeat.scheduler }}"
+            {{- end }}
           {{- if .Values.envFromSecret }}
           envFrom:
             - secretRef:

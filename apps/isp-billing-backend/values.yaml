@@ -99,7 +99,14 @@ seed:
 celeryWorker:
   enabled: true
   replicaCount: 1
-  command: ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+  # NOTE: the shared charts/app celery templates do NOT read a `command:` array.
+  # They hardcode `command: ["celery"]` and assemble args from the values below
+  # (.app / .logLevel / .concurrency). isp-billing-backend is a FastAPI app whose
+  # Celery module is app/core/celery.py exposing `celery_app`; the importable
+  # target is `app.core.celery` (celery auto-detects the celery_app attribute).
+  app: app.core.celery
+  logLevel: info
+  concurrency: 2
   resources:
     requests:
       cpu: 50m
@@ -123,7 +130,15 @@ celeryBeat:
   enabled: true
   persistence:
     enabled: false
-  command: ["celery", "-A", "app.core.celery_app", "beat", "--loglevel=info"]
+  # FastAPI app — use the importable celery module (app/core/celery.py → celery_app).
+  app: app.core.celery
+  logLevel: info
+  # IMPORTANT: do NOT set `scheduler`. This service is FastAPI and has no
+  # django_celery_beat installed. Leaving scheduler unset makes the shared chart
+  # omit the --scheduler flag so celery beat uses its default PersistentScheduler
+  # (driven by celery_app.conf.beat_schedule). Setting a Django scheduler here
+  # would crash the beat pod with ModuleNotFoundError: django_celery_beat.
+  scheduler: ""
   resources:
     requests:
       cpu: 50m
