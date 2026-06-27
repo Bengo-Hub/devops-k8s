@@ -40,7 +40,7 @@ spec:
           command: ["celery"]
           args:
             - "-A"
-            - "{{ .Values.celeryWorker.app | default "ProcureProKEAPI" }}"
+            - "{{ .Values.celeryWorker.app | required "celeryWorker.app is required when celeryWorker is enabled" }}"
             - "worker"
             - "--loglevel={{ .Values.celeryWorker.logLevel | default "info" }}"
             - "--concurrency={{ .Values.celeryWorker.concurrency | default "4" }}"
@@ -62,7 +62,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - celery -A {{ .Values.celeryWorker.app | default "ProcureProKEAPI" }} inspect ping -d celery@$HOSTNAME --timeout={{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 30 }}
+                - celery -A {{ .Values.celeryWorker.app | required "celeryWorker.app is required when celeryWorker is enabled" }} inspect ping -d celery@$HOSTNAME --timeout={{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 30 }}
             initialDelaySeconds: {{ .Values.celeryWorker.livenessProbe.initialDelaySeconds | default 60 }}
             periodSeconds: {{ .Values.celeryWorker.livenessProbe.periodSeconds | default 60 }}
             timeoutSeconds: {{ .Values.celeryWorker.livenessProbe.timeoutSeconds | default 30 }}
@@ -74,7 +74,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - celery -A {{ .Values.celeryWorker.app | default "ProcureProKEAPI" }} inspect ping -d celery@$HOSTNAME --timeout={{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 30 }}
+                - celery -A {{ .Values.celeryWorker.app | required "celeryWorker.app is required when celeryWorker is enabled" }} inspect ping -d celery@$HOSTNAME --timeout={{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 30 }}
             initialDelaySeconds: {{ .Values.celeryWorker.readinessProbe.initialDelaySeconds | default 60 }}
             periodSeconds: {{ .Values.celeryWorker.readinessProbe.periodSeconds | default 30 }}
             timeoutSeconds: {{ .Values.celeryWorker.readinessProbe.timeoutSeconds | default 30 }}

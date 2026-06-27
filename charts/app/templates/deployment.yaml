@@ -144,7 +144,7 @@ spec:
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
               if python -c "
             import os
-            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ProcureProKEAPI.settings')
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', '{{ .Values.djangoSettingsModule | default "" }}')
             import django
             django.setup()
             from django.db import connection
@@ -164,7 +164,7 @@ spec:
               echo "📋 Connection error details:"
               python -c "
             import os
-            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ProcureProKEAPI.settings')
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', '{{ .Values.djangoSettingsModule | default "" }}')
             import django
             django.setup()
             from django.db import connection
