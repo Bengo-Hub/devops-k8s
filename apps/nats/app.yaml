@@ -49,6 +49,12 @@ spec:
         
         # Resource limits and healthcheck override
         container:
+            # Pin nats-server to the latest 2.10.x patch (chart 1.2.4 default is 2.10.20).
+            # 2.10.20 has a cross-node JetStream publish/ack routing bug: a client connected
+            # to one node could not get PubAcks publishing to a stream led by another node
+            # ("nats: no response from stream"). 2.10.21..29 carry JS clustering/route fixes.
+            image:
+              tag: "2.10.29-alpine"
             resources:
               requests:
                 cpu: 100m
