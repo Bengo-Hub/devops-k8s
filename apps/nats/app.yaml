@@ -16,6 +16,16 @@ spec:
     helm:
       values: |
         config:
+          # Disable NATS 2.10 route pooling (default pool_size=3). On this 2-node
+          # JetStream cluster, pooled routes broke CROSS-NODE JS PubAck routing:
+          # publishes from a client pinned to nats-1 to a stream led by nats-0 returned
+          # "nats: no response from stream" (core pubs + raft worked; only JS-API
+          # request/reply failed). pool_size:-1 forces a single route connection per peer
+          # (pre-2.10 behaviour), restoring JS-API reply routing. Deep-merged into the
+          # generated cluster{} block via config.merge.
+          merge:
+            cluster:
+              pool_size: -1
           cluster:
             enabled: true
             replicas: 2
