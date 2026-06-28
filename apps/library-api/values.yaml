@@ -95,6 +95,12 @@ env:
         name: library-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
+  - name: TERMINAL_JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: library-api-secrets
+        key: TERMINAL_JWT_SECRET
+        optional: true
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://library.codevertexitsolutions.com,https://libraryapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
 resources:
