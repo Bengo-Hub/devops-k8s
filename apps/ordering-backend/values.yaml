@@ -85,8 +85,12 @@ env:
         key: REDIS_PASSWORD
         optional: true
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL loaded via Process("", &cfg.Events))
+  # Internal service only: the external endpoint (nats.codevertexitsolutions.com) in the
+  # server pool skewed the Go client's cluster view, breaking cross-node JS publish-acks
+  # (ordering-backend on nats-1 -> ordering stream led by nats-0 returned "no response from
+  # stream"). In-cluster service DNS alone keeps the client's server pool to the real cluster.
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222"
   - name: NATS_STREAM
     value: ordering
   # Media upload configuration
