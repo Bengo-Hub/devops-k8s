@@ -84,13 +84,15 @@ env:
         name: ordering-backend-secrets
         key: REDIS_PASSWORD
         optional: true
-  # NATS - standard key EVENTS_NATS_URL (Events.NATSURL loaded via Process("", &cfg.Events))
-  # Internal service only: the external endpoint (nats.codevertexitsolutions.com) in the
-  # server pool skewed the Go client's cluster view, breaking cross-node JS publish-acks
-  # (ordering-backend on nats-1 -> ordering stream led by nats-0 returned "no response from
-  # stream"). In-cluster service DNS alone keeps the client's server pool to the real cluster.
+  # NATS - standard key EVENTS_NATS_URL (Events.NATSURL loaded via Process("", &cfg.Events)).
+  # Use the HEADLESS service (pod-direct DNS, all pod IPs) NOT the ClusterIP `nats` service.
+  # Root cause (proven by a local 3-node reproducer on identical versions/config where
+  # cross-node publish works fine): the ClusterIP service's kube-proxy DNAT/SNAT path breaks
+  # the JetStream PubAck reply routing, so a client publishing to a stream led by another node
+  # got "nats: no response from stream". Connecting to nats-headless gives a real pod
+  # connection (how a direct `nats` CLI publish succeeded in prod), fixing it.
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222"
+    value: "nats://nats-headless.messaging.svc.cluster.local:4222"
   - name: NATS_STREAM
     value: ordering
   # Media upload configuration
