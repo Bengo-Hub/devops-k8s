@@ -85,7 +85,7 @@ spec:
                   OUTBOX_SQL_PUBLISHED="WITH deleted AS (DELETE FROM outbox_events WHERE UPPER(status) = 'PUBLISHED' AND published_at < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
                   OUTBOX_SQL_FAILED="WITH deleted AS (DELETE FROM outbox_events WHERE UPPER(status) = 'FAILED' AND COALESCE(last_attempt_at, created_at) < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
 
-                  for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects iot marketflow ticketing; do
+                  for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects marketflow ticketing; do
                     # Check if outbox_events table exists before running
                     HAS_TABLE=$(psql $CONN_OPTS -d "$DB" -At -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'outbox_events'" 2>/dev/null)
                     if [ "$HAS_TABLE" = "1" ]; then
@@ -102,18 +102,6 @@ spec:
                     "WITH deleted AS (DELETE FROM telemetry_points WHERE created_at < NOW() - INTERVAL '90 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
 
                   # ─────────────────────────────────────────────────────────
-                  # IOT TELEMETRY CLEANUP
-                  # Device data, heartbeats, and command history
-                  # ─────────────────────────────────────────────────────────
-                  for TABLE in telemetry_data device_heartbeats command_history; do
-                    HAS_TABLE=$(psql $CONN_OPTS -d "iot" -At -c "SELECT 1 FROM information_schema.tables WHERE table_name = '$TABLE'" 2>/dev/null)
-                    if [ "$HAS_TABLE" = "1" ]; then
-                      run_sql "iot" "$TABLE >90d" \
-                        "WITH deleted AS (DELETE FROM $TABLE WHERE created_at < NOW() - INTERVAL '90 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
-                    fi
-                  done
-
-                  # ─────────────────────────────────────────────────────────
                   # MARKETFLOW DATA CLEANUP
                   # Chat sessions and audit logs grow unboundedly
                   # ─────────────────────────────────────────────────────────
@@ -125,7 +113,7 @@ spec:
                   # 1-month retention policy: audit logs are dropped after 30 days.
                   # ─────────────────────────────────────────────────────────
                   AUDIT_SQL="WITH deleted AS (DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '30 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
-                  for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects iot marketflow ticketing; do
+                  for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects marketflow ticketing; do
                     HAS_TABLE=$(psql $CONN_OPTS -d "$DB" -At -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_logs'" 2>/dev/null)
                     if [ "$HAS_TABLE" = "1" ]; then
                       run_sql "$DB" "audit_logs >30d" "$AUDIT_SQL"

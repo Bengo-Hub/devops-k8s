@@ -88,7 +88,6 @@ spec:
                   apply_retention "notifications"   "notifications.>"         "${MAX_AGE}" "${MAX_BYTES}"
                   apply_retention "subscription"    "subscription.>"          "${MAX_AGE}" "${MAX_BYTES}"
                   apply_retention "projects"        "projects.>"              "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "iot"             "iot.>"                   "${MAX_AGE}" "${MAX_BYTES}"
                   apply_retention "ticketing"       "ticketing.>"             "${MAX_AGE}" "${MAX_BYTES}"
                   apply_retention "marketflow"      "marketflow.>"            "${MAX_AGE}" "${MAX_BYTES}"
 
@@ -98,7 +97,6 @@ spec:
                   apply_retention "inventory-dlq"   "inventory.dlq.>"         "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
                   apply_retention "pos-dlq"         "pos.dlq.>"               "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
                   apply_retention "projects-dlq"    "projects.dlq.>"          "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
-                  apply_retention "iot-dlq"         "iot.dlq.>"               "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
 
                   echo ""
                   echo "=== Stream Status After Update ==="
