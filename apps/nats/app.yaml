@@ -28,11 +28,7 @@ spec:
               pool_size: -1
           cluster:
             enabled: true
-            # 3 nodes for a QUORATE JetStream meta cluster + R3 streams (every node holds a
-            # replica, raft group spans all nodes) -> fixes the cross-node JS publish fault
-            # of the 2-node R1-split topology. NOTE: prod is a single k8s node, so this is
-            # logical/process quorum + correct routing, NOT physical-node HA.
-            replicas: 3
+            replicas: 2
           jetstream:
             enabled: true
             fileStore:
