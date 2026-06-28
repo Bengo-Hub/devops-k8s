@@ -3,7 +3,7 @@ fullnameOverride: library-api
 replicaCount: 2 # HA: min 2 replicas + PDB to avoid rollout/drain 503s
 image:
   repository: docker.io/codevertex/library-api
-  tag: "90b93895"
+  tag: "33c13fb8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
