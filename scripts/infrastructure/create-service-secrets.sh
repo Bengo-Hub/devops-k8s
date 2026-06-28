@@ -290,6 +290,24 @@ if [[ -n "${APP_ENC_KEY_VAR}" ]]; then
     fi
 fi
 
+# TERMINAL_JWT_SECRET — library-api desk/kiosk PIN (terminal) JWT HMAC secret. These tokens are
+# signed AND verified by library-api itself (not shared across services), so generate-or-preserve
+# a per-service value. Read-existing-first so it never rotates (would invalidate live PIN sessions).
+APP_TERMINAL_JWT_SECRET=""
+if [[ "${SERVICE_NAME}" == "library-api" ]]; then
+    EXISTING_TJS=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.TERMINAL_JWT_SECRET}" 2>/dev/null | base64 -d || echo "")
+    if [[ -n "${TERMINAL_JWT_SECRET:-}" ]]; then
+        APP_TERMINAL_JWT_SECRET="$TERMINAL_JWT_SECRET"
+        log_info "Using provided TERMINAL_JWT_SECRET from environment"
+    elif [[ -n "${EXISTING_TJS:-}" ]]; then
+        log_info "Retrieved existing TERMINAL_JWT_SECRET from cluster (preserved)"
+        APP_TERMINAL_JWT_SECRET="$EXISTING_TJS"
+    else
+        APP_TERMINAL_JWT_SECRET=$(openssl rand -base64 48)
+        log_info "Generated new TERMINAL_JWT_SECRET for library-api"
+    fi
+fi
+
 # Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
 # CRITICAL: Redis now uses POSTGRES_PASSWORD (master password) for consistency
 REDIS_PASSWORD=""
@@ -359,6 +377,10 @@ fi
 if [[ -n "${APP_ENC_KEY_VAR}" && -n "${APP_ENC_KEY_VALUE}" ]]; then
     secret_literals+=("--from-literal=${APP_ENC_KEY_VAR}=${APP_ENC_KEY_VALUE}")
 fi
+# library-api: include the stable terminal/PIN JWT secret.
+if [[ -n "${APP_TERMINAL_JWT_SECRET}" ]]; then
+    secret_literals+=("--from-literal=TERMINAL_JWT_SECRET=${APP_TERMINAL_JWT_SECRET}")
+fi
 
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Secret exists — patch to merge standardized keys without losing existing keys
@@ -380,6 +402,9 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     fi
     if [[ -n "${APP_ENC_KEY_VAR}" && -n "${APP_ENC_KEY_VALUE}" ]]; then
         PATCH_JSON+=",\"${APP_ENC_KEY_VAR}\":\"$(echo -n "${APP_ENC_KEY_VALUE}" | base64 -w0)\""
+    fi
+    if [[ -n "${APP_TERMINAL_JWT_SECRET}" ]]; then
+        PATCH_JSON+=",\"TERMINAL_JWT_SECRET\":\"$(echo -n "${APP_TERMINAL_JWT_SECRET}" | base64 -w0)\""
     fi
     PATCH_JSON+='}}'
 
