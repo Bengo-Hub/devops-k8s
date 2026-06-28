@@ -28,7 +28,10 @@ spec:
               pool_size: -1
           cluster:
             enabled: true
-            replicas: 2
+            # 3 = NATS-recommended minimum for JetStream clustering (RAFT needs an odd
+            # quorum; docs recommend 3 or 5). A 2-node JS cluster is unsupported (zero fault
+            # tolerance, broken cross-node $JS.API/publish-ack routing). Streams run R3.
+            replicas: 3
           jetstream:
             enabled: true
             fileStore:
