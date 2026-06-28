@@ -38,7 +38,6 @@ data:
     projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=8
     ticketing = host=postgresql.infra.svc.cluster.local port=5432 dbname=ticketing auth_dbname=postgres pool_size=8
     codevertex = host=postgresql.infra.svc.cluster.local port=5432 dbname=codevertex auth_dbname=postgres pool_size=8
-    iot = host=postgresql.infra.svc.cluster.local port=5432 dbname=iot auth_dbname=postgres pool_size=8
     superset = host=postgresql.infra.svc.cluster.local port=5432 dbname=superset auth_dbname=postgres pool_size=10
     * = host=postgresql.infra.svc.cluster.local port=5432 auth_dbname=postgres
 

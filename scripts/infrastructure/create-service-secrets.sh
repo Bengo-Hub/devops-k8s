@@ -30,7 +30,7 @@ if [[ -z "$SERVICE_NAME" ]]; then
     echo ""
     echo "Supported services:"
     echo "  - auth, ordering, treasury, inventory, logistics, erp"
-    echo "  - subscriptions, projects, notifications, iot"
+    echo "  - subscriptions, projects, notifications"
     echo "  - truload, isp-billing, ticketing, cafe, pos"
     exit 1
 fi
