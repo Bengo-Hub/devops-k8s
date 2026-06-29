@@ -308,6 +308,24 @@ if [[ "${SERVICE_NAME}" == "library-api" ]]; then
     fi
 fi
 
+# INTERNAL_SERVICE_KEY — the SHARED platform service-to-service key (all services use the SAME
+# value; treasury/auth/subscriptions validate it). library-api needs it to call treasury for
+# membership-fee / fine / e-book payment intents. NEVER generate a fresh one here (a new value
+# would not match the platform key) — preserve the existing cluster value, or accept it from env.
+APP_INTERNAL_SERVICE_KEY=""
+if [[ "${SERVICE_NAME}" == "library-api" ]]; then
+    EXISTING_ISK=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.INTERNAL_SERVICE_KEY}" 2>/dev/null | base64 -d || echo "")
+    if [[ -n "${INTERNAL_SERVICE_KEY:-}" ]]; then
+        APP_INTERNAL_SERVICE_KEY="$INTERNAL_SERVICE_KEY"
+        log_info "Using provided INTERNAL_SERVICE_KEY from environment"
+    elif [[ -n "${EXISTING_ISK:-}" ]]; then
+        APP_INTERNAL_SERVICE_KEY="$EXISTING_ISK"
+        log_info "Retrieved existing INTERNAL_SERVICE_KEY from cluster (preserved)"
+    else
+        log_warning "INTERNAL_SERVICE_KEY not set for library-api — treasury S2S payments will fail until provisioned (copy from treasury-api-secrets)"
+    fi
+fi
+
 # Redis password - Priority: POSTGRES_PASSWORD env > REDIS_PASSWORD env > redis secret
 # CRITICAL: Redis now uses POSTGRES_PASSWORD (master password) for consistency
 REDIS_PASSWORD=""
@@ -381,6 +399,10 @@ fi
 if [[ -n "${APP_TERMINAL_JWT_SECRET}" ]]; then
     secret_literals+=("--from-literal=TERMINAL_JWT_SECRET=${APP_TERMINAL_JWT_SECRET}")
 fi
+# library-api: include the shared S2S key (for treasury payment intents).
+if [[ -n "${APP_INTERNAL_SERVICE_KEY}" ]]; then
+    secret_literals+=("--from-literal=INTERNAL_SERVICE_KEY=${APP_INTERNAL_SERVICE_KEY}")
+fi
 
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Secret exists — patch to merge standardized keys without losing existing keys
@@ -405,6 +427,9 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     fi
     if [[ -n "${APP_TERMINAL_JWT_SECRET}" ]]; then
         PATCH_JSON+=",\"TERMINAL_JWT_SECRET\":\"$(echo -n "${APP_TERMINAL_JWT_SECRET}" | base64 -w0)\""
+    fi
+    if [[ -n "${APP_INTERNAL_SERVICE_KEY}" ]]; then
+        PATCH_JSON+=",\"INTERNAL_SERVICE_KEY\":\"$(echo -n "${APP_INTERNAL_SERVICE_KEY}" | base64 -w0)\""
     fi
     PATCH_JSON+='}}'
 
