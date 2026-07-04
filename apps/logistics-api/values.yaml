@@ -97,6 +97,15 @@ env:
     value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
   - name: AUTH_AUDIENCE
     value: "codevertex"
+  # Shared S2S key — required for the /api/v1/s2s/dispatch routes (pos-api creates + assigns
+  # delivery tasks for POS-native orders). Without it cfg.Treasury.InternalServiceKey is empty and
+  # those routes are not registered (→ 404 → pos-api assign-rider 502).
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: logistics-api-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
 resources:
   requests:
     cpu: 50m
