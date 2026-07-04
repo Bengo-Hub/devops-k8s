@@ -6,7 +6,7 @@ fullnameOverride: rider-app
 # ============================================================================
 image:
   repository: docker.io/codevertex/rider-app
-  tag: "818493c4"
+  tag: "099dd2e8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -128,7 +128,6 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
-
 pdb:
   enabled: true
   minAvailable: 1
