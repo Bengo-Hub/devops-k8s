@@ -113,8 +113,12 @@ resources:
     cpu: 50m
     memory: 256Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    # Raised 500m->750m / 512Mi->768Mi: pos-api is transaction-heavy and the new
+    # register-details report loads a date-range of orders+lines+payments into memory,
+    # which can spike a single request. 768Mi avoids OOMKill on large reports. Limits
+    # are burst ceilings (not reserved), so node request-allocation is unchanged.
+    cpu: 750m
+    memory: 768Mi
 # Safe at >=2 replicas as of pos-api#64: core NATS subscribers are queue-grouped
 # (one pod per event); JetStream push-durables are active-passive (idempotent
 # handlers + non-fatal bind). Min 2 for HA.

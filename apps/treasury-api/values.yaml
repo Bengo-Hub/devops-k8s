@@ -156,12 +156,16 @@ resources:
     cpu: 50m
     memory: 256Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    # Raised for the money-flow hub (treasury handles every payment/refund/ledger post):
+    # 750m CPU burst + 768Mi headroom. Limits are not reserved — burst ceiling only.
+    cpu: 750m
+    memory: 768Mi
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 2
+  # Raised 2->4: treasury is the most transaction-heavy service; allow scale-out under
+  # load (node has ample request headroom; each pod requests only 50m/256Mi).
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 monitoring:
