@@ -111,12 +111,17 @@ resources:
     cpu: 50m
     memory: 256Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    # Raised for the transaction-heavy inventory API: 750m CPU burst + 768Mi headroom
+    # (bulk stock ops, catalog sync, brands-by-sku lookups). Limits are not reserved, so
+    # this only affects burst ceilings — node request-allocation is unchanged.
+    cpu: 750m
+    memory: 768Mi
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 2
+  # Raised 2->4: allow scale-out under transaction load (node has ~2.7 core / ~12Gi
+  # request headroom; each pod requests only 50m/256Mi). Matches pos-api.
+  maxReplicas: 4
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
 monitoring:
