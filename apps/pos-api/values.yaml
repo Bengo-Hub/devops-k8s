@@ -40,6 +40,15 @@ strategy:
   rollingUpdate:
     maxSurge: 0 # terminate old pod (release NATS push-durable bindings) before new subscribes
     maxUnavailable: 1
+# Pod security context: the pos-api image ships the alpine non-root user "app"
+# (uid 100 / gid 101), same as inventory-api. fsGroup makes the media PVC
+# group-owned by 101 and group-writable so uploaded screensaver files stay
+# readable/writable across pod restarts (see inventory-api values for the
+# init-container uid gotcha this mirrors).
+securityContext:
+  runAsUser: 100
+  runAsGroup: 101
+  fsGroup: 101
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
@@ -78,6 +87,10 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
+  # Managed screensaver media (Settings → Display): uploads stored per-tenant on the
+  # media PVC, served publicly at /media/* (relative URLs stored in outlet settings).
+  - name: MEDIA_ROOT
+    value: "/data/media"
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://pos.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://theurbanloftcafe.com,https://books.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
   # Shared S2S key — validates inbound requests from other services (X-API-Key header)
@@ -141,6 +154,15 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+# Media PVC for managed screensavers (≤3 files × 8MB per tenant — 2Gi is ample).
+# local-path PVCs are NOT resizable (see provision-workflow-backup-pvc memory), so the
+# size is deliberately generous up front.
+persistence:
+  enabled: true
+  size: 2Gi
+  mountPath: /data/media
+  accessMode: ReadWriteOnce
+  storageClass: local-path
 ingress:
   enabled: true
   ingressClassName: nginx
