@@ -1,10 +1,10 @@
 # Auth API Deployment
 
-SSO and Authentication service for BengoBox platform.
+SSO and Authentication service for Codevertex platform.
 
 ## Overview
 
-The Auth Service provides centralized authentication, authorization, and single sign-on (SSO) capabilities for all BengoBox services.
+The Auth Service provides centralized authentication, authorization, and single sign-on (SSO) capabilities for all Codevertex services.
 
 ## Prerequisites
 

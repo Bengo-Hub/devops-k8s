@@ -42,7 +42,7 @@ update_helm_values "ordering-backend" "fb45a308" "docker.io/codevertex/ordering-
 | DEVOPS_REPO | Bengo-Hub/devops-k8s | Target repository |
 | DEVOPS_DIR | $HOME/devops-k8s | Local directory |
 | GIT_EMAIL | dev@bengobox.com | Commit email |
-| GIT_USER | BengoBox Bot | Commit author |
+| GIT_USER | Codevertex Bot | Commit author |
 
 ---
 
