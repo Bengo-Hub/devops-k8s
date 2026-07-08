@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the simplified, production-ready secret management approach for BengoBox microservices. Secrets are centrally managed in devops repositories and synced to service repositories via GitHub Actions workflows.
+This document describes the simplified, production-ready secret management approach for Codevertex microservices. Secrets are centrally managed in devops repositories and synced to service repositories via GitHub Actions workflows.
 
 ## Architecture
 
