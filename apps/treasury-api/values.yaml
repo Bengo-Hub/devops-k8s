@@ -118,21 +118,29 @@ env:
         key: INTERNAL_SERVICE_KEY
         optional: true
   # -----------------------------------------------------------------------
-  # KRA eTIMS OSCU (Online Sales Control Unit) — fiscal device integration
+  # KRA eTIMS OSCU Integrator (GavaConnect/Apigee) — fiscal device integration
+  # Auth = OAuth2 Bearer from the OSCU GavaConnect app (OSCU_CONSUMER_KEY/SECRET below).
+  # Per-device CMC key comes from /initialize and is stored on the etims_devices row.
   # -----------------------------------------------------------------------
   - name: KRA_ETIMS_BASE_URL
-    value: "https://etims-api.kra.go.ke/etims-api"
-  - name: KRA_ETIMS_API_KEY
+    value: "https://api.kra.go.ke/etims-oscu/api/v1"
+  - name: KRA_ETIMS_APIGEE_APP_ID
     valueFrom:
       secretKeyRef:
         name: treasury-api-secrets
-        key: KRA_ETIMS_API_KEY
+        key: KRA_ETIMS_APIGEE_APP_ID
         optional: true
-  - name: KRA_ETIMS_DEVICE_SERIAL
+  - name: OSCU_CONSUMER_KEY
     valueFrom:
       secretKeyRef:
         name: treasury-api-secrets
-        key: KRA_ETIMS_DEVICE_SERIAL
+        key: OSCU_CONSUMER_KEY
+        optional: true
+  - name: OSCU_CONSUMER_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: treasury-api-secrets
+        key: OSCU_CONSUMER_SECRET
         optional: true
   # -----------------------------------------------------------------------
   # KRA GavaConnect API (developer.go.ke) — platform-level OAuth2 credentials
