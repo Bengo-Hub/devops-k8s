@@ -184,12 +184,14 @@ spec:
                 - -c
                 - |
                   set -e
+                  CRICTL="/host-crictl --timeout=60s"
+                  disk_line() { df -h /host-root | tail -1 | awk '{print "  used="$3" avail="$4" use%="$5}'; }
                   echo "=== Image prune ($(date -u)) ==="
-                  echo "Disk before:"; df -h /host-root
-                  echo "Images before:"; /host-crictl images | tail -n +2 | wc -l
-                  /host-crictl rmi --prune
-                  echo "Images after:"; /host-crictl images | tail -n +2 | wc -l
-                  echo "Disk after:"; df -h /host-root
+                  echo "Disk before:"; disk_line
+                  echo "Images before:"; $CRICTL images | tail -n +2 | wc -l
+                  $CRICTL rmi --prune
+                  echo "Images after:"; $CRICTL images | tail -n +2 | wc -l
+                  echo "Disk after:"; disk_line
               env:
                 - name: CONTAINER_RUNTIME_ENDPOINT
                   value: "unix:///run/containerd/containerd.sock"
