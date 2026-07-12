@@ -22,9 +22,9 @@ spec:
             tag: "3.1.0"
             pullPolicy: IfNotPresent
           
-          # Replicas - optimized for 12-core server
-          replicaCount: 1
-          
+          # Replicas - not actively in use, scaled to zero (2026-07-12)
+          replicaCount: 0
+
           # Resource limits and requests - optimized for 12-core server
           resources:
             requests:
@@ -33,10 +33,10 @@ spec:
             limits:
               cpu: 1000m
               memory: 2Gi
-          
+
           # Horizontal Pod Autoscaling for handling load variations
           autoscaling:
-            enabled: true
+            enabled: false
             minReplicas: 1
             maxReplicas: 3
             targetCPUUtilizationPercentage: 70
@@ -281,7 +281,7 @@ spec:
           # HPA disabled - single node can't get CPU metrics reliably,
           # causing FailedComputeMetricsReplicas errors and scaling to max.
           supersetWorker:
-            enabled: true
+            enabled: false  # Not actively in use — scaled to zero (2026-07-12)
             replicaCount: 1
             # Limit Celery worker to 2 concurrent processes.
             # Default is os.cpu_count() (12 on this node) causing 496m CPU usage.
@@ -311,7 +311,7 @@ spec:
           
           # Celery beat for scheduled tasks - optimized
           supersetCeleryBeat:
-            enabled: true
+            enabled: false  # Not actively in use — scaled to zero (2026-07-12)
             resources:
               requests:
                 cpu: 50m
