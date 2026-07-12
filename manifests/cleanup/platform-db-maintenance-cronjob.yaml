@@ -1,6 +1,13 @@
-# Platform Database Maintenance CronJob
+# Platform Maintenance CronJob
 #
-# Runs nightly at 01:00 AM UTC to purge old records across all service databases.
+# Runs nightly at 01:00 AM UTC. Single Job, two independent containers:
+#   1. db-maintenance — purges old records across all service databases.
+#   2. image-prune     — removes stale containerd images from the node.
+# Kept as one CronJob rather than two so there's a single cleanup job to
+# reason about; add future maintenance tasks here as additional containers
+# rather than new CronJob resources.
+#
+# --- db-maintenance ---
 # Uses the admin_user (postgresql secret) to connect directly to each DB.
 #
 # Cleanup policy:
@@ -20,6 +27,23 @@
 #   - Connects via direct PostgreSQL (not PgBouncer) to avoid transaction-mode limits on DELETE
 #   - Uses LIMIT 10000 per run to prevent long-running transactions
 #   - set -e aborts the script but continues to next DB on error (each DB in separate psql call)
+#
+# --- image-prune ---
+# Runs `crictl rmi --prune` against the node's containerd, which deletes
+# only images with zero containers (running or otherwise) referencing
+# them. Safe by construction: a freshly-deployed image can never be
+# pruned out from under a live pod — the old image for a given app is
+# only removed once every replica has rolled onto the new tag and the
+# old ReplicaSet's pods have actually terminated.
+#
+# Why this exists: images from ~50 app services pinned by commit-hash
+# tags accumulate forever otherwise (839 stale images / 288Gi found on
+# 2026-07-12 before a one-off manual prune). kubelet's own image GC only
+# kicks in reactively at 85% disk usage, which is too late for good
+# hygiene. Mounts the node's own crictl binary (a static Go binary, so
+# no libc coupling to the container image) and the containerd CRI
+# socket; pinned to the node via nodeSelector since this must run once
+# per node, not once cluster-wide.
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -46,6 +70,8 @@ spec:
             app: platform-db-maintenance
         spec:
           restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: mss-prod-master
           securityContext:
             runAsUser: 999
             runAsGroup: 999
@@ -147,3 +173,53 @@ spec:
                 limits:
                   cpu: 500m
                   memory: 512Mi
+            - name: image-prune
+              image: busybox:stable
+              securityContext:
+                runAsUser: 0
+                runAsGroup: 0
+                runAsNonRoot: false
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "=== Image prune ($(date -u)) ==="
+                  echo "Disk before:"; df -h /host-root
+                  echo "Images before:"; /host-crictl images | tail -n +2 | wc -l
+                  /host-crictl rmi --prune
+                  echo "Images after:"; /host-crictl images | tail -n +2 | wc -l
+                  echo "Disk after:"; df -h /host-root
+              env:
+                - name: CONTAINER_RUNTIME_ENDPOINT
+                  value: "unix:///run/containerd/containerd.sock"
+                - name: IMAGE_SERVICE_ENDPOINT
+                  value: "unix:///run/containerd/containerd.sock"
+              volumeMounts:
+                - name: crictl-bin
+                  mountPath: /host-crictl
+                - name: containerd-sock
+                  mountPath: /run/containerd/containerd.sock
+                - name: root-disk
+                  mountPath: /host-root
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+          volumes:
+            - name: crictl-bin
+              hostPath:
+                path: /usr/local/bin/crictl
+                type: File
+            - name: containerd-sock
+              hostPath:
+                path: /run/containerd/containerd.sock
+                type: Socket
+            - name: root-disk
+              hostPath:
+                path: /
+                type: Directory
