@@ -1,6 +1,6 @@
 nameOverride: projects-ui
 fullnameOverride: projects-ui
-replicaCount: 0 # Disabled: Docker image not yet built. Set to 1 after first CI deploy.
+replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/projects-ui
@@ -96,3 +96,6 @@ verticalPodAutoscaling:
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
   recommendationMode: true
+pdb:
+  enabled: true
+  minAvailable: 1
