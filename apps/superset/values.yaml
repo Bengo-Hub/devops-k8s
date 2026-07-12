@@ -13,10 +13,10 @@ image:
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
-replicaCount: 1  # Default single replica
+replicaCount: 0  # Not actively in use — scaled to zero (2026-07-12)
 
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1  # Start with 1 replica
   maxReplicas: 2  # Scale to 2 under load
   targetCPUUtilizationPercentage: 70
@@ -289,7 +289,7 @@ configOverrides:
 # CELERY WORKERS - ASYNC QUERY EXECUTION
 # ============================================================================
 supersetWorker:
-  enabled: true
+  enabled: false  # Not actively in use — scaled to zero (2026-07-12)
   replicaCount: 1
   # Limit Celery to 2 concurrent processes (default: os.cpu_count()=12, causing 496m CPU usage).
   # --max-tasks-per-child recycles each worker process after N tasks so leaked
@@ -324,7 +324,7 @@ supersetWorker:
 # CELERY BEAT - SCHEDULED TASKS
 # ============================================================================
 supersetCeleryBeat:
-  enabled: true
+  enabled: false  # Not actively in use — scaled to zero (2026-07-12)
   resources:
     requests:
       cpu: 50m
