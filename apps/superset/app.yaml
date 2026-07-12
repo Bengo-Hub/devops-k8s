@@ -189,11 +189,16 @@ spec:
           # This uses the chart's built-in support for external databases
           supersetNode:
             # Not actively in use — scaled to zero (2026-07-12). The apache/superset
-            # chart's web Deployment reads supersetNode.replicaCount (NOT the top-level
-            # replicaCount, which the chart ignores), so 0 must be set HERE for the
-            # desired state to actually render 0 replicas and for ArgoCD self-heal to
-            # keep it there rather than reverting a manual scale back to 1.
-            replicaCount: 0
+            # 0.15.0 chart web Deployment renders `replicas` ONLY when
+            # supersetNode.replicas.enabled is true, reading
+            # supersetNode.replicas.replicaCount (NOT top-level replicaCount, NOT
+            # supersetNode.replicaCount — both are ignored). replicas.enabled must be
+            # true so the chart actually manages the field and ArgoCD self-heal holds
+            # it at 0 instead of leaving it unmanaged (which defaulted to 1 and
+            # reverted every manual scale-down).
+            replicas:
+              enabled: true
+              replicaCount: 0
             connections:
               # Route through PgBouncer (transaction pooler in infra ns).
               # To bypass (e.g. for DDL that transaction-mode blocks),
@@ -287,11 +292,13 @@ spec:
           # HPA disabled - single node can't get CPU metrics reliably,
           # causing FailedComputeMetricsReplicas errors and scaling to max.
           supersetWorker:
-            # Not actively in use — scaled to zero (2026-07-12). The chart has no
-            # honored `enabled` key for the worker (unlike supersetCeleryBeat), so the
-            # worker Deployment is zeroed via replicaCount: 0, not enabled: false.
-            enabled: false
-            replicaCount: 0
+            # Not actively in use — scaled to zero (2026-07-12). Same as supersetNode:
+            # the worker Deployment reads supersetWorker.replicas.replicaCount, gated by
+            # supersetWorker.replicas.enabled — zero it there, not via a top-level
+            # replicaCount/enabled.
+            replicas:
+              enabled: true
+              replicaCount: 0
             # Limit Celery worker to 2 concurrent processes.
             # Default is os.cpu_count() (12 on this node) causing 496m CPU usage.
             # --max-tasks-per-child recycles each worker process after 10 tasks so
