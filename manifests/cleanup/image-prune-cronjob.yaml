@@ -1,0 +1,100 @@
+# Container Image Prune CronJob
+#
+# Runs every 6 hours and deletes any containerd image with zero containers
+# (running or otherwise) referencing it. This is inherently safe: crictl
+# rmi --prune only ever removes images that are not in use by any container
+# on the node, so a freshly-deployed image can never be pruned out from
+# under a live pod — the old image for a given app only gets removed once
+# ArgoCD has rolled every replica over to the new tag and the old
+# ReplicaSet's pods have actually terminated.
+#
+# Why this exists: images from ~50 app services pinned by commit-hash tags
+# accumulate forever otherwise (found 839 stale images / 288Gi on
+# 2026-07-12 before a one-off manual prune). kubelet's own image GC only
+# kicks in reactively at 85% disk usage, which is too late for good
+# hygiene — this keeps the node pruned proactively instead.
+#
+# Runs directly on the host: mounts the node's own crictl binary (a static
+# Go binary, so no libc coupling to the container image) and the
+# containerd CRI socket. Single-node cluster today, so no nodeSelector is
+# strictly required, but kubernetes.io/hostname pins it explicitly in case
+# the cluster ever grows, since this must run once per node, not once
+# cluster-wide.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: image-prune
+  namespace: infra
+  labels:
+    app: image-prune
+    component: maintenance
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 7200
+      activeDeadlineSeconds: 600  # 10 minute max
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: image-prune
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            kubernetes.io/hostname: mss-prod-master
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          containers:
+            - name: crictl-prune
+              image: busybox:stable
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "=== Image prune ($(date -u)) ==="
+                  echo "Disk before:"; df -h /host-root
+                  echo "Images before:"; /host-crictl images | tail -n +2 | wc -l
+                  /host-crictl rmi --prune
+                  echo "Images after:"; /host-crictl images | tail -n +2 | wc -l
+                  echo "Disk after:"; df -h /host-root
+              env:
+                - name: CONTAINER_RUNTIME_ENDPOINT
+                  value: "unix:///run/containerd/containerd.sock"
+                - name: IMAGE_SERVICE_ENDPOINT
+                  value: "unix:///run/containerd/containerd.sock"
+              volumeMounts:
+                - name: crictl-bin
+                  mountPath: /host-crictl
+                - name: containerd-sock
+                  mountPath: /run/containerd/containerd.sock
+                - name: root-disk
+                  mountPath: /host-root
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi
+          volumes:
+            - name: crictl-bin
+              hostPath:
+                path: /usr/local/bin/crictl
+                type: File
+            - name: containerd-sock
+              hostPath:
+                path: /run/containerd/containerd.sock
+                type: Socket
+            - name: root-disk
+              hostPath:
+                path: /
+                type: Directory
