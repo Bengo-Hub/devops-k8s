@@ -15,14 +15,15 @@ service:
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
-# Go ERP: Ent (Atlas) migrations + RBAC seed are applied OUT-OF-BAND by the
-# repo build.sh (idempotent one-off Jobs against the existing bengo_erp DB /
-# `erp` schema). The Go server does NOT auto-migrate in prod. Django-era init
-# containers (migrations/seed) are therefore disabled here.
+# Go ERP: Ent (Atlas) migrations + RBAC/payroll/tenant-defaults seed run
+# in-container via scripts/entrypoint.sh (erp-migrate, then erp-seed,
+# erp-seed-payroll, erp-seed-defaults — all idempotent) before the server
+# starts, matching inventory-api/pos-api/logistics-api/subscriptions-api.
+# Django-era Helm-hook init containers (migrations/seed) are disabled here.
 migrations:
-  enabled: false # Go: handled idempotently by build.sh (cmd/migrate, schema erp)
+  enabled: false # Handled by entrypoint.sh (runs erp-migrate on startup)
 seed:
-  enabled: false # Go: handled idempotently by build.sh (cmd/seed, RBAC upsert)
+  enabled: false # Handled by entrypoint.sh (runs erp-seed/-payroll/-defaults on startup)
 # Strategy for zero-downtime updates
 strategy:
   type: RollingUpdate
@@ -39,8 +40,8 @@ securityContext:
 # ============================================================================
 # HEALTH CHECKS (Go server: /healthz liveness, /readyz readiness)
 # ============================================================================
-# No migration waits — the Go binary starts in seconds (migrations run as
-# separate one-off Jobs, not in the pod).
+# entrypoint.sh runs migrate + seed before the server binds its port, so the
+# startup probe's ~155s budget below covers that + DB connect, not just DB connect.
 healthCheck:
   enabled: true
   startup:
