@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/logistics-ui
-  tag: "a7922432"
+  tag: "c93c54f9"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
