@@ -130,6 +130,13 @@ celeryBeat:
   enabled: true
   persistence:
     enabled: false
+  # Beat is a singleton scheduler with no Service/traffic — no readiness probe
+  # needed. Explicit (not just relying on the chart default) because the live
+  # pod was stuck CrashLoopBackOff/0-Ready for days on the old `ps aux | grep`
+  # exec probe (image has no procps), and ArgoCD wasn't reconciling that field
+  # away even after the chart itself made the probe template opt-in.
+  readinessProbe:
+    enabled: false
   # FastAPI app — use the importable celery module (app/core/celery.py → celery_app).
   app: app.core.celery
   logLevel: info
