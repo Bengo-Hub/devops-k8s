@@ -31,7 +31,7 @@ spec:
             - name: session-cleanup
               image: docker.io/codevertex/auth-api:latest
               imagePullPolicy: Always
-              command: ["/app/auth-session-cleanup"]
+              command: ["/usr/local/bin/auth-session-cleanup"]
               env:
                 - name: SESSION_CLEANUP_LOG_ENV
                   value: "production"
