@@ -113,7 +113,7 @@ monitoring:
     port: 9090
     path: /metrics
 serviceMonitor:
-  enabled: true
+  enabled: false
   namespace: infra
   interval: 30s
   scrapeTimeout: 10s
