@@ -18,8 +18,8 @@ image:
 replicaCount: 1
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 2
+  minReplicas: 1
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
   scaleDown:
@@ -448,14 +448,16 @@ env:
     #  delivery + treasury payments are now unconditional in the service.)
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
+# Lowered 2026-07-13: isp-billing is not actively used; single backend pod with
+# a smaller footprint. Bump back up if tenant load returns.
 # ============================================================================
 resources:
   requests:
-    cpu: 50m
-    memory: 256Mi
+    cpu: 25m
+    memory: 192Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 300m
+    memory: 384Mi
 # ============================================================================
 # HEALTH CHECKS (FastAPI serves /health, NOT /healthz)
 # ============================================================================
