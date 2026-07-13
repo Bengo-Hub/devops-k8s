@@ -288,7 +288,7 @@ jobs:
           
           # List of namespaces required by the cluster
           # Create these FIRST, independent of registry credentials
-          NAMESPACES="infra argocd erp truload cafe treasury notifications auth inventory logistics pos iot isp-billing ordering projects subscription ticketing"
+          NAMESPACES="infra argocd erp truload cafe treasury notifications auth inventory logistics pos isp-billing ordering projects ticketing"
           
           for ns in $NAMESPACES; do
             if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
@@ -349,7 +349,7 @@ jobs:
           
           # List of namespaces that need registry-credentials
           # These are application namespaces that pull images from Docker Hub
-          NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos argocd iot isp-billing ordering projects subscription ticketing"
+          NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos argocd isp-billing ordering projects ticketing"
           
           for ns in $NAMESPACES; do
             # Namespace should already exist from previous step

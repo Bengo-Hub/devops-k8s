@@ -62,12 +62,6 @@ if [[ -z "$NAMESPACE" ]]; then
         logistics-api)
             NAMESPACE="logistics"
             ;;
-        iot-api)
-            NAMESPACE="iot"
-            ;;
-        iot-ui)
-            NAMESPACE="iot"
-            ;;
         ordering-backend)
             NAMESPACE="ordering"
             ;;
@@ -132,9 +126,6 @@ if [[ -z "$NAMESPACE" ]]; then
             ;;
         rider-app)
             NAMESPACE="logistics"
-            ;;
-        iot-service-api)
-            NAMESPACE="iot"
             ;;
         *)
             # Try to extract namespace from service name
