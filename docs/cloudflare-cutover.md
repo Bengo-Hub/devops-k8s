@@ -27,13 +27,22 @@ RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
    the zone to show **Active**.
 3. Create an API token: My Profile → API Tokens → "Edit zone DNS" template,
    scoped to this zone only.
-4. On the node: `./scripts/cloudflare/activate-dns01.sh <TOKEN>`
+4. Populate/verify the zone records (safe pre-flip; grey-cloud mirror of the
+   cloudoon DNS audited 2026-07-13, incl. MX smtp.google.com + SPF/DMARC/
+   site-verification TXT):
+   `CF_API_TOKEN=<TOKEN> ./scripts/cloudflare/populate-zone.py <ZONE_ID>`
+   Zone ID: 729e99d9d6b41f0ec021e9fbe7c7695d. Note: projectsapi/ticketing/
+   ticketingapi/webmail are mirrored to the legacy Truehost host
+   (102.212.247.163) — repointing them to the cluster is a separate decision
+   (it would also unstick the projects-api/ticketing-api certs pending since
+   December).
+5. On the node: `./scripts/cloudflare/activate-dns01.sh <TOKEN>`
    (creates the cert-manager secret + applies the issuers).
-5. Dashboard: SSL/TLS → **Full (strict)**.
-6. Flip to **Proxied (orange)** gradually: `accounts` + `sso` first → verify
+6. Dashboard: SSL/TLS → **Full (strict)**.
+7. Flip to **Proxied (orange)** gradually: `accounts` + `sso` first → verify
    SSO login end-to-end → then all remaining web hosts.
    **Keep `nats` and `argocd` DNS-only permanently** (non-HTTP / admin).
-7. Speed: enable Brotli, HTTP/3, 0-RTT, Early Hints, Tiered Cache.
+8. Speed: enable Brotli, HTTP/3, 0-RTT, Early Hints, Tiered Cache.
    Caching: cache rule for `/_next/static/*` + `*.js,*.css,*.woff2,*.svg,*.png`;
    bypass cache on `*api*` hostnames and HTML.
 
