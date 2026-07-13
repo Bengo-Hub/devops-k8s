@@ -5,10 +5,28 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: info@codevertexitsolutions.com
+    email: codevertexitsolutions@gmail.com
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
+    # DNS-01 via Cloudflare for the primary zone. Required once these hosts
+    # sit behind Cloudflare's proxy (orange cloud): HTTP-01 breaks because
+    # Cloudflare intercepts /.well-known/acme-challenge. Needs the
+    # cloudflare-api-token secret in the cert-manager namespace (an
+    # "Edit zone DNS" token scoped to codevertexitsolutions.com) — see
+    # scripts/cloudflare/activate-dns01.sh. Challenges only validate after
+    # the domain's nameservers are delegated to Cloudflare; until then
+    # cert-manager retries harmlessly (certs have ~30d slack past renewal).
+    - selector:
+        dnsZones:
+          - codevertexitsolutions.com
+      dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token
+    # HTTP-01 fallback for every other zone (masterspace.co.ke, kura.go.ke,
+    # theurbanloftcafe.com) — those stay direct-to-origin, not proxied.
     - http01:
         ingress:
           class: nginx
@@ -20,10 +38,18 @@ metadata:
 spec:
   acme:
     server: https://acme-staging-v02.api.letsencrypt.org/directory
-    email: info@codevertexitsolutions.com
+    email: codevertexitsolutions@gmail.com
     privateKeySecretRef:
       name: letsencrypt-staging
     solvers:
+    - selector:
+        dnsZones:
+          - codevertexitsolutions.com
+      dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token
     - http01:
         ingress:
           class: nginx
