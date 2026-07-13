@@ -71,8 +71,12 @@ def api(token, method, path, body=None):
         method=method,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req) as resp:
-        out = json.load(resp)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            out = json.load(resp)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")[:400]
+        raise RuntimeError(f"{method} {path} -> HTTP {e.code}: {detail}") from None
     if not out.get("success"):
         raise RuntimeError(f"{method} {path}: {out.get('errors')}")
     return out["result"]
@@ -113,21 +117,41 @@ def main():
             created += 1
             continue
 
+        # A and CNAME are mutually exclusive per name: treat an existing record
+        # of either type at this name as the occupant (the import scan often
+        # creates e.g. `www CNAME apex` where we'd write an A record).
+        if want["type"] in ("A", "CNAME") and not matches:
+            other = "CNAME" if want["type"] == "A" else "A"
+            matches = [r for r in existing if r["type"] == other and r["name"].lower() == name.lower()]
+
         if not matches:
             api(token, "POST", f"/zones/{zone}/dns_records", {**want, "name": name})
             print(f"  + {want['type']} {name} -> {want['content']}")
             created += 1
+            continue
+
+        r = matches[0]
+        # A CNAME to the apex is functionally identical to an A record at the
+        # origin (and vice versa) — keep the occupant's shape, only fix proxied.
+        equivalent = (
+            r["content"].lower() == want["content"].lower()
+            or (r["type"] == "CNAME" and r["content"].lower() == APEX and want.get("content") == ORIGIN)
+            or (r["type"] == "A" and r["content"] == ORIGIN and want["type"] == "CNAME" and want["content"].lower() == APEX)
+        )
+        unproxied = not r.get("proxied", False)
+        if equivalent and unproxied:
+            ok += 1
+        elif equivalent:
+            api(token, "PUT", f"/zones/{zone}/dns_records/{r['id']}",
+                {"type": r["type"], "name": name, "content": r["content"], "proxied": False,
+                 **({"priority": r["priority"]} if r.get("priority") is not None else {})})
+            print(f"  ~ {r['type']} {name}: proxied=True -> proxied=false (content kept: {r['content']})")
+            updated += 1
         else:
-            r = matches[0]
-            same = r["content"].lower() == want["content"].lower()
-            unproxied = not r.get("proxied", False)
-            if same and unproxied:
-                ok += 1
-            else:
-                api(token, "PUT", f"/zones/{zone}/dns_records/{r['id']}",
-                    {**want, "name": name})
-                print(f"  ~ {want['type']} {name}: {r['content']}(proxied={r.get('proxied')}) -> {want['content']}(proxied=false)")
-                updated += 1
+            api(token, "PUT", f"/zones/{zone}/dns_records/{r['id']}",
+                {**want, "name": name})
+            print(f"  ~ {r['type']} {name}: {r['content']}(proxied={r.get('proxied')}) -> {want['type']} {want['content']}(proxied=false)")
+            updated += 1
 
     print(f"done: {created} created, {updated} corrected, {ok} already right")
     print("NOTE: nothing was deleted; records the import scan added beyond this "
