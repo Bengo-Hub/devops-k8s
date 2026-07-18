@@ -140,8 +140,11 @@ env:
   # ── Worker sidecar env (NATS consumer runs inside the same pod) ────────────
   - name: NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222"
+  # Stream names are case-sensitive: prod's stream is lowercase "marketflow".
+  # The old "MARKETFLOW" value named a stream that never existed, killing the
+  # in-container worker at startup on every boot (consumers never registered).
   - name: NATS_STREAM
-    value: "MARKETFLOW"
+    value: "marketflow"
   - name: WORKER_HTTP_PORT
     value: "4002"
   - name: SCHEDULER_INTERVAL_SECONDS
