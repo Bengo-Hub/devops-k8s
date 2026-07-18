@@ -5,7 +5,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/pos-ui
-  tag: "e0ecabe8"
+  tag: "22087924"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
