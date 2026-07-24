@@ -5,7 +5,7 @@ image:
   repository: docker.io/codevertex/pos-api
   # Pinned to last known-good tag. Image 0e86af28 has an ent init panic
   # ("interface {} is nil, not string") — app-side bug, not a pgbouncer issue.
-  tag: "e03a72a3"
+  tag: "11d41b51"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
