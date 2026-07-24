@@ -101,15 +101,18 @@ env:
         key: INTERNAL_SERVICE_KEY
         optional: true
   # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
-  # S2S service URLs — values injected by CI/CD; placeholders only here
+  # S2S service URLs — use INTERNAL cluster DNS (ClusterIP:4000) for intra-cluster S2S so
+  # calls never leave the cluster: no Cloudflare/ingress hop, no ~15s gateway 502 on a slow
+  # KRA-signing POST (sign-pos-sale was taking 20-27s → ingress 502 → the ETR receipt fell back
+  # to the async worker instead of signing in real time), and lower latency on every S2S call.
   - name: INVENTORY_SERVICE_URL
-    value: "https://inventoryapi.codevertexitsolutions.com"
+    value: "http://inventory-api.inventory.svc.cluster.local:4000"
   - name: TREASURY_SERVICE_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: NOTIFICATIONS_SERVICE_URL
     value: "https://notificationsapi.codevertexitsolutions.com"
   - name: ORDERING_SERVICE_URL
-    value: "https://orderingapi.codevertexitsolutions.com"
+    value: "http://ordering-backend.ordering.svc.cluster.local:4000"
   # MarketFlow CRM — customer single source of truth (upsert crm_contact_id from loyalty/client flows)
   - name: MARKETFLOW_API_URL
     value: "https://marketflowapi.codevertexitsolutions.com"
