@@ -30,10 +30,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - routing.codevertexitsolutions.com
+        - routing.codevertexafrica.com
       secretName: valhalla-tls
   rules:
-    - host: routing.codevertexitsolutions.com
+    - host: routing.codevertexafrica.com
       http:
         paths:
           - path: /

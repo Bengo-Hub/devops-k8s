@@ -81,7 +81,7 @@ env:
         key: REDIS_PASSWORD
         optional: true
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: STORAGE_ENDPOINT
     value: http://minio.storage.svc.cluster.local:9000
   - name: STORAGE_BUCKET
@@ -89,21 +89,21 @@ env:
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://books.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
+    value: "https://books.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
   - name: MPESA_CALLBACK_URL
-    value: "https://booksapi.codevertexitsolutions.com/api/v1/webhooks/mpesa/callback"
+    value: "https://booksapi.codevertexafrica.com/api/v1/webhooks/mpesa/callback"
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_AUDIENCE
     value: "codevertex"
   - name: HTTP_PUBLIC_BASE_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   - name: HTTP_UI_BASE_URL
-    value: "https://books.codevertexitsolutions.com"
+    value: "https://books.codevertexafrica.com"
   - name: INVENTORY_API_URL
     value: "http://inventory-api.inventory.svc.cluster.local:4000"
   - name: LOGISTICS_API_URL
@@ -200,13 +200,13 @@ ingress:
     # Nginx ingress CORS annotations are intentionally omitted to prevent duplicate
     # Access-Control-Allow-Origin headers which cause browser CORS failures.
   hosts:
-    - host: booksapi.codevertexitsolutions.com
+    - host: booksapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - booksapi.codevertexitsolutions.com
+        - booksapi.codevertexafrica.com
       secretName: treasury-api-tls
 pdb:
   enabled: true

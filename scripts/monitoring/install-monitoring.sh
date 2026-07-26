@@ -12,7 +12,7 @@ MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
-GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.codevertexitsolutions.com}
+GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.codevertexafrica.com}
 MONITORING_NAMESPACE=${MONITORING_NAMESPACE:-infra}
 
 # Deployment strategy:

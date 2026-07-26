@@ -23,7 +23,7 @@ stringData:
     - name: 'email'
       email_configs:
       - to: 'codevertexitsolutions@gmail.com'
-        from: 'alerts@codevertexitsolutions.com'
+        from: 'alerts@codevertexafrica.com'
         smarthost: smtp.gmail.com:587
         auth_username: 'codevertexitsolutions@gmail.com'
         auth_password: '<APP_PASSWORD>'

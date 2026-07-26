@@ -13,13 +13,13 @@ spec:
     # sit behind Cloudflare's proxy (orange cloud): HTTP-01 breaks because
     # Cloudflare intercepts /.well-known/acme-challenge. Needs the
     # cloudflare-api-token secret in the cert-manager namespace (an
-    # "Edit zone DNS" token scoped to codevertexitsolutions.com) — see
+    # "Edit zone DNS" token scoped to codevertexafrica.com) — see
     # scripts/cloudflare/activate-dns01.sh. Challenges only validate after
     # the domain's nameservers are delegated to Cloudflare; until then
     # cert-manager retries harmlessly (certs have ~30d slack past renewal).
     - selector:
         dnsZones:
-          - codevertexitsolutions.com
+          - codevertexafrica.com
       dns01:
         cloudflare:
           apiTokenSecretRef:
@@ -44,7 +44,7 @@ spec:
     solvers:
     - selector:
         dnsZones:
-          - codevertexitsolutions.com
+          - codevertexafrica.com
       dns01:
         cloudflare:
           apiTokenSecretRef:

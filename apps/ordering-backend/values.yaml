@@ -47,7 +47,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://orderingapi.codevertexitsolutions.com,https://theurbanloftcafe.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://ordering.codevertexafrica.com,https://orderingapi.codevertexafrica.com,https://theurbanloftcafe.com,https://pos.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
   # Database Configuration - uses standard keys from devops-k8s create-service-secrets.sh
   - name: POSTGRES_URL
     valueFrom:
@@ -97,7 +97,7 @@ env:
   - name: MEDIA_ROOT
     value: "/data/media"
   - name: MEDIA_URL_BASE
-    value: "https://orderingapi.codevertexitsolutions.com"
+    value: "https://orderingapi.codevertexafrica.com"
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
@@ -107,16 +107,16 @@ env:
     # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
     # ============================================================================
 
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_AUDIENCE
     value: "codevertex"
   # Treasury Service - Payment processing and refunds
   - name: TREASURY_API_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   # Shared S2S key — one key used for all outbound service calls (auth, treasury, logistics, inventory, notifications, subscriptions)
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
@@ -135,10 +135,10 @@ env:
   - name: MPESA_ENABLED
     value: "true"
   - name: MPESA_CALLBACK_BASE_URL
-    value: "https://orderingapi.codevertexitsolutions.com/api/v1/webhooks/mpesa"
+    value: "https://orderingapi.codevertexafrica.com/api/v1/webhooks/mpesa"
   # Logistics Service - Delivery task management
   - name: LOGISTICS_SERVICE_URL
-    value: "https://logisticsapi.codevertexitsolutions.com"
+    value: "https://logisticsapi.codevertexafrica.com"
   - name: LOGISTICS_WEBHOOK_SECRET
     valueFrom:
       secretKeyRef:
@@ -148,28 +148,28 @@ env:
   - name: LOGISTICS_REQUEST_TIMEOUT
     value: "30s"
   - name: LOGISTICS_WEBSOCKET_URL
-    value: "wss://logisticsapi.codevertexitsolutions.com/ws"
+    value: "wss://logisticsapi.codevertexafrica.com/ws"
   # Inventory Service - Stock management
   - name: INVENTORY_SERVICE_URL
-    value: "https://inventoryapi.codevertexitsolutions.com"
+    value: "https://inventoryapi.codevertexafrica.com"
   - name: INVENTORY_REQUEST_TIMEOUT
     value: "10s"
   # Subscriptions Service - Subscription enforcement
   - name: SUBSCRIPTIONS_SERVICE_URL
-    value: "https://pricingapi.codevertexitsolutions.com"
+    value: "https://pricingapi.codevertexafrica.com"
   - name: SUBSCRIPTIONS_REQUEST_TIMEOUT
     value: "10s"
   # MarketFlow CRM - customer single source of truth (upsert crm_contact_id at checkout)
   - name: MARKETFLOW_API_URL
-    value: "https://marketflowapi.codevertexitsolutions.com"
+    value: "https://marketflowapi.codevertexafrica.com"
   # Notifications Service - Email, SMS, Push notifications
   - name: NOTIFICATIONS_SERVICE_URL
-    value: "https://notificationsapi.codevertexitsolutions.com"
+    value: "https://notificationsapi.codevertexafrica.com"
   - name: NOTIFICATIONS_REQUEST_TIMEOUT
     value: "10s"
   # Superset - Business Intelligence & Analytics
   - name: SUPERSET_BASE_URL
-    value: "https://superset.codevertexitsolutions.com"
+    value: "https://superset.codevertexafrica.com"
   - name: SUPERSET_ADMIN_USERNAME
     value: "admin"
   - name: SUPERSET_ADMIN_PASSWORD
@@ -271,13 +271,13 @@ ingress:
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-connections: "200"
   hosts:
-    - host: orderingapi.codevertexitsolutions.com
+    - host: orderingapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - orderingapi.codevertexitsolutions.com
+        - orderingapi.codevertexafrica.com
       secretName: ordering-backend-tls
 # ============================================================================
 # PERSISTENCE (media uploads)

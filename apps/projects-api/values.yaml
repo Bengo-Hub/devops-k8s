@@ -73,23 +73,23 @@ env:
         optional: true
   # NATS - standard key EVENTS_NATS_URL
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Auth / JWKS
   - name: AUTH_SERVICE_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: AUTH_ISSUER
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: AUTH_AUDIENCE
     value: codevertex
   - name: AUTH_JWKS_URL
-    value: https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json
+    value: https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json
   - name: AUTH_ENABLE_API_KEY_AUTH
     value: "true"
   # CORS allowed origins
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://projects.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3005"
+    value: "https://projects.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3005"
 resources:
   requests:
     cpu: 50m
@@ -124,19 +124,19 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://projects.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://projects.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    - host: projectsapi.codevertexitsolutions.com
+    - host: projectsapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - projectsapi.codevertexitsolutions.com
+        - projectsapi.codevertexafrica.com
       secretName: projects-api-tls
 pdb:
   enabled: true

@@ -5,7 +5,7 @@ ArgoCD application deploying the Next.js frontend for the Ordering service using
 ## Key Settings
 
 - Namespace: `ordering`
-- Domain: `ordersapp.codevertexitsolutions.com`
+- Domain: `ordering.codevertexafrica.com`
 - Image: `docker.io/codevertex/ordering-frontend`
 - Health probe path: `/healthz`
 - External dependencies: Ordering backend API, Notifications service, Mapbox

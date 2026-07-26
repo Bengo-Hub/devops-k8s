@@ -97,7 +97,7 @@ fi
 ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
 ADMIN_FIRSTNAME=${ADMIN_FIRSTNAME:-Admin}
 ADMIN_LASTNAME=${ADMIN_LASTNAME:-User}
-ADMIN_EMAIL=${ADMIN_EMAIL:-admin@codevertexitsolutions.com}
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@codevertexafrica.com}
 
 # Create the secret
 log_info "Creating Kubernetes secret..."

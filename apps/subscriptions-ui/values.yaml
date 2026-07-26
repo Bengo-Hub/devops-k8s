@@ -37,11 +37,11 @@ strategy:
     maxUnavailable: 0
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://pricingapi.codevertexitsolutions.com
+    value: https://pricingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SSO_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexitsolutions.com
+    value: https://notifications.codevertexafrica.com
 resources:
   requests:
     cpu: 50m
@@ -63,13 +63,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: pricing.codevertexitsolutions.com
+    - host: pricing.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - pricing.codevertexitsolutions.com
+        - pricing.codevertexafrica.com
       secretName: subscriptions-ui-tls
 monitoring:
   enabled: false

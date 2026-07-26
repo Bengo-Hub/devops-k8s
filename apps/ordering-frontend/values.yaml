@@ -45,27 +45,27 @@ envFromSecret: ordering-frontend-secrets
 env:
   # API URLs - Production endpoints
   - name: NEXT_PUBLIC_API_URL
-    value: https://orderingapi.codevertexitsolutions.com
+    value: https://orderingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notificationsapi.codevertexitsolutions.com
+    value: https://notificationsapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SSO_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_APP_URL
-    value: https://ordersapp.codevertexitsolutions.com
+    value: https://ordering.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
-    value: https://pricingapi.codevertexitsolutions.com
+    value: https://pricingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
-    value: https://pricing.codevertexitsolutions.com
+    value: https://pricing.codevertexafrica.com
   # Map and logistics URLs
   - name: NEXT_PUBLIC_TILE_SERVER_URL
-    value: https://tiles.codevertexitsolutions.com
+    value: https://tiles.codevertexafrica.com
   - name: NEXT_PUBLIC_LOGISTICS_API_URL
-    value: https://logisticsapi.codevertexitsolutions.com/api/v1
+    value: https://logisticsapi.codevertexafrica.com/api/v1
   # Treasury (finance) API and UI URLs
   - name: NEXT_PUBLIC_TREASURY_API_URL
-    value: https://booksapi.codevertexitsolutions.com
+    value: https://booksapi.codevertexafrica.com
   - name: NEXT_PUBLIC_TREASURY_UI_URL
-    value: https://books.codevertexitsolutions.com
+    value: https://books.codevertexafrica.com
   # Optional third-party integrations (from secret)
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
@@ -124,13 +124,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: ordersapp.codevertexitsolutions.com
+    - host: ordering.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - ordersapp.codevertexitsolutions.com
+        - ordering.codevertexafrica.com
       secretName: ordering-frontend-tls
 # ============================================================================
 # MONITORING AND OBSERVABILITY

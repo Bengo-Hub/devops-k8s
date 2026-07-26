@@ -101,7 +101,7 @@ ingress:
         - path: /
           pathType: Prefix
     # Platform owner domain (CodeVertex)
-    - host: erpapi.codevertexitsolutions.com
+    - host: erpapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
@@ -110,7 +110,7 @@ ingress:
         - erpapi.masterspace.co.ke
       secretName: erpapi-masterspace-tls
     - hosts:
-        - erpapi.codevertexitsolutions.com
+        - erpapi.codevertexafrica.com
       secretName: erpapi-codevertex-tls
 # Load standardized keys (POSTGRES_URL, INTERNAL_SERVICE_KEY, REDIS_URL, etc.)
 # from the pre-existing erp-api-env secret.
@@ -158,11 +158,11 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222"
   # ── Auth (SSO) — JWKS/issuer/audience for JWT validation ──
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_AUDIENCE
     value: "codevertex"
   # ── S2S owner-service URLs. INTERNAL_SERVICE_KEY from erp-api-env. ──
@@ -170,11 +170,11 @@ env:
   # subscriptions). The direct ClusterIP bypasses the ingress + KEDA
   # http-interceptor and fails when treasury-api is scaled-to-zero / mid-restart.
   - name: TREASURY_SERVICE_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   - name: NOTIFICATIONS_SERVICE_URL
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://erp.masterspace.co.ke,https://erpapi.masterspace.co.ke,https://erp.codevertexitsolutions.com"
+    value: "https://erp.masterspace.co.ke,https://erpapi.masterspace.co.ke,https://erp.codevertexafrica.com"
   # ── Distributed rate limiting (Redis sliding-window). Per-tenant general budget + stricter
   # per-endpoint limits on money paths (payroll/backups/fx). Fails open if Redis is down. ──
   - name: RATE_LIMIT_ENABLED

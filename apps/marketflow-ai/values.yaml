@@ -29,7 +29,7 @@ env:
   - name: HTTP_PORT
     value: "4001"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://codevertexitsolutions.com,https://www.codevertexitsolutions.com"
+    value: "https://marketflow.codevertexafrica.com,https://accounts.codevertexafrica.com,https://codevertexafrica.com,https://www.codevertexafrica.com"
   # Database (shared with marketflow-api — same DB for pgvector queries)
   - name: POSTGRES_URL
     valueFrom:
@@ -55,9 +55,9 @@ env:
   - name: MF_SECURITY_REQUIRE_JWT
     value: "true"
   - name: MF_SECURITY_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: MF_SECURITY_JWT_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: MF_SECURITY_JWT_AUDIENCE
     value: "codevertex"
   # Groq AI (Primary LLM)
@@ -178,18 +178,18 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://codevertexitsolutions.com,https://www.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexafrica.com,https://accounts.codevertexafrica.com,https://codevertexafrica.com,https://www.codevertexafrica.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key, X-Widget-Mode, X-Widget-Persona"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
   hosts:
-    - host: marketflowai.codevertexitsolutions.com
+    - host: marketflowai.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - marketflowai.codevertexitsolutions.com
+        - marketflowai.codevertexafrica.com
       secretName: marketflow-ai-tls
 monitoring:
   enabled: true

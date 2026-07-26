@@ -38,10 +38,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - tiles.codevertexitsolutions.com
+        - tiles.codevertexafrica.com
       secretName: tileserver-tls
   rules:
-    - host: tiles.codevertexitsolutions.com
+    - host: tiles.codevertexafrica.com
       http:
         paths:
           - path: /

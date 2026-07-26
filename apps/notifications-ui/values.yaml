@@ -96,14 +96,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
   hosts:
-    - host: notifications.codevertexitsolutions.com
+    - host: notifications.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: notifications-ui-tls
       hosts:
-        - notifications.codevertexitsolutions.com
+        - notifications.codevertexafrica.com
 pdb:
   enabled: true
   minAvailable: 1

@@ -84,7 +84,7 @@ env:
         optional: true
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Managed screensaver media (Settings → Display): uploads stored per-tenant on the
@@ -92,7 +92,7 @@ env:
   - name: MEDIA_ROOT
     value: "/data/media"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://pos.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://theurbanloftcafe.com,https://books.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,https://books.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
   # Shared S2S key — validates inbound requests from other services (X-API-Key header)
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
@@ -110,20 +110,20 @@ env:
   - name: TREASURY_SERVICE_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: NOTIFICATIONS_SERVICE_URL
-    value: "https://notificationsapi.codevertexitsolutions.com"
+    value: "https://notificationsapi.codevertexafrica.com"
   - name: ORDERING_SERVICE_URL
     value: "http://ordering-backend.ordering.svc.cluster.local:4000"
   # MarketFlow CRM — customer single source of truth (upsert crm_contact_id from loyalty/client flows)
   - name: MARKETFLOW_API_URL
-    value: "https://marketflowapi.codevertexitsolutions.com"
+    value: "https://marketflowapi.codevertexafrica.com"
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_AUDIENCE
     value: "codevertex"
   - name: AUTH_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
 resources:
   requests:
     cpu: 50m
@@ -174,10 +174,10 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md).
-    # books.codevertexitsolutions.com = the embedded treasury/Paystack ("Books") payment iframe origin
+    # books.codevertexafrica.com = the embedded treasury/Paystack ("Books") payment iframe origin
     # that POSTs to /pos/payments/initiate — without it the gateway init is CORS-blocked.
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://theurbanloftcafe.com, https://books.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://theurbanloftcafe.com, https://books.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
@@ -187,13 +187,13 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
   hosts:
-    - host: posapi.codevertexitsolutions.com
+    - host: posapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - posapi.codevertexitsolutions.com
+        - posapi.codevertexafrica.com
       secretName: posapi-tls
 pdb:
   enabled: true
