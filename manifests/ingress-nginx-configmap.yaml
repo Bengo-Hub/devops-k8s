@@ -24,7 +24,7 @@ data:
   gzip-min-length: "256"
   gzip-types: "application/javascript application/x-javascript application/json application/manifest+json application/xml application/rss+xml application/vnd.ms-fontobject image/svg+xml text/css text/plain text/javascript text/xml"
   # ── Cloudflare real client IPs ──────────────────────────────────────────────
-  # Restore end-user IPs once codevertexitsolutions.com is proxied through
+  # Restore end-user IPs once codevertexafrica.com is proxied through
   # Cloudflare (orange cloud). Only connections FROM Cloudflare's published
   # ranges (proxy-real-ip-cidr) have their CF-Connecting-IP honored — direct
   # traffic keeps its socket IP, so this is inert until the DNS cutover and

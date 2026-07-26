@@ -78,7 +78,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://notifications.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://pricing.codevertexitsolutions.com,https://books.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
+    value: "https://notifications.codevertexafrica.com,https://ordering.codevertexafrica.com,https://pricing.codevertexafrica.com,https://books.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
   # Database and Redis
   - name: POSTGRES_URL
     valueFrom:
@@ -116,7 +116,7 @@ env:
         optional: true
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   # Provider secrets (optional - create notifications-provider-secrets manually)
   - name: PROVIDERS_SENDGRID_API_KEY
     valueFrom:
@@ -150,19 +150,19 @@ env:
         optional: true
   # Service URLs for email links (override tenant website for specific services)
   - name: NOTIFICATIONS_ORDERING_APP_URL
-    value: "https://ordersapp.codevertexitsolutions.com"
+    value: "https://ordering.codevertexafrica.com"
   - name: NOTIFICATIONS_RIDER_APP_URL
-    value: "https://riderapp.codevertexitsolutions.com/"
+    value: "https://riderapp.codevertexafrica.com/"
   - name: NOTIFICATIONS_SSO_UI_URL
-    value: "https://accounts.codevertexitsolutions.com"
+    value: "https://accounts.codevertexafrica.com"
   - name: TREASURY_API_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   - name: NOTIFICATIONS_TREASURY_APP_URL
-    value: "https://books.codevertexitsolutions.com"
+    value: "https://books.codevertexafrica.com"
   - name: NOTIFICATIONS_POS_APP_URL
-    value: "https://pos.codevertexitsolutions.com"
+    value: "https://pos.codevertexafrica.com"
   - name: NOTIFICATIONS_LOGISTICS_APP_URL
-    value: "https://logistics.codevertexitsolutions.com"
+    value: "https://logistics.codevertexafrica.com"
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
@@ -180,9 +180,9 @@ env:
   - name: SECURITY_REQUIRE_JWT
     value: "true"
   - name: SECURITY_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: SECURITY_JWT_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: SECURITY_JWT_AUDIENCE
     value: "codevertex"
 resources:
@@ -224,19 +224,19 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     # CORS: allow notifications-ui and other frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://notifications.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, https://pricing.codevertexitsolutions.com, https://books.codevertexitsolutions.com, https://theurbanloftcafe.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://notifications.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://pricing.codevertexafrica.com, https://books.codevertexafrica.com, https://theurbanloftcafe.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    - host: notificationsapi.codevertexitsolutions.com # ui uses notifications.codevertexitsolutions.com
+    - host: notificationsapi.codevertexafrica.com # ui uses notifications.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - notificationsapi.codevertexitsolutions.com
+        - notificationsapi.codevertexafrica.com
       secretName: notifications-api-tls
 # ============================================================================
 # SECURITY CONFIGURATION

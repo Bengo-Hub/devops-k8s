@@ -73,16 +73,16 @@ env:
         optional: true
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Media upload configuration
   - name: MEDIA_ROOT
     value: "/data/media"
   - name: MEDIA_URL_BASE
-    value: "https://logisticsapi.codevertexitsolutions.com"
+    value: "https://logisticsapi.codevertexafrica.com"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ordersapp.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,https://riderapp.codevertexitsolutions.com,http://localhost:3001,https://logistics.codevertexitsolutions.com,https://theurbanloftcafe.com"
+    value: "https://ordering.codevertexafrica.com,https://pos.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,https://riderapp.codevertexafrica.com,http://localhost:3001,https://logistics.codevertexafrica.com,https://theurbanloftcafe.com"
   # Routing engine (Valhalla in-cluster)
   - name: ROUTING_PRIMARY_URL
     value: "http://valhalla.logistics.svc.cluster.local:8002"
@@ -90,11 +90,11 @@ env:
     value: "5m"
   # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_AUDIENCE
     value: "codevertex"
   # Shared S2S key — required for the /api/v1/s2s/dispatch routes (pos-api creates + assigns
@@ -148,19 +148,19 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://logistics.codevertexitsolutions.com, https://riderapp.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://logistics.codevertexafrica.com, https://riderapp.codevertexafrica.com, https://ordering.codevertexafrica.com, https://pos.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    - host: logisticsapi.codevertexitsolutions.com
+    - host: logisticsapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - logisticsapi.codevertexitsolutions.com
+        - logisticsapi.codevertexafrica.com
       secretName: logisticsapi-tls
 pdb:
   enabled: true

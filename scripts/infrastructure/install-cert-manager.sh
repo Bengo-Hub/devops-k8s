@@ -10,7 +10,7 @@ MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
 # Default production configuration
-LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-info@codevertexitsolutions.com}
+LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-info@codevertexafrica.com}
 
 log_section "Installing cert-manager (Production)"
 log_info "Let's Encrypt Email: ${LETSENCRYPT_EMAIL}"

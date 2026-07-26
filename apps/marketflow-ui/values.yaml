@@ -22,25 +22,25 @@ minReadySeconds: 15
 progressDeadlineSeconds: 600
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: "https://marketflowapi.codevertexitsolutions.com"
+    value: "https://marketflowapi.codevertexafrica.com"
   - name: NEXT_PUBLIC_AI_API_URL
-    value: "https://marketflowai.codevertexitsolutions.com"
+    value: "https://marketflowai.codevertexafrica.com"
   - name: NEXT_PUBLIC_AUTH_API_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: NEXT_PUBLIC_SSO_CLIENT_ID
     value: "marketflow-ui"
   - name: NEXT_PUBLIC_APP_URL
-    value: "https://marketflow.codevertexitsolutions.com"
+    value: "https://marketflow.codevertexafrica.com"
   - name: NEXT_PUBLIC_TREASURY_API_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   - name: NEXT_PUBLIC_TREASURY_UI_URL
-    value: "https://books.codevertexitsolutions.com"
+    value: "https://books.codevertexafrica.com"
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
-    value: "https://pricingapi.codevertexitsolutions.com"
+    value: "https://pricingapi.codevertexafrica.com"
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_URL
-    value: "https://pricingapi.codevertexitsolutions.com"
+    value: "https://pricingapi.codevertexafrica.com"
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
-    value: "https://pricing.codevertexitsolutions.com"
+    value: "https://pricing.codevertexafrica.com"
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
@@ -90,13 +90,13 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
   hosts:
-    - host: marketflow.codevertexitsolutions.com
+    - host: marketflow.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - marketflow.codevertexitsolutions.com
+        - marketflow.codevertexafrica.com
       secretName: marketflow-ui-tls
 monitoring:
   enabled: false

@@ -71,20 +71,20 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexitsolutions.com, https://kuraweigh.kura.go.ke, https://kuraweightest.masterspace.co.ke, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://truload.codevertexafrica.com, https://kuraweigh.kura.go.ke, https://kuraweightest.masterspace.co.ke, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Org-ID, X-Station-ID, X-Request-ID, X-Env"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
     # Production backend domain (serves all tenants — commercial and enforcement)
-    - host: truloadapi.codevertexitsolutions.com
+    - host: truloadapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - truloadapi.codevertexitsolutions.com
+        - truloadapi.codevertexafrica.com
       secretName: truload-api-tls
 envFromSecret: truload-backend-env
 # Additional environment variables (non-secret config)
@@ -92,9 +92,9 @@ envFromSecret: truload-backend-env
 env:
   # Auth-api JWKS URL for SSO token validation (commercial tenants)
   - name: Auth__JwksUrl
-    value: "https://sso.codevertexitsolutions.com/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/.well-known/jwks.json"
   - name: Auth__SsoIssuer
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   # Treasury-api base URL (commercial tenant payments)
   - name: Treasury__ApiUrl
     value: "http://treasury-api.treasury.svc.cluster.local:8080"
@@ -130,7 +130,7 @@ env:
   # kuraweightest = axle load enforcement test (road authority), truload = commercial weighing tenants
   # Add enforcement tenant custom frontend domains here as they are onboarded
   - name: CORS__AllowedOrigins
-    value: "https://kuraweigh.kura.go.ke,https://kuraweightest.masterspace.co.ke,https://truload.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com"
+    value: "https://kuraweigh.kura.go.ke,https://kuraweightest.masterspace.co.ke,https://truload.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com"
   # Notifications-api integration — override appsettings.json defaults
   # TenantId is resolved dynamically from the logged-in user's organisation (ITenantContext),
   # so only BaseUrl and ApiKey need to be set here.
@@ -144,7 +144,7 @@ env:
   # Public-facing API URL used to build absolute logo URLs in emails.
   # Must be the full origin without trailing slash.
   - name: NotificationService__PublicBaseUrl
-    value: "https://truloadapi.codevertexitsolutions.com"
+    value: "https://truloadapi.codevertexafrica.com"
 # Per-tenant DB override: kura tenant uses a dedicated 'kuraweigh' PostgreSQL database.
 # The connection string is injected at runtime via the truload-backend-env K8s secret.
 # Add TENANTDATABASES__KURA=Host=...;Database=kuraweigh;Username=app;Password=...

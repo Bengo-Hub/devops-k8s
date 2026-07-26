@@ -259,15 +259,15 @@ env:
         key: GLOBAL_ADMIN_PASSWORD
   # ── CORS ──
   - name: CORS_ORIGINS
-    value: '["https://ispbilling.codevertexitsolutions.com"]'
+    value: '["https://ispbilling.codevertexafrica.com"]'
   - name: CORS_ALLOW_CREDENTIALS
     value: "true"
   - name: FRONTEND_URL
-    value: "https://ispbilling.codevertexitsolutions.com"
+    value: "https://ispbilling.codevertexafrica.com"
   - name: API_BASE_URL
-    value: "https://ispbillingapi.codevertexitsolutions.com/api/v1"
+    value: "https://ispbillingapi.codevertexafrica.com/api/v1"
   - name: BACKEND_URL
-    value: "https://ispbillingapi.codevertexitsolutions.com"
+    value: "https://ispbillingapi.codevertexafrica.com"
   # ── M-PESA ──
   - name: MPESA_ENVIRONMENT
     value: "production"
@@ -292,7 +292,7 @@ env:
         name: isp-billing-backend-secrets
         key: MPESA_SHORTCODE
   - name: MPESA_CALLBACK_URL
-    value: "https://ispbillingapi.codevertexitsolutions.com/api/v1/payments/mpesa/callback"
+    value: "https://ispbillingapi.codevertexafrica.com/api/v1/payments/mpesa/callback"
   # ── SMS ──
   - name: SMS_PROVIDER
     valueFrom:
@@ -351,7 +351,7 @@ env:
   # so the backend boots fine before the WG setup script has run (VPN
   # enrollment is simply disabled until WG_SERVER_PUBLIC_KEY is present).
   - name: WG_ENDPOINT
-    value: "vpn.codevertexitsolutions.com:51820"
+    value: "vpn.codevertexafrica.com:51820"
   - name: WG_SUBNET
     value: "10.8.0.0/16"
   - name: WG_SERVER_PUBLIC_KEY
@@ -385,7 +385,7 @@ env:
     value: "10"
   # ── VPN overlay (remote Winbox / management) ──
   - name: VPN_DOMAIN
-    value: "vpn.codevertexitsolutions.com"
+    value: "vpn.codevertexafrica.com"
   # ── Rate Limiting ──
   - name: RATE_LIMIT_ENABLED
     value: "true"
@@ -424,7 +424,7 @@ env:
         optional: true
   # SSO (central auth-api). Local login remains dual-run.
   - name: SSO_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: SSO_AUDIENCE
     value: "isp-billing-ui"
   # Treasury S2S base — use the public ingress (matches notifications-api,
@@ -433,9 +433,9 @@ env:
   # so it returns "All connection attempts failed" whenever treasury-api is
   # scaled-to-zero / mid-restart — which broke hotspot purchase intent creation.
   - name: TREASURY_API_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   - name: TREASURY_PAY_PAGE_URL
-    value: "https://books.codevertexitsolutions.com"
+    value: "https://books.codevertexafrica.com"
   - name: SUBSCRIPTIONS_API_URL
     value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: NOTIFICATIONS_API_URL
@@ -511,17 +511,17 @@ ingress:
     nginx.ingress.kubernetes.io/limit-connections: "100"
     # CORS headers (backup — app-level CORS is primary)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ispbilling.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ispbilling.codevertexafrica.com"
     # Allow the custom headers used by the frontend (preflight must include these)
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-Request-ID,X-Organization-Slug,x-organization-slug"
   hosts:
-    - host: ispbillingapi.codevertexitsolutions.com
+    - host: ispbillingapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - ispbillingapi.codevertexitsolutions.com
+        - ispbillingapi.codevertexafrica.com
       secretName: isp-billing-backend-tls
 # ============================================================================
 # MONITORING AND OBSERVABILITY

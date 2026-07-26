@@ -61,13 +61,13 @@ grafana:
           return 200;
         }
     hosts:
-      - grafana.codevertexitsolutions.com
+      - grafana.codevertexafrica.com
     path: /
     pathType: Prefix
     tls:
       - secretName: grafana-tls
         hosts:
-          - grafana.codevertexitsolutions.com
+          - grafana.codevertexafrica.com
 
 alertmanager:
   alertmanagerSpec:

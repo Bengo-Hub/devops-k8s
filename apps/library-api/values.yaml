@@ -72,21 +72,21 @@ env:
         key: REDIS_PASSWORD
         optional: true
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: MEDIA_ROOT
     value: "/data/media"
   - name: EBOOK_ROOT
     value: "/data/media/ebooks"
   - name: MEDIA_URL_BASE
-    value: "https://libraryapi.codevertexitsolutions.com"
+    value: "https://libraryapi.codevertexafrica.com"
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: TREASURY_SERVICE_URL
-    value: "https://booksapi.codevertexitsolutions.com"
+    value: "https://booksapi.codevertexafrica.com"
   - name: NOTIFICATIONS_SERVICE_URL
-    value: "https://notificationsapi.codevertexitsolutions.com"
+    value: "https://notificationsapi.codevertexafrica.com"
   - name: SUBSCRIPTIONS_SERVICE_URL
-    value: "https://pricingapi.codevertexitsolutions.com"
+    value: "https://pricingapi.codevertexafrica.com"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: INTERNAL_SERVICE_KEY
@@ -102,7 +102,7 @@ env:
         key: TERMINAL_JWT_SECRET
         optional: true
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://library.codevertexitsolutions.com,https://libraryapi.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001"
+    value: "https://library.codevertexafrica.com,https://libraryapi.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
 resources:
   requests:
     cpu: 50m
@@ -144,19 +144,19 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://library.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://library.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    - host: libraryapi.codevertexitsolutions.com
+    - host: libraryapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - libraryapi.codevertexitsolutions.com
+        - libraryapi.codevertexafrica.com
       secretName: libraryapi-tls
 pdb:
   enabled: true

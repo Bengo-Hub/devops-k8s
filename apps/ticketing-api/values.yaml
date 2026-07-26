@@ -67,12 +67,12 @@ env:
         optional: true
   # NATS - standard key EVENTS_NATS_URL
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Auth service (JWT validation, JWKS, OTP)
   - name: AUTH_SERVICE_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: AUTH_ISSUER
     value: bengobox-auth
   - name: AUTH_AUDIENCE
@@ -88,7 +88,7 @@ env:
         key: INTERNAL_SERVICE_KEY
   # CORS allowed origins
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ticketing.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3009"
+    value: "https://ticketing.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3009"
 resources:
   requests:
     cpu: 50m
@@ -123,19 +123,19 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ticketing.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ticketing.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Tenant-ID, X-API-Key, X-OTP-Token"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    - host: ticketingapi.codevertexitsolutions.com
+    - host: ticketingapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - ticketingapi.codevertexitsolutions.com
+        - ticketingapi.codevertexafrica.com
       secretName: ticketing-api-tls
 pdb:
   enabled: true

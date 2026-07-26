@@ -45,7 +45,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com"
+    value: "https://marketflow.codevertexafrica.com,https://accounts.codevertexafrica.com"
   # Database
   - name: POSTGRES_URL
     valueFrom:
@@ -80,20 +80,20 @@ env:
     value: marketflow
   # NATS Events
   - name: MF_EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: MF_EVENTS_ENABLED
     value: "true"
   # Security (JWT via auth-api JWKS)
   - name: MF_SECURITY_REQUIRE_JWT
     value: "true"
   - name: MF_SECURITY_JWKS_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/.well-known/jwks.json"
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: MF_SECURITY_JWT_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: MF_SECURITY_JWT_AUDIENCE
     value: "codevertex"
   - name: MF_SECURITY_AUTH_SERVICE_URL
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   # 32-byte base64 key used to encrypt ProviderSetting secrets at rest.
   # Must be populated before any provider_configure call with secret_keys;
   # rotation requires re-encrypting existing rows.
@@ -243,20 +243,20 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexafrica.com,https://accounts.codevertexafrica.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/limit-connections: "200"
   hosts:
-    - host: marketflowapi.codevertexitsolutions.com
+    - host: marketflowapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - marketflowapi.codevertexitsolutions.com
+        - marketflowapi.codevertexafrica.com
       secretName: marketflow-api-tls
 # ============================================================================
 # MONITORING

@@ -9,4 +9,4 @@ metadata:
 data:
   # Backend base URL the WG reconcile loop pulls the authoritative peer list
   # from (GET {BACKEND_URL}/api/v1/vpn/peers). Non-secret.
-  BACKEND_URL: "https://ispbillingapi.codevertexitsolutions.com"
+  BACKEND_URL: "https://ispbillingapi.codevertexafrica.com"

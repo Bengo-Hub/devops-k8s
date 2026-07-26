@@ -37,9 +37,9 @@ strategy:
     maxUnavailable: 0
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://projectsapi.codevertexitsolutions.com
+    value: https://projectsapi.codevertexafrica.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexitsolutions.com
+    value: https://notifications.codevertexafrica.com
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
@@ -73,13 +73,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: projects.codevertexitsolutions.com
+    - host: projects.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - projects.codevertexitsolutions.com
+        - projects.codevertexafrica.com
       secretName: projects-ui-tls
 monitoring:
   enabled: false

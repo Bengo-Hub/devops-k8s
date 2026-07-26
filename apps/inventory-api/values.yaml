@@ -86,12 +86,12 @@ env:
         optional: true
   # NATS - standard key EVENTS_NATS_URL (Events.NATSURL in config)
   - name: EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   # Media upload configuration
   - name: MEDIA_ROOT
     value: "/data/media"
   - name: MEDIA_URL_BASE
-    value: "https://inventoryapi.codevertexitsolutions.com"
+    value: "https://inventoryapi.codevertexafrica.com"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Shared S2S key — validates inbound requests from other services (ordering, pos, etc.)
@@ -102,7 +102,7 @@ env:
         key: INTERNAL_SERVICE_KEY
         optional: true
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://inventory.codevertexitsolutions.com,https://inventoryapi.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com"
+    value: "https://inventory.codevertexafrica.com,https://inventoryapi.codevertexafrica.com,https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com"
 resources:
   requests:
     # Lowered 100m→50m: the single k3s node sits at ~99% CPU requests, so with maxSurge=0 the
@@ -153,19 +153,19 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexitsolutions.com, https://pos.codevertexitsolutions.com, https://ordersapp.codevertexitsolutions.com, https://accounts.codevertexitsolutions.com, https://sso.codevertexitsolutions.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexafrica.com, https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
-    - host: inventoryapi.codevertexitsolutions.com
+    - host: inventoryapi.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - inventoryapi.codevertexitsolutions.com
+        - inventoryapi.codevertexafrica.com
       secretName: inventoryapi-tls
 pdb:
   enabled: true

@@ -1,6 +1,6 @@
 # Codevertex Website — Production Helm Values
 # Next.js 16 marketing & academy site
-# Namespace: codevertex | Domain: codevertexitsolutions.com
+# Namespace: codevertex | Domain: codevertexafrica.com
 nameOverride: codevertex-website
 fullnameOverride: codevertex-website
 # ============================================================================
@@ -53,13 +53,13 @@ env:
   - name: NEXT_PUBLIC_TREASURY_TENANT
     value: codevertex
   - name: NEXT_PUBLIC_TREASURY_PAY_URL
-    value: https://books.codevertexitsolutions.com/pay
+    value: https://books.codevertexafrica.com/pay
   # SSO link
   - name: NEXT_PUBLIC_SSO_URL
-    value: https://accounts.codevertexitsolutions.com
+    value: https://accounts.codevertexafrica.com
   # Application URL
   - name: NEXT_PUBLIC_APP_URL
-    value: https://codevertexitsolutions.com
+    value: https://codevertexafrica.com
   # Notifications service (S2S email) — port 4000
   - name: NOTIFICATIONS_API_URL
     value: http://notifications-api.notifications.svc.cluster.local:4000
@@ -68,7 +68,7 @@ env:
     value: nats://nats.messaging.svc.cluster.local:4222
   # MarketFlow AI proxy — Vera chatbot server-side calls
   - name: MARKETFLOW_AI_URL
-    value: https://marketflowai.codevertexitsolutions.com
+    value: https://marketflowai.codevertexafrica.com
   # Node environment
   - name: NODE_ENV
     value: production
@@ -119,18 +119,18 @@ ingress:
     # Cache static assets at ingress level
     nginx.ingress.kubernetes.io/proxy-buffering: "on"
   hosts:
-    - host: codevertexitsolutions.com
+    - host: codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
-    - host: www.codevertexitsolutions.com
+    - host: www.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - codevertexitsolutions.com
-        - www.codevertexitsolutions.com
+        - codevertexafrica.com
+        - www.codevertexafrica.com
       secretName: codevertex-website-tls
 # ============================================================================
 # MONITORING

@@ -1,10 +1,10 @@
 #!/bin/bash
-# Activate Cloudflare DNS-01 certificate issuance for codevertexitsolutions.com.
+# Activate Cloudflare DNS-01 certificate issuance for codevertexafrica.com.
 #
 # Run ON the cluster node (or anywhere with kubectl access) AFTER:
-#   1. The Cloudflare zone for codevertexitsolutions.com exists, and
+#   1. The Cloudflare zone for codevertexafrica.com exists, and
 #   2. An API token has been created (My Profile -> API Tokens -> template
-#      "Edit zone DNS", scoped to codevertexitsolutions.com only).
+#      "Edit zone DNS", scoped to codevertexafrica.com only).
 #
 # Usage: ./activate-dns01.sh <CLOUDFLARE_API_TOKEN>
 #
@@ -27,7 +27,7 @@ kubectl create secret generic cloudflare-api-token \
   --from-literal=api-token="$TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "==> Applying ClusterIssuers (DNS-01 for codevertexitsolutions.com, HTTP-01 fallback)"
+echo "==> Applying ClusterIssuers (DNS-01 for codevertexafrica.com, HTTP-01 fallback)"
 kubectl apply -f "$REPO_ROOT/manifests/cert-manager-clusterissuer.yaml"
 
 echo "==> Verifying issuer readiness"

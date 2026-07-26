@@ -37,23 +37,23 @@ strategy:
     maxUnavailable: 0
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://inventoryapi.codevertexitsolutions.com
+    value: https://inventoryapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SSO_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexitsolutions.com
+    value: https://notifications.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
-    value: https://pricingapi.codevertexitsolutions.com
+    value: https://pricingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
-    value: https://pricing.codevertexitsolutions.com
+    value: https://pricing.codevertexafrica.com
   - name: NEXT_PUBLIC_POS_UI_URL
-    value: https://pos.codevertexitsolutions.com
+    value: https://pos.codevertexafrica.com
   - name: NEXT_PUBLIC_TREASURY_UI_URL
-    value: https://books.codevertexitsolutions.com
+    value: https://books.codevertexafrica.com
   - name: NEXT_PUBLIC_ORDERING_UI_URL
-    value: https://ordersapp.codevertexitsolutions.com
+    value: https://ordering.codevertexafrica.com
   - name: NEXT_PUBLIC_AUTH_UI_URL
-    value: https://accounts.codevertexitsolutions.com
+    value: https://accounts.codevertexafrica.com
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
@@ -81,13 +81,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: inventory.codevertexitsolutions.com
+    - host: inventory.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - inventory.codevertexitsolutions.com
+        - inventory.codevertexafrica.com
       secretName: inventory-ui-tls
 monitoring:
   enabled: false

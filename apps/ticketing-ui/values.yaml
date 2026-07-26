@@ -37,15 +37,15 @@ strategy:
     maxUnavailable: 0
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://ticketingapi.codevertexitsolutions.com
+    value: https://ticketingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SSO_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_SSO_CLIENT_ID
     value: ticketing-ui
   - name: NEXT_PUBLIC_AUTH_API_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexitsolutions.com
+    value: https://notifications.codevertexafrica.com
   - name: NEXT_PUBLIC_SENTRY_DSN
     valueFrom:
       secretKeyRef:
@@ -73,13 +73,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: ticketing.codevertexitsolutions.com
+    - host: ticketing.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - ticketing.codevertexitsolutions.com
+        - ticketing.codevertexafrica.com
       secretName: ticketing-ui-tls
 monitoring:
   enabled: false

@@ -1,5 +1,5 @@
 # NATS Monitoring HTTP Ingress
-# Exposes the NATS HTTP monitoring endpoint (port 8222) on nats.codevertexitsolutions.com.
+# Exposes the NATS HTTP monitoring endpoint (port 8222) on nats.codevertexafrica.com.
 # Provides JSON endpoints: /varz, /connz, /subsz, /routez, /healthz, /jsz
 #
 # The NATS Helm chart service only exposes the client port (4222).
@@ -36,10 +36,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - nats.codevertexitsolutions.com
+        - nats.codevertexafrica.com
       secretName: nats-monitoring-tls
   rules:
-    - host: nats.codevertexitsolutions.com
+    - host: nats.codevertexafrica.com
       http:
         paths:
           - path: /

@@ -1,14 +1,14 @@
 # Standalone Ingress (NOT part of the pos-api Helm chart's own Ingress) for the branded,
-# bit.ly-style receipt short-link host: https://r.codevertexitsolutions.com/{code}
+# bit.ly-style receipt short-link host: https://r.codevertexafrica.com/{code}
 #
 # Deliberately kept OUT of apps/pos-api/values.yaml: that Ingress's `annotations` block is a
 # single shared object applied to the WHOLE resource (not per-host), and this route needs an
-# nginx rewrite-target regex capture that would otherwise apply to posapi.codevertexitsolutions.com's
+# nginx rewrite-target regex capture that would otherwise apply to posapi.codevertexafrica.com's
 # main "/" path too (which has no capture group), breaking all normal API traffic through it. A
 # separate Ingress resource keeps the rewrite fully isolated to this one host.
 #
-# Requires a DNS A record: r.codevertexitsolutions.com -> the cluster's public origin IP
-# (same host/proxied=false convention as the other codevertexitsolutions.com records — see
+# Requires a DNS A record: r.codevertexafrica.com -> the cluster's public origin IP
+# (same host/proxied=false convention as the other codevertexafrica.com records — see
 # scripts/cloudflare/populate-zone.py). cert-manager auto-issues its own cert via the existing
 # letsencrypt-prod ClusterIssuer (DNS-01 already covers the whole zone) — no manual cert step.
 #
@@ -32,10 +32,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - r.codevertexitsolutions.com
+        - r.codevertexafrica.com
       secretName: pos-receipt-shortlink-tls
   rules:
-    - host: r.codevertexitsolutions.com
+    - host: r.codevertexafrica.com
       http:
         paths:
           - path: /(.*)

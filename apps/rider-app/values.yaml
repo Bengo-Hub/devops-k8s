@@ -41,17 +41,17 @@ minReadySeconds: 30
 # ============================================================================
 env:
   - name: NEXT_PUBLIC_API_URL
-    value: https://logisticsapi.codevertexitsolutions.com
+    value: https://logisticsapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SSO_URL
-    value: https://sso.codevertexitsolutions.com
+    value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_APP_URL
-    value: https://riderapp.codevertexitsolutions.com
+    value: https://riderapp.codevertexafrica.com
   - name: NEXT_PUBLIC_DEFAULT_TENANT
     value: urban-loft
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
-    value: https://pricingapi.codevertexitsolutions.com
+    value: https://pricingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
-    value: https://pricing.codevertexitsolutions.com
+    value: https://pricing.codevertexafrica.com
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
       secretKeyRef:
@@ -100,13 +100,13 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: riderapp.codevertexitsolutions.com
+    - host: riderapp.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - riderapp.codevertexitsolutions.com
+        - riderapp.codevertexafrica.com
       secretName: rider-app-tls
 # ============================================================================
 # MONITORING AND OBSERVABILITY
