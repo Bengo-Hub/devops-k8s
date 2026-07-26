@@ -1,0 +1,47 @@
+# Standalone Ingress (NOT part of the pos-api Helm chart's own Ingress) for the branded,
+# bit.ly-style receipt short-link host: https://r.codevertexitsolutions.com/{code}
+#
+# Deliberately kept OUT of apps/pos-api/values.yaml: that Ingress's `annotations` block is a
+# single shared object applied to the WHOLE resource (not per-host), and this route needs an
+# nginx rewrite-target regex capture that would otherwise apply to posapi.codevertexitsolutions.com's
+# main "/" path too (which has no capture group), breaking all normal API traffic through it. A
+# separate Ingress resource keeps the rewrite fully isolated to this one host.
+#
+# Requires a DNS A record: r.codevertexitsolutions.com -> the cluster's public origin IP
+# (same host/proxied=false convention as the other codevertexitsolutions.com records — see
+# scripts/cloudflare/populate-zone.py). cert-manager auto-issues its own cert via the existing
+# letsencrypt-prod ClusterIssuer (DNS-01 already covers the whole zone) — no manual cert step.
+#
+# Not synced by the ArgoCD root app (which only watches path: apps) — apply manually:
+#   kubectl apply -f manifests/pos-receipt-shortlink-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pos-receipt-shortlink
+  namespace: pos
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # /{code} -> pos-api's existing /api/v1/r/{code} route. No pos-api code depends on this
+    # rewrite existing — the long-form host still works unchanged if this Ingress/DNS record is
+    # ever removed, since pos-api's own /api/v1/r/{code} route is unaffected either way.
+    nginx.ingress.kubernetes.io/rewrite-target: /api/v1/r/$1
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - r.codevertexitsolutions.com
+      secretName: pos-receipt-shortlink-tls
+  rules:
+    - host: r.codevertexitsolutions.com
+      http:
+        paths:
+          - path: /(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: pos-api
+                port:
+                  number: 4000
