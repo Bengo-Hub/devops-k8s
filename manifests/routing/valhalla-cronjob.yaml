@@ -22,6 +22,8 @@ spec:
           containers:
             - name: valhalla-refresh
               image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+              securityContext:
+                runAsUser: 0
               command:
                 - /bin/bash
                 - -c
