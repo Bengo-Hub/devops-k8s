@@ -7,7 +7,7 @@ outbound; each router keeps its **own** private key.
 ## Architecture
 
 - **Server**: `wg0 = 10.8.0.1/16`, UDP `51820` exposed on the node via `hostPort`
-  at `vpn.codevertexitsolutions.com:51820`. Runs in ns `vpn`, `NET_ADMIN` +
+  at `vpn.codevertexafrica.com:51820`. Runs in ns `vpn`, `NET_ADMIN` +
   `SYS_MODULE`, `/dev/net/tun`, `net.ipv4.ip_forward=1`.
 - **Server keypair**: created **once** by `setup.sh` into Secret
   `vpn/wg-server-keys` (`privatekey`, `publickey`, `WG_PEER_SYNC_TOKEN`). The
@@ -23,7 +23,7 @@ outbound; each router keeps its **own** private key.
 
 ## First-time deploy
 
-1. **DNS** (already done): `vpn.codevertexitsolutions.com A -> 77.237.232.66`.
+1. **DNS** (already done): `vpn.codevertexafrica.com A -> 77.237.232.66`.
 2. **Open UDP 51820** to the node at the host firewall / cloud SG.
 3. **Run setup** (idempotent — generates keys, syncs backend Secret):
    ```sh
@@ -41,7 +41,7 @@ kubectl -n vpn get pods
 kubectl -n vpn exec deploy/wireguard -- wg show
 kubectl -n vpn exec deploy/wireguard -- iptables -t nat -nL WG_WINBOX_DNAT
 curl -H "Authorization: Bearer <WG_PEER_SYNC_TOKEN>" \
-  https://ispbillingapi.codevertexitsolutions.com/api/v1/vpn/peers
+  https://ispbillingapi.codevertexafrica.com/api/v1/vpn/peers
 ```
 
 ## Notes / caveats

@@ -456,7 +456,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: info@codevertexitsolutions.com
+    email: info@codevertexafrica.com
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
@@ -656,7 +656,7 @@ kubectl apply -f apps/root-app.yaml
 - Documentation: `docs/README.md`
 - Issues: GitHub Issues
 - Contact: codevertexitsolutions@gmail.com
-- Website: https://www.codevertexitsolutions.com
+- Website: https://www.codevertexafrica.com
 
 # Deploy test app
 cat <<EOF | kubectl apply -f -

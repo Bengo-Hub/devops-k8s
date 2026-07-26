@@ -221,4 +221,4 @@ Support
 - Documentation: `docs/README.md`
 - Issues: GitHub Issues
 - Contact: codevertexitsolutions@gmail.com
-- Website: https://www.codevertexitsolutions.com
+- Website: https://www.codevertexafrica.com

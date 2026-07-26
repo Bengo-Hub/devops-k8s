@@ -111,14 +111,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
   hosts:
-    - host: routing.codevertexitsolutions.com
+    - host: routing.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - routing.codevertexitsolutions.com
-      secretName: routing-codevertexitsolutions-tls
+        - routing.codevertexafrica.com
+      secretName: routing-codevertexafrica-tls
 # ============================================================================
 # VERTICAL POD AUTOSCALER
 # ============================================================================

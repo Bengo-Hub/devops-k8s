@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Populate the Cloudflare zone for codevertexitsolutions.com.
+"""Populate the Cloudflare zone for codevertexafrica.com.
 
 Mirrors the authoritative DNS as audited from the cloudoon nameservers on
 2026-07-13, so the registrar nameserver flip is a no-op for traffic. Merge
@@ -23,12 +23,12 @@ API = "https://api.cloudflare.com/client/v4"
 
 ORIGIN = "77.237.232.66"        # mss-prod ingress
 TRUEHOST = "102.212.247.163"    # das112b.superfasthost01.cloud (legacy shared host)
-APEX = "codevertexitsolutions.com"
+APEX = "codevertexafrica.com"
 
 # Hosts served by the k8s ingress (A -> origin, DNS-only).
 ORIGIN_HOSTS = [
     "@", "www", "accounts", "sso", "pricing", "pricingapi",
-    "pos", "posapi", "inventory", "inventoryapi",
+    "pos", "posapi", "r", "inventory", "inventoryapi",
     "erp", "erpapi", "marketflow", "marketflowapi", "marketflowai",
     "logistics", "logisticsapi", "riderapp", "routing", "tiles",
     "ordersapp", "orderingapi", "notifications", "notificationsapi",

@@ -5,7 +5,7 @@ ArgoCD application for deploying the Go backend that powers ordering, logistics,
 ## Configuration Highlights
 
 - Namespace: `ordering`
-- Domain: `orderingapi.codevertexitsolutions.com`
+- Domain: `orderingapi.codevertexafrica.com`
 - Image: `docker.io/codevertex/ordering-backend`
 - Health endpoint: `/healthz`
 - Metrics endpoint: `/metrics`
