@@ -1,13 +1,13 @@
-# Cloudflare cutover — codevertexitsolutions.com
+# Cloudflare cutover — codevertexafrica.com
 
 Goal: put Cloudflare's edge (Nairobi PoP) in front of all
-`*.codevertexitsolutions.com` traffic to cut the ~150–200 ms Kenya↔Contabo
+`*.codevertexafrica.com` traffic to cut the ~150–200 ms Kenya↔Contabo
 RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
 
 ## Cluster-side prep (done, 2026-07-13)
 
 - `manifests/cert-manager-clusterissuer.yaml` — DNS-01 (Cloudflare) solver
-  scoped to `codevertexitsolutions.com`; HTTP-01 fallback kept for
+  scoped to `codevertexafrica.com`; HTTP-01 fallback kept for
   masterspace.co.ke / kura.go.ke / theurbanloftcafe.com (not proxied).
   ACME contact: codevertexitsolutions@gmail.com.
   **Not applied until the API token exists** — activation is one command
@@ -19,7 +19,7 @@ RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
 
 ## Cutover order (zero-downtime)
 
-1. Cloudflare dashboard: add zone `codevertexitsolutions.com` (Free plan),
+1. Cloudflare dashboard: add zone `codevertexafrica.com` (Free plan),
    import/verify all DNS records **DNS-only (grey cloud)**, including MX/TXT.
    Every web host is A → 77.237.232.66.
 2. Registrar: switch nameservers from cloudoon → the two assigned Cloudflare

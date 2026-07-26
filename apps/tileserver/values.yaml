@@ -98,14 +98,14 @@ ingress:
     nginx.ingress.kubernetes.io/configuration-snippet: |
       add_header Cache-Control "public, max-age=86400, s-maxage=604800";
   hosts:
-    - host: tiles.codevertexitsolutions.com
+    - host: tiles.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - tiles.codevertexitsolutions.com
-      secretName: tiles-codevertexitsolutions-tls
+        - tiles.codevertexafrica.com
+      secretName: tiles-codevertexafrica-tls
 # ============================================================================
 # VERTICAL POD AUTOSCALER
 # ============================================================================

@@ -302,6 +302,6 @@ After each phase, verify:
 
 For issues or questions:
 - **Email:** codevertexitsolutions@gmail.com
-- **Website:** https://www.codevertexitsolutions.com
+- **Website:** https://www.codevertexafrica.com
 - **GitHub Issues:** Create issues in the devops-k8s repository
 

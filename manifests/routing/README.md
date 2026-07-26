@@ -7,10 +7,10 @@ Self-hosted OpenStreetMap stack for the logistics platform. Replaces paid Google
 ```
 Geofabrik (free OSM data)
     │
-    ├─→ Planetiler ──→ kenya.mbtiles ──→ TileServer-GL ──→ tiles.codevertexitsolutions.com
+    ├─→ Planetiler ──→ kenya.mbtiles ──→ TileServer-GL ──→ tiles.codevertexafrica.com
     │   (weekly CronJob)                  (vector tiles)     (MapLibre GL JS frontends)
     │
-    └─→ Valhalla ──→ routing graph ──→ logistics-api ──→ routing.codevertexitsolutions.com
+    └─→ Valhalla ──→ routing graph ──→ logistics-api ──→ routing.codevertexafrica.com
         (auto-rebuild)                  (ETA, directions)    (tenant-scoped, rate-limited)
 ```
 
@@ -18,9 +18,9 @@ Geofabrik (free OSM data)
 
 | Service | Purpose | Port | Domain |
 |---------|---------|------|--------|
-| **TileServer-GL** | Vector tile server for MapLibre frontends | 8080 | `tiles.codevertexitsolutions.com` |
+| **TileServer-GL** | Vector tile server for MapLibre frontends | 8080 | `tiles.codevertexafrica.com` |
 | **Planetiler** | Generates OpenMapTiles mbtiles from OSM data | — | CronJob (weekly) |
-| **Valhalla** | Routing engine (ETA, distance matrix, isochrones) | 8002 | `routing.codevertexitsolutions.com` |
+| **Valhalla** | Routing engine (ETA, distance matrix, isochrones) | 8002 | `routing.codevertexafrica.com` |
 
 ## Data Pipeline
 
@@ -40,11 +40,11 @@ manifests/routing/
 ├── tileserver-pvc.yaml          # 5Gi PVC for mbtiles data
 ├── tileserver-config.yaml       # TileServer-GL config (osm-bright style)
 ├── tileserver-deployment.yaml   # TileServer-GL + Planetiler init container
-├── tileserver-service.yaml      # Service + Ingress (tiles.codevertexitsolutions.com)
+├── tileserver-service.yaml      # Service + Ingress (tiles.codevertexafrica.com)
 ├── planetiler-cronjob.yaml      # Weekly tile regeneration
 ├── valhalla-pvc.yaml            # 10Gi PVC for routing data
 ├── valhalla-deployment.yaml     # Valhalla routing engine
-├── valhalla-service.yaml        # Service + Ingress (routing.codevertexitsolutions.com)
+├── valhalla-service.yaml        # Service + Ingress (routing.codevertexafrica.com)
 └── valhalla-cronjob.yaml        # Weekly OSM data refresh
 ```
 
@@ -88,7 +88,7 @@ kubectl get cronjobs -n logistics
 
 ## Tile API
 
-Base URL: `https://tiles.codevertexitsolutions.com`
+Base URL: `https://tiles.codevertexafrica.com`
 Internal: `http://tileserver.logistics.svc.cluster.local:8080`
 
 | Endpoint | Format | Usage |
@@ -104,8 +104,8 @@ Internal: `http://tileserver.logistics.svc.cluster.local:8080`
 import { MapProvider, MapContainer } from '@bengo-hub/maps';
 
 <MapProvider
-  tileServerUrl="https://tiles.codevertexitsolutions.com"
-  apiBaseUrl="https://logisticsapi.codevertexitsolutions.com/api/v1"
+  tileServerUrl="https://tiles.codevertexafrica.com"
+  apiBaseUrl="https://logisticsapi.codevertexafrica.com/api/v1"
   authToken={jwt}
 >
   <MapContainer center={[36.82, -1.29]} zoom={13} />
@@ -114,7 +114,7 @@ import { MapProvider, MapContainer } from '@bengo-hub/maps';
 
 ## Valhalla API
 
-Base URL: `https://routing.codevertexitsolutions.com`
+Base URL: `https://routing.codevertexafrica.com`
 Internal: `http://valhalla.logistics.svc.cluster.local:8002`
 
 | Endpoint | Purpose |

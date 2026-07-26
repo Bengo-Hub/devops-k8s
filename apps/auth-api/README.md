@@ -143,7 +143,7 @@ http://auth-api.auth.svc.cluster.local:4101
 ### External (Ingress)
 
 ```
-https://sso.codevertexitsolutions.com
+https://sso.codevertexafrica.com
 ```
 
 ## Monitoring

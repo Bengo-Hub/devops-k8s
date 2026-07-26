@@ -4,7 +4,7 @@ GitHub Secrets
 Organization-level (recommended):
 - REGISTRY_USERNAME: Docker Hub username (default: codevertex)
 - REGISTRY_PASSWORD: Docker Hub token/password (required for authenticated pulls)
-- REGISTRY_EMAIL: Docker Hub email (default: info@codevertexitsolutions.com)
+- REGISTRY_EMAIL: Docker Hub email (default: info@codevertexafrica.com)
 - KUBE_CONFIG: base64-encoded kubeconfig with apply permissions (for K8s deploy)
 - SSH_PRIVATE_KEY: SSH key for VPS deployments over SSH (optional for K8s)
 - DOCKER_SSH_KEY: base64 private key for docker build ssh forwarding (optional)
@@ -64,8 +64,8 @@ Cleanup (opt-in only):
 
 Contact emails:
 - Org email: codevertexitsolutions@gmail.com
-- Business email: info@codevertexitsolutions.com
-Website: https://www.codevertexitsolutions.com
+- Business email: info@codevertexafrica.com
+Website: https://www.codevertexafrica.com
 
 **Repository-level secrets (for application deployment workflows):**
 - `GH_PAT`: GitHub Personal Access Token for cross-repo Git operations

@@ -323,7 +323,7 @@ stringData:
     - name: 'email'
       email_configs:
       - to: 'codevertexitsolutions@gmail.com'
-        from: 'alerts@codevertexitsolutions.com'
+        from: 'alerts@codevertexafrica.com'
         smarthost: smtp.gmail.com:587
         auth_username: 'codevertexitsolutions@gmail.com'
         auth_password: '<APP_PASSWORD>'
@@ -341,7 +341,7 @@ kubectl rollout restart statefulset -n monitoring alertmanager-prometheus-kube-p
 
 **Email Configuration:**
 - Alerts sent to: `codevertexitsolutions@gmail.com`
-- From: `alerts@codevertexitsolutions.com`
+- From: `alerts@codevertexafrica.com`
 - SMTP: Gmail (smtp.gmail.com:587)
 - Auth: Requires Gmail App Password (not regular password)
 

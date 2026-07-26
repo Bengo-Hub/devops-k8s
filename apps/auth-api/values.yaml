@@ -47,7 +47,7 @@ env:
     value: "4000"
   # Frontend UI URL for OAuth redirects
   - name: AUTH_UI_URL
-    value: "https://accounts.codevertexitsolutions.com"
+    value: "https://accounts.codevertexafrica.com"
   # Database connection — config.go DatabaseConfig expects POSTGRES_* (envPrefix:"")
   - name: POSTGRES_URL
     valueFrom:
@@ -82,7 +82,7 @@ env:
         optional: true
   # NATS Events (EventsConfig expects AUTH_EVENTS_* prefix via caarlos0/env)
   - name: AUTH_EVENTS_NATS_URL
-    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexitsolutions.com:4222"
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: AUTH_EVENTS_ENABLED
     value: "true"
   # JWT Token Keys (RSA keys for token signing/verification)
@@ -92,7 +92,7 @@ env:
     value: /etc/auth-keys/public.pem
   # Token issuer and audience for JWT
   - name: AUTH_TOKEN_ISSUER
-    value: "https://sso.codevertexitsolutions.com"
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_TOKEN_AUDIENCE
     value: "codevertex"
   # OAuth State Secret (for CSRF protection)
@@ -118,7 +118,7 @@ env:
         key: GOOGLE_CLIENT_SECRET
         optional: true
   - name: AUTH_PROVIDERS_GOOGLE_REDIRECT_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/google/callback"
+    value: "https://sso.codevertexafrica.com/api/v1/auth/oauth/google/callback"
   # GitHub OAuth Provider (optional: true allows deployment without OAuth configured)
   # Uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
   - name: AUTH_PROVIDERS_GITHUB_ENABLED
@@ -136,7 +136,7 @@ env:
         key: GIT_APP_SECRET
         optional: true
   - name: AUTH_PROVIDERS_GITHUB_REDIRECT_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/github/callback"
+    value: "https://sso.codevertexafrica.com/api/v1/auth/oauth/github/callback"
   # Microsoft OAuth Provider (disabled until credentials are configured)
   - name: AUTH_PROVIDERS_MICROSOFT_ENABLED
     value: "false"
@@ -159,14 +159,14 @@ env:
         key: MICROSOFT_TENANT_ID
         optional: true
   - name: AUTH_PROVIDERS_MICROSOFT_REDIRECT_URL
-    value: "https://sso.codevertexitsolutions.com/api/v1/auth/oauth/microsoft/callback"
+    value: "https://sso.codevertexafrica.com/api/v1/auth/oauth/microsoft/callback"
   # WebAuthn / Passkeys (Relying Party configuration)
   - name: AUTH_WEBAUTHN_RPID
-    value: "codevertexitsolutions.com"
+    value: "codevertexafrica.com"
   - name: AUTH_WEBAUTHN_RP_DISPLAY_NAME
     value: "Codevertex Platform"
   - name: AUTH_WEBAUTHN_RP_ORIGINS
-    value: "https://accounts.codevertexitsolutions.com,https://sso.codevertexitsolutions.com,https://pos.codevertexitsolutions.com,https://inventory.codevertexitsolutions.com,https://ordersapp.codevertexitsolutions.com,https://logistics.codevertexitsolutions.com,https://riderapp.codevertexitsolutions.com,https://marketflow.codevertexitsolutions.com,https://ticketing.codevertexitsolutions.com"
+    value: "https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://pos.codevertexafrica.com,https://inventory.codevertexafrica.com,https://ordering.codevertexafrica.com,https://logistics.codevertexafrica.com,https://riderapp.codevertexafrica.com,https://marketflow.codevertexafrica.com,https://ticketing.codevertexafrica.com"
   # Subscription Service Integration — JWT enrichment with plan/features/limits
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"
@@ -340,14 +340,14 @@ ingress:
     nginx.ingress.kubernetes.io/limit-rps: "20"
     nginx.ingress.kubernetes.io/limit-connections: "100"
   hosts:
-    - host: sso.codevertexitsolutions.com
+    - host: sso.codevertexafrica.com
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - sso.codevertexitsolutions.com
-      secretName: sso-codevertexitsolutions-tls
+        - sso.codevertexafrica.com
+      secretName: sso-codevertexafrica-tls
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
