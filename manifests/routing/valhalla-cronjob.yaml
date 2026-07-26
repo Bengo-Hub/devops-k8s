@@ -33,7 +33,7 @@ spec:
 
                   # Download latest Kenya PBF
                   echo "Downloading Kenya OSM data..."
-                  wget -q -O kenya-latest.osm.pbf.tmp \
+                  curl -fsSL -o kenya-latest.osm.pbf.tmp \
                     https://download.geofabrik.de/africa/kenya-latest.osm.pbf
 
                   # Replace old PBF

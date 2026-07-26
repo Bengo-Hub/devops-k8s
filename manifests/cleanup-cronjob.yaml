@@ -44,6 +44,20 @@ spec:
               AFTER=$(nsenter --target 1 --mount --uts --ipc --net -- crictl images -q 2>/dev/null | wc -l)
               echo "Images after prune: $AFTER"
               echo "Removed $((BEFORE - AFTER)) unused images"
+
+              # Host-level Docker Engine (the standalone n8n docker-compose stack —
+              # entirely separate image store from containerd/k3s above, never
+              # touches any k8s-managed image). Left unmanaged before this: exited
+              # containers, dangling/unused images, and build cache accumulate
+              # forever with no other cleanup path.
+              echo "=== Pruning unused host Docker resources ==="
+              if nsenter --target 1 --mount --uts --ipc --net -- which docker >/dev/null 2>&1; then
+                nsenter --target 1 --mount --uts --ipc --net -- docker container prune -f 2>/dev/null || true
+                nsenter --target 1 --mount --uts --ipc --net -- docker image prune -af 2>/dev/null || true
+                nsenter --target 1 --mount --uts --ipc --net -- docker builder prune -af 2>/dev/null || true
+              else
+                echo "  docker not present on host, skipping"
+              fi
             securityContext:
               privileged: true
             resources:
