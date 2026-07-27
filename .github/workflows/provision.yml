@@ -34,7 +34,12 @@ jobs:
     env:
       # Configurable domains and IPs via GitHub secrets (with defaults)
       # Priority: GitHub secrets first, fallback to defaults
-      ARGOCD_DOMAIN: ${{ secrets.ARGOCD_DOMAIN || 'argocd.codevertexafrica.com' }}
+      # ARGOCD_DOMAIN is NOT secret-driven: the actual ingress host comes solely
+      # from manifests/argocd-ingress.yaml (applied by install-argocd.sh). This
+      # var is display-only for the Summary step below. A stale ARGOCD_DOMAIN
+      # secret previously caused install-argocd.sh to silently repoint prod
+      # ArgoCD to the wrong hostname on every run (2026-07-27 incident).
+      ARGOCD_DOMAIN: argocd.codevertexafrica.com
       GRAFANA_DOMAIN: ${{ secrets.GRAFANA_DOMAIN || 'grafana.codevertexafrica.com' }}
       DB_NAMESPACE: ${{ secrets.DB_NAMESPACE || 'infra' }}
       MONITORING_NAMESPACE: ${{ secrets.MONITORING_NAMESPACE || 'infra' }}
@@ -1088,7 +1093,7 @@ jobs:
           echo "- Databases are created automatically during service deployment"
           echo ""
           echo "Configuration (via GitHub Secrets - priority order):"
-          echo "- ARGOCD_DOMAIN: ${ARGOCD_DOMAIN} (from secrets.ARGOCD_DOMAIN or default)"
+          echo "- ARGOCD_DOMAIN: ${ARGOCD_DOMAIN} (fixed; actual ingress host is sourced from manifests/argocd-ingress.yaml)"
           echo "- GRAFANA_DOMAIN: ${GRAFANA_DOMAIN} (from secrets.GRAFANA_DOMAIN or default)"
           echo "- DB_NAMESPACE: ${DB_NAMESPACE} (from secrets.DB_NAMESPACE or default)"
           echo ""
