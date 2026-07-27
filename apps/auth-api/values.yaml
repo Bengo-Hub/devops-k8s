@@ -365,6 +365,12 @@ serviceMonitor:
   labels:
     release: prometheus
 # ============================================================================
+# SERVICE ACCOUNT — read-only cluster access for the platform infra monitoring
+# dashboard (manifests/auth-api-monitor-rbac.yaml grants the ClusterRole)
+# ============================================================================
+serviceAccount:
+  name: auth-api-monitor
+# ============================================================================
 # SECURITY CONFIGURATION
 # ============================================================================
 securityContext:
