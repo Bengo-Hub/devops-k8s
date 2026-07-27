@@ -9,11 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
-# Default production configuration
-LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-info@codevertexafrica.com}
-
 log_section "Installing cert-manager (Production)"
-log_info "Let's Encrypt Email: ${LETSENCRYPT_EMAIL}"
 
 # Pre-flight checks
 check_kubectl
@@ -47,41 +43,14 @@ fi
 # Wait for pods
 wait_for_pods "cert-manager" "app.kubernetes.io/instance=cert-manager" 600
 
-# Create ClusterIssuers with dynamic email
-echo -e "${YELLOW}Creating Let's Encrypt ClusterIssuers...${NC}"
-cat > /tmp/cert-manager-clusterissuer-prod.yaml <<EOF
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-prod
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: ${LETSENCRYPT_EMAIL}
-    privateKeySecretRef:
-      name: letsencrypt-prod
-    solvers:
-    - http01:
-        ingress:
-          class: nginx
----
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-staging
-spec:
-  acme:
-    server: https://acme-staging-v02.api.letsencrypt.org/directory
-    email: ${LETSENCRYPT_EMAIL}
-    privateKeySecretRef:
-      name: letsencrypt-staging
-    solvers:
-    - http01:
-        ingress:
-          class: nginx
-EOF
-
-kubectl apply -f /tmp/cert-manager-clusterissuer-prod.yaml
+# Create ClusterIssuers from the tracked manifest (single source of truth).
+# Previously this regenerated a plain HTTP-01-only ClusterIssuer inline on every
+# run, which would silently strip the Cloudflare DNS-01 solver (required once
+# any codevertexafrica.com host is proxied through Cloudflare) if this script
+# ever re-ran after that solver was added. See manifests/cert-manager-clusterissuer.yaml
+# and docs/cloudflare-cutover.md.
+echo -e "${YELLOW}Applying Let's Encrypt ClusterIssuers...${NC}"
+kubectl apply -f "${MANIFESTS_DIR}/cert-manager-clusterissuer.yaml"
 echo -e "${GREEN}✓ ClusterIssuers configured${NC}"
 
 # Verification

@@ -9,11 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/manifests"
 source "${SCRIPT_DIR}/../tools/common.sh"
 
-# Default production configuration
-ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.codevertexafrica.com}
-
 log_section "Installing Argo CD (Production)"
-log_info "Domain: ${ARGOCD_DOMAIN}"
+log_info "Domain: $(grep -m1 'host:' "${MANIFESTS_DIR}/argocd-ingress.yaml" | awk '{print $2}')"
 
 # Pre-flight checks
 check_kubectl
@@ -110,37 +107,14 @@ kubectl apply -f "${MANIFESTS_DIR}/argocd-cm.yaml" || {
 }
 
 # Deploy production ingress with TLS
-log_info "Configuring production ingress with TLS..."
-cat > /tmp/argocd-ingress-prod.yaml <<EOF
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: argocd-server
-  namespace: argocd
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${ARGOCD_DOMAIN}
-    secretName: argocd-tls
-  rules:
-  - host: ${ARGOCD_DOMAIN}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: argocd-server
-            port:
-              number: 443
-EOF
-
-kubectl apply -f /tmp/argocd-ingress-prod.yaml
+# Single source of truth: manifests/argocd-ingress.yaml. Previously this step
+# regenerated the ingress inline from ${ARGOCD_DOMAIN}, which let a stale
+# ARGOCD_DOMAIN secret silently repoint prod ArgoCD to the wrong hostname on
+# every provisioning run (2026-07-27 incident). Applying the tracked manifest
+# means the host can only change via a reviewed commit.
+log_info "Applying production ingress with TLS..."
+kubectl apply -f "${MANIFESTS_DIR}/argocd-ingress.yaml"
+ARGOCD_DOMAIN=$(kubectl get ingress argocd-server -n argocd -o jsonpath='{.spec.rules[0].host}')
 echo -e "${GREEN}✓ Ingress configured for ${ARGOCD_DOMAIN}${NC}"
 
 # Get initial admin password
