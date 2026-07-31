@@ -1,0 +1,140 @@
+nameOverride: hospital-api
+fullnameOverride: hospital-api
+replicaCount: 2 # HA: min 2 replicas + PDB to avoid rollout/drain 503s
+image:
+  repository: docker.io/codevertex/hospital-api
+  tag: "placeholder" # set by CI on first successful build
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+service:
+  type: ClusterIP
+  port: 4200
+  targetPort: 4200
+# Migrations + seed are handled by entrypoint.sh (hospital-migrate / hospital-seed on startup)
+migrations:
+  enabled: false
+seed:
+  enabled: false
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0 # zero-downtime; HA replicas keep serving during rollout
+env:
+  - name: APP_ENV
+    value: production
+  - name: HTTP_PORT
+    value: "4200"
+  - name: POSTGRES_URL
+    valueFrom:
+      secretKeyRef:
+        name: hospital-api-secrets
+        key: POSTGRES_URL
+  - name: POSTGRES_MIGRATE_URL
+    valueFrom:
+      secretKeyRef:
+        name: hospital-api-secrets
+        key: POSTGRES_MIGRATE_URL
+        optional: true
+  - name: POSTGRES_MAX_OPEN_CONNS
+    value: "8"
+  - name: POSTGRES_MAX_IDLE_CONNS
+    value: "4"
+  - name: POSTGRES_CONN_MAX_LIFETIME
+    value: "15m"
+  - name: REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
+  - name: REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: hospital-api-secrets
+        key: REDIS_PASSWORD
+        optional: true
+  - name: EVENTS_NATS_URL
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
+  - name: AUTH_SERVICE_URL
+    value: "https://sso.codevertexafrica.com"
+  - name: INVENTORY_SERVICE_URL
+    value: "https://inventoryapi.codevertexafrica.com"
+  - name: TREASURY_SERVICE_URL
+    value: "https://booksapi.codevertexafrica.com"
+  - name: NOTIFICATIONS_SERVICE_URL
+    value: "https://notificationsapi.codevertexafrica.com"
+  - name: SUBSCRIPTIONS_SERVICE_URL
+    value: "https://pricingapi.codevertexafrica.com"
+  - name: OTLP_ENDPOINT
+    value: http://otel-collector.infra.svc.cluster.local:4317
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: hospital-api-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
+  - name: HTTP_ALLOWED_ORIGINS
+    value: "https://afya.codevertexafrica.com,https://afyaapi.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+serviceMonitor:
+  enabled: false
+  namespace: infra
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://afya.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "300"
+  hosts:
+    - host: afyaapi.codevertexafrica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - afyaapi.codevertexafrica.com
+      secretName: afyaapi-tls
+pdb:
+  enabled: true
+  minAvailable: 1
