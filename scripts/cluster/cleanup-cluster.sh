@@ -111,7 +111,6 @@ APP_NAMESPACES=(
     "treasury"
     "notifications"
     "auth-service"
-    "food-delivery"
 )
 
 # Get all namespaces
