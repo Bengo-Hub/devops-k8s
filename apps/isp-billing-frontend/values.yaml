@@ -10,7 +10,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/isp-billing-frontend
-  tag: "3d56d6a0"
+  tag: "1699d211"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
