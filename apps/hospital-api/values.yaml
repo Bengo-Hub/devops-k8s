@@ -3,7 +3,7 @@ fullnameOverride: hospital-api
 replicaCount: 2 # HA: min 2 replicas + PDB to avoid rollout/drain 503s
 image:
   repository: docker.io/codevertex/hospital-api
-  tag: "6e766757" # set by CI on first successful build
+  tag: "e82ab2c4" # set by CI on first successful build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
