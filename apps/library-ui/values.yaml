@@ -55,7 +55,7 @@ env:
       secretKeyRef:
         name: library-ui-secrets
         key: internalServiceKey
-        optional: true
+        optional: false
 resources:
   requests:
     cpu: 50m
