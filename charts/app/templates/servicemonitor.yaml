@@ -11,7 +11,7 @@ spec:
     matchLabels:
       {{- toYaml .Values.serviceMonitor.selector.matchLabels | nindent 6 }}
   endpoints:
-    - port: metrics
+    - port: http
       path: {{ .Values.monitoring.prometheus.path | default "/metrics" }}
       interval: {{ .Values.serviceMonitor.interval | default "30s" }}
       scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout | default "10s" }}
