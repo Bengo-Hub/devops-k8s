@@ -1,0 +1,160 @@
+# Postgres streaming-replication standby — purely additive, never touches the
+# primary's own StatefulSet/PVC. Single-node cluster: this protects against a
+# primary pod crash/OOM/bad-migration/human-error via a fast MANUAL promotion,
+# not against node or disk failure (both share the same physical disk here).
+# No automatic failover is implemented — see the promotion runbook in
+# shared-docs/internal/platform-standards/postgres-replica-promotion-runbook.md.
+# PgBouncer continues to point only at the primary; nothing reads from this
+# replica today except an operator during an incident.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-replica
+  namespace: infra
+  labels:
+    app: postgresql
+    component: replica
+spec:
+  type: ClusterIP
+  ports:
+    - name: tcp-postgresql
+      port: 5432
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    app: postgresql
+    component: replica
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgresql-replica
+  namespace: infra
+  labels:
+    app: postgresql
+    component: replica
+spec:
+  serviceName: postgresql-replica
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+      component: replica
+  template:
+    metadata:
+      labels:
+        app: postgresql
+        component: replica
+    spec:
+      priorityClassName: db-critical
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      # Primes the standby via pg_basebackup on first start only (checks for an
+      # empty PGDATA so a pod restart never re-runs this). -R writes standby.signal
+      # + primary_conninfo into postgresql.auto.conf, so the main container just
+      # starts postgres normally and it streams automatically — no recovery.conf
+      # (removed since PG12), no manual standby-mode wiring.
+      initContainers:
+      - name: pg-basebackup
+        image: docker.io/codevertex/postgresql-pgvector:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-replication
+              key: REPLICATION_PASSWORD
+        - name: REPL_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-replication
+              key: REPLICATION_USER
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          PGDATA=/var/lib/postgresql/data/pgdata
+          if [ -f "$PGDATA/PG_VERSION" ]; then
+            echo "pg-basebackup: PGDATA already initialized, skipping (pod restart, not first start)"
+            exit 0
+          fi
+          echo "pg-basebackup: empty PGDATA, priming standby via pg_basebackup from primary..."
+          mkdir -p "$PGDATA"
+          pg_basebackup -h postgresql.infra.svc.cluster.local -p 5432 -U "$REPL_USER" \
+            -D "$PGDATA" -Fp -Xs -P -R
+          echo "pg-basebackup: done, standby.signal + primary_conninfo written"
+        securityContext:
+          runAsUser: 999
+          runAsNonRoot: true
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+      containers:
+      - name: postgresql
+        image: docker.io/codevertex/postgresql-pgvector:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: postgresql
+          containerPort: 5432
+          protocol: TCP
+        env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        resources:
+          requests:
+            # Lean vs. the primary's 300m/3Gi — no app traffic, standby only.
+            # The primary's live shared_buffers is 1GB (inherited verbatim via
+            # basebackup), so the limit below leaves comfortable headroom.
+            cpu: 100m
+            memory: 1500Mi
+          limits:
+            cpu: 1000m
+            memory: 3Gi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U admin_user -d postgres -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U admin_user -d postgres -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        securityContext:
+          runAsUser: 999
+          runAsNonRoot: true
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: postgresql
+        component: replica
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 20Gi
