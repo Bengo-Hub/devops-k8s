@@ -97,7 +97,7 @@ metadata:
   labels:
     app: pgbouncer
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: pgbouncer
@@ -175,3 +175,14 @@ spec:
     - name: pgbouncer
       port: 6432
       targetPort: 6432
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pgbouncer
+  namespace: infra
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pgbouncer
