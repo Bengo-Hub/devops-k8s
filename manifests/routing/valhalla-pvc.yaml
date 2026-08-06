@@ -1,3 +1,10 @@
+# IDEMPOTENCY NOTE — DO NOT bump `storage` and expect a re-apply to resize it:
+#   This PVC is ArgoCD-managed (apps/valhalla) on the `local-path` storage class, a hostPath
+#   provisioner with allowVolumeExpansion=false — a re-sync after editing `storage` below fails
+#   with "forbidden: only dynamically provisioned pvc can be resized" and leaves the app OutOfSync.
+#   local-path also IGNORES the requested size — actual capacity is the node's disk.
+#   Same root cause as the postgresql-backup PVC incident — see manifests/backup/postgresql-backup-pvc.yaml.
+#   To genuinely grow it: delete the valhalla Deployment + this PVC, edit storage, then let ArgoCD recreate.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
