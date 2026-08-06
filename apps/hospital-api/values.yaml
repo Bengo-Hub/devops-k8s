@@ -70,13 +70,13 @@ env:
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexafrica.com"
   - name: INVENTORY_SERVICE_URL
-    value: "https://inventoryapi.codevertexafrica.com"
+    value: "http://inventory-api.inventory.svc.cluster.local:4000"
   - name: TREASURY_SERVICE_URL
-    value: "https://booksapi.codevertexafrica.com"
+    value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: NOTIFICATIONS_SERVICE_URL
-    value: "https://notificationsapi.codevertexafrica.com"
+    value: "http://notifications-api.notifications.svc.cluster.local:4000"
   - name: SUBSCRIPTIONS_SERVICE_URL
-    value: "https://pricingapi.codevertexafrica.com"
+    value: "http://subscriptions-api.subscriptions.svc.cluster.local:4000"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: INTERNAL_SERVICE_KEY

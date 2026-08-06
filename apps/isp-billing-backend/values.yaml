@@ -433,11 +433,11 @@ env:
   # so it returns "All connection attempts failed" whenever treasury-api is
   # scaled-to-zero / mid-restart — which broke hotspot purchase intent creation.
   - name: TREASURY_API_URL
-    value: "https://booksapi.codevertexafrica.com"
+    value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: TREASURY_PAY_PAGE_URL
     value: "https://books.codevertexafrica.com"
   - name: SUBSCRIPTIONS_API_URL
-    value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
+    value: "http://subscriptions-api.subscriptions.svc.cluster.local:4000"
   - name: NOTIFICATIONS_API_URL
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
   # NATS JetStream (events). Inert until the image ships nats-py; consumer is a
