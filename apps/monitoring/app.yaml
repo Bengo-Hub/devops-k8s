@@ -1,0 +1,123 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 79.10.0
+    helm:
+      values: |
+        # Full name override to prevent conflicts
+        fullnameOverride: prometheus
+
+        prometheus:
+          prometheusSpec:
+            # 15d retention halves write pressure/disk usage vs the original 30d — at current
+            # scrape volume this stores ~10-12Gi of metrics, well within the 20Gi PVC.
+            retention: 15d
+            # 30s scrape/eval interval halves CPU usage vs 15s — non-critical services don't
+            # need finer resolution.
+            scrapeInterval: "30s"
+            evaluationInterval: "30s"
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 20Gi
+            resources:
+              requests:
+                cpu: 200m
+                memory: 1Gi
+              limits:
+                cpu: 1000m
+                memory: 2Gi
+
+        grafana:
+          enabled: true
+          # adminPassword intentionally omitted — the chart auto-generates a random one into
+          # the prometheus-grafana Secret when unset. Retrieve it with:
+          #   kubectl get secret -n infra prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d
+          persistence:
+            enabled: true
+            size: 10Gi
+            accessModes:
+              - ReadWriteOnce
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              # Actual usage was 877Mi (dashboard caching + plugin state) which exceeded the
+              # original 512Mi limit — raised to 1536Mi.
+              memory: 1536Mi
+          securityContext:
+            runAsUser: 472
+            runAsGroup: 472
+            fsGroup: 472
+          initChownData:
+            enabled: false
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+              nginx.ingress.kubernetes.io/rewrite-target: /
+              nginx.ingress.kubernetes.io/ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+              # Allow the ACME HTTP-01 challenge path through even with SSL-redirect on.
+              nginx.ingress.kubernetes.io/configuration-snippet: |
+                if ($uri ~ "^/.well-known/acme-challenge/") {
+                  return 200;
+                }
+            hosts:
+              - grafana.codevertexafrica.com
+            path: /
+            pathType: Prefix
+            tls:
+              - secretName: grafana-tls
+                hosts:
+                  - grafana.codevertexafrica.com
+
+        alertmanager:
+          enabled: true
+          alertmanagerSpec:
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+
+        nodeExporter:
+          enabled: true
+
+        kubeStateMetrics:
+          enabled: true
+
+        # Disable admission webhooks to prevent RBAC conflicts ("already exists" errors during
+        # sync). Operator TLS is disabled to match (the admission-webhook patch job is what
+        # would otherwise create the prometheus-admission secret/cert).
+        prometheusOperator:
+          admissionWebhooks:
+            enabled: false
+            patch:
+              enabled: false
+          tls:
+            enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
