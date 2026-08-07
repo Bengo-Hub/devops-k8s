@@ -170,7 +170,7 @@ env:
   # Subscription Service Integration — JWT enrichment with plan/features/limits
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"
-  - name: AUTH_SUBSCRIPTION_BASE_URL
+  - name: SUBSCRIPTION_BASE_URL
     value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: AUTH_SUBSCRIPTION_TIMEOUT
     value: "5s"
