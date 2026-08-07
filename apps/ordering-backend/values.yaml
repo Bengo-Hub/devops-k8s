@@ -156,7 +156,7 @@ env:
     value: "10s"
   # Subscriptions Service - Subscription enforcement
   - name: SUBSCRIPTIONS_SERVICE_URL
-    value: "http://subscriptions-api.subscriptions.svc.cluster.local:4000"
+    value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: SUBSCRIPTIONS_REQUEST_TIMEOUT
     value: "10s"
   # MarketFlow CRM - customer single source of truth (upsert crm_contact_id at checkout)
