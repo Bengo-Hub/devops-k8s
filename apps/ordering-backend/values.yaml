@@ -155,7 +155,7 @@ env:
   - name: INVENTORY_REQUEST_TIMEOUT
     value: "10s"
   # Subscriptions Service - Subscription enforcement
-  - name: SUBSCRIPTIONS_SERVICE_URL
+  - name: SUBSCRIPTION_BASE_URL
     value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
   - name: SUBSCRIPTIONS_REQUEST_TIMEOUT
     value: "10s"
