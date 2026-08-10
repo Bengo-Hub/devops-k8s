@@ -3,7 +3,7 @@ fullnameOverride: email-provisioner
 replicaCount: 1
 image:
   repository: docker.io/codevertex/email-provisioner
-  tag: "df4ce67e"
+  tag: "2f5ec571"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
