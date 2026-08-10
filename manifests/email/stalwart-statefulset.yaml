@@ -202,10 +202,14 @@ spec:
       containers:
         - name: stalwart-mail
           # Pin to a specific tag before first deploy — NOT :latest, per Part 6.
-          # v0.11.9 doesn't exist on Docker Hub (initial guess, corrected 2026-08-10
-          # against the real tag list); v0.11.8-alpine is the latest real tag, alpine
-          # variant for a smaller/leaner image per the "keep it lean" scope decision.
-          image: stalwartlabs/mail-server:v0.11.8-alpine
+          # CORRECTED AGAIN 2026-08-10: `stalwartlabs/mail-server` is the project's
+          # OLD, abandoned Docker Hub repo (stale since 2025-04-30, capped at
+          # v0.11.8) — the project renamed to `stalwartlabs/stalwart` and has
+          # active releases up to v0.16.16 there. The bundled webadmin SPA in the
+          # image requires core server >=0.13.0, so v0.11.8 rejected every login
+          # attempt with "Unsupported server version" despite the auth itself
+          # working. Corrected to the real, current repo + latest tag.
+          image: stalwartlabs/stalwart:v0.16.16-alpine
           imagePullPolicy: IfNotPresent
           ports:
             - name: smtp
