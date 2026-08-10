@@ -132,13 +132,16 @@ data:
 
     # 4-layer rate-limiting Layer 1 (authoritative) — Part 6 of the plan.
     # Per-mailbox/tenant/global limits are written here by email-provisioner
-    # at license-assign time; these are the platform-wide floor.
-    [queue.limiter.inbound]
-    "*" = "1200/1h,20/1m"
+    # at license-assign time; these are the platform-wide floor. Fixed 2026-08-10:
+    # the original "*"="1200/1h,20/1m" shorthand and "20gb" size string were both
+    # invalid against the real v0.11.8 schema (non-fatal parse errors, settings
+    # were silently skipped) — corrected to the documented rate/size object form.
+    [queue.limiter.inbound."platform-global"]
+    rate = "1200/1h"
 
     [queue.quota."default"]
     messages = 50000
-    size = "20gb"
+    size = 21474836480
 
     # Spam filter — Part 6: DNSBL via a LOCAL resolver (public resolvers silently
     # NXDOMAIN Spamhaus queries above a low volume, making checks look like they
