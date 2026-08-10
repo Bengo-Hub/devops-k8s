@@ -1,0 +1,42 @@
+nameOverride: shared-docs
+fullnameOverride: shared-docs
+
+image:
+  repository: docker.io/codevertex/shared-docs
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: docs.codevertexafrica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: shared-docs-tls
+      hosts:
+        - docs.codevertexafrica.com
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+replicaCount: 2
+
+pdb:
+  enabled: true
+  minAvailable: 1
