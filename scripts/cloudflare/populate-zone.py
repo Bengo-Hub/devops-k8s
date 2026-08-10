@@ -37,29 +37,61 @@ ORIGIN_HOSTS = [
     "ispbilling", "ispbillingapi",
     "afya", "afyaapi",
     "argocd", "nats",  # keep DNS-only permanently (admin / non-HTTP)
+    # Email hosting platform (Stalwart), added 2026-08-10 — see
+    # .claude/plans/codevertex-email-hosting-service-plan.md Part 5/12.1.
+    # mx1 must stay unproxied permanently (MX target, TLS cert CN, PTR).
+    "mx1", "mail-admin", "mta-sts", "autoconfig", "autodiscover",
 ]
 
 # Mirrored as-is from cloudoon: these currently point at the Truehost shared
 # host, NOT the cluster (that's also why the k8s projects-api/ticketing-api
 # certs have been stuck since Dec). Repointing them to ORIGIN is a separate,
 # deliberate decision — flip the constant below when approved.
-TRUEHOST_HOSTS = ["projectsapi", "ticketing", "ticketingapi", "webmail"]
+#
+# `webmail` was split out 2026-08-10 (previously coupled to the stalled
+# projects-api/ticketing-api cutover, blocking it from moving independently —
+# see Part 0/12.1): still points at Truehost for now, deliberately NOT yet
+# repointed to the cluster. Only flip TRUEHOST_HOSTS_MAIL -> ORIGIN_HOSTS once
+# the Stalwart-backed webmail has been live and load-bearing for a full
+# billing cycle with no incidents (per the plan) — do not do this preemptively.
+TRUEHOST_HOSTS_LEGACY_APPS = ["projectsapi", "ticketing", "ticketingapi"]
+TRUEHOST_HOSTS_MAIL = ["webmail"]
 
 def desired_records():
     recs = []
     for h in ORIGIN_HOSTS:
         recs.append({"type": "A", "name": h, "content": ORIGIN, "proxied": False})
-    for h in TRUEHOST_HOSTS:
+    for h in TRUEHOST_HOSTS_LEGACY_APPS + TRUEHOST_HOSTS_MAIL:
         recs.append({"type": "A", "name": h, "content": TRUEHOST, "proxied": False})
     recs.append({"type": "CNAME", "name": "mail", "content": APEX, "proxied": False})
+    # smtp/imap are client-facing aliases for the MX target, not the apex —
+    # separate from the generic ORIGIN_HOSTS A-record shape above.
+    recs.append({"type": "CNAME", "name": "smtp", "content": f"mx1.{APEX}", "proxied": False})
+    recs.append({"type": "CNAME", "name": "imap", "content": f"mx1.{APEX}", "proxied": False})
     recs.append({"type": "MX", "name": "@", "content": "smtp.google.com", "priority": 1})
+    # Day-0 deliverability fix (2026-08-10, plan Part 0): the previous SPF had
+    # no Google include (Google Workspace's real sending IPs were never
+    # authorized -> outbound mail failed SPF) and `+a` also authorized
+    # Cloudflare's shared proxy IPs to send as this domain (removed). This is
+    # a CORRECTION (see the spf/dmarc special-case in main()'s matching loop
+    # below), not an addition — the old content must not be left in place
+    # alongside this one, or SPF becomes a PermError with two v=spf1 records.
     recs.append({"type": "TXT", "name": "@",
-                 "content": '"v=spf1 +a +mx include:_spf.truehostcloud.com ~all"'})
+                 "content": '"v=spf1 include:_spf.google.com include:_spf.truehostcloud.com ~all"'})
     recs.append({"type": "TXT", "name": "@",
                  "content": '"google-site-verification=s4W45Bi7hV_ouhQCPgu3yCBzVpWOnM8zOuk_atvE2B4"'})
+    # Day-0 fix continued: reports now come to us (not Truehost, which nobody
+    # reads), relaxed SPF alignment (aspf=r — strict alignment breaks
+    # subdomain/relay sending for no real benefit), forensic reports (ruf=)
+    # dropped (full message content to a third party is a real DPA/GDPR
+    # exposure and almost nobody honors ruf= anyway).
     recs.append({"type": "TXT", "name": "_dmarc",
-                 "content": '"v=DMARC1;p=quarantine;sp=quarantine;adkim=r;aspf=s;pct=100;fo=0;rf=afrf;ri=86400;'
-                            'rua=mailto:dmarc-reports@truehostcloud.com;ruf=mailto:dmarc-reports@truehostcloud.com"'})
+                 "content": '"v=DMARC1; p=quarantine; sp=quarantine; adkim=r; aspf=r; pct=100; fo=1; '
+                            'ri=86400; rua=mailto:dmarc@codevertexafrica.com"'})
+    # TLS-RPT (Part 5) — read-only reporting, safe to add anytime, no
+    # dependency on Stalwart or MTA-STS enforcement being live.
+    recs.append({"type": "TXT", "name": "_smtp._tls",
+                 "content": '"v=TLSRPTv1; rua=mailto:tlsrpt@codevertexafrica.com"'})
     return recs
 
 def fqdn(name):
@@ -108,10 +140,29 @@ def main():
         matches = [r for r in existing if r["type"] == want["type"] and r["name"].lower() == name.lower()]
 
         if want["type"] == "TXT":
-            # TXT allows multiple values per name — match on content, create if absent.
             if any(norm_txt(r["content"]) == norm_txt(want["content"]) for r in matches):
                 ok += 1
                 continue
+
+            # SPF and DMARC are singular-per-name by RFC (a second v=spf1 or
+            # v=DMARC1 TXT record at the same name is a PermError for
+            # receivers) — correct the existing one in place instead of the
+            # generic "TXT allows multiple values, just add another" path
+            # every other TXT record here uses (google-site-verification etc.
+            # genuinely can have several unrelated values, so this must stay
+            # opt-in per-prefix, not the default).
+            singular_prefixes = ("v=spf1", "v=dmarc1")
+            want_norm = norm_txt(want["content"]).lower()
+            is_singular = want_norm.startswith(singular_prefixes)
+            if is_singular:
+                stale = [r for r in matches if norm_txt(r["content"]).lower().startswith(singular_prefixes)]
+                if stale:
+                    api(token, "PUT", f"/zones/{zone}/dns_records/{stale[0]['id']}",
+                        {**want, "name": name})
+                    print(f"  ~ TXT {name}: {stale[0]['content'][:60]}... -> {want['content'][:60]}...")
+                    updated += 1
+                    continue
+
             api(token, "POST", f"/zones/{zone}/dns_records",
                 {**want, "name": name})
             print(f"  + TXT {name} {want['content'][:50]}...")
