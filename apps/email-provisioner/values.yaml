@@ -1,0 +1,103 @@
+nameOverride: email-provisioner
+fullnameOverride: email-provisioner
+replicaCount: 1
+image:
+  repository: docker.io/codevertex/email-provisioner
+  tag: "latest"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+# email-provisioner owns no database — it is a deliberately dumb NATS-to-Stalwart
+# bridge. See .claude/plans/codevertex-email-hosting-service-plan.md Part 3E.
+migrations:
+  enabled: false
+seed:
+  enabled: false
+envFromSecret: email-provisioner-env
+healthCheck:
+  enabled: true
+  startup:
+    httpGet:
+      path: /healthz/live
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 12
+  readiness:
+    httpGet:
+      path: /healthz/ready
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  liveness:
+    httpGet:
+      path: /healthz/live
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 6
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
+minReadySeconds: 10
+progressDeadlineSeconds: 300
+env:
+  - name: PORT
+    value: "8080"
+  - name: EVENTS_NATS_URL
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
+  - name: REDIS_ADDR
+    value: redis-master.infra.svc.cluster.local:6379
+  - name: STALWART_ADMIN_URL
+    value: "http://stalwart-mail.email.svc.cluster.local:8080"
+  - name: STALWART_ADMIN_USER
+    value: "admin"
+  - name: STALWART_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: stalwart-mail
+        key: admin-password
+  - name: SUBSCRIPTION_BASE_URL
+    value: "http://subscriptions-api.subscriptions.svc.cluster.local:4000"
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: email-provisioner-env
+        key: INTERNAL_SERVICE_KEY
+        optional: true
+  - name: SECURITY_JWKS_URL
+    value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+autoscaling:
+  enabled: false
+monitoring:
+  enabled: false
+serviceMonitor:
+  enabled: false
+# No public Ingress — this service has no external API surface, only an
+# internal health-check endpoint and NATS consumption.
+ingress:
+  enabled: false
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+pdb:
+  enabled: false
