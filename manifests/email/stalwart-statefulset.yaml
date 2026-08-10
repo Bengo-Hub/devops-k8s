@@ -219,6 +219,17 @@ spec:
           # working. Corrected to the real, current repo + latest tag.
           image: stalwartlabs/stalwart:v0.16.16-alpine
           imagePullPolicy: IfNotPresent
+          # Fixed 2026-08-10: without an explicit --config flag, this image's
+          # entrypoint uses some undocumented default config path that is
+          # NOT under /var/lib/stalwart or /etc/stalwart (confirmed both
+          # empty after the setup wizard reported "Setup complete" and a
+          # restart wiped it — the wizard's write never landed on our
+          # persistent volume at all). `stalwart --help` confirms `-c/--config
+          # <PATH>` is the explicit way to pin this rather than guess the
+          # default. Forcing it under /var/lib/stalwart (the persistent PVC,
+          # already correctly owned by uid 2000) so the wizard's write and
+          # every subsequent restart agree on the same real location.
+          args: ["--config", "/var/lib/stalwart/etc/config.toml"]
           ports:
             - name: smtp
               containerPort: 25
