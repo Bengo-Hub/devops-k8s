@@ -275,18 +275,20 @@ spec:
           volumeMounts:
             # v0.16.x's data root is /var/lib/stalwart (PWD in the container),
             # not /opt/stalwart-mail (that path only existed on the old, now-
-            # abandoned v0.11.x image) — corrected 2026-08-10 alongside the
-            # image repo fix, since the server logged "bootstrap mode / no
-            # configuration file was found" with the old path.
+            # abandoned v0.11.x image).
+            #
+            # The ConfigMap-mounted config.toml (used for the old v0.11.x
+            # declarative-TOML bootstrap) is REMOVED as of 2026-08-10: v0.16.x
+            # ignores it entirely (runs the interactive setup wizard instead),
+            # and the subPath mount into etc/config.toml caused kubelet to
+            # auto-create /var/lib/stalwart/etc as root:root 755 — a directory
+            # the container's non-root user (1000) can't write into, which is
+            # exactly what broke the wizard's "Finish setup" step ("Local
+            # registry write error... Permission denied"). Only the data PVC
+            # is mounted now; the wizard creates etc/ itself, correctly owned,
+            # the first time it successfully writes there.
             - name: data
               mountPath: /var/lib/stalwart
-            - name: config
-              mountPath: /var/lib/stalwart/etc/config.toml
-              subPath: config.toml
-      volumes:
-        - name: config
-          configMap:
-            name: stalwart-config
   volumeClaimTemplates:
     - metadata:
         name: data
