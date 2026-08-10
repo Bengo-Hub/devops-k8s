@@ -1,0 +1,265 @@
+# Stalwart Mail Server — Codevertex email hosting platform.
+# Mirrors manifests/databases/postgresql-statefulset.yaml's single-file pattern
+# (Service + headless Service + ConfigMap + StatefulSet together).
+#
+# NOTE (2026-08-10): the TOML config below follows Stalwart's documented config-file
+# schema as of the version this plan targets. Validate it against the actual pinned
+# image's `stalwart --help`/docs before the first real deploy — Stalwart's config
+# surface has changed across releases, and this has not yet been smoke-tested live.
+# See .claude/plans/codevertex-email-hosting-service-plan.md Parts 0/5/6 for the
+# DNS/hostname/rate-limit decisions this config implements.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart-mail
+  namespace: email
+  labels:
+    app: stalwart-mail
+spec:
+  type: ClusterIP
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: smtp
+      protocol: TCP
+    - name: smtps
+      port: 465
+      targetPort: smtps
+      protocol: TCP
+    - name: submission
+      port: 587
+      targetPort: submission
+      protocol: TCP
+    - name: imaps
+      port: 993
+      targetPort: imaps
+      protocol: TCP
+    - name: pop3s
+      port: 995
+      targetPort: pop3s
+      protocol: TCP
+    - name: sieve
+      port: 4190
+      targetPort: sieve
+      protocol: TCP
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: stalwart-mail
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart-mail-hl
+  namespace: email
+  labels:
+    app: stalwart-mail
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: stalwart-mail
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stalwart-config
+  namespace: email
+data:
+  config.toml: |
+    [server]
+    hostname = "mx1.codevertexafrica.com"
+
+    [server.listener."smtp"]
+    bind = ["0.0.0.0:25"]
+    protocol = "smtp"
+
+    [server.listener."submission"]
+    bind = ["0.0.0.0:587"]
+    protocol = "smtp"
+    tls.implicit = false
+
+    [server.listener."smtps"]
+    bind = ["0.0.0.0:465"]
+    protocol = "smtp"
+    tls.implicit = true
+
+    [server.listener."imaps"]
+    bind = ["0.0.0.0:993"]
+    protocol = "imap"
+    tls.implicit = true
+
+    [server.listener."pop3s"]
+    bind = ["0.0.0.0:995"]
+    protocol = "pop3"
+    tls.implicit = true
+
+    [server.listener."sieve"]
+    bind = ["0.0.0.0:4190"]
+    protocol = "managesieve"
+
+    [server.listener."http"]
+    bind = ["0.0.0.0:8080"]
+    protocol = "http"
+
+    # PostgreSQL backend — reuses the existing shared postgresql-0 instance,
+    # per Part 2's rationale (single DB to operate, not a new storage engine).
+    [store."postgresql"]
+    type = "postgresql"
+    host = "postgresql.infra.svc.cluster.local"
+    port = 5432
+    database = "stalwart_mail"
+    user = "stalwart"
+    password = "%{env:POSTGRES_PASSWORD}%"
+
+    [storage]
+    data = "postgresql"
+    blob = "postgresql"
+    fts = "postgresql"
+    lookup = "postgresql"
+    directory = "internal"
+
+    [directory."internal"]
+    type = "internal"
+    store = "postgresql"
+
+    # 4-layer rate-limiting Layer 1 (authoritative) — Part 6 of the plan.
+    # Per-mailbox/tenant/global limits are written here by email-provisioner
+    # at license-assign time; these are the platform-wide floor.
+    [queue.limiter.inbound]
+    "*" = "1200/1h,20/1m"
+
+    [queue.quota."default"]
+    messages = 50000
+    size = "20gb"
+
+    # Spam filter — Part 6: DNSBL via a LOCAL resolver (public resolvers silently
+    # NXDOMAIN Spamhaus queries above a low volume, making checks look like they
+    # pass when they never ran — do not point this at the cluster's default DNS
+    # without confirming a local unbound/CoreDNS resolver is in front of it).
+    [spam-filter]
+    enable = true
+
+    [spam-filter.dnsbl]
+    enable = true
+
+    [spam-filter.threshold]
+    reject = 15.0
+    # scoreDiscard intentionally NOT set — reject, never silently discard, per Part 6.
+
+    # Greylisting deliberately NOT enabled blanket (Part 6) — delays OTP/password-reset
+    # mail by minutes, a top small-host complaint. Gate it to already-suspicious mail
+    # only if used at all, as a later tuning pass.
+
+    [auth.fail2ban]
+    enable = true
+
+    [tracing]
+    level = "info"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stalwart-mail
+  namespace: email
+  labels:
+    app: stalwart-mail
+spec:
+  serviceName: stalwart-mail-hl
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stalwart-mail
+  template:
+    metadata:
+      labels:
+        app: stalwart-mail
+    spec:
+      priorityClassName: db-critical
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+        - name: stalwart-mail
+          # Pin to a specific tag before first deploy — NOT :latest, per Part 6.
+          image: stalwartlabs/mail-server:v0.11.9
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: smtp
+              containerPort: 25
+            - name: submission
+              containerPort: 587
+            - name: smtps
+              containerPort: 465
+            - name: imaps
+              containerPort: 993
+            - name: pop3s
+              containerPort: 995
+            - name: sieve
+              containerPort: 4190
+            - name: http
+              containerPort: 8080
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-mail
+                  key: postgres-password
+            - name: STALWART_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-mail
+                  key: admin-password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /opt/stalwart-mail
+            - name: config
+              mountPath: /opt/stalwart-mail/etc/config.toml
+              subPath: config.toml
+      volumes:
+        - name: config
+          configMap:
+            name: stalwart-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: stalwart-mail
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          # Fixed at creation — local-path StorageClass has ALLOWVOLUMEEXPANSION=false
+          # (confirmed live 2026-08-10). Size deliberately; see plan Part 9.
+          requests:
+            storage: 50Gi

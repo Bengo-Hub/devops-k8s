@@ -1,0 +1,14 @@
+# Create-once, like manifests/backup/postgresql-backup-pvc.yaml — local-path PVCs are
+# non-resizable, so this is intentionally NOT bundled with the CronJob file (which is
+# safely re-appliable). Provisioning creates this once, only when absent.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-backup-pvc
+  namespace: email
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi

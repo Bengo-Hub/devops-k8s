@@ -1,12 +1,20 @@
-# TCP Services ConfigMap for nginx-ingress to proxy NATS on port 4222.
-# NATS uses a binary TCP protocol (not HTTP), so standard HTTP ingress
-# cannot be used. This ConfigMap tells the nginx ingress controller to
-# forward external TCP port 4222 to the NATS service in the messaging namespace.
+# TCP Services ConfigMap for nginx-ingress to proxy NATS (and, as of 2026-08-10,
+# Stalwart mail protocols) on raw TCP ports. NATS/SMTP/IMAP/POP3/ManageSieve are
+# binary protocols (not HTTP), so standard HTTP ingress cannot be used. This
+# ConfigMap tells the nginx ingress controller to forward external TCP ports to
+# the right in-cluster service.
 #
 # Requires the ingress controller deployment to have:
 #   --tcp-services-configmap=ingress-nginx/tcp-services
-# and containerPort/hostPort 4222 exposed.
-# See: scripts/infrastructure/configure-ingress-controller.sh
+# and containerPort/hostPort exposed for every port listed below.
+# See: scripts/infrastructure/configure-ingress-controller.sh — adding the email
+# ports here requires the SAME hostPort-patching step (line ~82-85 pattern) run
+# again for ports 25/465/587/993/995/4190, or they'll sit in this ConfigMap inert.
+#
+# NOTE: this ConfigMap's own name (tcp-services) was already generic — the plan's
+# original "rename nats-tcp-services.yaml -> tcp-services.yaml" step turned out to
+# be unnecessary (only the file name is NATS-specific, not the object), so this
+# file was extended in place rather than renamed.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,3 +22,9 @@ metadata:
   namespace: ingress-nginx
 data:
   "4222": "messaging/nats:4222"
+  "25": "email/stalwart-mail:25"
+  "465": "email/stalwart-mail:465"
+  "587": "email/stalwart-mail:587"
+  "993": "email/stalwart-mail:993"
+  "995": "email/stalwart-mail:995"
+  "4190": "email/stalwart-mail:4190"

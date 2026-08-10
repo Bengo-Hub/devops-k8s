@@ -1,0 +1,32 @@
+# ArgoCD Application for Stalwart Mail Server (raw-manifests pattern, mirrors apps/postgresql).
+#
+# IMPORTANT — this file is NOT applied yet. Per the email hosting plan's implementation
+# order (.claude/plans/codevertex-email-hosting-service-plan.md), applying this is the
+# actual "go live" trigger: `kubectl apply -f apps/stalwart-mail/app.yaml` creates the
+# Application, and syncPolicy.automated below means it deploys immediately on apply.
+# Do not run that command without the pre-flight checks in the plan's Part 7 Phase 0/1
+# (IP blacklist check, port 25 reachability, PVC/secret readiness) and without the
+# stalwart-mail Secret already existing (see the plan's Part 10 — secrets are created
+# via scripts/infrastructure/create-service-secrets.sh, never committed to git).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stalwart-mail
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests/email
+    directory:
+      include: "stalwart-statefulset.yaml,stalwart-ingress.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: email
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
