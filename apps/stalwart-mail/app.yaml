@@ -20,7 +20,7 @@ spec:
     targetRevision: main
     path: manifests/email
     directory:
-      include: "stalwart-statefulset.yaml,stalwart-ingress.yaml"
+      include: "stalwart-*.yaml"
   destination:
     server: https://kubernetes.default.svc
     namespace: email
