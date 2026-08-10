@@ -7,6 +7,14 @@ on:
         description: 'Cloudflare zone ID (codevertexafrica.com = dbbf1a40cb82ffd43dbc1405d3d8a4b1)'
         required: true
         type: string
+      script:
+        description: 'Script to run'
+        required: false
+        type: choice
+        default: populate-zone.py
+        options:
+          - populate-zone.py
+          - set-proxied.py
 
 # Runs scripts/cloudflare/populate-zone.py against the given zone. It only
 # creates missing records / corrects mismatched content on records it owns
@@ -19,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Populate zone
+      - name: Run script
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-        run: python3 scripts/cloudflare/populate-zone.py "${{ inputs.zone_id }}"
+        run: python3 "scripts/cloudflare/${{ inputs.script }}" "${{ inputs.zone_id }}"
