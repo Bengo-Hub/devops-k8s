@@ -1,0 +1,52 @@
+# HTTP surfaces only — webmail, admin API, MTA-STS policy file. SMTP/IMAP/POP3/Sieve
+# are raw TCP passthrough (see manifests/nats-tcp-services.yaml), never via this Ingress —
+# nginx-ingress cannot parse those protocols. Per plan Part 5, only these hostnames are
+# Cloudflare-proxied; mx1.codevertexafrica.com must stay DNS-only and is not an Ingress host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stalwart-mail
+  namespace: email
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - webmail.codevertexafrica.com
+        - mail-admin.codevertexafrica.com
+        - mta-sts.codevertexafrica.com
+      secretName: stalwart-mail-tls
+  rules:
+    - host: webmail.codevertexafrica.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stalwart-mail
+                port:
+                  number: 8080
+    - host: mail-admin.codevertexafrica.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stalwart-mail
+                port:
+                  number: 8080
+    - host: mta-sts.codevertexafrica.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stalwart-mail
+                port:
+                  number: 8080

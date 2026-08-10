@@ -1,0 +1,75 @@
+# Mirrors manifests/backup/postgresql-backup-cronjob.yaml's shape. Stalwart's mail data is
+# filesystem-based (not a network DB), so this mounts the live data PVC read-only alongside
+# the backup output PVC and tars it — local-path/hostPath supports same-node multi-mount,
+# and this is a single-node cluster, so both PVCs are always co-locatable.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: stalwart-backup
+  namespace: email
+spec:
+  schedule: "0 3 * * *"  # Daily at 3am UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: stalwart-backup
+              image: busybox:1.36
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_DIR="/backups"
+                  FILENAME="stalwart_${TIMESTAMP}.tar.gz"
+
+                  mkdir -p ${BACKUP_DIR}
+                  AVAIL=$(df -m ${BACKUP_DIR} | awk 'NR==2{print $4}')
+                  if [ "$AVAIL" -lt 500 ]; then
+                    echo "ERROR: Only ${AVAIL}MB available in backup dir — aborting to prevent disk full"
+                    exit 1
+                  fi
+
+                  echo "Starting Stalwart mail-data backup at $(date)"
+                  tar czf "${BACKUP_DIR}/${FILENAME}" -C /data .
+                  SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
+                  echo "Backup completed: ${FILENAME} (${SIZE})"
+
+                  RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+                  find ${BACKUP_DIR} -name "stalwart_*.tar.gz" -mtime +${RETENTION_DAYS} -delete
+                  echo "Cleanup completed (removed backups older than ${RETENTION_DAYS} days)."
+              env:
+                - name: BACKUP_RETENTION_DAYS
+                  value: "7"
+              volumeMounts:
+                - name: mail-data
+                  mountPath: /data
+                  readOnly: true
+                - name: backup-storage
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+          volumes:
+            - name: mail-data
+              persistentVolumeClaim:
+                claimName: data-stalwart-mail-0
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: stalwart-backup-pvc
