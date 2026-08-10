@@ -190,7 +190,10 @@ spec:
       containers:
         - name: stalwart-mail
           # Pin to a specific tag before first deploy — NOT :latest, per Part 6.
-          image: stalwartlabs/mail-server:v0.11.9
+          # v0.11.9 doesn't exist on Docker Hub (initial guess, corrected 2026-08-10
+          # against the real tag list); v0.11.8-alpine is the latest real tag, alpine
+          # variant for a smaller/leaner image per the "keep it lean" scope decision.
+          image: stalwartlabs/mail-server:v0.11.8-alpine
           imagePullPolicy: IfNotPresent
           ports:
             - name: smtp
