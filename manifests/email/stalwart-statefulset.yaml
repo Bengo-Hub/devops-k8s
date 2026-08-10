@@ -109,6 +109,15 @@ data:
     bind = ["0.0.0.0:8080"]
     protocol = "http"
 
+    # Fallback admin bootstrap account, added 2026-08-10 — without this block
+    # the STALWART_ADMIN_PASSWORD env var was injected into the pod but never
+    # actually wired into Stalwart's own auth config, so the admin API/webadmin
+    # login returned 401 for every attempt. Matches the same %{env:...}%
+    # interpolation already proven working for the Postgres password below.
+    [authentication.fallback-admin]
+    user = "admin"
+    secret = "%{env:STALWART_ADMIN_PASSWORD}%"
+
     # PostgreSQL backend — reuses the existing shared postgresql-0 instance,
     # per Part 2's rationale (single DB to operate, not a new storage engine).
     [store."postgresql"]
