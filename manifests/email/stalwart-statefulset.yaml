@@ -196,8 +196,16 @@ spec:
     spec:
       priorityClassName: db-critical
       securityContext:
-        fsGroup: 1000
-        runAsUser: 1000
+        # Fixed 2026-08-10: the stalwartlabs/stalwart image defines its own
+        # "stalwart" user at uid/gid 2000 (confirmed via /etc/passwd inside
+        # the running container), NOT 1000 like most other services' images
+        # in this fleet. Running as 1000 meant the container couldn't write
+        # to /etc/stalwart (owned by uid 2000) at all, causing the setup
+        # wizard's "Local registry write error... Permission denied" on
+        # every attempt to save data store settings.
+        fsGroup: 2000
+        runAsUser: 2000
+        runAsGroup: 2000
         runAsNonRoot: true
       containers:
         - name: stalwart-mail
