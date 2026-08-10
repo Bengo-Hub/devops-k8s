@@ -237,6 +237,18 @@ spec:
                 secretKeyRef:
                   name: stalwart-mail
                   key: admin-password
+            # v0.16.x bootstrap fix (2026-08-10): the wizard-based first-run
+            # flow is unreliable (browser asset-loading errors after a pod
+            # restart re-downloads a different webui.zip build). This env
+            # var, per Stalwart's own bootstrap banner ("to pin a credential
+            # instead, set STALWART_RECOVERY_ADMIN=admin:<password>"), pins a
+            # permanent login without needing the wizard at all. Real value
+            # lives only in the K8s Secret, never in this file.
+            - name: STALWART_RECOVERY_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: stalwart-mail
+                  key: recovery-admin
           resources:
             requests:
               cpu: 250m
