@@ -261,10 +261,15 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 6
           volumeMounts:
+            # v0.16.x's data root is /var/lib/stalwart (PWD in the container),
+            # not /opt/stalwart-mail (that path only existed on the old, now-
+            # abandoned v0.11.x image) — corrected 2026-08-10 alongside the
+            # image repo fix, since the server logged "bootstrap mode / no
+            # configuration file was found" with the old path.
             - name: data
-              mountPath: /opt/stalwart-mail
+              mountPath: /var/lib/stalwart
             - name: config
-              mountPath: /opt/stalwart-mail/etc/config.toml
+              mountPath: /var/lib/stalwart/etc/config.toml
               subPath: config.toml
       volumes:
         - name: config
