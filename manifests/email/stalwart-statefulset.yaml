@@ -207,6 +207,21 @@ spec:
         runAsUser: 2000
         runAsGroup: 2000
         runAsNonRoot: true
+      initContainers:
+        # Fixed 2026-08-10: the pinned --config path (see below) points at
+        # /var/lib/stalwart/etc/config.toml, but Stalwart does not create
+        # missing parent directories itself — a fresh PVC with no etc/
+        # directory yet fails every wizard save with "No such file or
+        # directory (os error 2)". Idempotent — safe to run on every start.
+        - name: ensure-etc-dir
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /var/lib/stalwart/etc"]
+          securityContext:
+            runAsUser: 2000
+            runAsGroup: 2000
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/stalwart
       containers:
         - name: stalwart-mail
           # Pin to a specific tag before first deploy — NOT :latest, per Part 6.
