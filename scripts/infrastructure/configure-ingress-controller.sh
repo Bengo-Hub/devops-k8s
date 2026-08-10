@@ -89,6 +89,26 @@ if [ "$POD_HOSTNET" = "true" ]; then
       log_success "TCP services ConfigMap already configured"
     fi
 
+    # Email hosting (Stalwart Mail Server) hostPorts, added 2026-08-10 — see
+    # .claude/plans/codevertex-email-hosting-service-plan.md. Idempotent: only
+    # patches ports not already present.
+    CURRENT_PORTS=$(kubectl get deployment ingress-nginx-controller -n ingress-nginx -o jsonpath='{.spec.template.spec.containers[0].ports}' 2>/dev/null || echo "")
+    if [[ "$CURRENT_PORTS" != *"smtp-tcp"* ]]; then
+      log_info "Adding email hosting hostPorts (25/465/587/993/995/4190)..."
+      kubectl patch deployment ingress-nginx-controller -n ingress-nginx --type='json' -p='[
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 25, "hostPort": 25, "name": "smtp-tcp", "protocol": "TCP"}},
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 465, "hostPort": 465, "name": "smtps-tcp", "protocol": "TCP"}},
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 587, "hostPort": 587, "name": "subm-tcp", "protocol": "TCP"}},
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 993, "hostPort": 993, "name": "imaps-tcp", "protocol": "TCP"}},
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 995, "hostPort": 995, "name": "pop3s-tcp", "protocol": "TCP"}},
+        {"op": "add", "path": "/spec/template/spec/containers/0/ports/-", "value": {"containerPort": 4190, "hostPort": 4190, "name": "sieve-tcp", "protocol": "TCP"}}
+      ]'
+      log_info "Waiting for ingress controller to restart with email hosting TCP support..."
+      kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=180s || true
+    else
+      log_success "Email hosting hostPorts already configured"
+    fi
+
     log_info "To force reconfiguration, set FORCE_RECONFIGURE=true"
     exit 0
   elif [ "$READY_PODS" -gt 1 ]; then
