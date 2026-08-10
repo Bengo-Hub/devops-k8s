@@ -1,0 +1,25 @@
+name: Sync Cloudflare DNS
+
+on:
+  workflow_dispatch:
+    inputs:
+      zone_id:
+        description: 'Cloudflare zone ID (codevertexafrica.com = dbbf1a40cb82ffd43dbc1405d3d8a4b1)'
+        required: true
+        type: string
+
+# Runs scripts/cloudflare/populate-zone.py against the given zone. It only
+# creates missing records / corrects mismatched content on records it owns
+# (A/CNAME/MX/TXT for the host list baked into the script) and proxied flags —
+# it never deletes anything. Safe to re-run.
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Populate zone
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: python3 scripts/cloudflare/populate-zone.py "${{ inputs.zone_id }}"

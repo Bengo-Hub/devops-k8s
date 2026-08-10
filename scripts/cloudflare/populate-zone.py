@@ -33,7 +33,7 @@ ORIGIN_HOSTS = [
     "logistics", "logisticsapi", "riderapp", "routing", "tiles",
     "ordering", "orderingapi", "notifications", "notificationsapi",
     "projects", "library", "libraryapi", "books", "booksapi",
-    "truload", "truloadapi", "truload-docs",
+    "truload", "truloadapi", "truload-docs", "docs",
     "ispbilling", "ispbillingapi",
     "afya", "afyaapi",
     "argocd", "nats",  # keep DNS-only permanently (admin / non-HTTP)
