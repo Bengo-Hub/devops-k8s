@@ -326,14 +326,29 @@ spec:
             limits:
               cpu: 1000m
               memory: 2Gi
-          # Liveness probe TEMPORARILY REMOVED (2026-08-11) as a diagnostic
-          # step while chasing a live crash loop — needed to determine
-          # whether kubelet's own liveness-triggered SIGTERM was killing a
-          # process that would otherwise stay up (readiness never went true
-          # in ~90s windows across every restart, matching the liveness
-          # grace period almost exactly), or whether the process dies on its
-          # own regardless. Re-add once root-caused; a container with no
-          # liveness probe never self-heals from a genuine hang.
+          # Restored 2026-08-11 with a MUCH more lenient threshold, not the
+          # original tight one. Root cause found (not by me — needs the
+          # user's node/SSH access to fully confirm and fix): calico-node is
+          # continuously logging "Failed to set vxlan tunnel device MTU
+          # error=invalid argument ipVersion=0x4" — the node has a wg0
+          # WireGuard interface at mtu 1420, and vxlan.calico is stuck at
+          # mtu 1370 (1420-50, the VXLAN overhead — the arithmetic checks
+          # out, but felix can't actually apply it, so HOST-to-pod traffic
+          # over the VXLAN tunnel is unreliable while pod-to-pod and
+          # loopback both work fine — confirmed by directly comparing all
+          # three paths). This is a pre-existing node networking condition,
+          # not something introduced today, and not something entirely fixed
+          # by loosening probe thresholds — this just stops kubelet from
+          # killing an otherwise-working process over a transient host-path
+          # hiccup. See the plan's saga log for the full diagnostic trail.
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /healthz/ready
@@ -341,7 +356,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 6
+            failureThreshold: 12
           volumeMounts:
             # v0.16.x's data root is /var/lib/stalwart (PWD in the container),
             # not /opt/stalwart-mail (that path only existed on the old, now-
