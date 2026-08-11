@@ -1,0 +1,35 @@
+# Standalone cert-manager Certificate for mx1.codevertexafrica.com — the
+# mail-protocol TLS ports (25/465/587/993/995) present a self-signed cert
+# today (confirmed 2026-08-11 via a real SMTP submission test that needed
+# curl -k to connect at all). mx1 is deliberately NOT an Ingress host (must
+# stay DNS-only/unproxied, plan Part 5), so this can't be ingress-shim
+# generated like stalwart-mail-tls (webmail/mail-admin/mta-sts) is — it needs
+# its own Certificate resource.
+#
+# Uses the SAME letsencrypt-prod ClusterIssuer already used everywhere else
+# in this cluster. Its ACME solver list has a dns01.cloudflare solver scoped
+# to `dnsZones: [codevertexafrica.com]` that takes priority over the generic
+# http01/nginx fallback, so this resolves via DNS-01 (a temporary
+# _acme-challenge.mx1 TXT record, self-cleaning after each issuance/renewal)
+# rather than needing mx1 reachable over HTTP.
+#
+# The issued cert/key land in the `stalwart-mx1-tls` Secret. Loading it into
+# Stalwart's live TLS config is a separate step, done via the JMAP
+# x:Certificate object (certificate/privateKey PEM fields), not a mounted
+# file path — see the plan's saga log / shared-docs runbook.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: stalwart-mx1-tls
+  namespace: email
+spec:
+  secretName: stalwart-mx1-tls
+  dnsNames:
+    - mx1.codevertexafrica.com
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+    group: cert-manager.io
+  usages:
+    - digital signature
+    - key encipherment
