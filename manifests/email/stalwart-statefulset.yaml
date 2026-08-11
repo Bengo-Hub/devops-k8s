@@ -285,6 +285,18 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            # Diagnostic, added 2026-08-11 while chasing a live crash loop
+            # (exit 0/"Completed", zero output in Stalwart's own file-based
+            # log even at trace level, readiness/liveness failing with
+            # connection-reset/EOF). A raw Rust panic prints via the default
+            # panic hook straight to stderr, bypassing the application's own
+            # tracing/log-level config entirely — RUST_BACKTRACE surfaces the
+            # actual panic + backtrace in `kubectl logs` if that's what's
+            # happening (a plausible fit: Stalwart's own async runtime can
+            # abort on a blocking-call-from-async-context misuse). Remove
+            # once root-caused; not meant to be permanent.
+            - name: RUST_BACKTRACE
+              value: "full"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
