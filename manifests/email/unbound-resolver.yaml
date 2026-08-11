@@ -1,0 +1,126 @@
+# Local recursive DNS resolver for Stalwart's DNSBL/RBL checks — plan Part 6.
+#
+# Why this exists: confirmed live 2026-08-11 that DNSBL lookups currently
+# work (a Spamhaus test query against the pod's default resolver, kube-dns
+# at 10.96.0.10, correctly returned 127.0.0.2/4/10). But that resolver
+# forwards upstream through whatever shared/public path the node uses —
+# Spamhaus's own published policy rate-limits/blocks exactly this pattern
+# (many unrelated mail servers behind one shared forwarding resolver, which
+# Spamhaus can't attribute fairly), and failures show up as NXDOMAIN
+# indistinguishable from "not listed." Not broken today at near-zero mail
+# volume; a real, documented risk once volume grows. Fixing it means Stalwart
+# doing its OWN recursive resolution (querying authoritative servers
+# directly) so Spamhaus sees queries from this mail server's IP specifically,
+# not a resolver shared by unrelated traffic — a forwarding resolver
+# (even a dedicated one) doesn't solve this, only true recursion does.
+#
+# Wiring this into Stalwart is a JMAP call, not a manifest change — see the
+# runbook (shared-docs/internal/operations/email-hosting-stalwart-setup.md):
+# the singleton x:DnsResolver object's @type must be set to "Custom" with
+# `servers: [{address: <this Service's ClusterIP>, port: 53, protocol: udp}]`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unbound-resolver-config
+  namespace: email
+data:
+  unbound.conf: |
+    server:
+      interface: 0.0.0.0
+      port: 53
+      do-ip4: yes
+      do-ip6: no
+      do-udp: yes
+      do-tcp: yes
+      # Cluster-internal only (this Service is ClusterIP, never exposed via
+      # Ingress/LoadBalancer) — scoped broadly here since network-level
+      # reachability is already the real boundary, matching how the other
+      # in-cluster-only services in this fleet (nats, postgresql) are scoped.
+      access-control: 0.0.0.0/0 allow
+      hide-identity: yes
+      hide-version: yes
+      harden-glue: yes
+      harden-dnssec-stripped: yes
+      use-caps-for-id: yes
+      prefetch: yes
+      num-threads: 1
+      msg-cache-size: 32m
+      rrset-cache-size: 64m
+      cache-min-ttl: 300
+      cache-max-ttl: 86400
+      # Real recursion (root -> TLD -> authoritative), not forwarding — this
+      # is the entire point, root hints ship inside the image.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unbound-resolver
+  namespace: email
+  labels:
+    app: unbound-resolver
+spec:
+  type: ClusterIP
+  ports:
+    - name: dns-udp
+      port: 53
+      protocol: UDP
+      targetPort: 53
+    - name: dns-tcp
+      port: 53
+      protocol: TCP
+      targetPort: 53
+  selector:
+    app: unbound-resolver
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unbound-resolver
+  namespace: email
+  labels:
+    app: unbound-resolver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unbound-resolver
+  template:
+    metadata:
+      labels:
+        app: unbound-resolver
+    spec:
+      containers:
+        - name: unbound
+          image: mvance/unbound:1.22.0
+          ports:
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /opt/unbound/etc/unbound/unbound.conf
+              subPath: unbound.conf
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            exec:
+              command: ["drill", "@127.0.0.1", "-p", "53", "cloudflare.com"]
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["drill", "@127.0.0.1", "-p", "53", "cloudflare.com"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: config
+          configMap:
+            name: unbound-resolver-config
