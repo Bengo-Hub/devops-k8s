@@ -249,7 +249,26 @@ spec:
           # default. Forcing it under /var/lib/stalwart (the persistent PVC,
           # already correctly owned by uid 2000) so the wizard's write and
           # every subsequent restart agree on the same real location.
-          args: ["--config", "/var/lib/stalwart/etc/config.toml"]
+          #
+          # Fixed 2026-08-11: found stalwart-mail-0 crash-looping (exit 0,
+          # "Completed" — a clean SIGTERM-driven shutdown, not a panic) after
+          # ~3+ hours of uptime, readiness/liveness probes failing with
+          # "connection reset by peer"/EOF in the lead-up each time. Ruled
+          # out node CPU/memory pressure, disk space, and Postgres
+          # connectivity — all normal. Found the container's open-file
+          # ulimit was the default 1024 (soft) against a 524288 hard ceiling
+          # — far too low for a daemon holding SMTP/SMTPS/IMAPS/POP3S/Sieve/
+          # HTTP listeners plus a DB pool plus every client connection
+          # simultaneously; the image's own entrypoint doesn't raise it
+          # itself. A busy period (this session ran extensive JMAP account
+          # create/suspend/reactivate/archive/delete churn) plausibly
+          # exhausts it, matching the symptom exactly. Kubernetes has no
+          # native per-container ulimit field, so this wraps the entrypoint
+          # in a shell that raises the soft limit before exec'ing the real
+          # binary — the standard workaround for this class of container.
+          command: ["sh", "-c"]
+          args:
+            - "ulimit -n 65536; exec stalwart --config /var/lib/stalwart/etc/config.toml"
           ports:
             - name: smtp
               containerPort: 25
