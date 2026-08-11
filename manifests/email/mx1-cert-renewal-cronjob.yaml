@@ -1,0 +1,118 @@
+# Automates the manual cycle discovered 2026-08-11 while first issuing the
+# mx1 TLS cert (see the plan's saga log / shared-docs runbook): cert-manager
+# auto-renews the `stalwart-mx1-tls` Secret ~30 days before expiry, but
+# Stalwart doesn't watch that Secret at all — the new cert has to be pushed
+# in via a JMAP `x:Certificate/set` call, and (confirmed live) that alone
+# doesn't take effect until the pod restarts.
+#
+# Detection: a sha256 of the Secret's tls.crt, stored back as an annotation
+# on the Secret itself once successfully applied — cheap, no extra
+# ConfigMap/state object needed, and idempotent (a re-run with an unchanged
+# cert is a fast no-op).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mx1-cert-renewal
+  namespace: email
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mx1-cert-renewal
+  namespace: email
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mx1-cert-renewal
+  namespace: email
+subjects:
+  - kind: ServiceAccount
+    name: mx1-cert-renewal
+    namespace: email
+roleRef:
+  kind: Role
+  name: mx1-cert-renewal
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mx1-cert-renewal
+  namespace: email
+spec:
+  schedule: "0 4 * * *"  # Daily at 4am UTC — cheap to check, only acts when the cert actually changed
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          serviceAccountName: mx1-cert-renewal
+          restartPolicy: OnFailure
+          containers:
+            - name: mx1-cert-renewal
+              image: alpine/k8s:1.30.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  apk add --no-cache curl >/dev/null 2>&1 || true
+
+                  CERT=$(kubectl get secret stalwart-mx1-tls -n email -o jsonpath='{.data.tls\.crt}' | base64 -d)
+                  KEY=$(kubectl get secret stalwart-mx1-tls -n email -o jsonpath='{.data.tls\.key}' | base64 -d)
+                  NEW_HASH=$(printf '%s' "$CERT" | sha256sum | cut -d' ' -f1)
+                  OLD_HASH=$(kubectl get secret stalwart-mx1-tls -n email -o jsonpath='{.metadata.annotations.codevertexafrica\.com/applied-sha256}' 2>/dev/null || true)
+
+                  if [ "$NEW_HASH" = "$OLD_HASH" ]; then
+                    echo "mx1 cert unchanged (sha256=$NEW_HASH) — nothing to do"
+                    exit 0
+                  fi
+                  echo "mx1 cert changed ($OLD_HASH -> $NEW_HASH) — applying to Stalwart"
+
+                  # PEM content only ever contains base64 alphabet + header/footer lines,
+                  # so JSON-string-encoding it is just "escape the newlines" — no other
+                  # character in a PEM block needs escaping for a JSON string.
+                  CERT_JSON=$(printf '%s\n' "$CERT" | awk '{printf "%s\\n", $0}')
+                  KEY_JSON=$(printf '%s\n' "$KEY" | awk '{printf "%s\\n", $0}')
+
+                  ADMIN_PASS=$(kubectl get secret stalwart-mail -n email -o jsonpath='{.data.admin-password}' | base64 -d)
+                  AUTH=$(printf "admin@codevertexafrica.com:%s" "$ADMIN_PASS" | base64 -w0)
+
+                  PAYLOAD="{\"using\":[\"urn:ietf:params:jmap:core\",\"urn:stalwart:jmap\"],\"methodCalls\":[[\"x:Certificate/set\",{\"create\":{\"new1\":{\"certificate\":{\"@type\":\"Text\",\"value\":\"${CERT_JSON}\"},\"privateKey\":{\"@type\":\"Text\",\"secret\":\"${KEY_JSON}\"}}}},\"c1\"]]}"
+
+                  RESP=$(echo "$PAYLOAD" | curl -s -m 10 -X POST "http://stalwart-mail.email.svc.cluster.local:8080/jmap/" \
+                    -H "Authorization: Basic $AUTH" -H "Content-Type: application/json" --data-binary @-)
+                  echo "Stalwart response: $RESP"
+
+                  case "$RESP" in
+                    *'"created"'*)
+                      kubectl annotate secret stalwart-mx1-tls -n email "codevertexafrica.com/applied-sha256=${NEW_HASH}" --overwrite
+                      echo "Restarting stalwart-mail to pick up the new certificate..."
+                      kubectl rollout restart statefulset stalwart-mail -n email
+                      kubectl rollout status statefulset stalwart-mail -n email --timeout=180s
+                      echo "mx1 certificate renewed and applied successfully"
+                      ;;
+                    *)
+                      echo "ERROR: Stalwart rejected the new certificate, not restarting"
+                      exit 1
+                      ;;
+                  esac
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
