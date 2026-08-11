@@ -26,7 +26,7 @@ rules:
     verbs: ["get", "patch"]
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
-    verbs: ["get", "patch"]
+    verbs: ["get", "patch", "list", "watch"]  # list/watch needed by `kubectl rollout status`, not just `restart`
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
