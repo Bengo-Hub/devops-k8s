@@ -92,6 +92,26 @@ def desired_records():
     # dependency on Stalwart or MTA-STS enforcement being live.
     recs.append({"type": "TXT", "name": "_smtp._tls",
                  "content": '"v=TLSRPTv1; rua=mailto:tlsrpt@codevertexafrica.com"'})
+    # DKIM (added 2026-08-11, plan Part 13.1/saga log) — Stalwart's own
+    # automatic DKIM management generates dated selectors (not the
+    # originally-planned static `cvx2026a`) and rotates them over time;
+    # pulled verbatim from the live `x:Domain/get` dnsZoneFile via the JMAP
+    # admin API. Deliberately NOT pulling that same zone file's SPF/MX/DMARC/
+    # mta-sts suggestions here — those assume Stalwart is the sole mail
+    # system for the apex, which contradicts the deliberate "don't touch the
+    # apex MX" decision (Part 4). Only the DKIM keys are safe/correct to take
+    # as-is. Re-run this block whenever Stalwart rotates to a new selector.
+    recs.append({"type": "TXT", "name": "v1-ed25519-20260811._domainkey",
+                 "content": '"v=DKIM1; k=ed25519; h=sha256; '
+                            'p=Pi92OsUg1xTi03Vg7EscBYl/D0ikAiyl0osV4svuxAU="'})
+    recs.append({"type": "TXT", "name": "v1-rsa-20260811._domainkey",
+                 "content": '"v=DKIM1; k=rsa; h=sha256; '
+                            'p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3BIkxGMv3YYDQPKM1+FgGMhlaDxDbDa7'
+                            'jT7FElafFv7n+Nx9rN5MYHraUA0QgJqDgO3n0NW2Pv+Ir+ReGSt7BUpYEEaz1tCY2/Q/21vSorGNWr'
+                            'Ikifir2TZJOikpg1C+XHhBF+ZumbqvmaSD+mEf0SFW7sgfqhXFf/UFqMr4qSm0+Yw2uajoOThrmI7'
+                            'vOXovZNgcO+dBjfdIcCyGcTXg/Yi7z9GeotFh1S0Zrbp9RcPo0adS4k3nuANOQrGbFRWla3u0dXih'
+                            'PPcmdxphvUfJFEuZlTe4GVIM6WueVaMlitA6Jm6kSYhrWVDYI2pmfa8GuUeXs/41N28WGi2ydSWLK'
+                            'wIDAQAB"'})
     return recs
 
 def fqdn(name):
