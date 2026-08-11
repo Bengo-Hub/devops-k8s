@@ -61,7 +61,13 @@ env:
   - name: STALWART_ADMIN_URL
     value: "http://stalwart-mail.email.svc.cluster.local:8080"
   - name: STALWART_ADMIN_USER
-    value: "admin"
+    # Fixed 2026-08-11: bare "admin" doesn't authenticate on the now-current
+    # v0.16.x Stalwart (confirmed live: 401). The real wizard-created admin
+    # account is a full email address, not a bare username - this was silently
+    # broken since deploy, meaning every Stalwart API call this service ever
+    # made would have failed auth even before the client.go rewrite fixed the
+    # request shapes themselves.
+    value: "admin@codevertexafrica.com"
   - name: STALWART_ADMIN_PASSWORD
     valueFrom:
       secretKeyRef:
