@@ -1,0 +1,87 @@
+# Checks the mail-sending IP against the major DNSBLs receiving mail servers
+# actually consult (Spamhaus ZEN, Barracuda, SpamCop — matching the "big
+# three" already configured as x:SpamDnsblServer zones inside Stalwart
+# itself for inbound filtering; this job checks the same zones but for OUR
+# OWN outbound IP). Flagged in plan Part 6/13.3 as "higher priority than it
+# looks, fails silently" — an undetected blacklisting looks identical to
+# "deliverability is just bad" until someone thinks to check.
+#
+# Queries via the local unbound-resolver (manifests/email/unbound-resolver.yaml)
+# rather than the cluster's default DNS, for the same reason Stalwart's own
+# DNSBL checks were pointed there — public/shared forwarding resolvers get
+# rate-limited by Spamhaus for exactly this kind of automated lookup.
+#
+# MAIL_IP defaults to the current shared platform IP (77.237.232.66, plan
+# Part 5). Update once the second dedicated mail IP (Part 5's "before Phase 4,
+# before any paying tenant" item) is acquired — this check is only useful
+# against whatever IP mail is actually sent from.
+#
+# Alerting: deliberately just a non-zero exit code on a listing, not a direct
+# webhook POST — `argocd-notifications-secret` (the only webhook credential
+# already in this cluster) lives in the `argocd` namespace, not `email`, and
+# Secrets don't cross namespaces. A failing exit code already surfaces for
+# free: auth-api's lightweight monitoring dashboard (plan Part 13.3) flags
+# any CronJob whose last run didn't succeed as unhealthy, no extra code
+# needed. Wire a real webhook later only if that page proves insufficient.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ip-blacklist-check
+  namespace: email
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ip-blacklist-check
+              image: busybox:1.36
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  IP="${MAIL_IP}"
+                  REV=$(echo "$IP" | awk -F. '{print $4"."$3"."$2"."$1}')
+                  RESOLVER="unbound-resolver.email.svc.cluster.local"
+                  LISTED=""
+
+                  check_zone() {
+                    zone="$1"
+                    label="$2"
+                    result=$(nslookup "${REV}.${zone}" "$RESOLVER" 2>&1 || true)
+                    if echo "$result" | grep -q "Address: 127\."; then
+                      echo "LISTED: ${IP} is on ${label} (${zone})"
+                      LISTED="${LISTED}${label}, "
+                    else
+                      echo "clean: ${IP} not listed on ${label}"
+                    fi
+                  }
+
+                  echo "Checking ${IP} (reverse: ${REV}) against major DNSBLs via ${RESOLVER}..."
+                  check_zone "zen.spamhaus.org" "Spamhaus ZEN"
+                  check_zone "b.barracudacentral.org" "Barracuda"
+                  check_zone "bl.spamcop.net" "SpamCop"
+
+                  if [ -n "$LISTED" ]; then
+                    echo "ALERT: ${IP} is blacklisted on: ${LISTED}"
+                    exit 1
+                  fi
+                  echo "All clear."
+              env:
+                - name: MAIL_IP
+                  value: "77.237.232.66"
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
