@@ -326,14 +326,14 @@ spec:
             limits:
               cpu: 1000m
               memory: 2Gi
-          livenessProbe:
-            httpGet:
-              path: /healthz/live
-              port: http
-            initialDelaySeconds: 20
-            periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 6
+          # Liveness probe TEMPORARILY REMOVED (2026-08-11) as a diagnostic
+          # step while chasing a live crash loop — needed to determine
+          # whether kubelet's own liveness-triggered SIGTERM was killing a
+          # process that would otherwise stay up (readiness never went true
+          # in ~90s windows across every restart, matching the liveness
+          # grace period almost exactly), or whether the process dies on its
+          # own regardless. Re-add once root-caused; a container with no
+          # liveness probe never self-heals from a genuine hang.
           readinessProbe:
             httpGet:
               path: /healthz/ready
