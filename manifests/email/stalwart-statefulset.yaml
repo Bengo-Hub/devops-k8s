@@ -326,33 +326,39 @@ spec:
             limits:
               cpu: 1000m
               memory: 2Gi
-          # Restored 2026-08-11 with a MUCH more lenient threshold, not the
-          # original tight one. Root cause found (not by me — needs the
-          # user's node/SSH access to fully confirm and fix): calico-node is
-          # continuously logging "Failed to set vxlan tunnel device MTU
-          # error=invalid argument ipVersion=0x4" — the node has a wg0
-          # WireGuard interface at mtu 1420, and vxlan.calico is stuck at
-          # mtu 1370 (1420-50, the VXLAN overhead — the arithmetic checks
-          # out, but felix can't actually apply it, so HOST-to-pod traffic
-          # over the VXLAN tunnel is unreliable while pod-to-pod and
-          # loopback both work fine — confirmed by directly comparing all
-          # three paths). This is a pre-existing node networking condition,
-          # not something introduced today, and not something entirely fixed
-          # by loosening probe thresholds — this just stops kubelet from
-          # killing an otherwise-working process over a transient host-path
-          # hiccup. See the plan's saga log for the full diagnostic trail.
+          # Changed to exec probes 2026-08-11. Root cause found (not fully
+          # fixed by me — needs the user's node/SSH access to actually
+          # resolve): calico-node is continuously logging "Failed to set
+          # vxlan tunnel device MTU error=invalid argument ipVersion=0x4" —
+          # the node has a wg0 WireGuard interface at mtu 1420, and
+          # vxlan.calico is stuck at mtu 1370 (1420-50, the VXLAN overhead —
+          # the arithmetic checks out, but felix can't actually apply it via
+          # netlink). Confirmed by directly comparing all three paths: HOST
+          # (kubelet, node IP) -> pod over this VXLAN tunnel is unreliable
+          # (every single logged probe attempt failed, connection
+          # reset/EOF), while loopback and POD-to-pod (e.g. email-provisioner
+          # -> stalwart, same mechanism ingress-nginx itself uses, since it's
+          # also a pod, not host-networked) both succeeded every time tested.
+          # httpGet probes always go via the host path (kubelet issues them
+          # directly), so they could never pass no matter the threshold —
+          # switched to exec probes (checking loopback, inside the
+          # container's own namespace) so kubelet's Ready/Live determination
+          # matches the path that's actually been working, instead of the
+          # broken one. This should also fix the real mail-admin.
+          # codevertexafrica.com 503 users saw: Kubernetes Services only
+          # route to Ready pods regardless of whether the traffic itself
+          # would have worked, and ingress-nginx's own traffic is pod-to-pod.
+          # See the plan's saga log for the full diagnostic trail.
           livenessProbe:
-            httpGet:
-              path: /healthz/live
-              port: http
-            initialDelaySeconds: 30
-            periodSeconds: 20
+            exec:
+              command: ["sh", "-c", "curl -sf --max-time 3 http://127.0.0.1:8080/healthz/live"]
+            initialDelaySeconds: 20
+            periodSeconds: 15
             timeoutSeconds: 5
-            failureThreshold: 30
+            failureThreshold: 6
           readinessProbe:
-            httpGet:
-              path: /healthz/ready
-              port: http
+            exec:
+              command: ["sh", "-c", "curl -sf --max-time 3 http://127.0.0.1:8080/healthz/ready"]
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
