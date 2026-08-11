@@ -183,7 +183,15 @@ echo ""
 echo -e "${BLUE}Step 7: Configuring firewall...${NC}"
 # Determine required ports by node role
 if [ "${NODE_ROLE}" = "master" ]; then
-    REQUIRED_RULES="22/tcp 80/tcp 443/tcp 6443/tcp 2379:2380/tcp 10250/tcp 10251/tcp 10252/tcp 10255/tcp"
+    # Mail protocol ports added 2026-08-11 (email hosting plan, Part 6) — found
+    # missing during a live incident: ufw's default-deny INPUT policy was
+    # silently blocking all external SMTP/IMAP/POP3/Sieve traffic to Stalwart
+    # (TCP connection timeouts, not "refused" — the classic signature of a
+    # DROP-policy firewall, easy to miss since everything else on this list
+    # worked fine). This script is what provisions a fresh node's firewall, so
+    # without this addition a re-provisioned or additional node would silently
+    # reintroduce the same gap.
+    REQUIRED_RULES="22/tcp 80/tcp 443/tcp 6443/tcp 2379:2380/tcp 10250/tcp 10251/tcp 10252/tcp 10255/tcp 25/tcp 465/tcp 587/tcp 993/tcp 995/tcp 4190/tcp"
 else
     # Worker nodes: kubelet + NodePort range (no etcd/API server/scheduler/controller ports)
     REQUIRED_RULES="22/tcp 10250/tcp 30000:32767/tcp"
@@ -215,6 +223,12 @@ if command -v ufw &> /dev/null; then
                 ufw allow 10251/tcp         # kube-scheduler
                 ufw allow 10252/tcp         # kube-controller
                 ufw allow 10255/tcp         # Read-only Kubelet
+                ufw allow 25/tcp            # Stalwart SMTP
+                ufw allow 465/tcp           # Stalwart SMTPS
+                ufw allow 587/tcp           # Stalwart submission
+                ufw allow 993/tcp           # Stalwart IMAPS
+                ufw allow 995/tcp           # Stalwart POP3S
+                ufw allow 4190/tcp          # Stalwart ManageSieve
             else
                 ufw allow 22/tcp            # SSH
                 ufw allow 10250/tcp         # Kubelet
@@ -237,6 +251,12 @@ if command -v ufw &> /dev/null; then
             ufw allow 10251/tcp         # kube-scheduler
             ufw allow 10252/tcp         # kube-controller
             ufw allow 10255/tcp         # Read-only Kubelet
+            ufw allow 25/tcp            # Stalwart SMTP
+            ufw allow 465/tcp           # Stalwart SMTPS
+            ufw allow 587/tcp           # Stalwart submission
+            ufw allow 993/tcp           # Stalwart IMAPS
+            ufw allow 995/tcp           # Stalwart POP3S
+            ufw allow 4190/tcp          # Stalwart ManageSieve
         else
             ufw allow 22/tcp            # SSH
             ufw allow 10250/tcp         # Kubelet
