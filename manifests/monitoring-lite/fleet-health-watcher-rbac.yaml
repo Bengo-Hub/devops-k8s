@@ -1,0 +1,33 @@
+# Read-only cluster access for the fleet-health-watcher CronJob (see
+# fleet-health-watcher-cronjob.yaml). Grants GET/LIST only, cluster-wide,
+# on pods — the one resource the watcher actually inspects (restart counts /
+# waiting reasons). No write verbs anywhere, and deliberately narrower than
+# auth-api-monitor's RBAC (manifests/auth-api-monitor-rbac.yaml) since this
+# job doesn't need nodes/PVCs/ingresses/cronjobs — just pod health.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fleet-health-watcher
+  namespace: infra
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fleet-health-watcher
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fleet-health-watcher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: fleet-health-watcher
+subjects:
+- kind: ServiceAccount
+  name: fleet-health-watcher
+  namespace: infra
