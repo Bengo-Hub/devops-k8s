@@ -1,0 +1,155 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: fleet-health-watcher
+  namespace: infra
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 90
+      template:
+        spec:
+          serviceAccountName: fleet-health-watcher
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          containers:
+            - name: watcher
+              image: alpine/k8s:1.30.2
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+
+                  FAILURES=""
+
+                  # --- 1. Admin-configured alert channels (DB-backed, UI-editable via
+                  #        the platform monitor dashboard), falling back to this job's
+                  #        static Secret defaults when auth-api is unreachable or nothing
+                  #        has been configured yet. Mirrors notifications-api's own
+                  #        DB-first/env-fallback provider pattern.
+                  SLACK_WEBHOOK_URL=""
+                  ALERT_EMAIL_TO=""
+                  CONFIGURED=$(curl -sf --max-time 5 \
+                    -H "X-API-Key: ${INTERNAL_SERVICE_KEY:-}" \
+                    "http://auth-api.auth.svc.cluster.local:4000/api/v1/s2s/platform-alert-settings" 2>/dev/null || echo '{}')
+                  SLACK_WEBHOOK_URL=$(echo "$CONFIGURED" | jq -r '.slack_webhook_url // empty')
+                  ALERT_EMAIL_TO=$(echo "$CONFIGURED" | jq -r '.alert_email_to // empty')
+                  SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-${SLACK_WEBHOOK_URL_DEFAULT:-}}"
+                  ALERT_EMAIL_TO="${ALERT_EMAIL_TO:-${ALERT_EMAIL_TO_DEFAULT:-}}"
+
+                  # --- 2. Pod health, cluster-wide: CrashLoopBackOff/ImagePullBackOff or
+                  #        >=5 restarts. Same thresholds as auth-api's platform-monitor
+                  #        Overview() Problems field (internal/clients/k8s/monitor.go) —
+                  #        this job exists to PUSH what that dashboard can only show on
+                  #        request.
+                  BAD_PODS=$(kubectl get pods --all-namespaces -o json | jq -r '
+                    .items[] | . as $pod | ($pod.status.containerStatuses // [])[] |
+                    select(
+                      (.state.waiting.reason // "") == "CrashLoopBackOff" or
+                      (.state.waiting.reason // "") == "ImagePullBackOff" or
+                      (.state.waiting.reason // "") == "ErrImagePull" or
+                      (.restartCount // 0) >= 5
+                    ) |
+                    "\($pod.metadata.namespace)/\($pod.metadata.name) [\(.name)]: \(.state.waiting.reason // "HighRestartCount") (\(.restartCount) restarts)"
+                  ')
+                  if [ -n "$BAD_PODS" ]; then
+                    FAILURES="${FAILURES}Unhealthy pods:
+                  ${BAD_PODS}
+
+                  "
+                  fi
+
+                  # --- 3. Blackbox checks on the endpoints this incident actually
+                  #        touched. Expand this list as coverage grows — starter set,
+                  #        not exhaustive.
+                  for url in \
+                    https://sso.codevertexafrica.com/healthz \
+                    https://pos.codevertexafrica.com \
+                    https://accounts.codevertexafrica.com
+                  do
+                    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || echo "000")
+                    case "$CODE" in
+                      2??|3??) ;;
+                      *) FAILURES="${FAILURES}Endpoint check failed: ${url} returned ${CODE}
+                  " ;;
+                    esac
+                  done
+
+                  if [ -z "$FAILURES" ]; then
+                    echo "OK - no problems detected"
+                    exit 0
+                  fi
+
+                  echo "ISSUES DETECTED:"
+                  echo "$FAILURES"
+
+                  # --- 4a. Slack — fully independent of every other platform service,
+                  #         so this is the channel that actually fires during an
+                  #         auth-api-down incident like 2026-08-16.
+                  if [ -n "$SLACK_WEBHOOK_URL" ]; then
+                    SLACK_TEXT=$(printf '%s' "$FAILURES" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+                    curl -s -X POST -H 'Content-Type: application/json' \
+                      -d "{\"text\":\":rotating_light: Fleet health check failed:\\n${SLACK_TEXT}\"}" \
+                      "$SLACK_WEBHOOK_URL" >/dev/null \
+                      || echo "WARN: slack alert failed to send"
+                  else
+                    echo "WARN: no Slack webhook configured (admin UI or SLACK_WEBHOOK_URL_DEFAULT) - skipping"
+                  fi
+
+                  # --- 4b. Email via notifications-api (channel:"email", the
+                  #         fleet_health_alert template) — deliberately reuses the
+                  #         platform's one email-sending path instead of a second,
+                  #         parallel one. Trade-off, accepted: its X-API-Key check
+                  #         validates against auth-api, so this channel degrades
+                  #         gracefully (not silently retried, just skipped) if
+                  #         auth-api itself is unreachable or INTERNAL_SERVICE_KEY
+                  #         isn't set — Slack above is the channel guaranteed to
+                  #         fire in that specific case.
+                  if [ -n "$ALERT_EMAIL_TO" ] && [ -n "${INTERNAL_SERVICE_KEY:-}" ]; then
+                    DETAILS_JSON=$(printf '%s' "$FAILURES" | jq -Rs .)
+                    curl -s -X POST \
+                      -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
+                      -H 'Content-Type: application/json' \
+                      -d "{\"channel\":\"email\",\"tenant\":\"codevertex\",\"template\":\"fleet_health_alert\",\"to\":[\"${ALERT_EMAIL_TO}\"],\"data\":{\"summary\":\"Fleet health check failed\",\"details\":${DETAILS_JSON},\"detected_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" \
+                      "http://notifications-api.notifications.svc.cluster.local:4000/api/v1/notifications/messages" >/dev/null \
+                      || echo "WARN: email alert failed to send"
+                  else
+                    echo "WARN: no alert email configured, or INTERNAL_SERVICE_KEY unset - skipping email"
+                  fi
+
+                  exit 1
+              env:
+                - name: SLACK_WEBHOOK_URL_DEFAULT
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-health-watcher-secrets
+                      key: SLACK_WEBHOOK_URL_DEFAULT
+                      optional: true
+                - name: ALERT_EMAIL_TO_DEFAULT
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-health-watcher-secrets
+                      key: ALERT_EMAIL_TO_DEFAULT
+                      optional: true
+                - name: INTERNAL_SERVICE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: fleet-health-watcher-secrets
+                      key: INTERNAL_SERVICE_KEY
+                      optional: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
