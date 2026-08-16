@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kured
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://kubereboot.github.io/charts
+    chart: kured
+    targetRevision: 6.1.0
+    helm:
+      values: |
+        # Node-reboot safety (2026-08-16 incident follow-up): converts an
+        # already-pending kernel/OS update (reboot-required) into a
+        # controlled cordon -> drain -> reboot -> uncordon sequence instead
+        # of it sitting un-rebooted for weeks and eventually happening
+        # uncontrolled. Does NOT protect against a hypervisor-forced
+        # reboot (nothing can) — only against self-inflicted ones.
+        configuration:
+          period: 1h
+          rebootSentinel: /var/run/reboot-required
+          # 00:00-02:00 UTC = 03:00-05:00 EAT, the platform's lowest-traffic
+          # window. Single time zone chosen (not crossing midnight) to
+          # avoid kured's start/end-time window semantics getting tricky.
+          startTime: "00:00"
+          endTime: "02:00"
+          rebootDays:
+            - su
+            - mo
+            - tu
+            - we
+            - th
+            - fr
+            - sa
+          # Deliberately NOT overriding drain behavior: kured respects
+          # PodDisruptionBudgets by default, so it will correctly stall on
+          # redis-master's single-replica PDB until that's handled manually
+          # (promote the replica, or temporarily lift the PDB) rather than
+          # forcing a drain that could lose data. This is intentional,
+          # accepted behavior on a single-node cluster with no automatic
+          # Redis failover yet — see the incident-hardening plan's Part A2/A4.
+      releaseName: kured
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
