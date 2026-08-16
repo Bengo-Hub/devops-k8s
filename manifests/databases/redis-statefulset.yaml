@@ -125,6 +125,10 @@ spec:
         component: master
     spec:
       priorityClassName: db-critical
+      # 60s (default is 30s) so a k8s-initiated termination (drain, node
+      # cordon, rollout) gives preStop's SHUTDOWN SAVE time to flush the AOF
+      # cleanly before SIGKILL — see the 2026-08-16 AOF-corruption incident.
+      terminationGracePeriodSeconds: 60
       securityContext:
         fsGroup: 999
         runAsUser: 999
@@ -190,6 +194,18 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 1
           failureThreshold: 5
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - |
+                if [ -n "$REDIS_PASSWORD" ]; then
+                  redis-cli -a "$REDIS_PASSWORD" SHUTDOWN SAVE
+                else
+                  redis-cli SHUTDOWN SAVE
+                fi
         volumeMounts:
         - name: data
           mountPath: /data
@@ -198,7 +214,7 @@ spec:
         securityContext:
           runAsUser: 999
           runAsNonRoot: true
-      
+
       - name: metrics
         image: oliver006/redis_exporter:v1.62.0-alpine
         imagePullPolicy: IfNotPresent
