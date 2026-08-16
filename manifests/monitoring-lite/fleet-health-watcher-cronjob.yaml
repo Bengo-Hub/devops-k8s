@@ -28,8 +28,18 @@ spec:
                 - -c
                 - |
                   set -eu
+                  # busybox ash (this image's /bin/sh) supports pipefail; harmless no-op if not —
+                  # without it, `kubectl ... | jq ...` masks a kubectl failure entirely: jq sees
+                  # zero bytes of input, emits zero records, and exits 0, so a broken kubectl call
+                  # silently reports "no problems found" instead of erroring. Defense in depth on
+                  # top of the explicit in-cluster auth below (which is the actual fix — this image's
+                  # kubectl was not auto-detecting in-cluster config despite the SA token/CA/env vars
+                  # all being correctly present, root cause not fully identified; explicit args are
+                  # a robust workaround regardless of why auto-detection was failing).
+                  set -o pipefail 2>/dev/null || true
 
                   FAILURES=""
+                  KCTL="kubectl --server=https://kubernetes.default.svc --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt --request-timeout=20s"
 
                   # --- 1. Admin-configured alert channels (DB-backed, UI-editable via
                   #        the platform monitor dashboard), falling back to this job's
@@ -56,13 +66,14 @@ spec:
                   #        it stopped being one. Same base thresholds as auth-api's
                   #        platform-monitor Overview() Problems field (monitor.go) — this job
                   #        exists to PUSH what that dashboard can only show on request.
-                  # --request-timeout bounds the call: without it, an unresponsive k8s API
-                  # server (plausible during exactly the kind of incident this watcher exists
-                  # to catch) can hang the WHOLE run until activeDeadlineSeconds kills it — the
-                  # script never reaches the alerting step below, so nothing fires. Bounded here
-                  # means a slow API server degrades this one run, not the watcher's ability to
-                  # alert on the next scheduled run 2 minutes later.
-                  BAD_PODS=$(kubectl get pods --all-namespaces --request-timeout=20s -o json | jq -r '
+                  # --request-timeout (baked into $KCTL) bounds the call: without it, an
+                  # unresponsive k8s API server (plausible during exactly the kind of incident
+                  # this watcher exists to catch) can hang the WHOLE run until
+                  # activeDeadlineSeconds kills it — the script never reaches the alerting step
+                  # below, so nothing fires. Bounded here means a slow API server degrades this
+                  # one run, not the watcher's ability to alert on the next scheduled run 2
+                  # minutes later.
+                  BAD_PODS=$($KCTL get pods --all-namespaces -o json | jq -r '
                     def isRecent: (.lastState.terminated.finishedAt // empty) as $f |
                       ($f != null and $f != "") and ((now - ($f | fromdateiso8601)) <= 1800);
                     .items[] | . as $pod | ($pod.status.containerStatuses // [])[] |
