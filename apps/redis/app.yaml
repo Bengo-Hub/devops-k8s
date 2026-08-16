@@ -10,7 +10,7 @@ spec:
     targetRevision: main
     path: manifests/databases
     directory:
-      include: redis-statefulset.yaml
+      include: '{redis-statefulset.yaml,redis-master-pdb.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: infra
