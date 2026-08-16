@@ -51,6 +51,25 @@ spec:
                   SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
                   echo "Backup completed: ${FILENAME} (${SIZE})"
 
+                  # Offsite push to Cloudflare R2 — the local PVC above is on the SAME VPS as
+                  # postgresql-0 itself, so it's worthless in exactly the failure mode that
+                  # matters most (total VPS/host-provider loss, as happened 2026-08-16). This
+                  # is best-effort: a failed push never fails the job, since the local dump
+                  # (this backup's actual purpose) already succeeded above.
+                  if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_SECRET_ACCESS_KEY:-}" ] && [ -n "${R2_S3_ENDPOINT:-}" ]; then
+                    apk add --no-cache rclone >/dev/null 2>&1
+                    RCLONE_CONFIG_R2_TYPE=s3 \
+                    RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+                    RCLONE_CONFIG_R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
+                    RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+                    RCLONE_CONFIG_R2_ENDPOINT="${R2_S3_ENDPOINT}" \
+                    rclone copy "${BACKUP_DIR}/${FILENAME}" "r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/" --checksum \
+                      && echo "Offsite backup pushed to R2: ${FILENAME}" \
+                      || echo "WARN: R2 offsite push failed - local backup on the VPS PVC is still intact"
+                  else
+                    echo "WARN: R2 credentials not configured - this backup stays local-VPS-only"
+                  fi
+
                   # Retention churn: delete dump files older than BACKUP_RETENTION_DAYS
                   # (default 4, mirroring the per-service tenant-scoped backup churn).
                   RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-4}
@@ -76,6 +95,29 @@ spec:
                 # per-service tenant-scoped backup churn (BACKUP_RETENTION_DAYS).
                 - name: BACKUP_RETENTION_DAYS
                   value: "4"
+                # Cloudflare R2 offsite push — see postgresql-backup-r2-secrets (Secret, not
+                # committed to git). All optional: absent creds just skip the offsite push
+                # with a warning, local backup is unaffected either way.
+                - name: R2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-backup-r2-secrets
+                      key: R2_ACCESS_KEY_ID
+                      optional: true
+                - name: R2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-backup-r2-secrets
+                      key: R2_SECRET_ACCESS_KEY
+                      optional: true
+                - name: R2_S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgresql-backup-r2-secrets
+                      key: R2_S3_ENDPOINT
+                      optional: true
+                - name: R2_BUCKET
+                  value: "codevertex-platform-backups"
                 - name: PGHOST
                   value: "postgresql.infra.svc.cluster.local"
                 # PostgreSQL admin user = admin_user (set via POSTGRES_USER in Bitnami chart)
