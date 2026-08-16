@@ -20,6 +20,18 @@ spec:
             runAsUser: 999
             runAsGroup: 999
             fsGroup: 999
+          initContainers:
+            # `apk add rclone` inside pg-backup itself needs root (writes the system package
+            # db) and pg-backup deliberately runs non-root — confirmed live: apk update/apk
+            # add both succeed as root but silently fail under runAsUser 999. Standard fix:
+            # copy the static binary from the official image onto a shared volume instead of
+            # installing anything at runtime.
+            - name: fetch-rclone
+              image: rclone/rclone:1.67
+              command: ["sh", "-c", "cp $(command -v rclone) /rclone-bin/rclone && chmod +x /rclone-bin/rclone"]
+              volumeMounts:
+                - name: rclone-bin
+                  mountPath: /rclone-bin
           containers:
             - name: pg-backup
               image: postgres:17-alpine
@@ -57,24 +69,22 @@ spec:
                   # is best-effort: a failed push never fails the job, since the local dump
                   # (this backup's actual purpose) already succeeded above.
                   if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_SECRET_ACCESS_KEY:-}" ] && [ -n "${R2_S3_ENDPOINT:-}" ]; then
-                    # `|| true` on every install step: set -e must never abort the job over an
-                    # offsite-push problem — the local dump above already succeeded, which is
-                    # this job's actual purpose. Missing rclone just skips the push below.
-                    apk update >/dev/null 2>&1 || true
-                    apk add --no-cache rclone >/dev/null 2>&1 || true
-                    if command -v rclone >/dev/null 2>&1; then
+                    # rclone binary comes from the fetch-rclone initContainer (shared emptyDir)
+                    # — installing it here via apk needs root, and this container deliberately
+                    # runs non-root (confirmed live: apk add silently fails under runAsUser 999).
+                    if [ -x /rclone-bin/rclone ]; then
                       if RCLONE_CONFIG_R2_TYPE=s3 \
                          RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
                          RCLONE_CONFIG_R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
                          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
                          RCLONE_CONFIG_R2_ENDPOINT="${R2_S3_ENDPOINT}" \
-                         rclone copy "${BACKUP_DIR}/${FILENAME}" "r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/" --checksum; then
+                         /rclone-bin/rclone copy "${BACKUP_DIR}/${FILENAME}" "r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/" --checksum; then
                         echo "Offsite backup pushed to R2: ${FILENAME}"
                       else
                         echo "WARN: R2 offsite push failed - local backup on the VPS PVC is still intact"
                       fi
                     else
-                      echo "WARN: rclone install failed - skipping offsite push, local backup is still intact"
+                      echo "WARN: rclone binary missing (fetch-rclone initContainer) - skipping offsite push, local backup is still intact"
                     fi
                   else
                     echo "WARN: R2 credentials not configured - this backup stays local-VPS-only"
@@ -142,6 +152,8 @@ spec:
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backups
+                - name: rclone-bin
+                  mountPath: /rclone-bin
               resources:
                 requests:
                   cpu: 100m
@@ -153,6 +165,8 @@ spec:
             - name: backup-storage
               persistentVolumeClaim:
                 claimName: postgresql-backup-pvc
+            - name: rclone-bin
+              emptyDir: {}
 ---
 # The backup-storage PVC (postgresql-backup-pvc) lives in a SEPARATE file:
 #   manifests/backup/postgresql-backup-pvc.yaml
