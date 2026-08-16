@@ -57,15 +57,25 @@ spec:
                   # is best-effort: a failed push never fails the job, since the local dump
                   # (this backup's actual purpose) already succeeded above.
                   if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_SECRET_ACCESS_KEY:-}" ] && [ -n "${R2_S3_ENDPOINT:-}" ]; then
-                    apk add --no-cache rclone >/dev/null 2>&1
-                    RCLONE_CONFIG_R2_TYPE=s3 \
-                    RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
-                    RCLONE_CONFIG_R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-                    RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-                    RCLONE_CONFIG_R2_ENDPOINT="${R2_S3_ENDPOINT}" \
-                    rclone copy "${BACKUP_DIR}/${FILENAME}" "r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/" --checksum \
-                      && echo "Offsite backup pushed to R2: ${FILENAME}" \
-                      || echo "WARN: R2 offsite push failed - local backup on the VPS PVC is still intact"
+                    # `|| true` on every install step: set -e must never abort the job over an
+                    # offsite-push problem — the local dump above already succeeded, which is
+                    # this job's actual purpose. Missing rclone just skips the push below.
+                    apk update >/dev/null 2>&1 || true
+                    apk add --no-cache rclone >/dev/null 2>&1 || true
+                    if command -v rclone >/dev/null 2>&1; then
+                      if RCLONE_CONFIG_R2_TYPE=s3 \
+                         RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+                         RCLONE_CONFIG_R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
+                         RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+                         RCLONE_CONFIG_R2_ENDPOINT="${R2_S3_ENDPOINT}" \
+                         rclone copy "${BACKUP_DIR}/${FILENAME}" "r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/" --checksum; then
+                        echo "Offsite backup pushed to R2: ${FILENAME}"
+                      else
+                        echo "WARN: R2 offsite push failed - local backup on the VPS PVC is still intact"
+                      fi
+                    else
+                      echo "WARN: rclone install failed - skipping offsite push, local backup is still intact"
+                    fi
                   else
                     echo "WARN: R2 credentials not configured - this backup stays local-VPS-only"
                   fi
