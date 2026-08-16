@@ -46,20 +46,33 @@ spec:
                   SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-${SLACK_WEBHOOK_URL_DEFAULT:-}}"
                   ALERT_EMAIL_TO="${ALERT_EMAIL_TO:-${ALERT_EMAIL_TO_DEFAULT:-}}"
 
-                  # --- 2. Pod health, cluster-wide: CrashLoopBackOff/ImagePullBackOff or
-                  #        >=5 restarts. Same thresholds as auth-api's platform-monitor
-                  #        Overview() Problems field (internal/clients/k8s/monitor.go) —
-                  #        this job exists to PUSH what that dashboard can only show on
-                  #        request.
-                  BAD_PODS=$(kubectl get pods --all-namespaces -o json | jq -r '
+                  # --- 2. Pod health, cluster-wide: CrashLoopBackOff/ImagePullBackOff (always
+                  #        relevant — current state), or >=5 restarts WHERE THE LAST ONE WAS
+                  #        RECENT (<=30min). Restart count alone is a cumulative counter that
+                  #        never resets on its own — without the recency check, pods that
+                  #        restarted a bunch during a single past incident (e.g. the whole
+                  #        fleet during a node reboot) would trip this FOREVER after, spamming
+                  #        an alert every 2 minutes for an already-resolved problem long after
+                  #        it stopped being one. Same base thresholds as auth-api's
+                  #        platform-monitor Overview() Problems field (monitor.go) — this job
+                  #        exists to PUSH what that dashboard can only show on request.
+                  # --request-timeout bounds the call: without it, an unresponsive k8s API
+                  # server (plausible during exactly the kind of incident this watcher exists
+                  # to catch) can hang the WHOLE run until activeDeadlineSeconds kills it — the
+                  # script never reaches the alerting step below, so nothing fires. Bounded here
+                  # means a slow API server degrades this one run, not the watcher's ability to
+                  # alert on the next scheduled run 2 minutes later.
+                  BAD_PODS=$(kubectl get pods --all-namespaces --request-timeout=20s -o json | jq -r '
+                    def isRecent: (.lastState.terminated.finishedAt // empty) as $f |
+                      ($f != null and $f != "") and ((now - ($f | fromdateiso8601)) <= 1800);
                     .items[] | . as $pod | ($pod.status.containerStatuses // [])[] |
                     select(
                       (.state.waiting.reason // "") == "CrashLoopBackOff" or
                       (.state.waiting.reason // "") == "ImagePullBackOff" or
                       (.state.waiting.reason // "") == "ErrImagePull" or
-                      (.restartCount // 0) >= 5
+                      ((.restartCount // 0) >= 5 and isRecent)
                     ) |
-                    "\($pod.metadata.namespace)/\($pod.metadata.name) [\(.name)]: \(.state.waiting.reason // "HighRestartCount") (\(.restartCount) restarts)"
+                    "\($pod.metadata.namespace)/\($pod.metadata.name) [\(.name)]: \(.state.waiting.reason // "RecentHighRestartCount") (\(.restartCount) restarts)"
                   ')
                   if [ -n "$BAD_PODS" ]; then
                     FAILURES="${FAILURES}Unhealthy pods:
@@ -97,7 +110,7 @@ spec:
                   #         auth-api-down incident like 2026-08-16.
                   if [ -n "$SLACK_WEBHOOK_URL" ]; then
                     SLACK_TEXT=$(printf '%s' "$FAILURES" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
-                    curl -s -X POST -H 'Content-Type: application/json' \
+                    curl -s --max-time 10 -X POST -H 'Content-Type: application/json' \
                       -d "{\"text\":\":rotating_light: Fleet health check failed:\\n${SLACK_TEXT}\"}" \
                       "$SLACK_WEBHOOK_URL" >/dev/null \
                       || echo "WARN: slack alert failed to send"
@@ -116,7 +129,7 @@ spec:
                   #         fire in that specific case.
                   if [ -n "$ALERT_EMAIL_TO" ] && [ -n "${INTERNAL_SERVICE_KEY:-}" ]; then
                     DETAILS_JSON=$(printf '%s' "$FAILURES" | jq -Rs .)
-                    curl -s -X POST \
+                    curl -s --max-time 10 -X POST \
                       -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
                       -H 'Content-Type: application/json' \
                       -d "{\"channel\":\"email\",\"tenant\":\"codevertex\",\"template\":\"fleet_health_alert\",\"to\":[\"${ALERT_EMAIL_TO}\"],\"data\":{\"summary\":\"Fleet health check failed\",\"details\":${DETAILS_JSON},\"detected_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" \
@@ -126,7 +139,13 @@ spec:
                     echo "WARN: no alert email configured, or INTERNAL_SERVICE_KEY unset - skipping email"
                   fi
 
-                  exit 1
+                  # Reaching here means the watcher successfully detected AND alerted on the
+                  # issue(s) above — that's the job doing its job correctly, not a job failure.
+                  # exit 1 here would mark every alerting run as a "Failed" Job in k8s, which is
+                  # both wrong (the run succeeded at its actual purpose) and noisy (pollutes
+                  # kubectl get jobs / any future job-failure-based meta-monitoring with runs
+                  # that worked exactly as intended).
+                  exit 0
               env:
                 - name: SLACK_WEBHOOK_URL_DEFAULT
                   valueFrom:
