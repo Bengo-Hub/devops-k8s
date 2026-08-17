@@ -108,46 +108,86 @@ spec:
                     esac
                   done
 
+                  STATE_CM="fleet-health-watcher-state"
+                  STATE_NS="infra"
+
                   if [ -z "$FAILURES" ]; then
                     echo "OK - no problems detected"
+                    # Clear dedup state on recovery so a FUTURE recurrence of the same
+                    # signature (e.g. the same pod crash-looping again next week) alerts
+                    # immediately instead of being treated as a continuation of this one.
+                    $KCTL delete configmap "$STATE_CM" -n "$STATE_NS" --ignore-not-found >/dev/null 2>&1 || true
                     exit 0
                   fi
 
                   echo "ISSUES DETECTED:"
                   echo "$FAILURES"
 
-                  # --- 4a. Slack — fully independent of every other platform service,
-                  #         so this is the channel that actually fires during an
-                  #         auth-api-down incident like 2026-08-16.
-                  if [ -n "$SLACK_WEBHOOK_URL" ]; then
-                    SLACK_TEXT=$(printf '%s' "$FAILURES" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
-                    curl -s --max-time 10 -X POST -H 'Content-Type: application/json' \
-                      -d "{\"text\":\":rotating_light: Fleet health check failed:\\n${SLACK_TEXT}\"}" \
-                      "$SLACK_WEBHOOK_URL" >/dev/null \
-                      || echo "WARN: slack alert failed to send"
-                  else
-                    echo "WARN: no Slack webhook configured (admin UI or SLACK_WEBHOOK_URL_DEFAULT) - skipping"
+                  # --- 3b. De-dup against the last alert sent. Each run is a fresh Job pod
+                  #         with no memory of prior runs, and this watcher polls every 2
+                  #         minutes — without this, an ongoing incident (e.g. a pod stuck in
+                  #         CrashLoopBackOff for an hour) re-sends the IDENTICAL Slack/email
+                  #         alert 30 times an hour until someone fixes it. State is persisted
+                  #         in a small ConfigMap (this Job has no volume/DB of its own).
+                  #         Restart counts are stripped from the signature — they tick up
+                  #         every run for the same ongoing issue, which would otherwise defeat
+                  #         the dedup by making every run's signature "new". Re-alerts every
+                  #         COOLDOWN_SECONDS while the SAME issue persists, so it's a throttle
+                  #         (occasional reminder), not a one-shot mute.
+                  COOLDOWN_SECONDS=1800
+                  SIG_INPUT=$(printf '%s' "$FAILURES" | sed -E 's/\([0-9]+ restarts\)//; s/returned [0-9]+/returned/')
+                  SIGNATURE=$(printf '%s' "$SIG_INPUT" | md5sum | cut -d' ' -f1)
+
+                  PREV_JSON=$($KCTL get configmap "$STATE_CM" -n "$STATE_NS" -o json 2>/dev/null || echo '{}')
+                  PREV_SIG=$(echo "$PREV_JSON" | jq -r '.data.signature // empty')
+                  PREV_TS=$(echo "$PREV_JSON" | jq -r '.data.alerted_at // empty')
+                  ALERT_AGE=$(jq -n --arg ts "$PREV_TS" 'try ((now - ($ts | fromdateiso8601)) | floor) catch 999999')
+
+                  SUPPRESS=0
+                  if [ -n "$PREV_SIG" ] && [ "$PREV_SIG" = "$SIGNATURE" ] && [ "$ALERT_AGE" -lt "$COOLDOWN_SECONDS" ]; then
+                    SUPPRESS=1
+                    echo "Same issue as the last alert sent ${ALERT_AGE}s ago (< ${COOLDOWN_SECONDS}s cooldown) - suppressing duplicate Slack/email, still visible in this Job's logs."
                   fi
 
-                  # --- 4b. Email via notifications-api (channel:"email", the
-                  #         fleet_health_alert template) — deliberately reuses the
-                  #         platform's one email-sending path instead of a second,
-                  #         parallel one. Trade-off, accepted: its X-API-Key check
-                  #         validates against auth-api, so this channel degrades
-                  #         gracefully (not silently retried, just skipped) if
-                  #         auth-api itself is unreachable or INTERNAL_SERVICE_KEY
-                  #         isn't set — Slack above is the channel guaranteed to
-                  #         fire in that specific case.
-                  if [ -n "$ALERT_EMAIL_TO" ] && [ -n "${INTERNAL_SERVICE_KEY:-}" ]; then
-                    DETAILS_JSON=$(printf '%s' "$FAILURES" | jq -Rs .)
-                    curl -s --max-time 10 -X POST \
-                      -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
-                      -H 'Content-Type: application/json' \
-                      -d "{\"channel\":\"email\",\"tenant\":\"codevertex\",\"template\":\"fleet_health_alert\",\"to\":[\"${ALERT_EMAIL_TO}\"],\"data\":{\"summary\":\"Fleet health check failed\",\"details\":${DETAILS_JSON},\"detected_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" \
-                      "http://notifications-api.notifications.svc.cluster.local:4000/api/v1/notifications/messages" >/dev/null \
-                      || echo "WARN: email alert failed to send"
-                  else
-                    echo "WARN: no alert email configured, or INTERNAL_SERVICE_KEY unset - skipping email"
+                  if [ "$SUPPRESS" -eq 0 ]; then
+                    # --- 4a. Slack — fully independent of every other platform service,
+                    #         so this is the channel that actually fires during an
+                    #         auth-api-down incident like 2026-08-16.
+                    if [ -n "$SLACK_WEBHOOK_URL" ]; then
+                      SLACK_TEXT=$(printf '%s' "$FAILURES" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+                      curl -s --max-time 10 -X POST -H 'Content-Type: application/json' \
+                        -d "{\"text\":\":rotating_light: Fleet health check failed:\\n${SLACK_TEXT}\"}" \
+                        "$SLACK_WEBHOOK_URL" >/dev/null \
+                        || echo "WARN: slack alert failed to send"
+                    else
+                      echo "WARN: no Slack webhook configured (admin UI or SLACK_WEBHOOK_URL_DEFAULT) - skipping"
+                    fi
+
+                    # --- 4b. Email via notifications-api (channel:"email", the
+                    #         fleet_health_alert template) — deliberately reuses the
+                    #         platform's one email-sending path instead of a second,
+                    #         parallel one. Trade-off, accepted: its X-API-Key check
+                    #         validates against auth-api, so this channel degrades
+                    #         gracefully (not silently retried, just skipped) if
+                    #         auth-api itself is unreachable or INTERNAL_SERVICE_KEY
+                    #         isn't set — Slack above is the channel guaranteed to
+                    #         fire in that specific case.
+                    if [ -n "$ALERT_EMAIL_TO" ] && [ -n "${INTERNAL_SERVICE_KEY:-}" ]; then
+                      DETAILS_JSON=$(printf '%s' "$FAILURES" | jq -Rs .)
+                      curl -s --max-time 10 -X POST \
+                        -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
+                        -H 'Content-Type: application/json' \
+                        -d "{\"channel\":\"email\",\"tenant\":\"codevertex\",\"template\":\"fleet_health_alert\",\"to\":[\"${ALERT_EMAIL_TO}\"],\"data\":{\"summary\":\"Fleet health check failed\",\"details\":${DETAILS_JSON},\"detected_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" \
+                        "http://notifications-api.notifications.svc.cluster.local:4000/api/v1/notifications/messages" >/dev/null \
+                        || echo "WARN: email alert failed to send"
+                    else
+                      echo "WARN: no alert email configured, or INTERNAL_SERVICE_KEY unset - skipping email"
+                    fi
+
+                    $KCTL create configmap "$STATE_CM" -n "$STATE_NS" \
+                      --from-literal=signature="$SIGNATURE" \
+                      --from-literal=alerted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                      --dry-run=client -o yaml | $KCTL apply -f - >/dev/null
                   fi
 
                   # Reaching here means the watcher successfully detected AND alerted on the

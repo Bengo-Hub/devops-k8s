@@ -31,3 +31,36 @@ subjects:
 - kind: ServiceAccount
   name: fleet-health-watcher
   namespace: infra
+---
+# Namespaced (not cluster-wide) write access, and only for one named ConfigMap: the
+# alert-dedup state the CronJob reads/writes each run so it doesn't re-send the same
+# Slack/email alert every 2 minutes for the duration of an ongoing incident (see
+# fleet-health-watcher-cronjob.yaml's STATE_CM block). "create" can't be scoped by
+# resourceName in RBAC (the object doesn't exist yet) — get/update/patch/delete are.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fleet-health-watcher-state
+  namespace: infra
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["fleet-health-watcher-state"]
+  verbs: ["get", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleet-health-watcher-state
+  namespace: infra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fleet-health-watcher-state
+subjects:
+- kind: ServiceAccount
+  name: fleet-health-watcher
+  namespace: infra
