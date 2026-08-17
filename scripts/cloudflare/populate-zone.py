@@ -5,8 +5,16 @@ Mirrors the authoritative DNS as audited from the cloudoon nameservers on
 2026-07-13, so the registrar nameserver flip is a no-op for traffic. Merge
 semantics: creates missing records, corrects mismatched content on records
 it owns, and never deletes anything Cloudflare's import scan already added.
-Every record is created DNS-only (proxied=false); orange-clouding happens
-manually, host by host, after the cutover is approved.
+New records are created DNS-only (proxied=false); orange-clouding happens
+via set-proxied.py, separately.
+
+SAFE TO RE-RUN: as of 2026-08-17 this script never modifies the `proxied`
+flag on an existing, content-correct record — only content (A/CNAME/TXT
+values) is corrected. If it also forced `proxied=false` back onto every
+already-proxied record, it would silently undo set-proxied.py's cutover
+on every re-run — this happened twice (2026-08-10, 2026-08-17) before the
+proxied-touching code was removed. If you're re-adding that behavior for
+some reason, don't — run set-proxied.py instead, deliberately, afterward.
 
 Usage:
     CF_API_TOKEN=<token> ./populate-zone.py <ZONE_ID>
@@ -212,21 +220,24 @@ def main():
 
         r = matches[0]
         # A CNAME to the apex is functionally identical to an A record at the
-        # origin (and vice versa) — keep the occupant's shape, only fix proxied.
+        # origin (and vice versa) — keep the occupant's shape.
         equivalent = (
             r["content"].lower() == want["content"].lower()
             or (r["type"] == "CNAME" and r["content"].lower() == APEX and want.get("content") == ORIGIN)
             or (r["type"] == "A" and r["content"] == ORIGIN and want["type"] == "CNAME" and want["content"].lower() == APEX)
         )
-        unproxied = not r.get("proxied", False)
-        if equivalent and unproxied:
+        # Deliberately NEVER touches `proxied` on an existing/equivalent record
+        # (fixed 2026-08-17, second occurrence of the same incident — see
+        # repo-visibility-private-migration-audit-2026-08-10.md /
+        # project_email_hosting_stalwart.md memory). This script's job is
+        # content correctness only; live proxied state is `set-proxied.py`'s
+        # job and reflects a real, separately-decided cutover state that this
+        # script has no way to know about. A prior version forced proxied
+        # back to false here whenever a record was already correct-but-proxied,
+        # which silently reverted 43-44 production hostnames from orange-cloud
+        # to grey-cloud on every re-run — twice.
+        if equivalent:
             ok += 1
-        elif equivalent:
-            api(token, "PUT", f"/zones/{zone}/dns_records/{r['id']}",
-                {"type": r["type"], "name": name, "content": r["content"], "proxied": False,
-                 **({"priority": r["priority"]} if r.get("priority") is not None else {})})
-            print(f"  ~ {r['type']} {name}: proxied=True -> proxied=false (content kept: {r['content']})")
-            updated += 1
         else:
             api(token, "PUT", f"/zones/{zone}/dns_records/{r['id']}",
                 {**want, "name": name})
@@ -235,8 +246,9 @@ def main():
 
     print(f"done: {created} created, {updated} corrected, {ok} already right")
     print("NOTE: nothing was deleted; records the import scan added beyond this "
-          "list were left untouched. All records are DNS-only (grey) — no traffic "
-          "change until the registrar NS flip + manual orange-clouding.")
+          "list were left untouched. New records are created DNS-only (grey); "
+          "existing records' proxied state is never modified here — that's "
+          "set-proxied.py's job. Run that afterward if hosts need to be re-cloud.")
 
 if __name__ == "__main__":
     main()
