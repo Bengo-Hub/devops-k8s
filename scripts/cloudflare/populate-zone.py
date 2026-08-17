@@ -76,8 +76,16 @@ def desired_records():
     # a CORRECTION (see the spf/dmarc special-case in main()'s matching loop
     # below), not an addition — the old content must not be left in place
     # alongside this one, or SPF becomes a PermError with two v=spf1 records.
+    #
+    # Second correction (2026-08-17): notifications-api's platform SMTP
+    # provider is being flipped from the dead Zoho account to Stalwart's
+    # no-reply@ mailbox, which sends from ORIGIN (mx1's IP) — not covered by
+    # either existing include, so those sends were failing SPF (DMARC would
+    # still pass via DKIM alignment alone, since Stalwart's DKIM keys are
+    # published, but this closes the gap properly rather than relying on
+    # DKIM-only alignment).
     recs.append({"type": "TXT", "name": "@",
-                 "content": '"v=spf1 include:_spf.google.com include:_spf.truehostcloud.com ~all"'})
+                 "content": f'"v=spf1 include:_spf.google.com include:_spf.truehostcloud.com ip4:{ORIGIN} ~all"'})
     recs.append({"type": "TXT", "name": "@",
                  "content": '"google-site-verification=s4W45Bi7hV_ouhQCPgu3yCBzVpWOnM8zOuk_atvE2B4"'})
     # Day-0 fix continued: reports now come to us (not Truehost, which nobody
