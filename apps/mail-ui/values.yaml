@@ -8,7 +8,7 @@ fullnameOverride: mail-ui
 # ============================================================================
 image:
   repository: docker.io/codevertex/mail-ui
-  tag: "b672e009"
+  tag: "d13d70eb"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
