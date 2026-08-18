@@ -128,6 +128,17 @@ def desired_records():
                             'vOXovZNgcO+dBjfdIcCyGcTXg/Yi7z9GeotFh1S0Zrbp9RcPo0adS4k3nuANOQrGbFRWla3u0dXih'
                             'PPcmdxphvUfJFEuZlTe4GVIM6WueVaMlitA6Jm6kSYhrWVDYI2pmfa8GuUeXs/41N28WGi2ydSWLK'
                             'wIDAQAB"'})
+    # Google Workspace DKIM (added 2026-08-18), separate signing path from
+    # Stalwart's own selectors above — this one covers mail actually sent
+    # through Gmail's servers (e.g. info@ once dual-delivery routing is set
+    # up per the shared-docs runbook), fixed selector name "google" (Workspace
+    # doesn't rotate it the way Stalwart's own automatic DKIM does).
+    recs.append({"type": "TXT", "name": "google._domainkey",
+                 "content": '"v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxbt8PRZ7coRRDUyaRJestkKw'
+                            '4IPrS5BgnFmYHDWU322SBbU5nv81m/fCZkd/cGLi/hwVihbXJekJMcFrRv7ksXTf+MWrmMg5WmTK9bpOAdo1'
+                            'BrcP0D9GGSH8mt3CgwCdrVrLtbRayzG8TmyYoYFd3FbFLnsCV1gJqK724DVZTVdHU6fMmmp/aqm6Fbn2jcyP'
+                            'ON9Za/sFMY/rIkSSJd2jTNCZhnNqfYGAPlxBQopj8NQ89WYh8KGow1zEbgpZFD5VB97z+nT6G0fDkp5aIOtX'
+                            'NrbjLjGF3Vju14SloDodMskI1RDp+a9xUxX1s/xjV1Yuy0496aZaS8n3vpAecD5EsQIDAQAB"'})
     return recs
 
 def fqdn(name):
