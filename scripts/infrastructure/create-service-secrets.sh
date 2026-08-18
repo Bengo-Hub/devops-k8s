@@ -301,10 +301,12 @@ fi
 
 # INTERNAL_SERVICE_KEY — the SHARED platform service-to-service key (all services use the SAME
 # value; treasury/auth/subscriptions validate it). library-api needs it to call treasury for
-# membership-fee / fine / e-book payment intents. NEVER generate a fresh one here (a new value
-# would not match the platform key) — preserve the existing cluster value, or accept it from env.
+# membership-fee / fine / e-book payment intents. mail-ui needs it to call auth-api's S2S MFA
+# federation endpoints (POST /api/v1/s2s/mfa/status|verify) during webmail login. NEVER generate
+# a fresh one here (a new value would not match the platform key) — preserve the existing cluster
+# value, or accept it from env.
 APP_INTERNAL_SERVICE_KEY=""
-if [[ "${SERVICE_NAME}" == "library-api" ]]; then
+if [[ "${SERVICE_NAME}" == "library-api" || "${SERVICE_NAME}" == "mail-ui" ]]; then
     EXISTING_ISK=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.INTERNAL_SERVICE_KEY}" 2>/dev/null | base64 -d || echo "")
     if [[ -n "${INTERNAL_SERVICE_KEY:-}" ]]; then
         APP_INTERNAL_SERVICE_KEY="$INTERNAL_SERVICE_KEY"
@@ -313,7 +315,7 @@ if [[ "${SERVICE_NAME}" == "library-api" ]]; then
         APP_INTERNAL_SERVICE_KEY="$EXISTING_ISK"
         log_info "Retrieved existing INTERNAL_SERVICE_KEY from cluster (preserved)"
     else
-        log_warning "INTERNAL_SERVICE_KEY not set for library-api — treasury S2S payments will fail until provisioned (copy from treasury-api-secrets)"
+        log_warning "INTERNAL_SERVICE_KEY not set for ${SERVICE_NAME} — S2S calls will fail until provisioned (copy from auth-api-secrets)"
     fi
 fi
 

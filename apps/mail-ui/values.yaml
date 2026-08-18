@@ -79,6 +79,17 @@ env:
         optional: true
   - name: AUTH_API_PUBLIC_URL
     value: "https://sso.codevertexafrica.com"
+  # Shared platform S2S key — used to call auth-api's S2S MFA federation
+  # endpoints during webmail login (see create-service-secrets.sh). optional:
+  # true so the deployment isn't blocked before this key is provisioned;
+  # MFA federation simply stays unavailable (falls back to password-only)
+  # until it's set.
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: mail-ui-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: true
 # ============================================================================
 # RESOURCE LIMITS
 # ============================================================================
