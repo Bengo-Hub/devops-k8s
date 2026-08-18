@@ -43,13 +43,18 @@ spec:
                   TIMESTAMP=$(date +%Y%m%d_%H%M%S)
                   BACKUP_DIR="/backups"
                   FILENAME="bengobox_${TIMESTAMP}.sql.gz"
+                  DUMPFILE="${BACKUP_DIR}/bengobox_${TIMESTAMP}.sql"
 
                   # Ensure backup dir is writable
                   mkdir -p ${BACKUP_DIR}
 
-                  # Check available disk space before backup (abort if <500MB free)
+                  # Check available disk space before backup (abort if <2000MB free).
+                  # Threshold covers the UNCOMPRESSED intermediate dump file too (see the
+                  # two-step dump below) — pg_dumpall output is several times larger than
+                  # the final .sql.gz, unlike the old single-pipe approach where only the
+                  # compressed size ever touched disk.
                   AVAIL=$(df -m ${BACKUP_DIR} | awk 'NR==2{print $4}')
-                  if [ "$AVAIL" -lt 500 ]; then
+                  if [ "$AVAIL" -lt 2000 ]; then
                     echo "ERROR: Only ${AVAIL}MB available in backup dir — aborting backup to prevent disk full"
                     exit 1
                   fi
@@ -58,28 +63,57 @@ spec:
                   echo "Starting PostgreSQL backup at $(date)"
                   # Platform DR backup: pg_dumpall captures ALL cluster databases (every
                   # per-service DB on the shared postgresql-0) plus globals/roles.
-                  pg_dumpall -h $PGHOST -U $PGUSER | gzip -9 > "${BACKUP_DIR}/${FILENAME}"
+                  #
+                  # Dumped to a plain file first, THEN gzipped as a separate step —
+                  # deliberately NOT `pg_dumpall | gzip -9 > file` (the original form).
+                  # This shell has no pipefail, so a failing/truncated pg_dumpall behind a
+                  # pipe is invisible: gzip happily compresses whatever partial input it
+                  # gets and exits 0, so the pipeline's exit code is gzip's, not
+                  # pg_dumpall's — a broken dump would look "successful" right as this
+                  # script is about to delete the only other backup we have (see retention
+                  # below). Splitting the steps lets pg_dumpall's own exit code be checked
+                  # directly via `set -e`.
+                  pg_dumpall -h $PGHOST -U $PGUSER > "${DUMPFILE}"
+                  gzip -9 "${DUMPFILE}"
+
+                  if [ ! -s "${BACKUP_DIR}/${FILENAME}" ]; then
+                    echo "ERROR: backup file missing or empty after dump - aborting, previous backup(s) left untouched"
+                    exit 1
+                  fi
+                  if ! gzip -t "${BACKUP_DIR}/${FILENAME}"; then
+                    echo "ERROR: backup file failed gzip integrity check - aborting, previous backup(s) left untouched"
+                    rm -f "${BACKUP_DIR}/${FILENAME}"
+                    exit 1
+                  fi
 
                   SIZE=$(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1)
-                  echo "Backup completed: ${FILENAME} (${SIZE})"
+                  echo "Backup completed and verified: ${FILENAME} (${SIZE})"
 
                   # Offsite push to Cloudflare R2 — the local PVC above is on the SAME VPS as
                   # postgresql-0 itself, so it's worthless in exactly the failure mode that
                   # matters most (total VPS/host-provider loss, as happened 2026-08-16). This
                   # is best-effort: a failed push never fails the job, since the local dump
-                  # (this backup's actual purpose) already succeeded above.
+                  # (this backup's actual purpose) already succeeded above. Retention below
+                  # is gated on this succeeding though — see that comment for why.
+                  R2_UPLOAD_OK=false
+                  r2() {
+                    RCLONE_CONFIG_R2_TYPE=s3 \
+                    RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+                    RCLONE_CONFIG_R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
+                    RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+                    RCLONE_CONFIG_R2_ENDPOINT="${R2_S3_ENDPOINT}" \
+                    /rclone-bin/rclone "$@"
+                  }
+                  R2_PATH="r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/"
+
                   if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_SECRET_ACCESS_KEY:-}" ] && [ -n "${R2_S3_ENDPOINT:-}" ]; then
                     # rclone binary comes from the fetch-rclone initContainer (shared emptyDir)
                     # — installing it here via apk needs root, and this container deliberately
                     # runs non-root (confirmed live: apk add silently fails under runAsUser 999).
                     if [ -x /rclone-bin/rclone ]; then
-                      if RCLONE_CONFIG_R2_TYPE=s3 \
-                         RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
-                         RCLONE_CONFIG_R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-                         RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-                         RCLONE_CONFIG_R2_ENDPOINT="${R2_S3_ENDPOINT}" \
-                         /rclone-bin/rclone copy "${BACKUP_DIR}/${FILENAME}" "r2:${R2_BUCKET:-codevertex-platform-backups}/postgresql/" --checksum; then
+                      if r2 copy "${BACKUP_DIR}/${FILENAME}" "${R2_PATH}" --checksum; then
                         echo "Offsite backup pushed to R2: ${FILENAME}"
+                        R2_UPLOAD_OK=true
                       else
                         echo "WARN: R2 offsite push failed - local backup on the VPS PVC is still intact"
                       fi
@@ -90,11 +124,31 @@ spec:
                     echo "WARN: R2 credentials not configured - this backup stays local-VPS-only"
                   fi
 
-                  # Retention churn: delete dump files older than BACKUP_RETENTION_DAYS
-                  # (default 4, mirroring the per-service tenant-scoped backup churn).
-                  RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-4}
-                  find ${BACKUP_DIR} -name "bengobox_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
-                  echo "Cleanup completed (removed dumps older than ${RETENTION_DAYS} days)."
+                  # Retention: keep exactly ONE backup — the one just verified above — both
+                  # locally and on R2, per platform requirement (single most recent COMPLETE
+                  # backup, not a rolling window). Pruning only happens after a confirmed
+                  # successful R2 upload of the new file: if R2 is unreachable, misconfigured,
+                  # or this run's dump/upload had any problem, every previous backup (local
+                  # AND remote) is left exactly as-is, so there's always at least one
+                  # known-good backup surviving a bad run.
+                  if [ "$R2_UPLOAD_OK" = true ]; then
+                    echo "New backup verified locally and confirmed on R2 - pruning older backups (keeping only ${FILENAME})"
+
+                    find ${BACKUP_DIR} -name "bengobox_*.sql.gz" ! -name "${FILENAME}" -print -delete
+
+                    R2_OLD=$(r2 lsf "${R2_PATH}" 2>/dev/null || echo "")
+                    for f in $R2_OLD; do
+                      if [ "$f" != "${FILENAME}" ]; then
+                        if r2 deletefile "${R2_PATH}${f}"; then
+                          echo "  deleted old R2 backup: ${f}"
+                        else
+                          echo "  WARN: failed to delete old R2 backup ${f} - it will remain alongside the new one"
+                        fi
+                      fi
+                    done
+                  else
+                    echo "Skipping retention prune - R2 upload did not succeed this run, so all previous local+R2 backups are left in place as the safety net"
+                  fi
 
                   # Generate manifest.json for auth-api backup listing endpoint
                   echo '{"backups": [' > ${BACKUP_DIR}/manifest.json
@@ -111,10 +165,6 @@ spec:
                   echo "Manifest updated. Available backups:"
                   ls -lh ${BACKUP_DIR}/bengobox_*.sql.gz 2>/dev/null || echo "No backups found"
               env:
-                # Retention window for the platform DR dumps (days). Default 4, matching the
-                # per-service tenant-scoped backup churn (BACKUP_RETENTION_DAYS).
-                - name: BACKUP_RETENTION_DAYS
-                  value: "4"
                 # Cloudflare R2 offsite push — see postgresql-backup-r2-secrets (Secret, not
                 # committed to git). All optional: absent creds just skip the offsite push
                 # with a warning, local backup is unaffected either way.
