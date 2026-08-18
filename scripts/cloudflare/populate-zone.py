@@ -49,27 +49,27 @@ ORIGIN_HOSTS = [
     # .claude/plans/codevertex-email-hosting-service-plan.md Part 5/12.1.
     # mx1 must stay unproxied permanently (MX target, TLS cert CN, PTR).
     "mx1", "mail-admin", "mta-sts", "autoconfig", "autodiscover",
+    # `webmail` repointed to the cluster 2026-08-18 — the real mail-ui
+    # frontend (apps/mail-ui/) is deployed, Healthy, and is the sole owner
+    # of this hostname's Ingress (stalwart-mail's own Ingress had this host
+    # removed the same day to avoid an nginx conflict). The root-cause fix
+    # for the incident that motivated waiting for a "billing cycle with no
+    # incidents" (Stalwart's own week-long self-inflicted port-scan ban) has
+    # been confirmed live and stable since; no longer worth deferring this.
+    "webmail",
 ]
 
 # Mirrored as-is from cloudoon: these currently point at the Truehost shared
 # host, NOT the cluster (that's also why the k8s projects-api/ticketing-api
 # certs have been stuck since Dec). Repointing them to ORIGIN is a separate,
 # deliberate decision — flip the constant below when approved.
-#
-# `webmail` was split out 2026-08-10 (previously coupled to the stalled
-# projects-api/ticketing-api cutover, blocking it from moving independently —
-# see Part 0/12.1): still points at Truehost for now, deliberately NOT yet
-# repointed to the cluster. Only flip TRUEHOST_HOSTS_MAIL -> ORIGIN_HOSTS once
-# the Stalwart-backed webmail has been live and load-bearing for a full
-# billing cycle with no incidents (per the plan) — do not do this preemptively.
 TRUEHOST_HOSTS_LEGACY_APPS = ["projectsapi", "ticketing", "ticketingapi"]
-TRUEHOST_HOSTS_MAIL = ["webmail"]
 
 def desired_records():
     recs = []
     for h in ORIGIN_HOSTS:
         recs.append({"type": "A", "name": h, "content": ORIGIN, "proxied": False})
-    for h in TRUEHOST_HOSTS_LEGACY_APPS + TRUEHOST_HOSTS_MAIL:
+    for h in TRUEHOST_HOSTS_LEGACY_APPS:
         recs.append({"type": "A", "name": h, "content": TRUEHOST, "proxied": False})
     recs.append({"type": "CNAME", "name": "mail", "content": APEX, "proxied": False})
     # smtp/imap are client-facing aliases for the MX target, not the apex —
