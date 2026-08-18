@@ -83,6 +83,18 @@ env:
         optional: true
   - name: SECURITY_JWKS_URL
     value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
+  # Credential-delivery (2026-08-18) — must exactly match mail-ui's own copy
+  # of this same secret (apps/mail-ui/values.yaml), which verifies the HMAC
+  # this service signs. Deliberately optional at the app level (config.go):
+  # see that file's comment for why this must never be required:"true"
+  # again — it crash-looped production once already the moment this env var
+  # didn't exist yet.
+  - name: PROVISIONING_TOKEN_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: mail-provisioning-shared
+        key: PROVISIONING_TOKEN_SECRET
+        optional: true
 resources:
   requests:
     cpu: 50m
