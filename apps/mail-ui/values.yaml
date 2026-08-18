@@ -1,0 +1,133 @@
+# Mail UI Production Configuration — webmail frontend for Stalwart-hosted
+# email (mail-service/mail-ui). Co-located in the `email` namespace with
+# stalwart-mail/email-provisioner, which it depends on directly.
+nameOverride: mail-ui
+fullnameOverride: mail-ui
+# ============================================================================
+# IMAGE CONFIGURATION
+# ============================================================================
+image:
+  repository: docker.io/codevertex/mail-ui
+  tag: "f45cf90a"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+# ============================================================================
+# REPLICA AND SCALING CONFIGURATION
+# ============================================================================
+replicaCount: 2
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+serviceMonitor:
+  enabled: false
+verticalPodAutoscaling:
+  enabled: false
+  minCPU: 50m
+  maxCPU: 750m
+  minMemory: 128Mi
+  maxMemory: 1Gi
+  controlledResources: ["cpu", "memory"]
+  controlledValues: RequestsAndLimits
+# ============================================================================
+# SERVICE CONFIGURATION
+# ============================================================================
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+# ============================================================================
+# DEPLOYMENT STRATEGY
+# ============================================================================
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 20
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+envFromSecret: mail-ui-secrets
+env:
+  - name: NODE_ENV
+    value: production
+  - name: PORT
+    value: "3000"
+  # In-cluster Stalwart JMAP origin — this app talks to it server-side only,
+  # never from the browser.
+  - name: STALWART_JMAP_URL
+    value: "http://stalwart-mail.email.svc.cluster.local:8080"
+  # Reuses the existing stalwart-mail Secret directly (same one
+  # email-provisioner already references) rather than duplicating the
+  # credential into a second Secret.
+  - name: STALWART_ADMIN_EMAIL
+    value: "admin@codevertexafrica.com"
+  - name: STALWART_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: stalwart-mail
+        key: admin-password
+  # Must exactly match email-provisioner's own copy (apps/email-provisioner/
+  # values.yaml) — verifies the setup-link HMAC it signs.
+  - name: PROVISIONING_TOKEN_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: mail-provisioning-shared
+        key: PROVISIONING_TOKEN_SECRET
+        optional: true
+  - name: AUTH_API_PUBLIC_URL
+    value: "https://sso.codevertexafrica.com"
+# ============================================================================
+# RESOURCE LIMITS
+# ============================================================================
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+# ============================================================================
+# HEALTH CHECKS
+# ============================================================================
+healthCheck:
+  enabled: true
+  liveness:
+    httpGet:
+      path: /login
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 15
+  readiness:
+    httpGet:
+      path: /login
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+# webmail.codevertexafrica.com currently still points at a legacy Truehost
+# mirror at the DNS layer (devops-k8s/scripts/cloudflare/populate-zone.py) —
+# this Ingress object doesn't receive any traffic until that record is
+# repointed. Safe to deploy ahead of the DNS change.
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: webmail.codevertexafrica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: mail-ui-tls
+      hosts:
+        - webmail.codevertexafrica.com
+pdb:
+  enabled: true
+  minAvailable: 1
