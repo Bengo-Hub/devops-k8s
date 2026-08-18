@@ -480,6 +480,62 @@ kubectl exec deployment/argocd-repo-server -n argocd -- git ls-remote https://gi
    - Implement preventive measures
    - Update runbook with lessons learned
 
+#### Node Cordoned / Stuck Drain (single-node cluster)
+
+**Incident: 2026-08-18** — all `*.codevertexafrica.com` domains returned
+Cloudflare 521 ("Host: Error") for 4+ hours, discovered via a client
+screenshot rather than alerting. Root cause: `kured` (see
+`apps/kured/app.yaml`) started its scheduled cordon → drain → reboot cycle,
+but the drain could never complete — `redis-master`'s PDB (`minAvailable: 1`,
+single replica) and `nats`'s PDB structurally cannot be satisfied by eviction
+on this **single-node** cluster (there is nowhere else for the pod to go).
+kured correctly refuses to force an eviction that would violate a PDB
+(intentional — avoids data loss), so it just left the node cordoned and kept
+retrying forever. A cordoned node accepts zero new pods, so every
+Deployment-managed pod that got evicted during the drain (`pos-api`,
+`pos-ui`, `ingress-nginx-controller`, `erp-api`, `library-api`, ...) sat
+`Pending` indefinitely — including the ingress controller itself, which is
+why *every* domain broke, not just one.
+
+**Fast diagnosis:**
+```bash
+kubectl get nodes                        # STATUS shows "Ready,SchedulingDisabled"
+kubectl get pods -A | grep Pending       # widespread Pending across namespaces = confirms it
+kubectl logs -n kube-system -l name=kured --tail=50   # look for repeated
+                                          # "Cannot evict pod as it would violate
+                                          # the pod's disruption budget"
+```
+
+**Fast fix** (safe — does not touch the PDB or force any eviction):
+```bash
+kubectl uncordon <node-name>
+```
+Pods reschedule automatically within a couple of minutes. This does **not**
+complete the pending reboot — the reboot-required sentinel is still set, so
+kured will cordon again on its next `period` tick (hourly) and get stuck the
+same way, indefinitely, until the underlying tension is resolved.
+
+**Why not just loosen the PDBs?** Already considered and rejected —
+force-evicting the only `redis-master` replica risks losing unpersisted
+writes, and forcing `nats` risks message loss. Loosening them would let
+kured "succeed," but only by removing the protection they exist for.
+
+**Actual structural fix (not yet done):** add a second cluster node (see
+`docs/ADD-WORKER-NODE.md`) so drains have somewhere to relocate PDB-protected
+pods to, letting kured's cordon → drain → reboot → uncordon cycle complete as
+designed instead of stalling. Until that lands, treat the pending OS reboot
+as a **manual** maintenance task during the existing low-traffic window
+(00:00–02:00 UTC / 03:00–05:00 EAT, see `apps/kured/app.yaml`): cordon,
+manually stop/restart `redis-master` and `nats` yourself (accepting their
+brief expected restart), reboot, uncordon.
+
+**Detection gap closed:** `fleet-health-watcher`
+(`manifests/monitoring-lite/fleet-health-watcher-cronjob.yaml`) previously
+only checked pod container statuses and 3 blackbox URLs — a `Pending` pod
+has no container status, so this whole class of failure was invisible to it
+for 4+ hours. It now also checks `kubectl get nodes` for
+`spec.unschedulable: true` directly and alerts by node name immediately.
+
 ### Data Recovery
 
 #### Database Recovery
