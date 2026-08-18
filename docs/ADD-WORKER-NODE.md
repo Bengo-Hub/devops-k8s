@@ -126,6 +126,84 @@ kubectl get pods -A -o wide
 
 ---
 
+## Post-join hardening (2026-08-18 incident follow-up)
+
+Do this **only after** `kubectl get nodes` shows the worker `Ready` — applying any
+of this beforehand (especially the taint) will make pods unschedulable with
+nowhere to go, which is the exact outage this is meant to prevent.
+
+### 1. Re-taint the master
+
+```bash
+kubectl taint nodes mss-prod-master node-role.kubernetes.io/control-plane:NoSchedule
+kubectl get pods -A -o wide   # confirm app-tier pods rescheduled onto the worker
+```
+
+This is what actually closes the 2026-08-18 outage class: when the master gets
+cordoned in the future (kured, manual maintenance, anything), stateless
+Deployment-managed pods — `pos-api`, `pos-ui`, `erp-api`, `ingress-nginx-controller`,
+etc. — reschedule onto the worker instead of sitting `Pending` forever. See
+`docs/OPERATIONS-RUNBOOK.md` → "Node Cordoned / Stuck Drain" for the full incident
+writeup.
+
+### 2. Make ingress-nginx-controller redundant across both nodes
+
+`ingress-nginx-controller` is **not** GitOps-tracked in this repo (it was
+installed once via raw `kubectl apply` from the upstream manifest — no ArgoCD
+Application, no Helm values file here). It currently runs a single replica,
+which is a single point of failure for every domain even with a worker node
+in place. After the worker joins:
+
+```bash
+kubectl -n ingress-nginx patch deployment ingress-nginx-controller --type=json -p='[
+  {"op":"replace","path":"/spec/replicas","value":2},
+  {"op":"add","path":"/spec/template/spec/affinity","value":{
+    "podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{
+      "topologyKey":"kubernetes.io/hostname",
+      "labelSelector":{"matchLabels":{
+        "app.kubernetes.io/component":"controller",
+        "app.kubernetes.io/instance":"ingress-nginx",
+        "app.kubernetes.io/name":"ingress-nginx"
+      }}
+    }]}
+  }}
+]'
+kubectl get pods -n ingress-nginx -o wide   # confirm one pod per node
+```
+
+The anti-affinity is `required`, not `preferred` — with only 2 nodes and 2
+replicas this guarantees one-per-node instead of both landing on whichever
+node happens to be free. Don't apply this before the worker exists: with
+only 1 node available, the second replica would just sit `Pending`
+indefinitely.
+
+### 3. Stateful primaries stay on the master — this is expected
+
+`postgresql-0`, `postgresql-replica-0`, `redis-master-0`, `redis-replica-0`,
+`nats-*` all use the `local-path` StorageClass, which binds a PV to whichever
+node's disk it was created on. Adding a worker does **not** make these
+failover-capable — their pods can only ever run back on the master, because
+that's where their data physically lives. This is fine: the worker's job is
+to keep the *site* up during master maintenance, not to solve database HA.
+Real DB/cache HA would need a distributed storage layer (Longhorn, Rook/Ceph)
+as a separate future project — don't attempt to force these onto the worker
+node via nodeSelector/affinity changes without that in place first, or
+you'll strand their PVCs.
+
+### 4. Verify
+
+```bash
+for h in pos.codevertexafrica.com posapi.codevertexafrica.com erp.codevertexafrica.com \
+         accounts.codevertexafrica.com; do
+  curl -s -o /dev/null -w "%{http_code} $h\n" "https://$h/"
+done
+```
+All should return 2xx/3xx. Cross-check `kubectl get pods -A -o wide` — you
+should now see application pods spread across both `mss-prod-master` and
+`mss-prod-worker-1`.
+
+---
+
 ## Adding a second worker
 
 Repeat steps 1–5 with `WORKER_NUMBER=2`. The new node will be named `mss-prod-worker-2`.
