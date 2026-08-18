@@ -20,10 +20,14 @@ runs:
           kubectl version --client=true
           exit 0
         fi
-        
-        # Install kubectl
-        VER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-        curl -LO https://dl.k8s.io/release/${VER}/bin/linux/amd64/kubectl
+
+        # Install kubectl — every network call bounded so a slow/dead host
+        # fails fast instead of hanging the job for hours (2026-08-18: this
+        # exact step hung 20+ minutes with no timeout on multiple real
+        # production deploys, root cause was here, not the calling repos).
+        CURL_OPTS="--connect-timeout 10 --max-time 60 --retry 2 --retry-delay 3"
+        VER=$(curl -L -s $CURL_OPTS https://dl.k8s.io/release/stable.txt)
+        curl -LO $CURL_OPTS https://dl.k8s.io/release/${VER}/bin/linux/amd64/kubectl
         sudo install -m 0755 kubectl /usr/local/bin/kubectl
         kubectl version --client=true
 
@@ -36,9 +40,11 @@ runs:
           helm version
           exit 0
         fi
-        
-        # Try to install Helm
-        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash || {
+
+        # Try to install Helm — bounded both at the download (curl) and the
+        # overall installer-script execution (timeout wrapper), so a hung
+        # download or a hung install script can't block the job indefinitely.
+        timeout 90 bash -c 'curl -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash' || {
           echo "⚠️ Network connectivity issue - cannot install Helm"
           echo "This is a transient GitHub Actions infrastructure issue"
           echo "Please retry the workflow in a few minutes"
@@ -55,9 +61,9 @@ runs:
           yq --version
           exit 0
         fi
-        
+
         # Install yq
-        sudo curl -L "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq
+        sudo curl -L --connect-timeout 10 --max-time 60 --retry 2 --retry-delay 3 "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq
         yq --version
 
     - name: Install Trivy (optional)
@@ -70,11 +76,11 @@ runs:
           trivy --version
           exit 0
         fi
-        
+
         # Install Trivy
         sudo apt-get update -y
         sudo apt-get install wget apt-transport-https gnupg lsb-release -y
-        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        wget --timeout=30 --tries=2 -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
         echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
         sudo apt-get update -y
         sudo apt-get install trivy -y
@@ -89,10 +95,10 @@ runs:
           argocd version --client || true
           exit 0
         fi
-        
+
         # Install ArgoCD CLI
         ARGOCD_VERSION="v2.13.0"
-        curl -sSL -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64
+        curl -sSL --connect-timeout 10 --max-time 60 --retry 2 --retry-delay 3 -o /tmp/argocd https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64
         sudo install -m 0755 /tmp/argocd /usr/local/bin/argocd
         argocd version --client || true
         rm -f /tmp/argocd
@@ -102,17 +108,17 @@ runs:
       run: |
         # Check which dependencies are missing
         MISSING_DEPS=()
-        
+
         command -v jq &> /dev/null || MISSING_DEPS+=("jq")
         command -v curl &> /dev/null || MISSING_DEPS+=("curl")
         command -v git &> /dev/null || MISSING_DEPS+=("git")
         command -v openssl &> /dev/null || MISSING_DEPS+=("openssl")
-        
+
         if [ ${#MISSING_DEPS[@]} -eq 0 ]; then
           echo "✓ All system dependencies already installed"
           exit 0
         fi
-        
+
         # Install missing dependencies
         echo "Installing missing dependencies: ${MISSING_DEPS[*]}"
         sudo apt-get update -y
