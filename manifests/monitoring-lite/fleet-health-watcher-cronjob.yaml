@@ -92,6 +92,27 @@ spec:
                   "
                   fi
 
+                  # --- 2b. Node scheduling state (2026-08-18 incident follow-up): a
+                  #         cordoned node accepts zero new pods. On a single-node
+                  #         cluster that means ANY node left cordoned — kured stalled
+                  #         draining a PDB-protected pod (redis-master/nats, see
+                  #         apps/kured/app.yaml), a maintenance cordon someone forgot
+                  #         to lift, anything — silently halts scheduling fleet-wide.
+                  #         That's exactly what happened on 2026-08-18: the node sat
+                  #         cordoned for 4+ hours and it took a client screenshot, not
+                  #         this watcher, to surface it, because check #2 above only
+                  #         sees pods with a container status — a pod stuck Pending
+                  #         from FailedScheduling never gets one. Checked directly and
+                  #         reported by name so on-call sees "node cordoned" in the
+                  #         first line instead of reverse-engineering it from a pile of
+                  #         Pending pods across a dozen namespaces.
+                  CORDONED=$($KCTL get nodes -o json | jq -r '.items[] | select(.spec.unschedulable == true) | .metadata.name')
+                  if [ -n "$CORDONED" ]; then
+                    FAILURES="${FAILURES}Node(s) cordoned (unschedulable - nothing can be scheduled): ${CORDONED}
+
+                  "
+                  fi
+
                   # --- 3. Blackbox checks on the endpoints this incident actually
                   #        touched. Expand this list as coverage grows — starter set,
                   #        not exhaustive.
