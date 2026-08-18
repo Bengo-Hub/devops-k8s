@@ -153,6 +153,27 @@ def api(token, method, path, body=None):
 def norm_txt(s):
     return s.strip().strip('"').replace(" ", "")
 
+def create_record(token, zone, body):
+    """POST a new record, treating Cloudflare's "identical record already
+    exists" (code 81058) as an idempotent no-op instead of a fatal crash.
+
+    Found 2026-08-18: this script's own dedup checks (norm_txt equality,
+    the singular-TXT stale lookup) can disagree with Cloudflare's own
+    stricter duplicate detection at the API layer — hit live for the
+    apex SPF record despite it already being correct and despite the
+    "already right" check above having run first. Rather than chase the
+    exact matching-logic gap (this script's dedup is advisory; Cloudflare's
+    own rejection is authoritative), just trust the API's answer: "already
+    exists" means the desired state is already achieved, so treat it as
+    success. Re-raises any other error unchanged.
+    """
+    try:
+        return api(token, "POST", f"/zones/{zone}/dns_records", body), True
+    except RuntimeError as e:
+        if "81058" in str(e):
+            return None, False
+        raise
+
 def main():
     token = os.environ.get("CF_API_TOKEN", "")
     if not token or len(sys.argv) != 2:
@@ -199,10 +220,13 @@ def main():
                     updated += 1
                     continue
 
-            api(token, "POST", f"/zones/{zone}/dns_records",
-                {**want, "name": name})
-            print(f"  + TXT {name} {want['content'][:50]}...")
-            created += 1
+            _, was_created = create_record(token, zone, {**want, "name": name})
+            if was_created:
+                print(f"  + TXT {name} {want['content'][:50]}...")
+                created += 1
+            else:
+                print(f"  = TXT {name} {want['content'][:50]}... (already exists, Cloudflare-confirmed)")
+                ok += 1
             continue
 
         # A and CNAME are mutually exclusive per name: treat an existing record
@@ -213,9 +237,13 @@ def main():
             matches = [r for r in existing if r["type"] == other and r["name"].lower() == name.lower()]
 
         if not matches:
-            api(token, "POST", f"/zones/{zone}/dns_records", {**want, "name": name})
-            print(f"  + {want['type']} {name} -> {want['content']}")
-            created += 1
+            _, was_created = create_record(token, zone, {**want, "name": name})
+            if was_created:
+                print(f"  + {want['type']} {name} -> {want['content']}")
+                created += 1
+            else:
+                print(f"  = {want['type']} {name} -> {want['content']} (already exists, Cloudflare-confirmed)")
+                ok += 1
             continue
 
         r = matches[0]
