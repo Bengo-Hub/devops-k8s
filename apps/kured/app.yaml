@@ -20,6 +20,18 @@ spec:
         configuration:
           period: 1h
           rebootSentinel: /var/run/reboot-required
+          # 2026-08-19 incident: drainTimeout defaults to 0 (infinite), so when
+          # redis-master's PDB permanently disallows disruption (see below),
+          # kured retried the eviction in a tight loop non-stop for 3+ days
+          # (2500+ attempts), and that retry volume was enough to push etcd
+          # past its apply-latency budget, which made kube-scheduler and
+          # kube-controller-manager lose their leader-election leases and
+          # restart-loop (RecentHighRestartCount alert). Bounding drainTimeout
+          # keeps the "stall on the PDB" behavior intentional below, but turns
+          # "hammer forever" into "try for 5m, then wait for the next period" —
+          # kured still can't reboot until redis-master is handled manually,
+          # but it stops taking the control plane down while it waits.
+          drainTimeout: 5m
           # 00:00-02:00 UTC = 03:00-05:00 EAT, the platform's lowest-traffic
           # window. Single time zone chosen (not crossing midnight) to
           # avoid kured's start/end-time window semantics getting tricky.
