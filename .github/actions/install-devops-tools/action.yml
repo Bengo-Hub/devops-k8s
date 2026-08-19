@@ -83,11 +83,11 @@ runs:
         # indefinitely, and with no TTY a stray debconf prompt can block forever too.
         # `sudo VAR=val cmd` (not a plain `export`) is required for DEBIAN_FRONTEND to
         # actually reach apt-get — sudo's default env_reset drops a bare exported var.
-        timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+        timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
         timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wget apt-transport-https gnupg lsb-release
         timeout 30 wget --timeout=30 --tries=2 -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
         echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-        timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+        timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
         timeout 120 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y trivy
         trivy --version
 
@@ -126,5 +126,5 @@ runs:
 
         # Install missing dependencies — same apt-get timeout bounding as Trivy above.
         echo "Installing missing dependencies: ${MISSING_DEPS[*]}"
-        timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+        timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
         timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${MISSING_DEPS[@]}"
