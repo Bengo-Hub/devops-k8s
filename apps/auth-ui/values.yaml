@@ -43,6 +43,19 @@ env:
     value: https://notificationsapi.codevertexafrica.com
   - name: NEXT_PUBLIC_APP_URL
     value: https://accounts.codevertexafrica.com
+  # In-cluster mail-ui origin for the dashboard's "Email Hosting" analytics
+  # tab (server-side only, never exposed to the browser).
+  - name: MAIL_UI_INTERNAL_URL
+    value: http://mail-ui.email.svc.cluster.local
+  # Shared platform S2S key — already present in the auth-ui-env secret (used
+  # by /api/subscriptions) but was never wired into this env list. Also
+  # enables /api/mail-stats's call to mail-ui's /api/internal/stats.
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-ui-env
+        key: INTERNAL_SERVICE_KEY
+        optional: true
   # OAuth providers loaded from secret via envFromSecret
   - name: NEXT_PUBLIC_MAPBOX_TOKEN
     valueFrom:
