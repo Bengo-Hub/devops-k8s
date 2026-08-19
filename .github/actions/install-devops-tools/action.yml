@@ -77,18 +77,29 @@ runs:
           exit 0
         fi
 
-        # Install Trivy — bounded the same way as the tools above. This apt-get/apt-key
-        # chain was the one gap the 2026-08-18 timeout pass missed: apt-get has no timeout
-        # of its own, so a slow/unreachable mirror (or the third-party Trivy repo) hangs
-        # indefinitely, and with no TTY a stray debconf prompt can block forever too.
+        # Install Trivy — best-effort. Verified 2026-08-19: no consuming workflow across
+        # ordering-frontend (or any other devops-k8s action) actually invokes `trivy`
+        # downstream, so a failure here must never block a real deploy over an optional,
+        # currently-unused tool. This also can't be fully solved with a bigger `timeout`:
+        # live on 2026-08-19, apt-get didn't just run slow, it stalled completely (zero
+        # output) for 2+ minutes mid-fetch against a flaky Ubuntu mirror — no fixed bound
+        # reliably survives that, so the whole chain is wrapped to warn-and-continue on any
+        # failure (network stall, apt-key/mirror issue, etc.) instead of failing the job.
         # `sudo VAR=val cmd` (not a plain `export`) is required for DEBIAN_FRONTEND to
         # actually reach apt-get — sudo's default env_reset drops a bare exported var.
-        timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-        timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wget apt-transport-https gnupg lsb-release
-        timeout 30 wget --timeout=30 --tries=2 -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-        timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-        timeout 120 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y trivy
+        (
+          set -e
+          timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+          timeout 90 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wget apt-transport-https gnupg lsb-release
+          timeout 30 wget --timeout=30 --tries=2 -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+          timeout 120 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y trivy
+        ) || {
+          echo "⚠️ Trivy install failed or timed out (transient mirror/network issue) — continuing without it."
+          echo "No deploy step invokes trivy today, so this does not block the deployment."
+          exit 0
+        }
         trivy --version
 
     - name: Install ArgoCD CLI
