@@ -192,6 +192,18 @@ kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
     psql -h localhost -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c \
     "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" 2>/dev/null || true
 
+# pg_trgm for fast ILIKE '%term%' / fuzzy search (GIN/GIST trigram indexes) — trusted extension,
+# no superuser needed since PG13. Installed unconditionally (like uuid-ossp above): every service
+# eventually needs a search box, and a service finding out it's missing this only when a migration
+# adding a trigram index crash-loops in production is exactly the incident this line prevents (see
+# inventory-api, 2026-08-20 — pg_trgm enabled locally but never here, so it was never on the real
+# database either, and every pod crash-looped until fixed live).
+log_info "Installing pg_trgm extension..."
+kubectl -n "$PG_NAMESPACE" exec "$PG_POD" -c postgresql -- \
+    env PGPASSWORD="$ADMIN_PASSWORD" \
+    psql -h localhost -U "$ADMIN_USER" -d "${SERVICE_DB_NAME}" -c \
+    "CREATE EXTENSION IF NOT EXISTS pg_trgm;" 2>/dev/null || true
+
 log_success "Database '${SERVICE_DB_NAME}' and user '${SERVICE_DB_USER}' created successfully"
 log_info "Connection string: postgresql://${SERVICE_DB_USER}:<POSTGRES_PASSWORD>@${PG_HOST}:${PG_PORT}/${SERVICE_DB_NAME}"
 log_info "User password: Uses POSTGRES_PASSWORD (master password) for consistency"
