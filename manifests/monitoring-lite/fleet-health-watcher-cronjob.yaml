@@ -155,7 +155,23 @@ spec:
                   #         the dedup by making every run's signature "new". Re-alerts every
                   #         COOLDOWN_SECONDS while the SAME issue persists, so it's a throttle
                   #         (occasional reminder), not a one-shot mute.
-                  COOLDOWN_SECONDS=1800
+                  #
+                  #         2026-08-20 fix: COOLDOWN_SECONDS used to equal the RecentHighRestartCount
+                  #         isRecent window above (both 1800s) -- for a single ONE-TIME restart (the
+                  #         overwhelmingly common case: something bounced once when the apiserver
+                  #         itself briefly restarted, then stayed healthy), the cooldown expiry and
+                  #         the event aging out of "recent" landed at basically the same instant, so
+                  #         this watcher's next 2-minute poll almost always caught it JUST before it
+                  #         aged out and fired a guaranteed duplicate "echo" alert for an already-
+                  #         resolved, non-recurring blip (confirmed live: keda-operator/kube-scheduler/
+                  #         kube-controller-manager all re-alerted a 2nd time ~30min after a single
+                  #         real restart, with restart counts unchanged and the pods Running the whole
+                  #         time). Cooldown is now kept meaningfully LONGER than the isRecent window so
+                  #         a one-off event has already aged out (FAILURES empty -> dedup state auto-
+                  #         clears via the OK path above) by the time the throttle would otherwise
+                  #         re-fire. A truly ongoing multi-hour incident still gets a reminder -- just
+                  #         once an hour instead of every 30 minutes.
+                  COOLDOWN_SECONDS=3600
                   SIG_INPUT=$(printf '%s' "$FAILURES" | sed -E 's/\([0-9]+ restarts\)//; s/returned [0-9]+/returned/')
                   SIGNATURE=$(printf '%s' "$SIG_INPUT" | md5sum | cut -d' ' -f1)
 
