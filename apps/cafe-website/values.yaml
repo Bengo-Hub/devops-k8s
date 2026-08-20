@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/cafe-website
-  tag: "68d035b0"
+  tag: "1163af9c"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
