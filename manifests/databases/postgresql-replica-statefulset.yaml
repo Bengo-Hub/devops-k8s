@@ -4,8 +4,13 @@
 # not against node or disk failure (both share the same physical disk here).
 # No automatic failover is implemented — see the promotion runbook in
 # shared-docs/internal/platform-standards/postgres-replica-promotion-runbook.md.
-# PgBouncer continues to point only at the primary; nothing reads from this
-# replica today except an operator during an incident.
+# UPDATED 2026-08-20: pgbouncer now ALSO routes real app read traffic here via the inventory_ro/
+# pos_ro aliases (pgbouncer.yaml) — inventory-api's ListItems catalog fetch and pos-api's
+# All-Sales list/export, both wired through POSTGRES_READONLY_URL. Accepted tradeoff (explicit
+# user decision, same session): this adds replication-apply + read I/O to the SAME physical disk
+# already flagged for control-plane probe instability under I/O bursts (see
+# control-plane-apiserver-probe-hardening-2026-08-20 memory) — revisit if that recurs. Still
+# manual-promotion-only DR otherwise; this does not change the no-automatic-failover posture.
 apiVersion: v1
 kind: Service
 metadata:

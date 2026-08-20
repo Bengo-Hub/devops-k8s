@@ -34,6 +34,18 @@ data:
     inventory = host=postgresql.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=10
     marketflow = host=postgresql.infra.svc.cluster.local port=5432 dbname=marketflow auth_dbname=postgres pool_size=10
     pos = host=postgresql.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=12
+    ; Read-replica aliases (2026-08-20): route to postgresql-replica instead of the primary, for
+    ; the specific heavy read-only endpoints wired via POSTGRES_READONLY_URL in inventory-api/
+    ; pos-api (ListItems catalog fetch; All-Sales list/export). Same physical dbname on the
+    ; replica (streaming copy of the primary), just a different upstream host. auth_dbname=postgres
+    ; resolves against the REPLICA's own postgres db (auth_dbname inherits each entry's own host=)
+    ; — fine, a physical streaming replica mirrors the whole cluster incl. the pgbouncer schema/
+    ; user_lookup() function, and auth_query is a read-only SELECT. Deliberately small pool_size:
+    ; this is a single-node cluster, the replica shares the same physical disk as the primary (see
+    ; postgresql-replica-statefulset.yaml's own comment) — keep replica load light relative to the
+    ; primary's.
+    inventory_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=4
+    pos_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=4
     isp_billing = host=postgresql.infra.svc.cluster.local port=5432 dbname=isp_billing auth_dbname=postgres pool_size=10
     projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=8
     ticketing = host=postgresql.infra.svc.cluster.local port=5432 dbname=ticketing auth_dbname=postgres pool_size=8
@@ -111,7 +123,7 @@ spec:
       labels:
         app: pgbouncer
       annotations:
-        checksum/config: "v2-auth-query"
+        checksum/config: "v3-read-replica-aliases"
     spec:
       priorityClassName: db-critical
       containers:
