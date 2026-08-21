@@ -44,7 +44,12 @@ data:
     ; this is a single-node cluster, the replica shares the same physical disk as the primary (see
     ; postgresql-replica-statefulset.yaml's own comment) — keep replica load light relative to the
     ; primary's.
-    inventory_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=4
+    ; inventory_ro raised 4->8 (2026-08-21): boi-enterprises' catalog sweep (~39 pages at 8-way
+    ; concurrency, see the inventory-api OutletScope cache fix same day) was queuing past pos-api's
+    ; 15s S2S timeout on this pool alone even after that fix landed. Still well under the 30
+    ; max_db_connections backstop and the 300 server-wide budget — revert if replica disk I/O
+    ; becomes the bottleneck instead (see the apiserver-probe-hardening incident on this same disk).
+    inventory_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=8
     pos_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=4
     isp_billing = host=postgresql.infra.svc.cluster.local port=5432 dbname=isp_billing auth_dbname=postgres pool_size=10
     projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=8
