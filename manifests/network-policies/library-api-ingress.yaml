@@ -1,0 +1,40 @@
+# Pilot NetworkPolicy (2026-08-21) for the fleet-wide pod-to-pod-isolation gap: today any pod
+# anywhere in the cluster can reach library-api's ClusterIP directly, bypassing ingress-nginx
+# entirely. Deliberately Ingress-only (no Egress block) — the shared `charts/app` chart's own
+# `networkpolicy.yaml` template bundles an Egress section whose default allow-list only covers
+# the `infra` namespace + external :443, which would have silently broken library-api's real
+# calls to NATS (`messaging` ns), treasury-api, notifications-api, and subscriptions-api (all
+# separate namespaces, confirmed via apps/library-api/values.yaml's *_URL env vars) — restricting
+# egress fleet-wide needs its own dedicated pass with a full per-service dependency audit, not a
+# side effect of this ingress pilot. This policy only restricts who can open a connection TO
+# library-api's pods; library-api's own outbound calls are completely unaffected.
+#
+# Verified before rollout: no other in-cluster service calls library-api's S2S API (grepped every
+# apps/*/values.yaml for library-api's internal hostname — zero matches), so the only real
+# inbound path is ingress-nginx -> pod. Same-namespace traffic (library-ui, if it ever calls
+# library-api's ClusterIP directly rather than through the public ingress) is also allowed, as a
+# safety margin.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: library-api-ingress
+  namespace: library
+spec:
+  podSelector:
+    matchLabels:
+      app: library-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: library
+      ports:
+        - protocol: TCP
+          port: 4010
+        - protocol: TCP
+          port: 9090
