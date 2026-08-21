@@ -3,12 +3,15 @@
 
 Closes the WAF/DDoS gap documented in shared-docs' internal gap-analysis
 (2026-08-21 decision: Cloudflare's managed ruleset, not a self-hosted WAF).
-Deploys the "Cloudflare Managed Ruleset" and "Cloudflare OWASP Core Ruleset"
-onto the zone's http_request_firewall_managed entry point.
+Deploys whatever managed WAF ruleset(s) the zone's actual Cloudflare plan
+provides (see MANAGED_RULESET_NAMES below — codevertexafrica.com is on the
+Free plan, so this is "Cloudflare Managed Free Ruleset" only, not the
+paid-tier "Cloudflare Managed Ruleset"/"OWASP Core Ruleset") onto the zone's
+http_request_firewall_managed entry point.
 
 SAFE TO RE-RUN, staged rollout by design:
-  - Default mode is --mode log: every rule in both rulesets is forced (via an
-    `overrides.action` on the deployed rule) to log-only, matching the
+  - Default mode is --mode log: every rule in the deployed ruleset(s) is
+    forced (via an `overrides.action` on the deployed rule) to log-only, matching the
     runbook's "watch for false positives before blocking real traffic" step.
     In this mode NOTHING is ever blocked — it only produces entries under
     Security > Events in the dashboard.
@@ -41,9 +44,17 @@ PHASE = "http_request_firewall_managed"
 # rules — looked up by name via the account's ruleset list rather than a
 # hardcoded ID, since account-scoped managed-ruleset IDs can differ from the
 # commonly-cited "well-known" ones depending on plan/account provisioning.
+#
+# codevertexafrica.com is on Cloudflare's Free plan (confirmed live 2026-08-21
+# via GET /zones/{zone}/rulesets, which only listed "Cloudflare Normalization
+# Ruleset", "Cloudflare Managed Free Ruleset", and "DDoS L7 ruleset" — the
+# paid-tier "Cloudflare Managed Ruleset" (full) and "Cloudflare OWASP Core
+# Ruleset" this script originally targeted don't exist on this plan). Only
+# the Free-tier managed ruleset is deployed here. Normalization and DDoS L7
+# are Cloudflare-operated defaults already active regardless of plan/entry
+# point config — not something this script needs to (or can) deploy.
 MANAGED_RULESET_NAMES = [
-    "Cloudflare Managed Ruleset",
-    "Cloudflare OWASP Core Ruleset",
+    "Cloudflare Managed Free Ruleset",
 ]
 
 
@@ -150,7 +161,7 @@ def main():
     current = get_entrypoint(token, zone)
 
     if current is not None and rules_already_match(current.get("rules", []), wanted):
-        print(f"entry point already deployed in --mode {mode} — no change needed")
+        print(f"entry point already deployed in --mode {mode} - no change needed")
         return
 
     result = api(token, "PUT", f"/zones/{zone}/rulesets/phases/{PHASE}/entrypoint", {"rules": wanted})
