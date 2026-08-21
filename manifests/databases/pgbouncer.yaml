@@ -54,6 +54,13 @@ data:
     ; QUERY VOLUME (done: inventory-api's OutletScope + Count() caching, same day), not pool size.
     inventory_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=inventory auth_dbname=postgres pool_size=4
     pos_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=pos auth_dbname=postgres pool_size=4
+    ; treasury_ro added 2026-08-21 for treasury-api's AR/AP aging reports, customer/vendor
+    ; statement, and bank-reconciliation unmatched-lines list (POSTGRES_READONLY_URL). Kept at the
+    ; same conservative pool_size=4 as inventory_ro/pos_ro's own post-incident value above (not the
+    ; briefly-tried 8) — the replica's disk I/O, not connection count, is this cluster's real
+    ; ceiling (see the comment right above), so a new alias should start small rather than repeat
+    ; that same-day incident on day one.
+    treasury_ro = host=postgresql-replica.infra.svc.cluster.local port=5432 dbname=treasury auth_dbname=postgres pool_size=4
     isp_billing = host=postgresql.infra.svc.cluster.local port=5432 dbname=isp_billing auth_dbname=postgres pool_size=10
     projects = host=postgresql.infra.svc.cluster.local port=5432 dbname=projects auth_dbname=postgres pool_size=8
     ticketing = host=postgresql.infra.svc.cluster.local port=5432 dbname=ticketing auth_dbname=postgres pool_size=8
