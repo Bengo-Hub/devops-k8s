@@ -128,7 +128,7 @@ spec:
       labels:
         app: pgbouncer
       annotations:
-        checksum/config: "v3-read-replica-aliases"
+        checksum/config: "v4-inventory-ro-pool-8"
     spec:
       priorityClassName: db-critical
       containers:
