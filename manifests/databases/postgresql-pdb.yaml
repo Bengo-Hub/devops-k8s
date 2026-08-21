@@ -1,0 +1,22 @@
+# postgresql is a single-replica (primary) StatefulSet with no automatic failover
+# to postgresql-replica (see postgresql-replica-statefulset.yaml's own comments and
+# shared-docs/internal/operations/database-maintenance.md's manual-promotion runbook).
+# pgbouncer and redis-master already have their own PDBs (pgbouncer.yaml,
+# redis-master-pdb.yaml) blocking voluntary eviction of their only pod; the primary
+# database itself had no equivalent until now. matchExpressions (rather than a plain
+# `app: postgresql` matchLabels selector) deliberately excludes postgresql-replica's
+# pods, which share the `app: postgresql` label but carry `component: replica` — a
+# plain selector would have silently covered the replica too.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgresql
+  namespace: infra
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: postgresql
+    matchExpressions:
+      - key: component
+        operator: DoesNotExist

@@ -176,6 +176,14 @@ autoscaling:
   maxReplicas: 4
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
+# Recommendation-only (updateMode Off) — captures a VPA object that was already live in-cluster
+# (applied out-of-band, undocumented in GitOps) into this repo so it's no longer drift. Min/max
+# left at the chart's own defaults (100m/128Mi–2000m/4096Mi), which already match the live object
+# exactly. Switching to an active update mode is a separate, later decision, not bundled here.
+verticalPodAutoscaling:
+  enabled: true
+  updateMode: "Off"
+  controlledValues: "RequestsAndLimits"
 monitoring:
   enabled: true
   prometheus:

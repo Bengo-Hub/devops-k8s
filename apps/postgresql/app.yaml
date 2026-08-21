@@ -10,7 +10,7 @@ spec:
     targetRevision: main
     path: manifests/databases
     directory:
-      include: postgresql-statefulset.yaml
+      include: '{postgresql-statefulset.yaml,postgresql-pdb.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: infra
