@@ -189,6 +189,16 @@ env:
         name: auth-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
+  # Fine-grained GitHub PAT (Actions: write ONLY, scoped to Bengo-Hub/devops-k8s) — powers the
+  # platform-admin "Infrastructure Monitor" Sealed Secrets rotate/backup-refresh trigger
+  # (dispatches devops-k8s's sealed-secrets-key-rotate.yml). optional: true so this deploys
+  # safely before the key is populated; the handler returns a clear 503 until then.
+  - name: DEVOPS_REPO_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: auth-api-secrets
+        key: DEVOPS_REPO_TOKEN
+        optional: true
   # Seed env vars — auth-seed runs inside entrypoint.sh on every pod startup
   - name: SEED_ADMIN_PASSWORD
     valueFrom:
