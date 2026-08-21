@@ -3,6 +3,33 @@ name: Provision Cluster Infrastructure
 on:
   push:
     branches: [ main ]
+    # Scoped 2026-08-21: this workflow re-bootstraps/reconciles shared cluster
+    # infrastructure (ArgoCD itself, its Application CRs, cert-manager, ingress,
+    # databases, platform secrets — see the step list) and is NOT how individual
+    # services get deployed (ArgoCD's own git-polling handles apps/*/values.yaml
+    # changes, including image-tag bumps, on its own, with no need for this
+    # workflow to run at all). Previously triggered on every single push to this
+    # repo with no path filter — including every service's routine image-tag-bump
+    # commit from the release-bot — which meant this ~6-7min workflow ran near-
+    # continuously and, per its own documented concurrency policy (queue collapses
+    # to 1 pending run, older pending run cancelled), got cancelled on 63 of the
+    # last 100 runs (`gh run list`, 2026-08-21). A cancelled run that hadn't yet
+    # reached the "Bootstrap Argo CD applications (app-of-apps)" step (the actual
+    # `kubectl apply -f apps/*/app.yaml` loop) silently skipped applying any
+    # new/changed Application CR, with no retry — the only workaround was noticing
+    # via `gh run list` and applying it manually. Scoping the trigger to only the
+    # paths this workflow's steps actually read (see the grep this comment's
+    # commit message documents) fixes the root cause: routine service deploys no
+    # longer touch this workflow at all, so genuine infra-provisioning pushes
+    # rarely collide with anything. workflow_dispatch (manual runs, e.g. after a
+    # VPS migration) is completely unaffected by this filter.
+    paths:
+      - 'manifests/**'
+      - 'scripts/**'
+      - 'apps/**/app.yaml'
+      - 'apps/root-app.yaml'
+      - '.github/workflows/provision.yml'
+      - '.github/actions/**'
   workflow_dispatch:
     inputs:
       enable_cleanup:
