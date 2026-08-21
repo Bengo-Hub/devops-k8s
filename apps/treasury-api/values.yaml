@@ -65,6 +65,16 @@ env:
         name: treasury-api-secrets
         key: POSTGRES_MIGRATE_URL
         optional: true
+  # Read-replica URL (pgbouncer's treasury_ro alias — see manifests/databases/pgbouncer.yaml) for
+  # AR/AP aging reports, customer/vendor statement, and the bank-reconciliation unmatched-lines
+  # list only (arpa/reconciliation SetReadClient() call sites in app.go). optional: true so this
+  # deploys safely before the secret key is populated — app.go falls back to the primary.
+  - name: POSTGRES_READONLY_URL
+    valueFrom:
+      secretKeyRef:
+        name: treasury-api-secrets
+        key: POSTGRES_READONLY_URL
+        optional: true
   # Database connection pool settings (prevent connection exhaustion)
   - name: POSTGRES_MAX_OPEN_CONNS
     value: "8"
