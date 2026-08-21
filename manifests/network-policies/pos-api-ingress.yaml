@@ -1,0 +1,36 @@
+# Extends the library-api pilot (2026-08-21) to pos-api. Ingress-only, same reasoning as
+# library-api-ingress.yaml (the shared charts/app Egress template is a real footgun for
+# cross-namespace S2S — not used here).
+#
+# Consumer namespaces verified by grepping every apps/*/values.yaml for pos-api's internal
+# ClusterIP hostname (pos-api.pos.svc.cluster.local) — anything NOT found this way uses the
+# compiled-in public-hostname default (posapi.codevertexafrica.com, e.g. ordering-backend's
+# POS_API_URL) and is already covered by the ingress-nginx allow rule below, same as external
+# traffic. Only one real internal-DNS consumer found: marketflow-api.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pos-api-ingress
+  namespace: pos
+spec:
+  podSelector:
+    matchLabels:
+      app: pos-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090
