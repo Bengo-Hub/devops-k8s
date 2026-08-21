@@ -923,6 +923,37 @@ jobs:
           echo "✅ Ordering Backend secrets created in $NAMESPACE namespace"
           echo "::endgroup::"
 
+      - name: Restore Sealed Secrets master key (disaster-recovery, idempotent)
+        # Runs BEFORE ArgoCD/the sealed-secrets-controller Helm release exist, so on a
+        # fresh cluster the controller starts up with the SAME keypair as prod instead
+        # of generating a brand-new one. The controller only ever generates a fresh key
+        # when none exists yet with the sealedsecrets.bitnami.com/sealed-secrets-key
+        # label in kube-system — every *.sealedsecret.yaml file already committed under
+        # manifests/sealed-secrets/ was encrypted against the CURRENT prod key, so a
+        # fresh key on a new cluster would make all of them permanently undecryptable.
+        # NEVER overwrites a key that's already present (a live, in-use key must never
+        # be clobbered by a backup, e.g. if the backup predates a rotation).
+        # SEALED_SECRETS_MASTER_KEY itself is the full `kubectl get secret ... -o yaml`
+        # output for the live key, backed up 2026-08-21 via `gh secret set` (piped
+        # directly from kubectl, never displayed) -- rotate this GitHub secret the same
+        # way any time the in-cluster key is deliberately rotated.
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        env:
+          SEALED_SECRETS_MASTER_KEY: ${{ secrets.SEALED_SECRETS_MASTER_KEY }}
+        run: |
+          echo "::group::Restoring Sealed Secrets master key (disaster-recovery)"
+          if kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key --no-headers 2>/dev/null | grep -q .; then
+            echo "✓ A sealed-secrets key already exists in-cluster — leaving it as-is (never overwrite a live key)"
+          elif [ -z "$SEALED_SECRETS_MASTER_KEY" ]; then
+            echo "⚠️ No sealed-secrets key in-cluster AND no SEALED_SECRETS_MASTER_KEY GitHub secret configured."
+            echo "⚠️ A fresh keypair will be generated when the controller starts, and every existing"
+            echo "⚠️ manifests/sealed-secrets/*.sealedsecret.yaml file will become permanently undecryptable."
+          else
+            echo "$SEALED_SECRETS_MASTER_KEY" | kubectl apply -f -
+            echo "✅ Restored the backed-up sealed-secrets master key — the controller will use it instead of generating a new one"
+          fi
+          echo "::endgroup::"
+
       - name: Install Argo CD (idempotent)
         if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
         timeout-minutes: 15
