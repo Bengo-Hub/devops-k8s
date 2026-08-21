@@ -1,0 +1,39 @@
+# Extends the NetworkPolicy pilot to auth-api. Ingress-only — see pos-api-ingress.yaml's header
+# comment for why.
+#
+# Consumer namespaces verified by grepping every apps/*/values.yaml for auth-api's internal
+# ClusterIP hostname (auth-api.auth.svc.cluster.local): notifications-api, subscriptions-api.
+# Per the S2S conventions doc, auth is the one deliberate exception where most services call the
+# PUBLIC hostname (sso.codevertexafrica.com) instead of internal DNS, specifically because the JWT
+# issuer must match what's embedded in tokens — that public-hostname traffic already routes
+# through ingress-nginx and needs no separate allow rule here.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-api-ingress
+  namespace: auth
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: notifications
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: subscriptions
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090
