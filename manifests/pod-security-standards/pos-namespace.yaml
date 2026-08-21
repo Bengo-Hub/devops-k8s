@@ -1,0 +1,20 @@
+# Pod Security Standards, observe-only (2026-08-21): closes the "no PSS labels anywhere"
+# gap alongside the NetworkPolicy work. warn+audit only, deliberately no `enforce` label (K8s
+# defaults enforce to "privileged" — i.e. unrestricted — when the label is absent, so this can
+# never block a pod from being admitted). Checked every Deployment in this namespace's
+# securityContext first (pos-api already sets non-root runAsUser/runAsGroup/fsGroup; no
+# privileged containers/host namespaces found anywhere in this fleet) — baseline is expected to
+# produce zero warnings, confirming compliance rather than generating noise. `shared-infra`'s
+# namespace (apps/ollama-shared/manifests/namespace.yaml) already runs `enforce: baseline` in
+# prod as a working precedent — flipping this namespace to enforce is a real, later, separate
+# decision once the warn/audit output here is confirmed clean, not bundled into this pass.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pos
+  labels:
+    kubernetes.io/metadata.name: pos
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: latest
