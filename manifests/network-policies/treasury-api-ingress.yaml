@@ -1,0 +1,73 @@
+# Extends the NetworkPolicy pilot to treasury-api — the largest fan-in of the 5 critical
+# services (treasury is the money-flow hub: every GL posting, payment, invoice, and tax event
+# touches it). Ingress-only — see pos-api-ingress.yaml's header comment for why.
+#
+# Consumer namespaces verified two ways (see subscription-api-ingress.yaml's header for why one
+# alone isn't enough):
+# 1. Grepping every apps/*/values.yaml for an explicit TREASURY_SERVICE_URL override to
+#    treasury-api's internal ClusterIP hostname: erp-api, hospital-api, isp-billing-backend,
+#    library-api, marketflow-api, notifications-api, ordering-backend, pos-api,
+#    subscriptions-api, truload-backend.
+# 2. Grepping every service's Go config.go for a COMPILED-IN default already pointing at
+#    treasury-api's internal DNS with no values.yaml override present: found ONE additional
+#    reference — logistics-api's TreasuryConfig.ServiceURL defaults to
+#    "http://treasury-api.treasury.svc.cluster.local:4005". NOT added to the allow list below:
+#    treasury-api's real Service only exposes port 4000 (confirmed via `kubectl get svc
+#    treasury-api -n treasury`), so this call is already broken today (connection refused/no
+#    listener on 4005) independent of this policy — adding a namespace allow for a call that
+#    can't succeed anyway would just widen the policy for no current benefit. If that port
+#    mismatch is ever fixed separately, add `logistics` here too at the same time.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: treasury-api-ingress
+  namespace: treasury
+spec:
+  podSelector:
+    matchLabels:
+      app: treasury-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: treasury
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: erp
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hospital
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: isp-billing
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: library
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: notifications
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ordering
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: subscriptions
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: truload
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090
