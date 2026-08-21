@@ -41,3 +41,7 @@ Thumbs.db
 
 # Contabo
 contabo_auth_token.sh
+
+# Python
+__pycache__/
+*.pyc

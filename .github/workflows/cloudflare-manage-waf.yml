@@ -1,0 +1,34 @@
+name: Manage Cloudflare WAF
+
+on:
+  workflow_dispatch:
+    inputs:
+      zone_id:
+        description: 'Cloudflare zone ID (codevertexafrica.com = dbbf1a40cb82ffd43dbc1405d3d8a4b1)'
+        required: true
+        type: string
+      mode:
+        description: 'log = observe only (nothing blocked), block = enforce default actions'
+        required: true
+        type: choice
+        default: log
+        options:
+          - log
+          - block
+
+# Runs scripts/cloudflare/manage-waf.py against the given zone, deploying the
+# Cloudflare Managed Ruleset + OWASP Core Ruleset onto the WAF entry point.
+# Defaults to log mode (nothing blocked) per the runbook at
+# shared-docs/internal/operations/cloudflare-waf-rollout.md — only switch to
+# block after a clean observation period. Idempotent, safe to re-run.
+
+jobs:
+  manage-waf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run script
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_WAF_API_TOKEN }}
+        run: python3 "scripts/cloudflare/manage-waf.py" "${{ inputs.zone_id }}" --mode "${{ inputs.mode }}"
