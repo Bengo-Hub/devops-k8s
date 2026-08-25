@@ -9,7 +9,7 @@ fullnameOverride: codevertex-website
 # ============================================================================
 image:
   repository: docker.io/codevertex/codevertex-website
-  tag: "e4620fc3"
+  tag: "4fefd5bd"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
