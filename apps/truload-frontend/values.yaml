@@ -1,6 +1,6 @@
 image:
   repository: docker.io/codevertex/truload-frontend
-  tag: "c16a0854"
+  tag: "acbe3d7e"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
