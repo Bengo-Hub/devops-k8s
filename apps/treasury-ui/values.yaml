@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/treasury-ui
-  tag: "b4633e23"
+  tag: "efd9f0c8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
