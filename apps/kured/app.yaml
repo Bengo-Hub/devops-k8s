@@ -21,16 +21,21 @@ spec:
           period: 1h
           rebootSentinel: /var/run/reboot-required
           # 2026-08-19 incident: drainTimeout defaults to 0 (infinite), so when
-          # redis-master's PDB permanently disallows disruption (see below),
-          # kured retried the eviction in a tight loop non-stop for 3+ days
-          # (2500+ attempts), and that retry volume was enough to push etcd
-          # past its apply-latency budget, which made kube-scheduler and
-          # kube-controller-manager lose their leader-election leases and
-          # restart-loop (RecentHighRestartCount alert). Bounding drainTimeout
-          # keeps the "stall on the PDB" behavior intentional below, but turns
-          # "hammer forever" into "try for 5m, then wait for the next period" —
-          # kured still can't reboot until redis-master is handled manually,
-          # but it stops taking the control plane down while it waits.
+          # redis-master's PDB permanently disallowed disruption, kured retried
+          # the eviction in a tight loop non-stop for 3+ days (2500+ attempts),
+          # and that retry volume was enough to push etcd past its apply-latency
+          # budget, which made kube-scheduler and kube-controller-manager lose
+          # their leader-election leases and restart-loop (RecentHighRestartCount
+          # alert). Bounding drainTimeout keeps a real, permanently-unsatisfiable
+          # PDB from ever hammering the control plane again, but the actual
+          # unsatisfiable-PDB deadlock itself is fixed as of 2026-09-01 (redis-
+          # master's PDB was removed — see manifests/databases/redis-statefulset.yaml)
+          # after it caused a 3-night-running silent reboot-drain failure: kured
+          # cordoned/evicted what it could every hour in its window, timed out on
+          # redis-master every time, uncordoned, and retried next hour — churning
+          # the whole fleet nightly while never actually applying the pending
+          # security update. Keep this timeout as a general safety bound even
+          # though nothing should permanently block drain anymore.
           drainTimeout: 5m
           # 00:00-02:00 UTC = 03:00-05:00 EAT, the platform's lowest-traffic
           # window. Single time zone chosen (not crossing midnight) to
@@ -46,12 +51,16 @@ spec:
             - fr
             - sa
           # Deliberately NOT overriding drain behavior: kured respects
-          # PodDisruptionBudgets by default, so it will correctly stall on
-          # redis-master's single-replica PDB until that's handled manually
-          # (promote the replica, or temporarily lift the PDB) rather than
-          # forcing a drain that could lose data. This is intentional,
-          # accepted behavior on a single-node cluster with no automatic
-          # Redis failover yet — see the incident-hardening plan's Part A2/A4.
+          # PodDisruptionBudgets by default. As of 2026-09-01 no workload on
+          # this cluster has a PDB that can never be satisfied by a voluntary
+          # eviction (redis-master's was removed — the last one), so a normal
+          # drain within drainTimeout should now complete and kured should
+          # actually reboot the node during its next scheduled window instead
+          # of stalling forever. If a future service adds a minAvailable:1 PDB
+          # on a single replica with no failover, this will silently regress
+          # to the same stuck-forever pattern — see ha-min-2-pods-and-pdb.md's
+          # singleton exception list before adding a PDB to any 1-replica
+          # workload.
       releaseName: kured
   destination:
     server: https://kubernetes.default.svc

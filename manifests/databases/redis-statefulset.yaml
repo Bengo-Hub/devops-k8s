@@ -103,6 +103,17 @@ data:
     # Security
     # Password will be set via REDIS_PASSWORD env var
 ---
+# No PodDisruptionBudget on this singleton (2026-09-01, incident follow-up):
+# a minAvailable:1 PDB on a 1-replica StatefulSet can never be satisfied by a
+# voluntary eviction, so it permanently blocked kured's nightly drain (see
+# apps/kured/app.yaml). The corruption risk that PDB was guarding against
+# (2026-08-16 incident) is handled by terminationGracePeriodSeconds:60 +
+# preStop SHUTDOWN SAVE below, not by blocking eviction outright — this is a
+# cache (maxmemory-policy allkeys-lru) with AOF+RDB persistence, so a graceful
+# restart is an acceptable, low-stakes blip, not a data-loss event. Matches
+# the platform's own singleton convention in ha-min-2-pods-and-pdb.md
+# (valhalla/tileserver/projects-ui). Do not re-add a PDB here without also
+# giving redis-master real failover (Sentinel or similar).
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

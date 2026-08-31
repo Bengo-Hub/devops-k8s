@@ -18,6 +18,14 @@ description: "High priority for cluster ingress + coredns — must not be evicte
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
+  name: auth-critical
+value: 700000000
+globalDefault: false
+description: "auth-api — almost every other service fetches its JWKS at startup, so it must win scheduling/CPU over ordinary app workloads whenever the whole node is under pressure (e.g. a full reboot recovery)."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
   name: platform-high
 value: 500000000
 globalDefault: false
