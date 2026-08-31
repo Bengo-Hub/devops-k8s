@@ -1,6 +1,14 @@
 # Auth Service Production Configuration
 nameOverride: auth-api
 fullnameOverride: auth-api
+# 2026-09-01 incident: every other service fetches its JWKS from auth-api at
+# startup and hard-fails if it's not ready yet. A full node reboot restarts
+# the whole fleet at once; without priority, auth-api competed for CPU on
+# equal footing with ~30 other services and lost the race, so library-api/
+# marketflow-ai/ordering-backend/logistics-api all crash-looped on "JWKS
+# fetch failed: status 503" until auth-api happened to win a later retry.
+# See manifests/priorityclasses/db-critical.yaml (auth-critical tier).
+priorityClassName: auth-critical
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================

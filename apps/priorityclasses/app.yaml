@@ -1,22 +1,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: redis
+  name: priorityclasses
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"  # cluster-scoped, no namespace dependency — apply early
 spec:
   project: default
   source:
     repoURL: https://github.com/Bengo-Hub/devops-k8s.git
     targetRevision: main
-    path: manifests/databases
+    path: manifests/priorityclasses
     directory:
-      include: 'redis-statefulset.yaml'
+      include: '*.yaml'
   destination:
     server: https://kubernetes.default.svc
-    namespace: infra
+    namespace: kube-system
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true

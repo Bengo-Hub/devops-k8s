@@ -1,0 +1,179 @@
+# Adopted into GitOps 2026-09-01 (incident follow-up): this Deployment existed
+# only as a one-off `kubectl apply` on the live cluster (no ArgoCD tracking,
+# no git source of truth) despite being the single ingress point for every
+# public domain (sso/accounts/pos/etc). If the object were ever lost — node
+# reprovision, accidental delete — nobody had a copy to reapply from. This
+# file is captured as-is from the live object with zero functional change:
+# same image, same replicas, same resources, same priorityClassName (already
+# correctly set to ingress-critical).
+#
+# Note on redundancy: this controller runs hostNetwork:true with static
+# hostPort bindings (80/443 plus mail+NATS TCP passthrough on 25/465/587/
+# 993/995/4222/4190 — see the extra container ports below). That means it can
+# only ever run ONE replica on this single node; a second replica would fail
+# to bind the same host ports. It is therefore a genuine, currently
+# irreducible single point of failure — real redundancy would need a second
+# node with a floating IP / VRRP-style failover, not just `replicas: 2`. Do
+# not add a PodDisruptionBudget here either: minAvailable:1 on a permanent
+# 1-replica workload is exactly the pattern that deadlocked kured against
+# redis-master (see manifests/databases/redis-statefulset.yaml) — this is a
+# deliberate singleton exception, same as valhalla/tileserver/projects-ui/
+# redis-master in ha-min-2-pods-and-pdb.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+    app.kubernetes.io/version: 1.8.1
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+      app.kubernetes.io/instance: ingress-nginx
+      app.kubernetes.io/name: ingress-nginx
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/instance: ingress-nginx
+        app.kubernetes.io/name: ingress-nginx
+        app.kubernetes.io/part-of: ingress-nginx
+        app.kubernetes.io/version: 1.8.1
+    spec:
+      containers:
+      - args:
+        - /nginx-ingress-controller
+        - --publish-service=$(POD_NAMESPACE)/ingress-nginx-controller
+        - --election-id=ingress-nginx-leader
+        - --controller-class=k8s.io/ingress-nginx
+        - --ingress-class=nginx
+        - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
+        - --validating-webhook=:8443
+        - --validating-webhook-certificate=/usr/local/certificates/cert
+        - --validating-webhook-key=/usr/local/certificates/key
+        - --tcp-services-configmap=ingress-nginx/tcp-services
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: LD_PRELOAD
+          value: /usr/local/lib/libmimalloc.so
+        image: registry.k8s.io/ingress-nginx/controller:v1.8.1@sha256:e5c4824e7375fcf2a393e1c03c293b69759af37a9ca6abdb91b13d78a93da8bd
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /wait-shutdown
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /healthz
+            port: 10254
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: controller
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        - containerPort: 443
+          name: https
+          protocol: TCP
+        - containerPort: 8443
+          name: webhook
+          protocol: TCP
+        - containerPort: 4222
+          hostPort: 4222
+          name: nats-tcp
+          protocol: TCP
+        - containerPort: 25
+          hostPort: 25
+          name: smtp-tcp
+          protocol: TCP
+        - containerPort: 465
+          hostPort: 465
+          name: smtps-tcp
+          protocol: TCP
+        - containerPort: 587
+          hostPort: 587
+          name: subm-tcp
+          protocol: TCP
+        - containerPort: 993
+          hostPort: 993
+          name: imaps-tcp
+          protocol: TCP
+        - containerPort: 995
+          hostPort: 995
+          name: pop3s-tcp
+          protocol: TCP
+        - containerPort: 4190
+          hostPort: 4190
+          name: sieve-tcp
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 10254
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 90Mi
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            drop:
+            - ALL
+          runAsUser: 101
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /usr/local/certificates/
+          name: webhook-cert
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: ingress-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: ingress-nginx
+      serviceAccountName: ingress-nginx
+      terminationGracePeriodSeconds: 300
+      volumes:
+      - name: webhook-cert
+        secret:
+          defaultMode: 420
+          secretName: ingress-nginx-admission
