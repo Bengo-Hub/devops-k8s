@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Script to create Kubernetes secrets for Go microservices
-# Creates only standardized keys: POSTGRES_URL, REDIS_URL, REDIS_PASSWORD, SECRET_KEY, DATABASE_*
+# Creates only standardized keys: POSTGRES_URL, POSTGRES_MIGRATE_URL, REDIS_URL, REDIS_PASSWORD, SECRET_KEY, DATABASE_*
 # All Go backends must read these env keys (no postgresUrl or service-prefixed DB URL keys).
 #
 # Usage:
@@ -353,6 +353,22 @@ else
     POSTGRES_URL="postgresql://${DB_USER}:CHANGE_ME@${PG_HOST}:${PG_PORT}/${DB_NAME}?sslmode=disable"
 fi
 
+# POSTGRES_MIGRATE_URL: always the direct Postgres host, bypassing PgBouncer,
+# regardless of what PG_HOST/PG_PORT resolved to above. Migrations that hold a
+# session-level pg_advisory_lock() across the tool's lifetime need a real,
+# un-pooled connection — through PgBouncer's transaction-pooling mode, a
+# client crash can orphan the lock on a pooled backend connection indefinitely
+# (found 2026-09-02: hospital-api was never given this key, so its migrate
+# path fell back to POSTGRES_URL/PgBouncer and got stuck this way in
+# production). See shared-docs/docs/platform-standards/connection-pooling-pgbouncer.md.
+POSTGRES_MIGRATE_HOST="postgresql.infra.svc.cluster.local"
+POSTGRES_MIGRATE_PORT="5432"
+if [[ -n "$DATABASE_PASSWORD" ]]; then
+    POSTGRES_MIGRATE_URL="postgresql://${DB_USER}:${ENCODED_DB_PASSWORD}@${POSTGRES_MIGRATE_HOST}:${POSTGRES_MIGRATE_PORT}/${DB_NAME}?sslmode=disable"
+else
+    POSTGRES_MIGRATE_URL="postgresql://${DB_USER}:CHANGE_ME@${POSTGRES_MIGRATE_HOST}:${POSTGRES_MIGRATE_PORT}/${DB_NAME}?sslmode=disable"
+fi
+
 # Construct Redis URL (password is percent-encoded)
 if [[ -n "$REDIS_PASSWORD" ]]; then
     ENCODED_REDIS_PASSWORD=$(url_encode_password "$REDIS_PASSWORD")
@@ -369,6 +385,7 @@ log_info "Upserting standardized keys into ${SECRET_NAME} in namespace ${NAMESPA
 # Build array of standardized key literals
 declare -a secret_literals=(
     "--from-literal=POSTGRES_URL=${POSTGRES_URL}"
+    "--from-literal=POSTGRES_MIGRATE_URL=${POSTGRES_MIGRATE_URL}"
     "--from-literal=SECRET_KEY=${APP_SECRET_KEY}"
     "--from-literal=DATABASE_HOST=${PG_HOST}"
     "--from-literal=DATABASE_PORT=${PG_PORT}"
@@ -402,6 +419,7 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Generate the new data as base64 and build a JSON patch
     PATCH_JSON='{"data":{'
     PATCH_JSON+="\"POSTGRES_URL\":\"$(echo -n "${POSTGRES_URL}" | base64 -w0)\","
+    PATCH_JSON+="\"POSTGRES_MIGRATE_URL\":\"$(echo -n "${POSTGRES_MIGRATE_URL}" | base64 -w0)\","
     PATCH_JSON+="\"SECRET_KEY\":\"$(echo -n "${APP_SECRET_KEY}" | base64 -w0)\","
     PATCH_JSON+="\"DATABASE_HOST\":\"$(echo -n "${PG_HOST}" | base64 -w0)\","
     PATCH_JSON+="\"DATABASE_PORT\":\"$(echo -n "${PG_PORT}" | base64 -w0)\","
@@ -491,6 +509,7 @@ REDIS_PORT=${REDIS_PORT}
 REDIS_PASSWORD=${REDIS_PASSWORD}
 
 POSTGRES_URL=${POSTGRES_URL}
+POSTGRES_MIGRATE_URL=${POSTGRES_MIGRATE_URL}
 REDIS_URL=${REDIS_URL}
 
 # DO NOT COMMIT THIS FILE TO VERSION CONTROL
