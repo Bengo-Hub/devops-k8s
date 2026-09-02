@@ -127,7 +127,8 @@ NEEDS_UPDATE=false
 if [ -f /etc/sysctl.d/k8s.conf ]; then
     if ! grep -q "net.bridge.bridge-nf-call-iptables.*=.*1" /etc/sysctl.d/k8s.conf || \
        ! grep -q "net.bridge.bridge-nf-call-ip6tables.*=.*1" /etc/sysctl.d/k8s.conf || \
-       ! grep -q "net.ipv4.ip_forward.*=.*1" /etc/sysctl.d/k8s.conf; then
+       ! grep -q "net.ipv4.ip_forward.*=.*1" /etc/sysctl.d/k8s.conf || \
+       ! grep -q "fs.inotify.max_user_instances.*=.*8192" /etc/sysctl.d/k8s.conf; then
         NEEDS_UPDATE=true
     fi
 else
@@ -135,10 +136,17 @@ else
 fi
 
 if [ "$NEEDS_UPDATE" = true ]; then
+# The kubeadm default of 128 inotify instances is a per-UID ceiling.
+# containerd allocates one instance per container for cgroup memory
+# eventing, and every process here runs as root, so a busy node pins
+# this at 128/128 and any further allocation fails ("failed to create
+# inotify fd: too many open files"). 8192 is standard production k8s
+# node tuning (also used by GKE/EKS-optimized images).
 cat <<EOF | tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
+fs.inotify.max_user_instances       = 8192
 EOF
 sysctl --system
 echo -e "${GREEN}✓ Sysctl parameters configured${NC}"
