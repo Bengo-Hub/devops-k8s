@@ -125,10 +125,15 @@ modprobe overlay
 modprobe br_netfilter
 
 # Set sysctl params
+# fs.inotify.max_user_instances raised from the kubeadm default of 128:
+# that's a per-UID ceiling, containerd (running as root, like everything
+# else here) allocates one inotify instance per container for cgroup
+# memory eventing, and a busy node pins it at 128/128.
 cat <<EOF | tee /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-iptables  = 1
 net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
+fs.inotify.max_user_instances       = 8192
 EOF
 
 sysctl --system
