@@ -86,7 +86,12 @@ env:
         key: INTERNAL_SERVICE_KEY
         optional: true
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://afya.codevertexafrica.com,https://afyaapi.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
+    # http://localhost:3010 is hospital-ui's own pinned dev port (package.json's `next dev
+    # --port 3010`, chosen to avoid clashing with sibling UIs that default to 3000) — without it
+    # a local hospital-ui dev server can log in via auth-api fine but every hospital-api call
+    # (starting with /auth/me) fails CORS. See auth-api's router.go CORS allowlist for the same
+    # gap, fixed the same day.
+    value: "https://afya.codevertexafrica.com,https://afyaapi.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001,http://localhost:3010"
 resources:
   requests:
     cpu: 50m
