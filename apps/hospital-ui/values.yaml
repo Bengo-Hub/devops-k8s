@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/hospital-ui
-  tag: "9e5ce0d1" # set by CI on first successful build
+  tag: "aed79419" # set by CI on first successful build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
