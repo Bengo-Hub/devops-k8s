@@ -150,12 +150,21 @@ spec:
           # it almost no guaranteed CPU share relative to the rest of the fleet during
           # contention despite top (ingress-critical) priority class. Node CPU requests
           # sit at ~75% already (historically a tight budget on this cluster), so kept
-          # the request bump modest and used limits for burst headroom instead.
+          # the request bump modest.
+          #
+          # CPU limit REMOVED same day: this image runs worker-processes:auto, which
+          # reads nproc/proc-cpuinfo inside the container -- NOT cgroup-aware here, so
+          # it saw the node's full 12 cores and spawned 12 nginx workers, then a 1-core
+          # CPU limit forced all 12 to fight over a single core's CFS quota. That's far
+          # worse than having no limit at all (confirmed: alerts got MORE frequent right
+          # after adding it). If a CPU ceiling is wanted again, set it well above what
+          # 12 workers need under real load, or pin worker-processes via the ingress-
+          # nginx ConfigMap to match whatever the limit actually is -- don't just add a
+          # limit without checking worker-processes count first.
           requests:
             cpu: 250m
             memory: 256Mi
           limits:
-            cpu: 1000m
             memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: true
