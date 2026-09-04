@@ -1,0 +1,69 @@
+# Tigera-operator-managed Calico Installation CR (cluster-scoped). Adopted into
+# GitOps 2026-09-04 -- was live-cluster-only kubectl-apply drift since cluster
+# bootstrap (2025-11-19), same class of gap ingress-nginx-controller and
+# manifests/priorityclasses/ were in before their own 2026-09-01 GitOps adoption
+# (see reboot-storm-and-permanent-fixes-2026-09-01 memory).
+#
+# 2026-09-04 fix: nodeAddressAutodetectionV4 was `firstFound: true`, which had
+# picked the admin WireGuard remote-access VPN interface (wg0, 10.8.0.1 -- see
+# apps/wireguard/) instead of the real public NIC (eth0, 77.237.232.66) as this
+# node's VXLAN tunnel endpoint. Confirmed live: `vxlan.calico`'s underlying
+# device was `dev wg0`, capping its usable MTU at 1370 (wg0's own MTU 1420 -
+# 50 bytes VXLAN overhead) while Felix's Installation-computed target MTU is
+# 1450 (from eth0's real 1500 MTU) -- an unresolvable mismatch that made Felix
+# retry-and-fail "Failed to set vxlan tunnel device MTU error=invalid
+# argument" every ~10s, forever, in calico-node's logs. Harmless TODAY only
+# because this is a single-node cluster with zero cross-node VXLAN routes in
+# use (`ip route show dev vxlan.calico` is empty) -- adding a second node
+# before this was fixed would have silently sent inter-node pod traffic into
+# the admin VPN tunnel instead of the real network path, breaking cluster
+# networking on day one of that node joining. Pinning `interface: "eth0"`
+# (the confirmed, stable NIC name on this Contabo VPS) makes the tunnel
+# endpoint selection deterministic instead of "whichever interface happens to
+# be first," regardless of what other interfaces (VPNs, docker bridges, veths)
+# exist on the node.
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  variant: Calico
+  cni:
+    type: Calico
+    ipam:
+      type: Calico
+  calicoNetwork:
+    bgp: Enabled
+    hostPorts: Enabled
+    linuxDataplane: Iptables
+    linuxPolicySetupTimeoutSeconds: 0
+    multiInterfaceMode: None
+    windowsDataplane: Disabled
+    nodeAddressAutodetectionV4:
+      firstFound: false
+      interface: "eth0"
+    ipPools:
+    - name: default-ipv4-ippool
+      cidr: 192.168.0.0/16
+      blockSize: 26
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+      disableBGPExport: false
+      allowedUses:
+      - Workload
+      - Tunnel
+  controlPlaneReplicas: 2
+  flexVolumePath: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/
+  kubeletVolumePluginPath: /var/lib/kubelet
+  nonPrivileged: Disabled
+  nodeUpdateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  logging:
+    cni:
+      logSeverity: Info
+      logFileMaxSize: 100Mi
+      logFileMaxAgeDays: 30
+      logFileMaxCount: 10
