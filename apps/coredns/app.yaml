@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: coredns
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests/coredns
+    directory:
+      include: 'coredns-configmap.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,69 @@
+# CoreDNS ConfigMap, GitOps-adopted 2026-09-04 -- was default-kubeadm-addon,
+# live-cluster-only drift since bootstrap (2025-11-19), same class of gap
+# ingress-nginx-controller and the Calico Installation CR were in before
+# their own adoption (see reboot-storm-and-permanent-fixes-2026-09-01 and
+# the calico-installation app added the same day as this file).
+#
+# 2026-09-04 fix: `forward . /etc/resolv.conf` sent every external DNS
+# lookup (anything not under cluster.local) through the NODE's own
+# resolv.conf, which -- per netplan (scripts/cluster provisioning) --
+# points at Contabo's own shared resolvers (213.136.95.10/.11). Root-caused
+# the recurring sso/pos/accounts "000000" alerts to exactly this: live
+# repeated curl probes from inside the cluster caught the SAME domain-
+# agnostic failure signature across all three unrelated services (sso,
+# pos, accounts) -- every failure timed out at ~2.00-2.10s during DNS
+# resolution specifically (`time_namelookup` ~2s, `time_connect` 0,
+# `time_total` == `time_namelookup`), meaning curl never even got to
+# opening a TCP connection. ingress-nginx's own access log showed ZERO
+# failed requests to any of the three hosts in the same windows -- proof
+# the failures never reached the origin at all, consistent with DNS
+# failing before a request is ever sent. This also explains why three
+# earlier investigation passes (2026-09-02, twice on 2026-09-04) found no
+# internal signal anywhere (CPU/disk/inotify/conntrack all clean) and why
+# external checks from outside the cluster (using a different resolver
+# entirely) never reproduced it -- the flakiness lives specifically in the
+# hop from this node to Contabo's shared DNS infrastructure, outside the
+# cluster and outside our control.
+#
+# Fixed by forwarding straight to well-known, independently-operated public
+# resolvers (Cloudflare + Google, spread across two providers so one
+# provider's own incident doesn't reintroduce this) instead of chaining
+# through the node's resolv.conf. Only affects names NOT already handled by
+# the `kubernetes` plugin above it in the same Corefile (cluster.local /
+# in-addr.arpa / ip6.arpa) or the static `hosts` overrides -- in-cluster
+# service discovery is completely unaffected by this change. The existing
+# `reload` plugin picks up a ConfigMap change within seconds with no pod
+# restart needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        hosts {
+           77.237.232.66 tiles.codevertexitsolutions.com
+           77.237.232.66 routing.codevertexitsolutions.com
+           10.99.204.236 mx1.codevertexafrica.com
+           fallthrough
+        }
+        prometheus :9153
+        forward . 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
