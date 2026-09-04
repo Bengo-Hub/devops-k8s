@@ -145,9 +145,18 @@ spec:
           successThreshold: 1
           timeoutSeconds: 1
         resources:
+          # Bumped 2026-09-04: this is the single ingress point for every public domain
+          # (hostNetwork, can only run 1 replica on this single node), and 100m/90Mi gave
+          # it almost no guaranteed CPU share relative to the rest of the fleet during
+          # contention despite top (ingress-critical) priority class. Node CPU requests
+          # sit at ~75% already (historically a tight budget on this cluster), so kept
+          # the request bump modest and used limits for burst headroom instead.
           requests:
-            cpu: 100m
-            memory: 90Mi
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
         securityContext:
           allowPrivilegeEscalation: true
           capabilities:
