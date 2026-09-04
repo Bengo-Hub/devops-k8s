@@ -138,24 +138,38 @@ spec:
                 #        touched. Expand this list as coverage grows — starter set,
                 #        not exhaustive.
                 #
-                # 2026-09-04: sso/pos/accounts kept alerting several times a day with
-                # zero corresponding CPU/disk/memory/network signal anywhere on the
-                # node at the same timestamps (checked exhaustively across two
-                # separate incidents) — the signature of a sub-second transient blip,
-                # not a real outage. One retry with a short delay means a blip that
-                # clears in a few seconds no longer pages, while a genuine outage
-                # still fails both attempts and alerts. --retry-all-errors is required
-                # here because curl's default --retry does NOT cover a bare connection
-                # failure (our exact "000" case) without it. Now running from a
-                # long-lived, already-warm pod (see the Deployment-conversion comment
-                # above) closes the remaining false-alarm class this retry alone
-                # didn't cover.
+                # 2026-09-04: sso/pos/accounts kept alerting several times a day.
+                # Root-caused the bulk of it to CoreDNS forwarding external lookups
+                # through the node's own (Contabo-managed) resolvers -- fixed
+                # separately (forward now goes straight to Cloudflare/Google, see
+                # manifests/coredns/coredns-configmap.yaml). That cut the rate
+                # substantially but did not fully zero it: a live correlation pass
+                # after that fix found the REMAINING failures line up almost exactly
+                # with routine pod-churn events on this node (a cronjob starting,
+                # an unrelated service's deploy rolling a new pod) -- e.g. one
+                # alert landed at the same second a cronjob's pod was scheduled.
+                # This matches known iptables-dataplane behavior (Calico + kube-
+                # proxy both reconcile via iptables-restore): a new pod's rule
+                # sync can briefly perturb dataplane state for OTHER already-
+                # running pods on the same node, not just the new one. This
+                # cluster deploys via CI dozens of times a day, so some baseline
+                # rate of correlated sub-outage blips is expected without a much
+                # bigger, riskier change (moving Calico off iptables to eBPF mode)
+                # that isn't something to take on as a monitoring-side fix. Widened
+                # the retry budget instead: 3 retries at 3s apart covers a
+                # multi-pod-churn window (e.g. two deploys landing seconds apart)
+                # that a single retry didn't. --retry-all-errors is required here
+                # because curl's default --retry does NOT cover a bare connection
+                # failure (our exact "000" case) without it. Running from a long-
+                # lived, already-warm pod (see the Deployment-conversion comment
+                # above) already closes the "fresh pod" class of false alarm this
+                # retry budget doesn't need to cover.
                 for url in \
                   https://sso.codevertexafrica.com/healthz \
                   https://pos.codevertexafrica.com \
                   https://accounts.codevertexafrica.com
                 do
-                  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --retry 1 --retry-delay 3 --retry-all-errors "$url" || echo "000")
+                  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --retry 3 --retry-delay 3 --retry-all-errors "$url" || echo "000")
                   case "$CODE" in
                     2??|3??) ;;
                     *) FAILURES="${FAILURES}Endpoint check failed: ${url} returned ${CODE}
