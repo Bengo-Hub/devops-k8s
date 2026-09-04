@@ -11,7 +11,12 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: 90
+      # 90s was already tight against 3 blackbox checks at --max-time 10 each; the
+      # 2026-09-04 retry addition (--retry 1 --retry-delay 3) adds up to ~13s more per
+      # URL in the all-three-genuinely-down case, so raised to keep headroom for the
+      # rest of the script (BAD_PODS/CORDONED kubectl calls, admin-config fetch,
+      # Slack/email alerting) even in that worst case.
+      activeDeadlineSeconds: 150
       template:
         spec:
           serviceAccountName: fleet-health-watcher
@@ -116,12 +121,22 @@ spec:
                   # --- 3. Blackbox checks on the endpoints this incident actually
                   #        touched. Expand this list as coverage grows — starter set,
                   #        not exhaustive.
+                  #
+                  # 2026-09-04: sso/pos/accounts kept alerting several times a day with
+                  # zero corresponding CPU/disk/memory/network signal anywhere on the
+                  # node at the same timestamps (checked exhaustively across two
+                  # separate incidents) — the signature of a sub-second transient blip,
+                  # not a real outage. One retry with a short delay means a blip that
+                  # clears in a few seconds no longer pages, while a genuine outage
+                  # still fails both attempts and alerts. --retry-all-errors is required
+                  # here because curl's default --retry does NOT cover a bare connection
+                  # failure (our exact "000" case) without it.
                   for url in \
                     https://sso.codevertexafrica.com/healthz \
                     https://pos.codevertexafrica.com \
                     https://accounts.codevertexafrica.com
                   do
-                    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || echo "000")
+                    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --retry 1 --retry-delay 3 --retry-all-errors "$url" || echo "000")
                     case "$CODE" in
                       2??|3??) ;;
                       *) FAILURES="${FAILURES}Endpoint check failed: ${url} returned ${CODE}
