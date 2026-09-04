@@ -105,6 +105,13 @@ env:
   # Npgsql defaults to MaxPoolSize=100 which is far too high for shared PostgreSQL.
   - name: Database__MaxPoolSize
     value: "6"
+  # NATS (AuthDemoSyncService codevertex-demo persona sync + SubscriptionCacheInvalidationService).
+  # Was never set - appsettings.json's Nats:Enabled=false default silently disabled both hosted
+  # services in production since they were added. Same URL convention every other service uses.
+  - name: Nats__Enabled
+    value: "true"
+  - name: Nats__Url
+    value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: Database__MinPoolSize
     value: "0"
   - name: Database__ConnectionIdleLifetime
