@@ -1,0 +1,302 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-health-watcher
+  namespace: infra
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: fleet-health-watcher
+  template:
+    metadata:
+      labels:
+        app: fleet-health-watcher
+    spec:
+      serviceAccountName: fleet-health-watcher
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: watcher
+          image: alpine/k8s:1.30.2
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              # busybox ash (this image's /bin/sh) supports pipefail; harmless no-op if not —
+              # without it, `kubectl ... | jq ...` masks a kubectl failure entirely: jq sees
+              # zero bytes of input, emits zero records, and exits 0, so a broken kubectl call
+              # silently reports "no problems found" instead of erroring. Defense in depth on
+              # top of the explicit in-cluster auth below (which is the actual fix — this image's
+              # kubectl was not auto-detecting in-cluster config despite the SA token/CA/env vars
+              # all being correctly present, root cause not fully identified; explicit args are
+              # a robust workaround regardless of why auto-detection was failing).
+              set -o pipefail 2>/dev/null || true
+
+              # --- 2026-09-04 architecture change: CronJob -> long-running Deployment ---
+              # This used to be a CronJob creating a brand-new Job pod every 2 minutes.
+              # Investigation of a recurring sso/pos/accounts 000000 alert pattern found
+              # concrete evidence (calico-node felix logs + a truload-backend startup-probe
+              # failure hitting the pod's own IP with "context deadline exceeded") that a
+              # FRESH pod's own egress networking on this node is not always fully
+              # programmed by Calico's Felix the instant its container starts — usually
+              # settles within ~100-500ms, but felix's own reconciliation-loop summary
+              # showed outliers over 500ms, and this cluster was mid-way through a ~3 hour
+              # burst of ~20 unrelated service deploys at the exact timestamps the alerts
+              # fired (heavy WorkloadEndpoint churn plausibly extends felix's reconcile
+              # latency past the previous fix's 3s retry-delay window). Recreating a fresh
+              # job pod every single check (720 times/day) means paying that CNI-warmup
+              # race on every run. Running as ONE long-lived pod instead pays that cost
+              # once at startup, then every subsequent check runs from an already-warm
+              # network path — closing the false-alarm class without touching
+              # ingress-nginx-controller (see ingress-nginx-hostport-rollout-deadlock-
+              # 2026-09-04 memory for why that Deployment specifically must not be
+              # touched without expecting a ~5min self-inflicted outage).
+              sleep 10
+
+              run_check() {
+                FAILURES=""
+                KCTL="kubectl --server=https://kubernetes.default.svc --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt --request-timeout=20s"
+
+                # --- 1. Admin-configured alert channels (DB-backed, UI-editable via
+                #        the platform monitor dashboard), falling back to this job's
+                #        static Secret defaults when auth-api is unreachable or nothing
+                #        has been configured yet. Mirrors notifications-api's own
+                #        DB-first/env-fallback provider pattern.
+                SLACK_WEBHOOK_URL=""
+                ALERT_EMAIL_TO=""
+                CONFIGURED=$(curl -sf --max-time 5 \
+                  -H "X-API-Key: ${INTERNAL_SERVICE_KEY:-}" \
+                  "http://auth-api.auth.svc.cluster.local:4000/api/v1/s2s/platform-alert-settings" 2>/dev/null || echo '{}')
+                SLACK_WEBHOOK_URL=$(echo "$CONFIGURED" | jq -r '.slack_webhook_url // empty')
+                ALERT_EMAIL_TO=$(echo "$CONFIGURED" | jq -r '.alert_email_to // empty')
+                SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-${SLACK_WEBHOOK_URL_DEFAULT:-}}"
+                ALERT_EMAIL_TO="${ALERT_EMAIL_TO:-${ALERT_EMAIL_TO_DEFAULT:-}}"
+
+                # --- 2. Pod health, cluster-wide: CrashLoopBackOff/ImagePullBackOff (always
+                #        relevant — current state), or >=5 restarts WHERE THE LAST ONE WAS
+                #        RECENT (<=30min). Restart count alone is a cumulative counter that
+                #        never resets on its own — without the recency check, pods that
+                #        restarted a bunch during a single past incident (e.g. the whole
+                #        fleet during a node reboot) would trip this FOREVER after, spamming
+                #        an alert every 2 minutes for an already-resolved problem long after
+                #        it stopped being one. Same base thresholds as auth-api's
+                #        platform-monitor Overview() Problems field (monitor.go) — this job
+                #        exists to PUSH what that dashboard can only show on request.
+                # --request-timeout (baked into $KCTL) bounds the call: without it, an
+                # unresponsive k8s API server (plausible during exactly the kind of incident
+                # this watcher exists to catch) can hang the WHOLE run until this iteration
+                # never finishes — bounded here means a slow API server degrades this one
+                # iteration, not the watcher's ability to alert on the next one 2 minutes
+                # later.
+                BAD_PODS=$($KCTL get pods --all-namespaces -o json | jq -r '
+                  def isRecent: (.lastState.terminated.finishedAt // empty) as $f |
+                    ($f != null and $f != "") and ((now - ($f | fromdateiso8601)) <= 1800);
+                  .items[] | . as $pod | ($pod.status.containerStatuses // [])[] |
+                  select(
+                    (.state.waiting.reason // "") == "CrashLoopBackOff" or
+                    (.state.waiting.reason // "") == "ImagePullBackOff" or
+                    (.state.waiting.reason // "") == "ErrImagePull" or
+                    ((.restartCount // 0) >= 5 and isRecent)
+                  ) |
+                  "\($pod.metadata.namespace)/\($pod.metadata.name) [\(.name)]: \(.state.waiting.reason // "RecentHighRestartCount") (\(.restartCount) restarts)"
+                ')
+                if [ -n "$BAD_PODS" ]; then
+                  FAILURES="${FAILURES}Unhealthy pods:
+                ${BAD_PODS}
+
+                "
+                fi
+
+                # --- 2b. Node scheduling state (2026-08-18 incident follow-up): a
+                #         cordoned node accepts zero new pods. On a single-node
+                #         cluster that means ANY node left cordoned — kured stalled
+                #         draining a PDB-protected pod (redis-master/nats, see
+                #         apps/kured/app.yaml), a maintenance cordon someone forgot
+                #         to lift, anything — silently halts scheduling fleet-wide.
+                #         That's exactly what happened on 2026-08-18: the node sat
+                #         cordoned for 4+ hours and it took a client screenshot, not
+                #         this watcher, to surface it, because check #2 above only
+                #         sees pods with a container status — a pod stuck Pending
+                #         from FailedScheduling never gets one. Checked directly and
+                #         reported by name so on-call sees "node cordoned" in the
+                #         first line instead of reverse-engineering it from a pile of
+                #         Pending pods across a dozen namespaces.
+                CORDONED=$($KCTL get nodes -o json | jq -r '.items[] | select(.spec.unschedulable == true) | .metadata.name')
+                if [ -n "$CORDONED" ]; then
+                  FAILURES="${FAILURES}Node(s) cordoned (unschedulable - nothing can be scheduled): ${CORDONED}
+
+                "
+                fi
+
+                # --- 3. Blackbox checks on the endpoints this incident actually
+                #        touched. Expand this list as coverage grows — starter set,
+                #        not exhaustive.
+                #
+                # 2026-09-04: sso/pos/accounts kept alerting several times a day with
+                # zero corresponding CPU/disk/memory/network signal anywhere on the
+                # node at the same timestamps (checked exhaustively across two
+                # separate incidents) — the signature of a sub-second transient blip,
+                # not a real outage. One retry with a short delay means a blip that
+                # clears in a few seconds no longer pages, while a genuine outage
+                # still fails both attempts and alerts. --retry-all-errors is required
+                # here because curl's default --retry does NOT cover a bare connection
+                # failure (our exact "000" case) without it. Now running from a
+                # long-lived, already-warm pod (see the Deployment-conversion comment
+                # above) closes the remaining false-alarm class this retry alone
+                # didn't cover.
+                for url in \
+                  https://sso.codevertexafrica.com/healthz \
+                  https://pos.codevertexafrica.com \
+                  https://accounts.codevertexafrica.com
+                do
+                  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --retry 1 --retry-delay 3 --retry-all-errors "$url" || echo "000")
+                  case "$CODE" in
+                    2??|3??) ;;
+                    *) FAILURES="${FAILURES}Endpoint check failed: ${url} returned ${CODE}
+                " ;;
+                  esac
+                done
+
+                STATE_CM="fleet-health-watcher-state"
+                STATE_NS="infra"
+
+                if [ -z "$FAILURES" ]; then
+                  echo "OK - no problems detected"
+                  # Clear dedup state on recovery so a FUTURE recurrence of the same
+                  # signature (e.g. the same pod crash-looping again next week) alerts
+                  # immediately instead of being treated as a continuation of this one.
+                  $KCTL delete configmap "$STATE_CM" -n "$STATE_NS" --ignore-not-found >/dev/null 2>&1 || true
+                  return 0
+                fi
+
+                echo "ISSUES DETECTED:"
+                echo "$FAILURES"
+
+                # --- 3b. De-dup against the last alert sent. This watcher polls every 2
+                #         minutes — without this, an ongoing incident (e.g. a pod stuck in
+                #         CrashLoopBackOff for an hour) re-sends the IDENTICAL Slack/email
+                #         alert 30 times an hour until someone fixes it. State is persisted
+                #         in a small ConfigMap rather than an in-process variable so it
+                #         still survives this pod itself being restarted/rescheduled.
+                #         Restart counts are stripped from the signature — they tick up
+                #         every run for the same ongoing issue, which would otherwise defeat
+                #         the dedup by making every run's signature "new". Re-alerts every
+                #         COOLDOWN_SECONDS while the SAME issue persists, so it's a throttle
+                #         (occasional reminder), not a one-shot mute.
+                #
+                #         2026-08-20 fix: COOLDOWN_SECONDS used to equal the RecentHighRestartCount
+                #         isRecent window above (both 1800s) -- for a single ONE-TIME restart (the
+                #         overwhelmingly common case: something bounced once when the apiserver
+                #         itself briefly restarted, then stayed healthy), the cooldown expiry and
+                #         the event aging out of "recent" landed at basically the same instant, so
+                #         this watcher's next 2-minute poll almost always caught it JUST before it
+                #         aged out and fired a guaranteed duplicate "echo" alert for an already-
+                #         resolved, non-recurring blip (confirmed live: keda-operator/kube-scheduler/
+                #         kube-controller-manager all re-alerted a 2nd time ~30min after a single
+                #         real restart, with restart counts unchanged and the pods Running the whole
+                #         time). Cooldown is now kept meaningfully LONGER than the isRecent window so
+                #         a one-off event has already aged out (FAILURES empty -> dedup state auto-
+                #         clears via the OK path above) by the time the throttle would otherwise
+                #         re-fire. A truly ongoing multi-hour incident still gets a reminder -- just
+                #         once an hour instead of every 30 minutes.
+                COOLDOWN_SECONDS=3600
+                SIG_INPUT=$(printf '%s' "$FAILURES" | sed -E 's/\([0-9]+ restarts\)//; s/returned [0-9]+/returned/')
+                SIGNATURE=$(printf '%s' "$SIG_INPUT" | md5sum | cut -d' ' -f1)
+
+                PREV_JSON=$($KCTL get configmap "$STATE_CM" -n "$STATE_NS" -o json 2>/dev/null || echo '{}')
+                PREV_SIG=$(echo "$PREV_JSON" | jq -r '.data.signature // empty')
+                PREV_TS=$(echo "$PREV_JSON" | jq -r '.data.alerted_at // empty')
+                ALERT_AGE=$(jq -n --arg ts "$PREV_TS" 'try ((now - ($ts | fromdateiso8601)) | floor) catch 999999')
+
+                SUPPRESS=0
+                if [ -n "$PREV_SIG" ] && [ "$PREV_SIG" = "$SIGNATURE" ] && [ "$ALERT_AGE" -lt "$COOLDOWN_SECONDS" ]; then
+                  SUPPRESS=1
+                  echo "Same issue as the last alert sent ${ALERT_AGE}s ago (< ${COOLDOWN_SECONDS}s cooldown) - suppressing duplicate Slack/email, still visible in this pod's logs."
+                fi
+
+                if [ "$SUPPRESS" -eq 0 ]; then
+                  # --- 4a. Slack — fully independent of every other platform service,
+                  #         so this is the channel that actually fires during an
+                  #         auth-api-down incident like 2026-08-16.
+                  if [ -n "$SLACK_WEBHOOK_URL" ]; then
+                    SLACK_TEXT=$(printf '%s' "$FAILURES" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+                    curl -s --max-time 10 -X POST -H 'Content-Type: application/json' \
+                      -d "{\"text\":\":rotating_light: Fleet health check failed:\\n${SLACK_TEXT}\"}" \
+                      "$SLACK_WEBHOOK_URL" >/dev/null \
+                      || echo "WARN: slack alert failed to send"
+                  else
+                    echo "WARN: no Slack webhook configured (admin UI or SLACK_WEBHOOK_URL_DEFAULT) - skipping"
+                  fi
+
+                  # --- 4b. Email via notifications-api (channel:"email", the
+                  #         fleet_health_alert template) — deliberately reuses the
+                  #         platform's one email-sending path instead of a second,
+                  #         parallel one. Trade-off, accepted: its X-API-Key check
+                  #         validates against auth-api, so this channel degrades
+                  #         gracefully (not silently retried, just skipped) if
+                  #         auth-api itself is unreachable or INTERNAL_SERVICE_KEY
+                  #         isn't set — Slack above is the channel guaranteed to
+                  #         fire in that specific case.
+                  if [ -n "$ALERT_EMAIL_TO" ] && [ -n "${INTERNAL_SERVICE_KEY:-}" ]; then
+                    DETAILS_JSON=$(printf '%s' "$FAILURES" | jq -Rs .)
+                    curl -s --max-time 10 -X POST \
+                      -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
+                      -H 'Content-Type: application/json' \
+                      -d "{\"channel\":\"email\",\"tenant\":\"codevertex\",\"template\":\"fleet_health_alert\",\"to\":[\"${ALERT_EMAIL_TO}\"],\"data\":{\"summary\":\"Fleet health check failed\",\"details\":${DETAILS_JSON},\"detected_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" \
+                      "http://notifications-api.notifications.svc.cluster.local:4000/api/v1/notifications/messages" >/dev/null \
+                      || echo "WARN: email alert failed to send"
+                  else
+                    echo "WARN: no alert email configured, or INTERNAL_SERVICE_KEY unset - skipping email"
+                  fi
+
+                  $KCTL create configmap "$STATE_CM" -n "$STATE_NS" \
+                    --from-literal=signature="$SIGNATURE" \
+                    --from-literal=alerted_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                    --dry-run=client -o yaml | $KCTL apply -f - >/dev/null
+                fi
+
+                return 0
+              }
+
+              # Runs forever inside this ONE pod instead of a fresh pod every 2 minutes —
+              # each command a single iteration touches (curl, kubectl) already carries
+              # its own timeout above, so a stuck iteration degrades only that iteration,
+              # never the loop itself.
+              while true; do
+                if ! run_check; then
+                  echo "WARN: watcher iteration hit an unexpected error; will retry next cycle in 120s"
+                fi
+                sleep 120
+              done
+          env:
+            - name: SLACK_WEBHOOK_URL_DEFAULT
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-health-watcher-secrets
+                  key: SLACK_WEBHOOK_URL_DEFAULT
+                  optional: true
+            - name: ALERT_EMAIL_TO_DEFAULT
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-health-watcher-secrets
+                  key: ALERT_EMAIL_TO_DEFAULT
+                  optional: true
+            - name: INTERNAL_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-health-watcher-secrets
+                  key: INTERNAL_SERVICE_KEY
+                  optional: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
