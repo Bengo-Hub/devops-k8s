@@ -10,7 +10,7 @@ spec:
     targetRevision: main
     path: manifests/monitoring-lite
     directory:
-      include: '{fleet-health-watcher-rbac.yaml,fleet-health-watcher-cronjob.yaml}'
+      include: '{fleet-health-watcher-rbac.yaml,fleet-health-watcher-deployment.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: infra

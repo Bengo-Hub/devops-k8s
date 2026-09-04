@@ -530,7 +530,8 @@ manually stop/restart `redis-master` and `nats` yourself (accepting their
 brief expected restart), reboot, uncordon.
 
 **Detection gap closed:** `fleet-health-watcher`
-(`manifests/monitoring-lite/fleet-health-watcher-cronjob.yaml`) previously
+(`manifests/monitoring-lite/fleet-health-watcher-deployment.yaml` — a
+long-running Deployment since 2026-09-04, was a CronJob before that) previously
 only checked pod container statuses and 3 blackbox URLs — a `Pending` pod
 has no container status, so this whole class of failure was invisible to it
 for 4+ hours. It now also checks `kubectl get nodes` for
