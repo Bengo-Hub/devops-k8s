@@ -59,6 +59,14 @@ spec:
               # touched without expecting a ~5min self-inflicted outage).
               sleep 10
 
+              # 2026-09-08: consecutive-failure counter for the debounce below.
+              # Lives in this shell process only (not the ConfigMap) — this is
+              # ONE long-running pod now (see the 2026-09-04 comment above), so
+              # a plain variable survives across loop iterations just fine; it
+              # resetting on a pod restart is harmless (worst case: one issue
+              # takes one extra 2min cycle to page after a watcher restart).
+              CONSEC_FAILS=0
+
               run_check() {
                 FAILURES=""
                 KCTL="kubectl --server=https://kubernetes.default.svc --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt --request-timeout=20s"
@@ -182,6 +190,7 @@ spec:
 
                 if [ -z "$FAILURES" ]; then
                   echo "OK - no problems detected"
+                  CONSEC_FAILS=0
                   # Clear dedup state on recovery so a FUTURE recurrence of the same
                   # signature (e.g. the same pod crash-looping again next week) alerts
                   # immediately instead of being treated as a continuation of this one.
@@ -191,6 +200,27 @@ spec:
 
                 echo "ISSUES DETECTED:"
                 echo "$FAILURES"
+
+                # --- 3a. Debounce (2026-09-08): require the SAME 2-minute poll to
+                #        come back unhealthy TWICE in a row before paging anyone.
+                #        Root-caused today: weeks of sub-2-minute network blips
+                #        (see fleet-health-alerts-single-node-mitigation memory)
+                #        each fired their own standalone Slack alert, because they
+                #        fully self-resolve before the NEXT poll -- the existing
+                #        cooldown/dedup below only throttles REPEATS of an alert
+                #        already sent, so it never even engaged; every new blip
+                #        looked like a brand new incident and paged immediately.
+                #        A real problem is still unhealthy 2 minutes later and
+                #        pages right on schedule, just delayed by one cycle; a
+                #        blip that clears within 2 minutes now never pages at all
+                #        (still fully visible above in this pod's own logs for
+                #        anyone auditing the true blip rate via `kubectl logs`).
+                CONSEC_FAILS=$((CONSEC_FAILS + 1))
+                DEBOUNCE_POLLS=2
+                if [ "$CONSEC_FAILS" -lt "$DEBOUNCE_POLLS" ]; then
+                  echo "Seen on ${CONSEC_FAILS}/${DEBOUNCE_POLLS} consecutive polls - not paging yet, confirming next cycle."
+                  return 0
+                fi
 
                 # --- 3b. De-dup against the last alert sent. This watcher polls every 2
                 #         minutes — without this, an ongoing incident (e.g. a pod stuck in
