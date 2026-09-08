@@ -282,6 +282,136 @@ update_helm_values() {
 }
 
 # =============================================================================
+# PLAIN-MANIFEST IMAGE UPDATE (2026-09-08)
+# =============================================================================
+# For workloads that are NOT rendered via `charts/app`/`apps/<app>/values.yaml`
+# (a raw CronJob/Deployment manifest under manifests/, applied verbatim by its
+# own ArgoCD Application) but whose image still needs to track a service's
+# releases — e.g. manifests/auth-session-cleanup-cronjob.yaml, which runs the
+# auth-api image's own session-cleanup binary but has no values.yaml of its
+# own. Same clone/commit/push machinery as update_helm_values above, just
+# pointed at an arbitrary file + yq path instead of always `apps/*/values.yaml`
+# + `.image.tag`/`.image.repository`. Root cause this fixes: that cronjob was
+# hardcoded to `:latest` + `imagePullPolicy: Always`, silently drifting from
+# whatever auth-api actually deployed and re-pulling from Docker Hub on every
+# hourly run (a real, live ErrImagePull alert on 2026-09-08). Statically
+# pinning it to one sha (done same day) stops the drift from THIS point on,
+# but only wiring it into CI here keeps it from drifting again on the NEXT
+# auth-api release.
+update_plain_manifest_image() {
+    local manifest_path="${1:-}"   # repo-relative path, e.g. manifests/auth-session-cleanup-cronjob.yaml
+    local yq_path="${2:-}"         # yq path to the image field, e.g. .spec.jobTemplate.spec.template.spec.containers[0].image
+    local image_ref="${3:-}"       # full image:tag to set, e.g. docker.io/codevertex/auth-api:abc12345
+
+    if [[ -z "$manifest_path" || -z "$yq_path" || -z "$image_ref" ]]; then
+        log_error "Usage: update_plain_manifest_image <manifest-path> <yq-path> <image-ref>"
+        log_error "  manifest_path : repo-relative path (e.g. manifests/auth-session-cleanup-cronjob.yaml)"
+        log_error "  yq_path       : yq expression to the image field (e.g. .spec.jobTemplate.spec.template.spec.containers[0].image)"
+        log_error "  image_ref     : full image:tag to set (e.g. docker.io/codevertex/auth-api:abc12345)"
+        return 1
+    fi
+
+    local devops_repo="${DEVOPS_REPO:-Bengo-Hub/devops-k8s}"
+    local devops_dir="${DEVOPS_DIR:-$HOME/devops-k8s}"
+    local git_email="${GIT_EMAIL:-dev@bengobox.com}"
+    local git_user="${GIT_USER:-BengoBox Bot}"
+
+    local token
+    token=$(resolve_token)
+    if ! validate_cross_repo_push "$devops_repo" "$token"; then
+        return 1
+    fi
+
+    log_step "Updating plain-manifest image"
+    log_info "Manifest: $manifest_path"
+    log_info "Image: $image_ref"
+
+    local clone_url="https://github.com/${devops_repo}.git"
+    [[ -n "$token" ]] && clone_url="https://${token}@github.com/${devops_repo}.git"
+
+    if [[ ! -d "$devops_dir" ]]; then
+        log_step "Cloning devops-k8s repository..."
+        git clone "$clone_url" "$devops_dir" 2>&1 | grep -v "Cloning into\|Resolving deltas" || {
+            log_error "Failed to clone devops-k8s"
+            return 1
+        }
+    fi
+
+    pushd "$devops_dir" >/dev/null || return 1
+
+    git config user.email "$git_email"
+    git config user.name "$git_user"
+    if [[ -n "$token" ]]; then
+        local auth_remote_url="https://${token}@github.com/${devops_repo}.git"
+        git remote set-url origin "$auth_remote_url" 2>/dev/null || {
+            git remote remove origin 2>/dev/null || true
+            git remote add origin "$auth_remote_url"
+        }
+    fi
+
+    log_step "Fetching latest from origin/main..."
+    git fetch origin main >/dev/null 2>&1 || true
+    git checkout main >/dev/null 2>&1 || git checkout -b main >/dev/null 2>&1 || true
+    git reset --hard origin/main >/dev/null 2>&1 || true
+
+    if [[ ! -f "$manifest_path" ]]; then
+        log_error "Manifest not found: $manifest_path"
+        popd >/dev/null || true
+        return 1
+    fi
+
+    IMAGE_REF_ENV="$image_ref" yq e -i "${yq_path} = strenv(IMAGE_REF_ENV)" "$manifest_path"
+
+    local updated_ref
+    updated_ref=$(yq e "$yq_path" "$manifest_path")
+    if [[ "$updated_ref" != "$image_ref" ]]; then
+        log_error "Failed to update image. Expected: $image_ref, Got: $updated_ref"
+        popd >/dev/null || true
+        return 1
+    fi
+    log_success "Image updated: $updated_ref"
+
+    git add "$manifest_path"
+    if git diff --cached --quiet; then
+        log_warning "No changes to commit (image already $image_ref)"
+        popd >/dev/null || true
+        return 0
+    fi
+
+    local commit_msg
+    commit_msg="$(basename "$manifest_path"): image -> ${image_ref}"
+    git commit -m "$commit_msg" >/dev/null 2>&1 || {
+        log_warning "Commit failed (changes may already be committed)"
+    }
+
+    if [[ -z "$token" || -z "${token// /}" ]]; then
+        log_error "No GitHub token (GH_PAT/GIT_TOKEN/GIT_SECRET) available for devops-k8s push"
+        log_warning "Skipping git push for $manifest_path"
+        popd >/dev/null || true
+        return 0
+    fi
+
+    local push_url="https://${token}@github.com/${devops_repo}.git"
+    git remote set-url origin "$push_url" >/dev/null 2>&1 || {
+        log_error "Failed to set remote URL with authentication"
+        popd >/dev/null || true
+        return 1
+    }
+
+    local push_output push_status=0
+    push_output=$(git push origin HEAD:main 2>&1) || push_status=$?
+    popd >/dev/null || true
+
+    if [[ $push_status -eq 0 ]]; then
+        log_success "Changes pushed to origin/main"
+        return 0
+    fi
+    log_error "Failed to push changes - check token permissions"
+    log_error "Push output: $push_output"
+    return 1
+}
+
+# =============================================================================
 # CLI MODE (direct execution)
 # =============================================================================
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
@@ -289,7 +419,10 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     app_name=""
     image_tag=""
     image_repo=""
-    
+    manifest_path=""
+    yq_path=""
+    image_ref=""
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --app)
@@ -304,6 +437,18 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 image_repo="$2"
                 shift 2
                 ;;
+            --manifest)
+                manifest_path="$2"
+                shift 2
+                ;;
+            --yq-path)
+                yq_path="$2"
+                shift 2
+                ;;
+            --image)
+                image_ref="$2"
+                shift 2
+                ;;
             --devops-dir)
                 DEVOPS_DIR="$2"
                 shift 2
@@ -316,10 +461,17 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Options:
+Mode 1 - Helm values (apps/<app>/values.yaml):
   --app NAME          Application name (required, e.g., ordering-backend)
   --tag TAG           Image tag to deploy (required, e.g., fb45a308)
   --repo REPO         Full image repository (optional, e.g., docker.io/codevertex/app)
+
+Mode 2 - Plain manifest (a raw CronJob/Deployment YAML with no values.yaml):
+  --manifest PATH     Repo-relative manifest path (required, e.g. manifests/auth-session-cleanup-cronjob.yaml)
+  --yq-path EXPR      yq expression to the image field (required, e.g. .spec.jobTemplate.spec.template.spec.containers[0].image)
+  --image REF         Full image:tag to set (required, e.g. docker.io/codevertex/auth-api:fb45a308)
+
+Common:
   --devops-dir DIR    DevOps repo directory (default: \$HOME/devops-k8s)
   --devops-repo REPO  DevOps repo (default: Bengo-Hub/devops-k8s)
   -h, --help          Show this help message
@@ -338,6 +490,11 @@ Examples:
   # Update repo and tag
   $(basename "$0") --app ordering-backend --tag fb45a308 --repo docker.io/codevertex/ordering-backend
 
+  # Update a plain manifest's image (no values.yaml)
+  $(basename "$0") --manifest manifests/auth-session-cleanup-cronjob.yaml \\
+    --yq-path '.spec.jobTemplate.spec.template.spec.containers[0].image' \\
+    --image docker.io/codevertex/auth-api:fb45a308
+
   # With custom devops directory
   DEVOPS_DIR=/custom/path $(basename "$0") --app ordering-backend --tag fb45a308
 EOF
@@ -349,7 +506,16 @@ EOF
                 ;;
         esac
     done
-    
+
+    if [[ -n "$manifest_path" || -n "$yq_path" || -n "$image_ref" ]]; then
+        if [[ -z "$manifest_path" || -z "$yq_path" || -z "$image_ref" ]]; then
+            log_error "Missing required arguments for plain-manifest mode (--manifest, --yq-path, --image are all required together)"
+            exit 1
+        fi
+        update_plain_manifest_image "$manifest_path" "$yq_path" "$image_ref"
+        exit $?
+    fi
+
     # Validate arguments
     if [[ -z "$app_name" || -z "$image_tag" ]]; then
         log_error "Missing required arguments"
@@ -357,7 +523,7 @@ EOF
         "$(basename "$0")" --help
         exit 1
     fi
-    
+
     # Execute the update
     update_helm_values "$app_name" "$image_tag" "$image_repo"
     exit $?

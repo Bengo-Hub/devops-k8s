@@ -29,8 +29,20 @@ spec:
             runAsNonRoot: true
           containers:
             - name: session-cleanup
-              image: docker.io/codevertex/auth-api:latest
-              imagePullPolicy: Always
+              # Pinned to a real auth-api release tag, not :latest (2026-09-08
+              # fix): this ran `:latest` + `Always` on an hourly schedule --
+              # every single run re-pulled from Docker Hub, so any transient
+              # registry hiccup (rate limiting, a blip during unrelated node
+              # disruption) surfaced as a live ErrImagePull alert, and the tag
+              # had also drifted from whatever auth-api actually deployed
+              # (this cronjob isn't wired into the release-bot's tag-bump, see
+              # apps/auth-session-cleanup/app.yaml — plain manifest, no
+              # values.yaml). Pinned to auth-api's current git-tracked release
+              # (apps/auth-api/values.yaml) so the cleanup binary matches what
+              # auth-api itself runs; bump this alongside any future
+              # auth-api release that changes session-cleanup behavior.
+              image: docker.io/codevertex/auth-api:56ef09b0
+              imagePullPolicy: IfNotPresent
               command: ["/usr/local/bin/auth-session-cleanup"]
               env:
                 - name: SESSION_CLEANUP_LOG_ENV

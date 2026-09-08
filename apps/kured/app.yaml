@@ -50,17 +50,46 @@ spec:
             - th
             - fr
             - sa
-          # Deliberately NOT overriding drain behavior: kured respects
-          # PodDisruptionBudgets by default. As of 2026-09-01 no workload on
-          # this cluster has a PDB that can never be satisfied by a voluntary
-          # eviction (redis-master's was removed — the last one), so a normal
-          # drain within drainTimeout should now complete and kured should
-          # actually reboot the node during its next scheduled window instead
-          # of stalling forever. If a future service adds a minAvailable:1 PDB
-          # on a single replica with no failover, this will silently regress
-          # to the same stuck-forever pattern — see ha-min-2-pods-and-pdb.md's
-          # singleton exception list before adding a PDB to any 1-replica
-          # workload.
+          # 2026-09-08 incident: even with no unsatisfiable singleton PDB left
+          # (previous comment below, still true), the drain failed AGAIN --
+          # twice, 00:15 and 01:15 UTC, both nights' only reboot-window
+          # attempts -- timing out the full 5m on nats (2 of its 3 pods,
+          # rotating which ones) and pgbouncer (1 of 2 pods), even though both
+          # are correctly-configured >=2-replica HA services per this file's
+          # own convention, not the singleton-PDB bug from before. Root cause
+          # is structural, not a misconfig: cordoning this single node blocks
+          # ANY evicted pod's replacement from rescheduling (nowhere else to
+          # go), so once eviction #1 of a minAvailable:1 pair consumes the
+          # whole disruption budget, eviction #2 can never clear it until
+          # uncordon -- by which point the drain has already failed. Because
+          # the fleet-wide disruption (everything else on the node evicted
+          # and restarted) already happens regardless of whether the drain
+          # ultimately "succeeds", a failed drain buys nothing: it pays the
+          # same disruption cost as a real reboot while leaving the pending
+          # security patch unapplied, guaranteeing the identical failure (and
+          # identical fleet-wide alert storm) repeats the next window. Forcing
+          # the reboot through after a failed drain converts that into a
+          # single resolved attempt per patch instead of a nightly repeat --
+          # nats/pgbouncer's PDBs still fully protect them during ordinary
+          # rolling deploys (a different, non-cordoned scenario where
+          # rescheduling actually works), and pods still get their normal
+          # terminationGracePeriodSeconds/preStop handling during the actual
+          # reboot's pod teardown either way, so this doesn't bypass graceful
+          # shutdown -- it only stops kured aborting the reboot itself over an
+          # eviction race that a single-node cluster can never resolve.
+          forceReboot: true
+          # Deliberately NOT overriding drain behavior otherwise: kured
+          # respects PodDisruptionBudgets by default. As of 2026-09-01 no
+          # workload on this cluster has a PDB that can never be satisfied by
+          # a voluntary eviction (redis-master's was removed — the last one),
+          # so this isn't a misconfigured-PDB situation — see the note above
+          # for the 2026-09-08 follow-up once nats/pgbouncer hit a related but
+          # distinct (cordon-vs-reschedule, not unsatisfiable-PDB) deadlock
+          # despite being correctly configured. If a future service adds a
+          # minAvailable:1 PDB on a single replica with no failover, THAT
+          # specific case is still a real misconfig to avoid — see
+          # ha-min-2-pods-and-pdb.md's singleton exception list before adding
+          # a PDB to any 1-replica workload.
       releaseName: kured
   destination:
     server: https://kubernetes.default.svc
