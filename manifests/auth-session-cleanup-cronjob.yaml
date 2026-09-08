@@ -7,7 +7,7 @@ metadata:
     app: auth-session-cleanup
     component: maintenance
 spec:
-  schedule: "0 * * * *"  # Every hour — keeps expired session count low without hammering the DB
+  schedule: "0 * * * *" # Every hour — keeps expired session count low without hammering the DB
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -41,7 +41,7 @@ spec:
               # (apps/auth-api/values.yaml) so the cleanup binary matches what
               # auth-api itself runs; bump this alongside any future
               # auth-api release that changes session-cleanup behavior.
-              image: docker.io/codevertex/auth-api:56ef09b0
+              image: docker.io/codevertex/auth-api:1586bb68
               imagePullPolicy: IfNotPresent
               command: ["/usr/local/bin/auth-session-cleanup"]
               env:
