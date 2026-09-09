@@ -95,6 +95,10 @@ env:
     value: "https://sso.codevertexafrica.com/.well-known/jwks.json"
   - name: Auth__SsoIssuer
     value: "https://sso.codevertexafrica.com"
+  # auth-api internal URL - used for the public GET /tenants/by-slug/{slug} lookup (subscription
+  # status/plan/expiry projection + tenant id resolution), no credential needed for that route.
+  - name: Auth__BaseUrl
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   # Treasury-api base URL (commercial tenant payments)
   - name: Treasury__ApiUrl
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
@@ -159,8 +163,10 @@ env:
 # Secrets below MUST be added to truload-backend-env Kubernetes secret, not here:
 #   Auth__JwksUrl (if using env-based override)
 #   Treasury__ServiceJwt        — service-to-service JWT for treasury-api
-#   Subscriptions__ServiceJwt   — service-to-service JWT for subscriptions-api
 #   Treasury__WebhookSecret     — HMAC secret for treasury webhook verification
+# Subscriptions-api S2S calls (GetFeaturesAsync/GetSubscriptionJsonAsync) reuse the existing
+# INTERNAL_SERVICE_KEY secret below (X-API-Key header) rather than a separate credential -
+# subscriptions-api's own S2S auth accepts that same platform-wide key.
 # ============================================================================
 # MIGRATIONS AND SEEDING
 # ============================================================================
