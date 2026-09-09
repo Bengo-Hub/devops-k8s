@@ -2,7 +2,9 @@
 # comment for why.
 #
 # Consumer namespaces verified by grepping every apps/*/values.yaml for auth-api's internal
-# ClusterIP hostname (auth-api.auth.svc.cluster.local): notifications-api, subscriptions-api.
+# ClusterIP hostname (auth-api.auth.svc.cluster.local): notifications-api, subscriptions-api,
+# truload (Auth__BaseUrl, added 2026-09-09 for SubscriptionService's tenant-by-slug lookup —
+# live-tested via kubectl exec and confirmed hanging/dropped before this namespace was added).
 # Per the S2S conventions doc, auth is the one deliberate exception where most services call the
 # PUBLIC hostname (sso.codevertexafrica.com) instead of internal DNS, specifically because the JWT
 # issuer must match what's embedded in tokens — that public-hostname traffic already routes
@@ -32,6 +34,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: subscriptions
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: truload
       ports:
         - protocol: TCP
           port: 4000
