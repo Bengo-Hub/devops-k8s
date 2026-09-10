@@ -12,6 +12,10 @@
 #    internal DNS with no values.yaml override present: auth-api's NotificationsConfig.BaseURL,
 #    marketflow-ai's serviceRegistry (same namespace as marketflow-api, already covered). Added
 #    `auth`.
+# 3. A fleet-wide unrestricted-language re-grep (not just *.go) caught a real miss from both passes
+#    above: manifests/monitoring-lite/fleet-health-watcher-deployment.yaml (namespace `infra`) posts
+#    alert emails straight to notifications-api's internal DNS as its own fallback channel (Slack is
+#    the primary/independent one). Added `infra`.
 # ticketing-api's values.yaml also has a NOTIFICATIONS_API_URL override, but to port 4003 — the
 # real Service only exposes port 4000 (confirmed via `kubectl get svc notifications-api -n
 # notifications` / endpoints), so that call is already broken (connection refused/no listener on
@@ -48,6 +52,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: hospital
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: infra
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: isp-billing
