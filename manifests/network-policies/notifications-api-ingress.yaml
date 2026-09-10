@@ -1,0 +1,73 @@
+# Extends the NetworkPolicy pilot to notifications-api. Ingress-only — see pos-api-ingress.yaml's
+# header comment for why.
+#
+# Consumer namespaces verified two ways (see subscription-api-ingress.yaml's header for why one
+# alone isn't enough):
+# 1. Grepping every apps/*/values.yaml for an explicit NOTIFICATIONS_API_URL (or equivalent)
+#    override to notifications-api's internal ClusterIP hostname
+#    (notifications-api.notifications.svc.cluster.local): codevertex-website, erp-api,
+#    hospital-api, isp-billing-backend, library-api, marketflow-api, ordering-backend, pos-api,
+#    truload-backend.
+# 2. Grepping every service's Go config.go for a COMPILED-IN default already pointing at the same
+#    internal DNS with no values.yaml override present: auth-api's NotificationsConfig.BaseURL,
+#    marketflow-ai's serviceRegistry (same namespace as marketflow-api, already covered). Added
+#    `auth`.
+# ticketing-api's values.yaml also has a NOTIFICATIONS_API_URL override, but to port 4003 — the
+# real Service only exposes port 4000 (confirmed via `kubectl get svc notifications-api -n
+# notifications` / endpoints), so that call is already broken (connection refused/no listener on
+# 4003) independent of this policy, same judgment call as treasury-api-ingress.yaml's logistics-api
+# case. NOT added — if the port is ever fixed, add `ticketing` here too at the same time.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notifications-api-ingress
+  namespace: notifications
+spec:
+  podSelector:
+    matchLabels:
+      app: notifications-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: notifications
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: codevertex
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: erp
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hospital
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: isp-billing
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: library
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ordering
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: truload
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090

@@ -17,6 +17,16 @@
 # The largest fan-in of the 5 critical services (subscription gating is checked from almost
 # everywhere) — anything not in this list uses the public pricingapi.codevertexafrica.com
 # default and is already covered by the ingress-nginx allow rule.
+#
+# 2026-09-10 update: pos-ui, inventory-ui, notifications-ui, logistics-ui, and marketflow-ui's
+# server-side /api/subscription and /api/features-catalog proxy routes were switched from the
+# public pricingapi.codevertexafrica.com hostname (which resolved to Cloudflare and round-tripped
+# back through the single ingress-nginx replica, measured at 2.2-2.8s per call) to a new
+# SUBSCRIPTIONS_API_INTERNAL_URL pointing at this Service's internal DNS. Added pos, inventory,
+# notifications, logistics, marketflow so that traffic isn't silently dropped by this policy.
+# treasury/ordering/erp/library/truload UIs share a namespace with an already-allowed backend
+# (treasury-api/ordering-backend/erp-api/library-api/truload-backend) so no change was needed
+# for those.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -63,6 +73,21 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: treasury
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: inventory
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: notifications
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logistics
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
       ports:
         - protocol: TCP
           port: 4000

@@ -1,0 +1,13 @@
+# Pod Security Standards, observe-only — see pos-namespace.yaml's header comment for the full
+# reasoning (same pattern, applied per namespace). ordering-backend's values.yaml sets a numeric
+# runAsUser + runAsNonRoot:true; no privileged containers/host namespaces found.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ordering
+  labels:
+    kubernetes.io/metadata.name: ordering
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: latest

@@ -1,0 +1,36 @@
+# Extends the NetworkPolicy pilot to truload-backend. Ingress-only — see pos-api-ingress.yaml's
+# header comment for why.
+#
+# Consumer namespaces verified two ways (see subscription-api-ingress.yaml's header for why one
+# alone isn't enough):
+# 1. Grepping every apps/*/values.yaml for an internal ClusterIP override to truload-backend's
+#    hostname (truload-backend.truload.svc.cluster.local): zero matches.
+# 2. Grepping every service's Go/TS/C# source for the same hostname as a compiled-in default: only
+#    hit was a doc file (truload-frontend/docs/ANALYTICS_PRODUCTION_DEPLOYMENT.md), not real code.
+# No other in-cluster service calls truload-backend today — the only real inbound paths are
+# ingress-nginx and same-namespace traffic (truload-frontend/truload-docs, kept as a safety
+# margin, same convention as library-api-ingress.yaml).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: truload-backend-ingress
+  namespace: truload
+spec:
+  podSelector:
+    matchLabels:
+      app: truload-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: truload
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090

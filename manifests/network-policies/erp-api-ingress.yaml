@@ -1,0 +1,42 @@
+# Extends the NetworkPolicy pilot to erp-api. Ingress-only — see pos-api-ingress.yaml's header
+# comment for why.
+#
+# Consumer namespaces verified two ways (see subscription-api-ingress.yaml's header for why one
+# alone isn't enough):
+# 1. Grepping every apps/*/values.yaml for an internal ClusterIP override to erp-api's hostname
+#    (erp-api.erp.svc.cluster.local): zero matches — nothing in the fleet called erp-api
+#    internally before this pass.
+# 2. Grepping every service's Go/TS source for the same hostname as a compiled-in default: zero
+#    matches.
+# 2026-09-10: cafe-website's /api/erp/staff and /api/erp/attendance server-side proxy routes were
+# switched from the public erp.codevertexafrica.com hostname (server-to-server calls that never
+# needed to leave the cluster) to a new ERP_API_INTERNAL_URL pointing at this Service's internal
+# DNS. `cafe` is the first and only internal-DNS consumer. Real container port confirmed 4000 via
+# `kubectl get endpoints erp-api -n erp` (the public Service fronts it on port 80).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: erp-api-ingress
+  namespace: erp
+spec:
+  podSelector:
+    matchLabels:
+      app: erp-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: erp
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cafe
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090
