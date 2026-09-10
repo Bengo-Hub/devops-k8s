@@ -1,0 +1,44 @@
+# Extends the NetworkPolicy pilot to ordering-backend. Ingress-only — see pos-api-ingress.yaml's
+# header comment for why.
+#
+# Consumer namespaces verified two ways (see subscription-api-ingress.yaml's header for why one
+# alone isn't enough):
+# 1. Grepping every apps/*/values.yaml for an explicit ORDERING_BACKEND_URL (or equivalent)
+#    override to ordering-backend's internal ClusterIP hostname
+#    (ordering-backend.ordering.svc.cluster.local): marketflow-api, pos-api. Both point at port
+#    4000, matching the real Service (confirmed via `kubectl get svc ordering-backend -n
+#    ordering`).
+# 2. Grepping every service's Go config.go for a COMPILED-IN default at the same internal DNS with
+#    no values.yaml override: marketflow-api's own CrossServiceConfig.OrderingURL and
+#    marketflow-ai's serviceRegistry — same namespace as the values.yaml finding, no new
+#    namespace added.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ordering-backend-ingress
+  namespace: ordering
+spec:
+  podSelector:
+    matchLabels:
+      app: ordering-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ordering
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090
