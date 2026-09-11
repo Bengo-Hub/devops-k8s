@@ -56,6 +56,11 @@ env:
     value: https://pos.codevertexafrica.com
   - name: POS_API_URL
     value: https://posapi.codevertexafrica.com
+  # Server-side /api/erp/staff and /api/erp/attendance proxies run inside the
+  # cluster — route them via in-cluster Service DNS instead of looping back out
+  # through the public erp.codevertexafrica.com domain/Cloudflare/ingress.
+  - name: ERP_BASE_URL
+    value: http://erp-api.erp.svc.cluster.local:80
 # Use envFromSecret for all other environment variables (consistent with erp-ui)
 # POS_API_KEY is set via cafe-website-env sealed secret
 envFromSecret: cafe-website-env

@@ -49,6 +49,11 @@ env:
     value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
     value: https://pricingapi.codevertexafrica.com
+  # Server-side /api/features-catalog proxy runs inside the cluster — route it via
+  # in-cluster Service DNS instead of looping back out through the public
+  # domain/Cloudflare/ingress. Browser code keeps using the URL above.
+  - name: SUBSCRIPTION_BASE_URL
+    value: http://subscription-api.subscriptions.svc.cluster.local:4000
   - name: NEXT_PUBLIC_TREASURY_UI_URL
     value: https://books.codevertexafrica.com
   - name: NEXT_PUBLIC_INVENTORY_UI_URL
