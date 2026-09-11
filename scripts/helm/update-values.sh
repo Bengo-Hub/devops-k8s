@@ -146,11 +146,11 @@ update_helm_values() {
     [[ -n "$image_repo" ]] && log_info "Repo: $image_repo"
     log_info "DevOps Dir: $devops_dir"
     log_info ""
-    
+
     # Build clone URL
     local clone_url="https://github.com/${devops_repo}.git"
     [[ -n "$token" ]] && clone_url="https://${token}@github.com/${devops_repo}.git"
-    
+
     # Clone or update devops-k8s repo
     if [[ ! -d "$devops_dir" ]]; then
         log_step "Cloning devops-k8s repository..."
@@ -160,15 +160,15 @@ update_helm_values() {
         }
         log_success "Repository cloned"
     fi
-    
+
     # Change to devops directory
     pushd "$devops_dir" >/dev/null || return 1
-    
+
     # Configure git with token in remote URL for authenticated operations
     log_step "Configuring git..."
     git config user.email "$git_email"
     git config user.name "$git_user"
-    
+
     # Set remote URL with token if token is available
     if [[ -n "$token" ]]; then
         local auth_remote_url="https://${token}@github.com/${devops_repo}.git"
@@ -179,106 +179,114 @@ update_helm_values() {
         }
     fi
     log_success "Git configured"
-    
-    # Ensure we have latest changes
-    log_step "Fetching latest from origin/main..."
-    git fetch origin main >/dev/null 2>&1 || true
-    git checkout main >/dev/null 2>&1 || git checkout -b main >/dev/null 2>&1 || true
-    git reset --hard origin/main >/dev/null 2>&1 || true
-    log_success "Branch synchronized"
-    
-    # Check if values file exists
-    if [[ ! -f "$values_file" ]]; then
-        log_error "Values file not found: $values_file"
-        popd >/dev/null || true
-        return 1
-    fi
-    
-    # Update image tag (and optionally repo) using yq
-    log_step "Updating $values_file..."
-    if [[ -n "$image_repo" ]]; then
-        # Update both repository and tag
-        IMAGE_REPO_ENV="$image_repo" IMAGE_TAG_ENV="$image_tag" \
-            yq e -i '.image.repository = strenv(IMAGE_REPO_ENV) | .image.tag = strenv(IMAGE_TAG_ENV)' "$values_file"
-    else
-        # Update tag only
-        IMAGE_TAG_ENV="$image_tag" \
-            yq e -i '.image.tag = strenv(IMAGE_TAG_ENV)' "$values_file"
-    fi
-    
-    # Verify the update
-    local updated_tag
-    updated_tag=$(yq e '.image.tag' "$values_file")
-    if [[ "$updated_tag" != "$image_tag" ]]; then
-        log_error "Failed to update image tag. Expected: $image_tag, Got: $updated_tag"
-        popd >/dev/null || true
-        return 1
-    fi
-    log_success "Image tag updated: $updated_tag"
-    
-    # Commit changes
-    log_step "Committing changes..."
-    git add "$values_file"
-    if git diff --cached --quiet; then
-        log_warning "No changes to commit (tag already $image_tag)"
-        popd >/dev/null || true
-        return 0
-    fi
-    
-    local commit_msg="${app_name}:${image_tag} released"
-    git commit -m "$commit_msg" >/dev/null 2>&1 || {
-        log_warning "Commit failed (changes may already be committed)"
-    }
-    log_success "Changes committed: $commit_msg"
-    
-    # Push changes
+
     if [[ -z "$token" ]]; then
         log_error "No GitHub token (GH_PAT/GIT_TOKEN/GIT_SECRET) available for devops-k8s push"
         log_warning "Skipping git push; set GH_PAT or GIT_TOKEN (preferred) with repo write perms to Bengo-Hub/devops-k8s"
         popd >/dev/null || true
         return 0
     fi
-    
-    # Validate token is not just whitespace
     if [[ -z "${token// /}" ]]; then
         log_error "Token is empty or contains only whitespace"
         popd >/dev/null || true
         return 1
     fi
-    
-    log_step "Pushing changes to origin/main..."
-    # GitHub supports multiple authentication URL formats:
-    # Format 1: https://TOKEN@github.com/... (simplest, recommended for PAT)
-    # Format 2: https://x-access-token:TOKEN@github.com/... (also valid)
-    # Using format 1 as it's simpler and works reliably with PATs
-    local push_url="https://${token}@github.com/${devops_repo}.git"
-    git remote set-url origin "$push_url" >/dev/null 2>&1 || {
-        log_error "Failed to set remote URL with authentication"
-        popd >/dev/null || true
-        return 1
-    }
-    
-    # Perform the push with full error output for debugging
-    local push_output
-    local push_status=0
-    push_output=$(git push origin HEAD:main 2>&1) || push_status=$?
-    
-    if [[ $push_status -eq 0 ]]; then
-        log_success "Changes pushed to origin/main"
-    else
+
+    # Every service's CI updates this SAME apps/*/values.yaml tree, so two deploys landing
+    # within seconds of each other race for the same devops-k8s main ref — the loser's push is
+    # rejected outright (non-fast-forward / "cannot lock ref"). Retry the whole
+    # fetch-edit-commit-push cycle on that specific failure: a stale local commit can't just be
+    # re-pushed after a bare `git fetch`, since it was built on a now-outdated parent, so each
+    # attempt re-syncs to the new tip and re-applies the (idempotent) yq edit from scratch rather
+    # than force-pushing over whatever the other service just landed.
+    local max_attempts=6
+    local attempt=1
+    local backoff=3
+    while (( attempt <= max_attempts )); do
+        [[ $attempt -gt 1 ]] && log_warning "Retry $attempt/$max_attempts after push conflict..."
+
+        log_step "Fetching latest from origin/main..."
+        git fetch origin main >/dev/null 2>&1 || true
+        git checkout main >/dev/null 2>&1 || git checkout -b main >/dev/null 2>&1 || true
+        git reset --hard origin/main >/dev/null 2>&1 || true
+        log_success "Branch synchronized"
+
+        if [[ ! -f "$values_file" ]]; then
+            log_error "Values file not found: $values_file"
+            popd >/dev/null || true
+            return 1
+        fi
+
+        log_step "Updating $values_file..."
+        if [[ -n "$image_repo" ]]; then
+            IMAGE_REPO_ENV="$image_repo" IMAGE_TAG_ENV="$image_tag" \
+                yq e -i '.image.repository = strenv(IMAGE_REPO_ENV) | .image.tag = strenv(IMAGE_TAG_ENV)' "$values_file"
+        else
+            IMAGE_TAG_ENV="$image_tag" \
+                yq e -i '.image.tag = strenv(IMAGE_TAG_ENV)' "$values_file"
+        fi
+
+        local updated_tag
+        updated_tag=$(yq e '.image.tag' "$values_file")
+        if [[ "$updated_tag" != "$image_tag" ]]; then
+            log_error "Failed to update image tag. Expected: $image_tag, Got: $updated_tag"
+            popd >/dev/null || true
+            return 1
+        fi
+        log_success "Image tag updated: $updated_tag"
+
+        log_step "Committing changes..."
+        git add "$values_file"
+        if git diff --cached --quiet; then
+            log_warning "No changes to commit (tag already $image_tag)"
+            popd >/dev/null || true
+            return 0
+        fi
+
+        local commit_msg="${app_name}:${image_tag} released"
+        git commit -m "$commit_msg" >/dev/null 2>&1 || {
+            log_warning "Commit failed (changes may already be committed)"
+        }
+        log_success "Changes committed: $commit_msg"
+
+        log_step "Pushing changes to origin/main..."
+        local push_url="https://${token}@github.com/${devops_repo}.git"
+        git remote set-url origin "$push_url" >/dev/null 2>&1 || {
+            log_error "Failed to set remote URL with authentication"
+            popd >/dev/null || true
+            return 1
+        }
+
+        local push_output push_status=0
+        push_output=$(git push origin HEAD:main 2>&1) || push_status=$?
+
+        if [[ $push_status -eq 0 ]]; then
+            log_success "Changes pushed to origin/main"
+            popd >/dev/null || true
+            log_step "========================================="
+            log_success "Helm values updated successfully!"
+            log_step "========================================="
+            return 0
+        fi
+
+        if echo "$push_output" | grep -qiE "rejected|fetch first|cannot lock ref|stale info|non-fast-forward"; then
+            log_warning "Push rejected (concurrent update from another service's deploy) — will retry"
+            (( attempt++ ))
+            sleep "$backoff"
+            (( backoff = backoff * 2 > 30 ? 30 : backoff * 2 ))
+            continue
+        fi
+
         log_error "Failed to push changes - check token permissions"
         log_error "Push output: $push_output"
         log_error "Remote URL: $(git remote get-url origin 2>/dev/null | sed 's/:[^@]*@/:***@/')"
         popd >/dev/null || true
         return 1
-    fi
-    
+    done
+
+    log_error "Failed to push changes after $max_attempts attempts (persistent conflict on devops-k8s main)"
     popd >/dev/null || true
-    
-    log_step "========================================="
-    log_success "Helm values updated successfully!"
-    log_step "========================================="
-    return 0
+    return 1
 }
 
 # =============================================================================
@@ -349,41 +357,6 @@ update_plain_manifest_image() {
         }
     fi
 
-    log_step "Fetching latest from origin/main..."
-    git fetch origin main >/dev/null 2>&1 || true
-    git checkout main >/dev/null 2>&1 || git checkout -b main >/dev/null 2>&1 || true
-    git reset --hard origin/main >/dev/null 2>&1 || true
-
-    if [[ ! -f "$manifest_path" ]]; then
-        log_error "Manifest not found: $manifest_path"
-        popd >/dev/null || true
-        return 1
-    fi
-
-    IMAGE_REF_ENV="$image_ref" yq e -i "${yq_path} = strenv(IMAGE_REF_ENV)" "$manifest_path"
-
-    local updated_ref
-    updated_ref=$(yq e "$yq_path" "$manifest_path")
-    if [[ "$updated_ref" != "$image_ref" ]]; then
-        log_error "Failed to update image. Expected: $image_ref, Got: $updated_ref"
-        popd >/dev/null || true
-        return 1
-    fi
-    log_success "Image updated: $updated_ref"
-
-    git add "$manifest_path"
-    if git diff --cached --quiet; then
-        log_warning "No changes to commit (image already $image_ref)"
-        popd >/dev/null || true
-        return 0
-    fi
-
-    local commit_msg
-    commit_msg="$(basename "$manifest_path"): image -> ${image_ref}"
-    git commit -m "$commit_msg" >/dev/null 2>&1 || {
-        log_warning "Commit failed (changes may already be committed)"
-    }
-
     if [[ -z "$token" || -z "${token// /}" ]]; then
         log_error "No GitHub token (GH_PAT/GIT_TOKEN/GIT_SECRET) available for devops-k8s push"
         log_warning "Skipping git push for $manifest_path"
@@ -391,23 +364,82 @@ update_plain_manifest_image() {
         return 0
     fi
 
-    local push_url="https://${token}@github.com/${devops_repo}.git"
-    git remote set-url origin "$push_url" >/dev/null 2>&1 || {
-        log_error "Failed to set remote URL with authentication"
+    # See update_helm_values' matching comment: retry the whole fetch-edit-commit-push cycle on
+    # a concurrent-push rejection rather than just the push, since a stale local commit can't be
+    # re-pushed after a bare fetch.
+    local max_attempts=6
+    local attempt=1
+    local backoff=3
+    while (( attempt <= max_attempts )); do
+        [[ $attempt -gt 1 ]] && log_warning "Retry $attempt/$max_attempts after push conflict..."
+
+        log_step "Fetching latest from origin/main..."
+        git fetch origin main >/dev/null 2>&1 || true
+        git checkout main >/dev/null 2>&1 || git checkout -b main >/dev/null 2>&1 || true
+        git reset --hard origin/main >/dev/null 2>&1 || true
+
+        if [[ ! -f "$manifest_path" ]]; then
+            log_error "Manifest not found: $manifest_path"
+            popd >/dev/null || true
+            return 1
+        fi
+
+        IMAGE_REF_ENV="$image_ref" yq e -i "${yq_path} = strenv(IMAGE_REF_ENV)" "$manifest_path"
+
+        local updated_ref
+        updated_ref=$(yq e "$yq_path" "$manifest_path")
+        if [[ "$updated_ref" != "$image_ref" ]]; then
+            log_error "Failed to update image. Expected: $image_ref, Got: $updated_ref"
+            popd >/dev/null || true
+            return 1
+        fi
+        log_success "Image updated: $updated_ref"
+
+        git add "$manifest_path"
+        if git diff --cached --quiet; then
+            log_warning "No changes to commit (image already $image_ref)"
+            popd >/dev/null || true
+            return 0
+        fi
+
+        local commit_msg
+        commit_msg="$(basename "$manifest_path"): image -> ${image_ref}"
+        git commit -m "$commit_msg" >/dev/null 2>&1 || {
+            log_warning "Commit failed (changes may already be committed)"
+        }
+
+        local push_url="https://${token}@github.com/${devops_repo}.git"
+        git remote set-url origin "$push_url" >/dev/null 2>&1 || {
+            log_error "Failed to set remote URL with authentication"
+            popd >/dev/null || true
+            return 1
+        }
+
+        local push_output push_status=0
+        push_output=$(git push origin HEAD:main 2>&1) || push_status=$?
+
+        if [[ $push_status -eq 0 ]]; then
+            log_success "Changes pushed to origin/main"
+            popd >/dev/null || true
+            return 0
+        fi
+
+        if echo "$push_output" | grep -qiE "rejected|fetch first|cannot lock ref|stale info|non-fast-forward"; then
+            log_warning "Push rejected (concurrent update from another service's deploy) — will retry"
+            (( attempt++ ))
+            sleep "$backoff"
+            (( backoff = backoff * 2 > 30 ? 30 : backoff * 2 ))
+            continue
+        fi
+
+        log_error "Failed to push changes - check token permissions"
+        log_error "Push output: $push_output"
         popd >/dev/null || true
         return 1
-    }
+    done
 
-    local push_output push_status=0
-    push_output=$(git push origin HEAD:main 2>&1) || push_status=$?
+    log_error "Failed to push changes after $max_attempts attempts (persistent conflict on devops-k8s main)"
     popd >/dev/null || true
-
-    if [[ $push_status -eq 0 ]]; then
-        log_success "Changes pushed to origin/main"
-        return 0
-    fi
-    log_error "Failed to push changes - check token permissions"
-    log_error "Push output: $push_output"
     return 1
 }
 
