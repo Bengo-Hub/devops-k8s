@@ -49,6 +49,16 @@ env:
   # domain/Cloudflare/ingress. Browser code keeps using the URL above.
   - name: SUBSCRIPTION_BASE_URL
     value: http://subscription-api.subscriptions.svc.cluster.local:4000
+  # Pre-existing gap found while live-verifying the above: logistics-ui-secrets already
+  # has a real INTERNAL_SERVICE_KEY value, it was just never wired into this Deployment's
+  # env — subscription-api's /api/v1/features/catalog requires it, unrelated to and
+  # pre-dating this session's networking fix.
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: logistics-ui-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: false
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
     value: https://pricing.codevertexafrica.com
 resources:
