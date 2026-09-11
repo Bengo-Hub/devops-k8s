@@ -59,6 +59,17 @@ env:
   # pricingapi.codevertexafrica.com domain/Cloudflare/ingress.
   - name: SUBSCRIPTION_BASE_URL
     value: http://subscription-api.subscriptions.svc.cluster.local:4000
+  # Pre-existing gap found while live-verifying the above with a real login: notifications-ui
+  # never had any INTERNAL_SERVICE_KEY at all (confirmed via a full secret dump), so
+  # subscription-api's X-API-Key check was 401ing. Added the shared platform key to
+  # notifications-ui-secrets (matches the identical value already used by pos-ui/treasury-ui/
+  # logistics-ui/inventory-ui, confirmed via sha256 comparison before copying) and wired it here.
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: notifications-ui-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: false
   - name: NEXT_PUBLIC_API_URL
     valueFrom:
       secretKeyRef:
