@@ -2,6 +2,12 @@ nameOverride: cafe-website
 fullnameOverride: cafe-website
 replicaCount: 2
 minReadySeconds: 30
+podAnnotations:
+  # Bump to force a real, git-tracked rollout when only a referenced Secret's data changed
+  # (envFromSecret isn't hot-reloaded, and a bare `kubectl rollout restart` gets reverted by
+  # ArgoCD's selfHeal since it isn't a git-tracked change). Added to pick up the new
+  # INTERNAL_SERVICE_KEY in cafe-website-env (313db2e6).
+  restartedAt: "2026-09-11T06-30-00Z"
 image:
   repository: docker.io/codevertex/cafe-website
   tag: "31727e6f"
