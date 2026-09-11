@@ -49,6 +49,16 @@ env:
   # domain/Cloudflare/ingress. Browser code keeps using the URL above.
   - name: SUBSCRIPTION_BASE_URL
     value: http://subscription-api.subscriptions.svc.cluster.local:4000
+  # Pre-existing gap found while live-verifying the above: treasury-ui-secrets already
+  # has a real INTERNAL_SERVICE_KEY value, it was just never wired into this Deployment's
+  # env — subscription-api's /api/v1/features/catalog requires it and was 401ing (same
+  # before this session's networking fix, unrelated to it; confirmed via kubectl exec).
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: treasury-ui-secrets
+        key: INTERNAL_SERVICE_KEY
+        optional: false
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
     value: https://pricing.codevertexafrica.com
   - name: MARKETFLOW_API_URL
