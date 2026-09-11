@@ -54,6 +54,11 @@ env:
     value: production
   - name: PORT
     value: "3000"
+  # Server-side /api/features-catalog proxy runs inside the cluster — route it via
+  # in-cluster Service DNS instead of looping back out through the public
+  # pricingapi.codevertexafrica.com domain/Cloudflare/ingress.
+  - name: SUBSCRIPTION_BASE_URL
+    value: http://subscription-api.subscriptions.svc.cluster.local:4000
   - name: NEXT_PUBLIC_API_URL
     valueFrom:
       secretKeyRef:
