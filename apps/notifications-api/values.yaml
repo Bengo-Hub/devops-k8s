@@ -78,7 +78,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://notifications.codevertexafrica.com,https://ordering.codevertexafrica.com,https://pricing.codevertexafrica.com,https://books.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
+    value: "https://notifications.codevertexafrica.com,https://ordering.codevertexafrica.com,https://riderapp.codevertexafrica.com,https://pricing.codevertexafrica.com,https://books.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001"
   # Database and Redis
   - name: POSTGRES_URL
     valueFrom:
@@ -224,7 +224,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     # CORS: allow notifications-ui and other frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://notifications.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://pricing.codevertexafrica.com, https://books.codevertexafrica.com, https://theurbanloftcafe.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://notifications.codevertexafrica.com, https://ordering.codevertexafrica.com, https://riderapp.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://pricing.codevertexafrica.com, https://books.codevertexafrica.com, https://theurbanloftcafe.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
