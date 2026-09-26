@@ -117,6 +117,9 @@ env:
   # Treasury Service - Payment processing and refunds
   - name: TREASURY_API_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
+  # Browser-facing treasury URL for checkout initiate_url (never the in-cluster address above)
+  - name: TREASURY_API_PUBLIC_URL
+    value: "https://booksapi.codevertexafrica.com"
   # Shared S2S key — one key used for all outbound service calls (auth, treasury, logistics, inventory, notifications, subscriptions)
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
