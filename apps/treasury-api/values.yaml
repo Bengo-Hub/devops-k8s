@@ -104,6 +104,10 @@ env:
     value: "https://booksapi.codevertexafrica.com/api/v1/webhooks/mpesa/callback"
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexafrica.com"
+  # Server-side tenant / outlet lookups (by-slug, outlets) go in-cluster; AUTH_SERVICE_URL stays
+  # public because it also builds browser-facing links. Allowed by auth-api-ingress NetworkPolicy.
+  - name: AUTH_API_URL
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_ISSUER
