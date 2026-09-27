@@ -66,6 +66,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: truload
+        # projects-api reads project financials and keeps project budgets in treasury (S2S).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: projects
       ports:
         - protocol: TCP
           port: 4000
