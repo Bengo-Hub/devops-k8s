@@ -71,6 +71,9 @@ env:
         name: projects-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
+  # treasury-api over in-cluster DNS (project financials and project budgets, S2S).
+  - name: TREASURY_SERVICE_URL
+    value: "http://treasury-api.treasury.svc.cluster.local:4000"
   # NATS - standard key EVENTS_NATS_URL
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
