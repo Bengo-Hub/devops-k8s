@@ -75,10 +75,12 @@ env:
   # issuer check uses AUTH_ISSUER (public). Allowed by auth-api-ingress NetworkPolicy.
   - name: AUTH_SERVICE_URL
     value: "http://auth-api.auth.svc.cluster.local:4000"
+  # Must match what SSO puts in tokens (iss = the SSO origin, aud includes "codevertex"); the old
+  # bengobox-auth / bengobox-ticketing values rejected every signed-in request.
   - name: AUTH_ISSUER
-    value: bengobox-auth
+    value: "https://sso.codevertexafrica.com"
   - name: AUTH_AUDIENCE
-    value: bengobox-ticketing
+    value: "codevertex"
   # Notifications S2S
   - name: NOTIFICATIONS_SERVICE_URL
     value: http://notifications-api.notifications.svc.cluster.local:4003
