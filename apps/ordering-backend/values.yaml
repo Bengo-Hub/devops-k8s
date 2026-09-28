@@ -102,12 +102,10 @@ env:
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   # Auth Service (SSO) - User authentication and identity management
+  # Server-side auth calls (tenant lookups, API-key checks, user sync, JWKS) go in-cluster; the
+  # issuer check uses AUTH_ISSUER (public). Allowed by auth-api-ingress NetworkPolicy.
   - name: AUTH_SERVICE_URL
-    # ============================================================================
-    # MICROSERVICE INTEGRATIONS - PRODUCTION URLS
-    # ============================================================================
-
-    value: "https://sso.codevertexafrica.com"
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: AUTH_ISSUER
     value: "https://sso.codevertexafrica.com"
   - name: AUTH_JWKS_URL

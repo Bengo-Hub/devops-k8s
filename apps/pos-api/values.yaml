@@ -126,8 +126,10 @@ env:
   # MarketFlow CRM — customer single source of truth (upsert crm_contact_id from loyalty/client flows)
   - name: MARKETFLOW_API_URL
     value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+  # Server-side auth calls (tenant lookups, API-key checks, user sync, JWKS) go in-cluster; the
+  # issuer check uses AUTH_ISSUER (public). Allowed by auth-api-ingress NetworkPolicy.
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexafrica.com"
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: AUTH_ISSUER
     value: "https://sso.codevertexafrica.com"
   - name: AUTH_AUDIENCE
