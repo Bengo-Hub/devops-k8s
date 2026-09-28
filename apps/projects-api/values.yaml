@@ -3,7 +3,7 @@ fullnameOverride: projects-api
 replicaCount: 1
 image:
   repository: docker.io/codevertex/projects-api
-  tag: "f37ef5c9"
+  tag: "b9fff125"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
