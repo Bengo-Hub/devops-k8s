@@ -6,7 +6,9 @@
 # truload (Auth__BaseUrl, added 2026-09-09 for SubscriptionService's tenant-by-slug lookup —
 # live-tested via kubectl exec and confirmed hanging/dropped before this namespace was added),
 # treasury (AUTH_API_URL, added 2026-09-28 for the tenant-by-slug / outlet lookups: through the
-# public hostname every lookup looped out via Cloudflare and back, adding seconds per page load).
+# public hostname every lookup looped out via Cloudflare and back, adding seconds per page load),
+# pos, inventory, ordering, ticketing (AUTH_SERVICE_URL in-cluster 2026-09-28: tenant lookups,
+# API-key checks, user sync, JWKS; the issuer check uses AUTH_ISSUER, which stays public).
 # Per the S2S conventions doc, auth is the one deliberate exception where most services call the
 # PUBLIC hostname (sso.codevertexafrica.com) instead of internal DNS, specifically because the JWT
 # issuer must match what's embedded in tokens — that public-hostname traffic already routes
@@ -42,6 +44,18 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: treasury
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: inventory
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ordering
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ticketing
       ports:
         - protocol: TCP
           port: 4000
