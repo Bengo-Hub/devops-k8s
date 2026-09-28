@@ -35,6 +35,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: cafe
+        # 2026-09-28: projects-api reads timesheet hours per project over S2S
+        # (GET /api/v1/hrm/attendance/timesheets/project-hours) for project utilisation.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: projects
       ports:
         - protocol: TCP
           port: 4000
