@@ -52,6 +52,12 @@ securityContext:
   runAsGroup: 101
   fsGroup: 101
 env:
+  # Server-side auth calls (tenant lookups, API-key checks, user sync, JWKS) go in-cluster; the
+  # issuer check uses AUTH_ISSUER (public). Allowed by auth-api-ingress NetworkPolicy.
+  - name: AUTH_SERVICE_URL
+    value: "http://auth-api.auth.svc.cluster.local:4000"
+  - name: AUTH_ISSUER
+    value: "https://sso.codevertexafrica.com"
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
     value: production

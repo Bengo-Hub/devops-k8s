@@ -72,6 +72,10 @@ progressDeadlineSeconds: 900 # 15 minutes for migrations and startup
 # Env var naming: tags are the full env var name (envconfig:"" on parent structs
 # suppresses struct field prefix). E.g. POSTGRES_URL, REDIS_ADDR, SECURITY_REQUIRE_JWT.
 env:
+  # Server-side auth calls (tenant lookups, API-key checks, user sync, JWKS) go in-cluster; the
+  # issuer check uses AUTH_ISSUER (public). Allowed by auth-api-ingress NetworkPolicy.
+  - name: SERVICES_AUTH_API_URL
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   # App and HTTP
   - name: APP_ENV
     value: production
