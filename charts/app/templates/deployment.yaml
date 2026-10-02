@@ -261,6 +261,10 @@ spec:
           livenessProbe:
             {{- toYaml .Values.healthCheck.liveness | nindent 12 }}
           {{- end }}
+          {{- with .Values.lifecycle }}
+          lifecycle:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
