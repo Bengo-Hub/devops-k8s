@@ -3,7 +3,7 @@ fullnameOverride: shared-docs
 
 image:
   repository: docker.io/codevertex/shared-docs
-  tag: 8a98b234
+  tag: f0a8cca2
   pullPolicy: IfNotPresent
 
 service:
