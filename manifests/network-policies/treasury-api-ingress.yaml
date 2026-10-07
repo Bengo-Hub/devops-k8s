@@ -70,6 +70,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: projects
+        # maskani-api raises invoices, payment intents and C2B account routes (TREASURY_SERVICE_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maskani
       ports:
         - protocol: TCP
           port: 4000

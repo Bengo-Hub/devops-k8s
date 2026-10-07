@@ -264,6 +264,8 @@ case "${SERVICE_NAME}" in
     # marketflow's deployment maps secret data-key ENCRYPTION_KEY -> env MF_SECURITY_ENCRYPTION_KEY.
     marketflow-api)    APP_ENC_KEY_VAR="ENCRYPTION_KEY" ;;
     notifications-api) APP_ENC_KEY_VAR="SECURITY_ENCRYPTION_KEY" ;;
+    # maskani-api: AES-GCM field encryption of identity numbers and KRA PINs. Must never rotate.
+    maskani-api)       APP_ENC_KEY_VAR="FIELD_ENCRYPTION_KEY" ;;
 esac
 APP_ENC_KEY_VALUE=""
 if [[ -n "${APP_ENC_KEY_VAR}" ]]; then
@@ -306,7 +308,11 @@ fi
 # a fresh one here (a new value would not match the platform key) — preserve the existing cluster
 # value, or accept it from env.
 APP_INTERNAL_SERVICE_KEY=""
-if [[ "${SERVICE_NAME}" == "library-api" || "${SERVICE_NAME}" == "mail-ui" ]]; then
+case "${SERVICE_NAME}" in
+    library-api|mail-ui|maskani-api|maskani-ui|maskani-commerce) NEEDS_ISK=true ;;
+    *) NEEDS_ISK=false ;;
+esac
+if [[ "${NEEDS_ISK}" == "true" ]]; then
     EXISTING_ISK=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.INTERNAL_SERVICE_KEY}" 2>/dev/null | base64 -d || echo "")
     if [[ -n "${INTERNAL_SERVICE_KEY:-}" ]]; then
         APP_INTERNAL_SERVICE_KEY="$INTERNAL_SERVICE_KEY"
@@ -315,7 +321,14 @@ if [[ "${SERVICE_NAME}" == "library-api" || "${SERVICE_NAME}" == "mail-ui" ]]; t
         APP_INTERNAL_SERVICE_KEY="$EXISTING_ISK"
         log_info "Retrieved existing INTERNAL_SERVICE_KEY from cluster (preserved)"
     else
-        log_warning "INTERNAL_SERVICE_KEY not set for ${SERVICE_NAME} — S2S calls will fail until provisioned (copy from auth-api-secrets)"
+        # First deploy: copy the platform value from auth-api, which validates it.
+        AUTH_ISK=$(kubectl get secret auth-api-secrets -n auth -o jsonpath="{.data.INTERNAL_SERVICE_KEY}" 2>/dev/null | base64 -d || echo "")
+        if [[ -n "${AUTH_ISK}" ]]; then
+            APP_INTERNAL_SERVICE_KEY="$AUTH_ISK"
+            log_info "Copied INTERNAL_SERVICE_KEY from auth-api-secrets"
+        else
+            log_warning "INTERNAL_SERVICE_KEY not set for ${SERVICE_NAME}: S2S calls will fail until provisioned (copy from auth-api-secrets)"
+        fi
     fi
 fi
 

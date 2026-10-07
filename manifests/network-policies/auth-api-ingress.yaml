@@ -56,6 +56,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ticketing
+        # maskani-api: tenant sync, S2S member creation for portal users (AUTH_API_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maskani
       ports:
         - protocol: TCP
           port: 4000
