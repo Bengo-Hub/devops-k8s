@@ -73,6 +73,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: truload
+        # maskani-api sends notices and portal messages (NOTIFICATIONS_SERVICE_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maskani
       ports:
         - protocol: TCP
           port: 4000

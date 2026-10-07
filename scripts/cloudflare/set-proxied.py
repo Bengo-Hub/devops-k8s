@@ -34,6 +34,7 @@ PROXIED_HOSTS = [
     "truload", "truloadapi", "truload-docs", "docs",
     "ispbilling", "ispbillingapi",
     "afya", "afyaapi",
+    "maskani", "maskaniapp", "maskaniapi",
     "projectsapi", "ticketing", "ticketingapi", "webmail",
 ]
 PROXIED_CNAMES = ["mail"]

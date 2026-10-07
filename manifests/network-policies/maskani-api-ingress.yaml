@@ -1,0 +1,28 @@
+# maskani-api ingress policy. Consumers mapped from values.yaml and config.go defaults
+# (feedback_network_policy_consumer_mapping): public traffic arrives through ingress-nginx;
+# maskani-ui and maskani-commerce server components call it in-cluster from the maskani
+# namespace. No other service calls maskani-api today; add a namespace here when one does.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: maskani-api-ingress
+  namespace: maskani
+spec:
+  podSelector:
+    matchLabels:
+      app: maskani-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maskani
+      ports:
+        - protocol: TCP
+          port: 4000
+        - protocol: TCP
+          port: 9090

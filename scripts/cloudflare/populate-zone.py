@@ -44,6 +44,7 @@ ORIGIN_HOSTS = [
     "truload", "truloadapi", "truload-docs", "docs",
     "ispbilling", "ispbillingapi",
     "afya", "afyaapi",
+    "maskani", "maskaniapp", "maskaniapi",
     "argocd", "nats",  # keep DNS-only permanently (admin / non-HTTP)
     # Email hosting platform (Stalwart), added 2026-08-10 — see
     # .claude/plans/codevertex-email-hosting-service-plan.md Part 5/12.1.

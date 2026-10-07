@@ -88,6 +88,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: marketflow
+        # maskani-api limit checks and maskani-ui/maskani-commerce server-side subscription proxy.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maskani
       ports:
         - protocol: TCP
           port: 4000
