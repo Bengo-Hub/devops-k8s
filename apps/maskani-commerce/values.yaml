@@ -5,7 +5,7 @@ fullnameOverride: maskani-commerce
 replicaCount: 1
 image:
   repository: docker.io/codevertex/maskani-commerce
-  tag: "ff357e31" # first CI image; CI bumps this on every build
+  tag: "3201c07e" # first CI image; CI bumps this on every build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
