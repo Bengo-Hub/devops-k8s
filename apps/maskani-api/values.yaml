@@ -8,7 +8,7 @@ fullnameOverride: maskani-api
 replicaCount: 2
 image:
   repository: docker.io/codevertex/maskani-api
-  tag: "7cf73f93" # set by CI on first successful build
+  tag: "65683d3f" # set by CI on first successful build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
