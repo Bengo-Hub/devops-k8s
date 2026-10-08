@@ -21,6 +21,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # notifications-api pages estate residents for notice broadcasts
+        # (GET /api/v1/internal/residents/reach, internal service key).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: notifications
       ports:
         - protocol: TCP
           port: 4000
