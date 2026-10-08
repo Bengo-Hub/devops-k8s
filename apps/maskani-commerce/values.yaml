@@ -1,0 +1,69 @@
+# maskani-commerce: Maskani Marketplace public site (estate showcase in R1), namespace maskani.
+# One replica until R3: public, cached, read-only showcase on a node near its CPU request budget.
+nameOverride: maskani-commerce
+fullnameOverride: maskani-commerce
+replicaCount: 1
+image:
+  repository: docker.io/codevertex/maskani-commerce
+  tag: "ead33bbd" # first CI image; CI bumps this on every build
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 20
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+env:
+  # Server components fetch the market API in-cluster, never through Cloudflare.
+  - name: MASKANI_API_INTERNAL_URL
+    value: "http://maskani-api.maskani.svc.cluster.local:4000"
+resources:
+  requests:
+    cpu: 30m
+    memory: 112Mi
+  limits:
+    cpu: 400m
+    memory: 256Mi
+autoscaling:
+  enabled: false
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: maskani.codevertexafrica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - maskani.codevertexafrica.com
+      secretName: maskani-commerce-tls
+monitoring:
+  enabled: false
+verticalPodAutoscaling:
+  enabled: false
+pdb:
+  enabled: false

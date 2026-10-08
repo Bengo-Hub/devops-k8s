@@ -2,9 +2,10 @@
 # Migrations and seed run in the image entrypoint (advisory lock 727271007, POSTGRES_MIGRATE_URL).
 nameOverride: maskani-api
 fullnameOverride: maskani-api
-# Bootstrap: 0 replicas until CI pushes the first image (projects-ui precedent); then flip to the
-# HA baseline (autoscaling min 2, PDB) in the same commit that confirms the first healthy rollout.
-replicaCount: 0
+# HA baseline: 2 replicas (HPA 2 to 3) with a PDB. The migrate step takes advisory lock 727271007,
+# so two pods starting together run migrations once. Never set 0: the local-path media PVC
+# (WaitForFirstConsumer) then never binds and ArgoCD shows the app Progressing forever.
+replicaCount: 2
 image:
   repository: docker.io/codevertex/maskani-api
   tag: "a67fb4f1" # set by CI on first successful build
@@ -122,7 +123,7 @@ resources:
     cpu: 500m
     memory: 512Mi
 autoscaling:
-  enabled: false
+  enabled: true
   minReplicas: 2
   maxReplicas: 3
   targetCPUUtilizationPercentage: 70
@@ -165,5 +166,5 @@ ingress:
         - maskaniapi.codevertexafrica.com
       secretName: maskaniapi-tls
 pdb:
-  enabled: false
+  enabled: true
   minAvailable: 1
