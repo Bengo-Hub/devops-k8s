@@ -5,7 +5,7 @@ replicaCount: 2
 minReadySeconds: 20
 image:
   repository: docker.io/codevertex/maskani-ui
-  tag: "05acb676" # latest CI image; CI bumps this on every build
+  tag: "a93612be" # latest CI image; CI bumps this on every build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
