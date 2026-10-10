@@ -10,13 +10,9 @@
 #    subscriptions-api, truload-backend.
 # 2. Grepping every service's Go config.go for a COMPILED-IN default already pointing at
 #    treasury-api's internal DNS with no values.yaml override present: found ONE additional
-#    reference — logistics-api's TreasuryConfig.ServiceURL defaults to
-#    "http://treasury-api.treasury.svc.cluster.local:4005". NOT added to the allow list below:
-#    treasury-api's real Service only exposes port 4000 (confirmed via `kubectl get svc
-#    treasury-api -n treasury`), so this call is already broken today (connection refused/no
-#    listener on 4005) independent of this policy — adding a namespace allow for a call that
-#    can't succeed anyway would just widen the policy for no current benefit. If that port
-#    mismatch is ever fixed separately, add `logistics` here too at the same time.
+#    reference — logistics-api's TreasuryConfig.ServiceURL, whose default pointed at port 4005
+#    while treasury-api only exposes 4000. Fixed 2026-10-10 (default now :4000) and
+#    `logistics` added below so rider payouts can settle.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -74,6 +70,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # logistics-api settles rider earnings statements through treasury payouts. Added
+        # 2026-10-10 together with the fix of its default treasury port (4005 -> 4000).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logistics
       ports:
         - protocol: TCP
           port: 4000
