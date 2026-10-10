@@ -141,7 +141,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://pricing.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://theurbanloftcafe.com, https://ordering.codevertexafrica.com, https://books.codevertexafrica.com, https://pos.codevertexafrica.com, https://inventory.codevertexafrica.com, https://logistics.codevertexafrica.com, http://localhost:3000, http://localhost:3001, http://localhost:3010"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
