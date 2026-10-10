@@ -44,6 +44,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # logistics-api raises per diem claims for staff riders (POST /hrm/claims/external,
+        # ERP_SERVICE_URL default http://erp-api.erp.svc.cluster.local). Added 2026-10-10.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logistics
       ports:
         - protocol: TCP
           port: 4000
