@@ -161,11 +161,17 @@ spec:
           # 12 workers need under real load, or pin worker-processes via the ingress-
           # nginx ConfigMap to match whatever the limit actually is -- don't just add a
           # limit without checking worker-processes count first.
+          #
+          # Memory raised 2026-10-10 after two OOMKills during config reloads (every site
+          # returned Cloudflare 521 while it restarted). Steady state is ~270Mi with 12
+          # workers, and a reload runs a second set of 12 workers while the old ones drain,
+          # so the peak is roughly double. 512Mi left no headroom for that; 1.5Gi does, and
+          # the node has ample free memory.
           requests:
             cpu: 250m
-            memory: 256Mi
+            memory: 384Mi
           limits:
-            memory: 512Mi
+            memory: 1536Mi
         securityContext:
           allowPrivilegeEscalation: true
           capabilities:
