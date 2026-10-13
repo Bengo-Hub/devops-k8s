@@ -6,7 +6,7 @@ fullnameOverride: rider-app
 # ============================================================================
 image:
   repository: docker.io/codevertex/rider-app
-  tag: "35551006"
+  tag: "d11f4594"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
