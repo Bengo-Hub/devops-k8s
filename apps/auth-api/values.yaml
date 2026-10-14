@@ -118,64 +118,9 @@ env:
         name: auth-api-secrets
         key: OAUTH_STATE_SECRET
         optional: true
-  # Google OAuth Provider (optional: true allows deployment without OAuth configured)
-  - name: AUTH_PROVIDERS_GOOGLE_ENABLED
-    value: "true"
-  - name: AUTH_PROVIDERS_GOOGLE_CLIENT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GOOGLE_CLIENT_ID
-        optional: true
-  - name: AUTH_PROVIDERS_GOOGLE_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GOOGLE_CLIENT_SECRET
-        optional: true
-  - name: AUTH_PROVIDERS_GOOGLE_REDIRECT_URL
-    value: "https://sso.codevertexafrica.com/api/v1/auth/oauth/google/callback"
-  # GitHub OAuth Provider (optional: true allows deployment without OAuth configured)
-  # Uses GIT_APP_ID/GIT_APP_SECRET to match local dev variable names
-  - name: AUTH_PROVIDERS_GITHUB_ENABLED
-    value: "true"
-  - name: AUTH_PROVIDERS_GITHUB_CLIENT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GIT_APP_ID
-        optional: true
-  - name: AUTH_PROVIDERS_GITHUB_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: GIT_APP_SECRET
-        optional: true
-  - name: AUTH_PROVIDERS_GITHUB_REDIRECT_URL
-    value: "https://sso.codevertexafrica.com/api/v1/auth/oauth/github/callback"
-  # Microsoft OAuth Provider (disabled until credentials are configured)
-  - name: AUTH_PROVIDERS_MICROSOFT_ENABLED
-    value: "false"
-  - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: MICROSOFT_CLIENT_ID
-        optional: true
-  - name: AUTH_PROVIDERS_MICROSOFT_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: MICROSOFT_CLIENT_SECRET
-        optional: true
-  - name: AUTH_PROVIDERS_MICROSOFT_TENANT_ID
-    valueFrom:
-      secretKeyRef:
-        name: auth-api-secrets
-        key: MICROSOFT_TENANT_ID
-        optional: true
-  - name: AUTH_PROVIDERS_MICROSOFT_REDIRECT_URL
-    value: "https://sso.codevertexafrica.com/api/v1/auth/oauth/microsoft/callback"
+  # Social sign-in (Google, GitHub, Microsoft) is configured only in the database
+  # (integration_configs, via the auth-ui Integrations page). Each provider stays inactive until a
+  # platform owner saves its client ID, secret and callback URL there. Nothing is read from env.
   # WebAuthn / Passkeys (Relying Party configuration)
   - name: AUTH_WEBAUTHN_RPID
     value: "codevertexafrica.com"
