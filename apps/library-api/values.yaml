@@ -35,8 +35,11 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0 # zero-downtime; HA replicas keep serving during rollout
-# The image ships a non-root "app" user (uid 100 / gid 101). Pin the media PVC
-# group ownership so uploaded covers/e-books stay readable/writable across restarts.
+# Shared object storage for covers and e-book files: OBJECT_STORAGE_* from the object-storage
+# Secret (docs/object-storage.md).
+objectStorage:
+  enabled: true
+# The image ships a non-root "app" user (uid 100 / gid 101).
 securityContext:
   runAsUser: 100
   runAsGroup: 101
@@ -73,12 +76,6 @@ env:
         optional: true
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
-  - name: MEDIA_ROOT
-    value: "/data/media"
-  - name: EBOOK_ROOT
-    value: "/data/media/ebooks"
-  - name: MEDIA_URL_BASE
-    value: "https://libraryapi.codevertexafrica.com"
   - name: AUTH_SERVICE_URL
     value: "https://sso.codevertexafrica.com"
   - name: TREASURY_SERVICE_URL
@@ -129,12 +126,10 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+# No media volume since 2026-10-17: covers (public) and e-book files (private) live on the
+# shared object storage. The old volume held no files; every cover is an Open Library link.
 persistence:
-  enabled: true
-  size: 10Gi # covers + e-book files
-  mountPath: /data/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+  enabled: false
 ingress:
   enabled: true
   ingressClassName: nginx
