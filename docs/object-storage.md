@@ -39,7 +39,10 @@ of the tenant uses it, so storage only holds files in use.
 | ordering-backend | done 2026-10-17: uploads require a signed-in tenant user (were anonymous), volume was empty so nothing moved, PVC `ordering-backend-media` released, no `MEDIA_*` env |
 | pos-api | done 2026-10-17: damage evidence and lost-and-found photos private (signed links), screensavers and job attachments public; volume held no files; PVC `pos-api-media` released |
 | auth-api | done 2026-10-17: tenant logos, service icons and profile pictures stored on the public bucket, rows keep the link; 7 tenants and 2 users with inline images moved at startup; no volume |
-| others (logistics, hospital, library, maskani, erp, marketflow) | pending |
+| logistics-api | done 2026-10-17: KYC and proof-of-delivery files private (presigned), uploads require sign-in (were anonymous); the volume held only test KYC files (user: hard delete), PVC `logistics-api-media` released; map volumes (tileserver, valhalla) untouched |
+| others (hospital, library, maskani, erp, marketflow) | pending |
+
+Before dropping a volume, check the service's entrypoint and Dockerfile for media-directory setup: logistics' entrypoint ran `mkdir -p $MEDIA_ROOT/...` and crash-looped without the volume (fixed in `112f70d`).
 
 ## Setup
 
