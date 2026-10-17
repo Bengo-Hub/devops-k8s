@@ -238,10 +238,19 @@ spec:
                   optional: true
             {{- end }}
           {{- end }}
-          {{- if .Values.envFromSecret }}
+          {{- if or .Values.envFromSecret (and .Values.objectStorage .Values.objectStorage.enabled) }}
           envFrom:
+            {{- if .Values.envFromSecret }}
             - secretRef:
                 name: {{ .Values.envFromSecret }}
+            {{- end }}
+            {{- if and .Values.objectStorage .Values.objectStorage.enabled }}
+            # Shared object storage (OBJECT_STORAGE_*), one Secret per namespace written by the
+            # object-storage workflow. Optional, so a pod still starts before it exists.
+            - secretRef:
+                name: {{ .Values.objectStorage.secretName | default "object-storage" }}
+                optional: true
+            {{- end }}
           {{- end }}
           volumeMounts:
             {{- if .Values.persistence.enabled }}

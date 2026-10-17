@@ -1,0 +1,175 @@
+name: Object Storage (Cloudflare R2)
+
+# Sets up the platform's shared object storage (see shared/httpware objectstore):
+#   buckets  creates the public and private R2 buckets, CORS on the public one, and binds the
+#            public media domain to it (Cloudflare caches it at the edge).
+#   secrets  writes Secret "object-storage" (OBJECT_STORAGE_*) into each listed namespace from the
+#            CF_R2_* repository secrets. Values are never printed.
+# Both steps are idempotent. Run manually; it changes production.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'What to do'
+        required: true
+        type: choice
+        options: [buckets, secrets, all]
+        default: all
+      namespaces:
+        description: 'Namespaces that get the object-storage Secret'
+        required: true
+        type: string
+        default: 'auth treasury inventory ordering pos logistics hospital library maskani erp marketflow'
+      public_bucket:
+        description: 'Public bucket'
+        required: true
+        type: string
+        default: 'codevertex-media-public'
+      private_bucket:
+        description: 'Private bucket'
+        required: true
+        type: string
+        default: 'codevertex-media-private'
+      public_domain:
+        description: 'Domain serving the public bucket'
+        required: true
+        type: string
+        default: 'media.codevertexafrica.com'
+      zone_name:
+        description: 'Cloudflare zone of the public domain'
+        required: true
+        type: string
+        default: 'codevertexafrica.com'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: object-storage
+  cancel-in-progress: false
+
+jobs:
+  buckets:
+    if: inputs.action == 'buckets' || inputs.action == 'all'
+    runs-on: ubuntu-latest
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+      # Bucket calls need R2 edit; the domain binding also needs zone access, so the general
+      # Cloudflare token is the fallback for that call.
+      CF_R2_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
+      CF_ZONE_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      PUBLIC_BUCKET: ${{ inputs.public_bucket }}
+      PRIVATE_BUCKET: ${{ inputs.private_bucket }}
+      PUBLIC_DOMAIN: ${{ inputs.public_domain }}
+      ZONE_NAME: ${{ inputs.zone_name }}
+    steps:
+      - name: Check secrets
+        run: |
+          for v in CF_ACCOUNT_ID CF_R2_TOKEN; do
+            if [ -z "${!v}" ]; then echo "::error::$v is not set"; exit 1; fi
+          done
+
+      - name: Create buckets
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets"
+          for b in "$PUBLIC_BUCKET" "$PRIVATE_BUCKET"; do
+            code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$api" \
+              -H "Authorization: Bearer ${CF_R2_TOKEN}" -H "Content-Type: application/json" \
+              --data "{\"name\":\"${b}\"}")
+            if [ "$code" = "200" ]; then
+              echo "created bucket $b"
+            elif [ "$code" = "409" ] || grep -q '"code":10004' /tmp/resp.json; then
+              echo "bucket $b already exists"
+            else
+              echo "::error::creating $b failed (HTTP $code)"; jq -c '.errors' /tmp/resp.json || true; exit 1
+            fi
+          done
+
+      - name: CORS on the public bucket
+        run: |
+          set -euo pipefail
+          # Browsers and the UIs' service workers read public media cross-origin.
+          code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${PUBLIC_BUCKET}/cors" \
+            -H "Authorization: Bearer ${CF_R2_TOKEN}" -H "Content-Type: application/json" \
+            --data '{"rules":[{"allowed":{"origins":["*"],"methods":["GET","HEAD"]},"maxAgeSeconds":86400}]}')
+          if [ "$code" != "200" ]; then
+            echo "::error::setting CORS failed (HTTP $code)"; jq -c '.errors' /tmp/resp.json || true; exit 1
+          fi
+          echo "CORS set on $PUBLIC_BUCKET"
+
+      - name: Bind the public domain
+        run: |
+          set -euo pipefail
+          zone_token="${CF_ZONE_TOKEN:-$CF_R2_TOKEN}"
+          zone_id=$(curl -sS "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
+            -H "Authorization: Bearer ${zone_token}" | jq -r '.result[0].id // empty')
+          if [ -z "$zone_id" ]; then echo "::error::zone ${ZONE_NAME} not found with the available token"; exit 1; fi
+          base="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${PUBLIC_BUCKET}/domains/custom"
+          existing=$(curl -sS "$base" -H "Authorization: Bearer ${CF_R2_TOKEN}" \
+            | jq -r --arg d "$PUBLIC_DOMAIN" '.result.domains[]? | select(.domain == $d) | .domain')
+          if [ -n "$existing" ]; then
+            echo "$PUBLIC_DOMAIN is already bound to $PUBLIC_BUCKET"
+            exit 0
+          fi
+          for token in "$CF_R2_TOKEN" "$zone_token"; do
+            code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$base" \
+              -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
+              --data "{\"domain\":\"${PUBLIC_DOMAIN}\",\"zoneId\":\"${zone_id}\",\"enabled\":true,\"minTLS\":\"1.2\"}")
+            if [ "$code" = "200" ]; then echo "bound $PUBLIC_DOMAIN to $PUBLIC_BUCKET"; exit 0; fi
+          done
+          echo "::error::binding $PUBLIC_DOMAIN failed (HTTP $code)"; jq -c '.errors' /tmp/resp.json || true; exit 1
+
+  secrets:
+    needs: [buckets]
+    # Runs after buckets when both are asked for; alone when only secrets is.
+    if: always() && (inputs.action == 'secrets' || (inputs.action == 'all' && needs.buckets.result == 'success'))
+    runs-on: ubuntu-latest
+    env:
+      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+      R2_ENDPOINT: ${{ secrets.CF_R2_S3_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+      PUBLIC_BUCKET: ${{ inputs.public_bucket }}
+      PRIVATE_BUCKET: ${{ inputs.private_bucket }}
+      PUBLIC_DOMAIN: ${{ inputs.public_domain }}
+      NAMESPACES: ${{ inputs.namespaces }}
+    steps:
+      - name: Check secrets
+        run: |
+          for v in KUBE_CONFIG_B64 R2_ENDPOINT R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::$v is not set"; exit 1; fi
+          done
+
+      - uses: azure/setup-kubectl@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | tr -d '[:space:]' | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl version --request-timeout=20s >/dev/null
+
+      - name: Write object-storage Secrets
+        run: |
+          set -euo pipefail
+          for ns in $NAMESPACES; do
+            if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+              echo "::warning::namespace $ns does not exist, skipped"; continue
+            fi
+            kubectl create secret generic object-storage -n "$ns" \
+              --from-literal=OBJECT_STORAGE_ENDPOINT="$R2_ENDPOINT" \
+              --from-literal=OBJECT_STORAGE_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
+              --from-literal=OBJECT_STORAGE_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+              --from-literal=OBJECT_STORAGE_REGION=auto \
+              --from-literal=OBJECT_STORAGE_PUBLIC_BUCKET="$PUBLIC_BUCKET" \
+              --from-literal=OBJECT_STORAGE_PRIVATE_BUCKET="$PRIVATE_BUCKET" \
+              --from-literal=OBJECT_STORAGE_PUBLIC_BASE_URL="https://${PUBLIC_DOMAIN}" \
+              --dry-run=client -o yaml \
+              | kubectl label --local -f - app.kubernetes.io/managed-by=object-storage-workflow -o yaml \
+              | kubectl apply -f - >/dev/null
+            echo "object-storage Secret written in $ns"
+          done
+          rm -f ~/.kube/config

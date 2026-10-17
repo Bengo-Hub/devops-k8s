@@ -49,6 +49,12 @@ strategy:
 env: []
 envFromSecret: ""
 
+# Shared object storage (Cloudflare R2): loads OBJECT_STORAGE_* from the namespace's
+# object-storage Secret, written by .github/workflows/object-storage.yml.
+objectStorage:
+  enabled: false
+  secretName: object-storage
+
 # Persistent storage for media files (optional)
 # Enable this for applications that need persistent storage (e.g., Django media uploads)
 persistence:
