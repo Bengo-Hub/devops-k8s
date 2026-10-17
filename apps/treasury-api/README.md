@@ -13,7 +13,7 @@ ArgoCD application deploying the Treasury Go service responsible for payments, s
   - PostgreSQL instance reachable via `postgresUrl`
   - Redis: `redis-master.infra.svc.cluster.local:6379`
   - NATS JetStream cluster: `nats.messaging.svc.cluster.local`
-  - MinIO/S3 endpoint for settlement artifacts
+  - Shared object storage (Cloudflare R2) for stored documents: Secret `object-storage`, see `docs/object-storage.md`
   - OTEL collector for tracing/metrics export
 
 Adjust scaling, ingress, and dependency endpoints in `values.yaml` per environment.

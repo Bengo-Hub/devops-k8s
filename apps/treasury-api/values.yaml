@@ -45,6 +45,10 @@ strategy:
   rollingUpdate:
     maxSurge: 0 # terminate old pod (release NATS push-durable bindings) before new subscribes
     maxUnavailable: 1
+# Shared object storage (stored PDFs, bill attachments, equity documents, report files,
+# signatures): OBJECT_STORAGE_* from the object-storage Secret. See docs/object-storage.md.
+objectStorage:
+  enabled: true
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
@@ -99,10 +103,6 @@ env:
         optional: true
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
-  - name: STORAGE_ENDPOINT
-    value: http://minio.storage.svc.cluster.local:9000
-  - name: STORAGE_BUCKET
-    value: treasury-artifacts
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
