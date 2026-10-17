@@ -120,13 +120,14 @@ serviceMonitor:
   enabled: false
 monitoring:
   enabled: false
-# Persistent storage for media uploads
-persistence:
+# Shared object storage for HR files (resumes, claim receipts, employee documents), all private:
+# OBJECT_STORAGE_* from the object-storage Secret (docs/object-storage.md).
+objectStorage:
   enabled: true
-  size: 20Gi
-  mountPath: /app/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+# No media volume since 2026-10-17: HR files live on the shared object storage; the old volume
+# held no files. Tenant backups move to SSO (the per-service backup module is being removed).
+persistence:
+  enabled: false
 # ============================================================================
 # ENVIRONMENT VARIABLES (Go config; namespace = "" so no service prefix)
 # ============================================================================
@@ -147,8 +148,6 @@ env:
     value: "5432"
   - name: REDIS_ADDR
     value: "redis-master.infra.svc.cluster.local:6379"
-  - name: MEDIA_ROOT
-    value: "/app/media"
   # ── NATS events: the Go server runs the outbox poller + JetStream consumers in-process ──
   - name: EVENTS_ENABLED
     value: "true"
