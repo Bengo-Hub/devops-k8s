@@ -10,12 +10,33 @@ longer maintained).
 | `codevertex-media-public` | avatars, logos, item and menu images, covers, other public pictures | `https://media.codevertexafrica.com/<key>`, cached by Cloudflare (keys never change content) |
 | `codevertex-media-private` | KYC, patient photos, signatures, documents, attachments, exports, backups | only by presigned links (15 minutes by default) |
 
-Keys: `<service>/<tenant_id>/<media_type>/<yyyy>/<mm>/<uuid>.<ext>`, or
-`<service>/users/<user_id>/<media_type>/...` for personal media. Old `/media/<path>` values map to
-`<service>/legacy/<public|private>/<path>`.
+Keys: `<service>/<tenant_id>/<media_type>/<yyyy>/<mm>/<uuid>.<ext>` (uploads) or
+`<service>/<tenant_id>/<media_type>/<content hash>.<ext>` (moved files), and
+`<service>/users/<user_id>/<media_type>/...` for personal media. Rows store the key.
 
-R2 free tier (2026-10): 10 GB-month storage, 1M Class A and 10M Class B operations a month, no
-egress fees.
+Free tiers only (no paid Cloudflare feature without sign-off): R2 10 GB-month storage, 1M Class A
+and 10M Class B operations a month, no egress fees. Image Transformations, if enabled later, give
+5,000 unique transformations a month; beyond that new variants fail (no charge), so pages must fall
+back to the original image.
+
+## Moving a service off its media volume
+
+1. Deploy the service version on `objectstore` with `objectStorage.enabled: true`. Old `/media/...`
+   values keep being served from the volume, so nothing breaks.
+2. In the pod run the service's `relink-media` command (report), then with `--apply`. Every file a
+   row still references is uploaded under its tenant's key and the row is updated; files no row
+   references are not moved. It is safe to run again.
+3. Rerun the report until nothing is left to move, then release the PVC and drop `MEDIA_ROOT`,
+   `MEDIA_URL_BASE` and `persistence` from the values (ask before deleting a PVC: it destroys data).
+
+Replaced or removed images delete their old file right after the row is saved, once no other row
+of the tenant uses it, so storage only holds files in use.
+
+| Service | State |
+|---|---|
+| treasury-api | done (never had a media volume) |
+| inventory-api | done in code; relink run 2026-10-17; volume holds only shipped assets and 1 moved upload; PVC release pending sign-off |
+| others | pending |
 
 ## Setup
 
