@@ -37,6 +37,10 @@ strategy:
     maxUnavailable: 1
 minReadySeconds: 30
 progressDeadlineSeconds: 1200 # 20 minutes for migrations and startup (matches auth-api)
+# Shared object storage for menu and outlet pictures: OBJECT_STORAGE_* from the object-storage
+# Secret (see docs/object-storage.md).
+objectStorage:
+  enabled: true
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
@@ -93,11 +97,6 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222"
   - name: NATS_STREAM
     value: ordering
-  # Media upload configuration
-  - name: MEDIA_ROOT
-    value: "/data/media"
-  - name: MEDIA_URL_BASE
-    value: "https://orderingapi.codevertexafrica.com"
   # Observability
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
@@ -283,12 +282,10 @@ ingress:
 # ============================================================================
 # PERSISTENCE (media uploads)
 # ============================================================================
+# No media volume since 2026-10-17: images live on the shared object storage (objectStorage
+# below); the old volume was empty.
 persistence:
-  enabled: true
-  size: 5Gi
-  mountPath: /data/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+  enabled: false
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
