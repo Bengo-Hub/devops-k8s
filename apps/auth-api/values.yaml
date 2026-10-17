@@ -53,6 +53,10 @@ strategy:
     maxUnavailable: 0
 minReadySeconds: 60
 progressDeadlineSeconds: 1200 # 20 minutes for migrations and startup
+# Shared object storage for tenant logos and service icons: OBJECT_STORAGE_* from the
+# object-storage Secret (docs/object-storage.md).
+objectStorage:
+  enabled: true
 # ============================================================================
 # ENVIRONMENT VARIABLES
 # ============================================================================
