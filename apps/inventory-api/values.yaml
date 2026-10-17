@@ -51,6 +51,11 @@ securityContext:
   runAsUser: 100
   runAsGroup: 101
   fsGroup: 101
+# Shared object storage for item images and logos: OBJECT_STORAGE_* from the object-storage
+# Secret. MEDIA_ROOT and the media volume stay until inventory-relink-media has moved every
+# referenced file (see docs/object-storage.md).
+objectStorage:
+  enabled: true
 env:
   # Server-side auth calls (tenant lookups, API-key checks, user sync, JWKS) go in-cluster; the
   # issuer check uses AUTH_ISSUER (public). Allowed by auth-api-ingress NetworkPolicy.
