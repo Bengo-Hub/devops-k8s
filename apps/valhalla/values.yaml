@@ -68,7 +68,8 @@ resources:
   requests:
     # Right-sized 1->300m: routing is intermittent and the limit (4) lets it burst on demand.
     # Frees ~700m on the shared node for balanced headroom across services.
-    cpu: "300m"
+    # 2026-10-17: was 300m, uses ~7m; the 4 CPU limit is the burst room.
+    cpu: "100m"
     # 2026-10-17: was 3Gi, uses ~160Mi (tiles are mmapped, counted as page cache).
     # VPA recommends 2Gi; 1Gi leaves the 5Gi limit as burst room.
     memory: 1Gi

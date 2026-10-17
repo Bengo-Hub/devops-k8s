@@ -55,8 +55,9 @@ persistence:
 # ============================================================================
 resources:
   requests:
-    cpu: 120m
-    memory: 512Mi
+    # 2026-10-17: was 120m/512Mi, uses 1m/149Mi (VPA target 100m/256Mi).
+    cpu: 50m
+    memory: 256Mi
   limits:
     cpu: "1"
     memory: 1Gi
