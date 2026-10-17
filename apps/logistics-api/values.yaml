@@ -38,6 +38,9 @@ strategy:
   rollingUpdate:
     maxSurge: 0 # terminate old pod (release NATS push-durable bindings) before new subscribes
     maxUnavailable: 1
+# Shared object storage: OBJECT_STORAGE_* from the object-storage Secret (docs/object-storage.md).
+objectStorage:
+  enabled: true
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
@@ -76,11 +79,6 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  # Media upload configuration
-  - name: MEDIA_ROOT
-    value: "/data/media"
-  - name: MEDIA_URL_BASE
-    value: "https://logisticsapi.codevertexafrica.com"
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://ordering.codevertexafrica.com,https://pos.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,https://riderapp.codevertexafrica.com,http://localhost:3001,https://logistics.codevertexafrica.com,https://theurbanloftcafe.com"
   # Routing engine (Valhalla in-cluster)
@@ -132,12 +130,10 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+# No media volume since 2026-10-17: KYC and proof-of-delivery files live on the shared object
+# storage (objectStorage below); the old volume held only test files.
 persistence:
-  enabled: true
-  size: 5Gi
-  mountPath: /data/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+  enabled: false
 ingress:
   enabled: true
   ingressClassName: nginx
