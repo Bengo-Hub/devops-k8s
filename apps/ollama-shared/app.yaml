@@ -19,3 +19,13 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+  # 2026-10-17: app resynced every few seconds (dozens of "Initiated automated sync"
+  # events), pointless write load on the single-node etcd. The server-side diff shows
+  # two fields that can never converge: volumeClaimTemplates (immutable on a
+  # StatefulSet, server-defaulted) and the pull-models init container cpu limit.
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates
+        - .spec.template.spec.initContainers[]?.resources.limits.cpu

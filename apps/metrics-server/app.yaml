@@ -21,5 +21,10 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      # 2026-10-17: client-side apply failed every sync with 'ports[1].name: Duplicate
+      # value: https' (chart moved the port), leaving the app OutOfSync. Server-side
+      # apply merges ports by key and avoids the duplicate.
+      - ServerSideApply=true
 
 

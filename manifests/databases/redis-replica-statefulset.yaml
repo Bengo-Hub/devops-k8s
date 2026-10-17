@@ -100,7 +100,9 @@ spec:
             - redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping
           initialDelaySeconds: 20
           periodSeconds: 5
-          timeoutSeconds: 1
+          # 2026-10-17: was 1s; a 1s exec timeout fires on brief node load spikes
+          # (readiness flapped, kubelet 'ExecSync ... timeout 1s exceeded'). Matches liveness.
+          timeoutSeconds: 5
           failureThreshold: 5
         volumeMounts:
         - name: data

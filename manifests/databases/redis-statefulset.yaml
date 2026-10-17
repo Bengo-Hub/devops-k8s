@@ -203,7 +203,8 @@ spec:
               fi
           initialDelaySeconds: 20
           periodSeconds: 5
-          timeoutSeconds: 1
+          # 2026-10-17: was 1s, see redis-replica-statefulset.yaml. Matches liveness.
+          timeoutSeconds: 5
           failureThreshold: 5
         lifecycle:
           preStop:

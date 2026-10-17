@@ -102,9 +102,31 @@ spec:
                 # never finishes — bounded here means a slow API server degrades this one
                 # iteration, not the watcher's ability to alert on the next one 2 minutes
                 # later.
-                BAD_PODS=$($KCTL get pods --all-namespaces -o json | jq -r '
-                  def isRecent: (.lastState.terminated.finishedAt // empty) as $f |
-                    ($f != null and $f != "") and ((now - ($f | fromdateiso8601)) <= 1800);
+                #
+                # 2026-10-17: restarts explained by a whole-node reboot are NOT paged.
+                # This is a single-node cluster, so every kured/kernel-update reboot
+                # (kured --force-reboot, see apps/kured/app.yaml) bounces every container
+                # at once and bumps its restartCount by 1. Static control-plane pods
+                # (etcd, apiserver, controller-manager, scheduler), kube-proxy, calico-node
+                # and csi-node-driver have accumulated 5-54 restarts over the node's life,
+                # so each monthly reboot pushed them over the >=5 threshold and paged a
+                # "Fleet health check failed" for an expected, already-recovered event
+                # (2026-10-15 03:37 EAT alert, 5 min after kured's 00:32:11Z reboot).
+                # Detection is stateless on purpose: this pod restarts WITH the node, so
+                # in-memory state would be lost exactly when it is needed, and the state
+                # ConfigMap is RBAC-pinned. A reboot looks like >=10 containers whose last
+                # termination landed inside one 180s window. Containers terminated inside
+                # that window are exempted from the restart-count rule only while they are
+                # currently ready; CrashLoopBackOff/ImagePullBackOff/ErrImagePull still
+                # page, so a service that fails to come back after the reboot is caught.
+                BAD_RAW=$($KCTL get pods --all-namespaces -o json | jq -r '
+                  def termAt: (.lastState.terminated.finishedAt // "");
+                  def isRecent: termAt != "" and ((now - (termAt | fromdateiso8601)) <= 1800);
+                  [.items[] | (.status.containerStatuses // [])[] | select(isRecent) | (termAt | fromdateiso8601)] as $ts
+                  | ([$ts[] as $t | {t: $t, n: ([$ts[] | select(. >= $t and . <= $t + 180)] | length)}] | max_by(.n)) as $best
+                  | (if $best != null and $best.n >= 10 then $best.t else null end) as $bootT
+                  | def inReboot: $bootT != null and termAt != "" and
+                      ((termAt | fromdateiso8601) >= ($bootT - 60)) and ((termAt | fromdateiso8601) <= ($bootT + 240));
                   .items[] | . as $pod | ($pod.status.containerStatuses // [])[] |
                   select(
                     (.state.waiting.reason // "") == "CrashLoopBackOff" or
@@ -112,8 +134,16 @@ spec:
                     (.state.waiting.reason // "") == "ErrImagePull" or
                     ((.restartCount // 0) >= 5 and isRecent)
                   ) |
+                  ((.state.waiting.reason // "") == "" and (.ready // false) and inReboot) as $rebootRestart |
+                  (if $rebootRestart then "SUPPRESSED-NODE-REBOOT " else "" end) +
                   "\($pod.metadata.namespace)/\($pod.metadata.name) [\(.name)]: \(.state.waiting.reason // "RecentHighRestartCount") (\(.restartCount) restarts)"
                 ')
+                BAD_PODS=$(printf '%s\n' "$BAD_RAW" | grep -v '^SUPPRESSED-NODE-REBOOT ' | sed '/^$/d' || true)
+                REBOOT_SUPPRESSED=$(printf '%s\n' "$BAD_RAW" | grep '^SUPPRESSED-NODE-REBOOT ' || true)
+                if [ -n "$REBOOT_SUPPRESSED" ]; then
+                  echo "Node reboot detected; not paging for these expected post-reboot restarts (still ready):"
+                  printf '%s\n' "$REBOOT_SUPPRESSED"
+                fi
                 if [ -n "$BAD_PODS" ]; then
                   FAILURES="${FAILURES}Unhealthy pods:
                 ${BAD_PODS}
