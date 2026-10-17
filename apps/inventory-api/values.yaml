@@ -52,8 +52,7 @@ securityContext:
   runAsGroup: 101
   fsGroup: 101
 # Shared object storage for item images and logos: OBJECT_STORAGE_* from the object-storage
-# Secret. MEDIA_ROOT and the media volume stay until inventory-relink-media has moved every
-# referenced file (see docs/object-storage.md).
+# Secret (see docs/object-storage.md). Every referenced file was relinked on 2026-10-17.
 objectStorage:
   enabled: true
 env:
@@ -108,8 +107,9 @@ env:
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   # Media upload configuration
+  # The image's shipped assets (category icons, demo menu pictures), read-only.
   - name: MEDIA_ROOT
-    value: "/data/media"
+    value: "/app/media"
   - name: MEDIA_URL_BASE
     value: "https://inventoryapi.codevertexafrica.com"
   - name: OTLP_ENDPOINT
@@ -165,12 +165,10 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels:
     release: prometheus
+# No media volume since 2026-10-17: uploads live on the shared object storage and the shipped
+# icons and demo pictures are served from the image's own ./media (MEDIA_ROOT below).
 persistence:
-  enabled: true
-  size: 5Gi
-  mountPath: /data/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+  enabled: false
 ingress:
   enabled: true
   ingressClassName: nginx
