@@ -42,9 +42,10 @@ spec:
             - name: ollama-data
               mountPath: /root/.ollama
           resources:
+            # Init requests count toward scheduling (max of init and app), kept low.
             requests:
-              cpu: 500m
-              memory: 2Gi
+              cpu: 100m
+              memory: 512Mi
             limits:
               cpu: 2000m
               memory: 4Gi
@@ -74,14 +75,15 @@ spec:
               mountPath: /root/.ollama
           resources:
             requests:
-              # 2026-10-17: was cpu 1 / mem 6Gi. Usage is ~0 while the model is unloaded
-              # (24Mi, 1m). A loaded 8B model needs ~5Gi but that is covered by the 10Gi
-              # limit and the node's free memory, it does not need to be reserved.
-              cpu: 250m
-              memory: 2Gi
+              # 2026-10-17: was cpu 1 / mem 6Gi. Only vera ai uses this and barely, so it
+              # is not critical: usage is ~0 while the model is unloaded (24Mi, 1m).
+              # Reserve almost nothing, the limit alone bounds it. 7Gi still fits the 8B
+              # model (~5Gi) plus context.
+              cpu: 100m
+              memory: 1Gi
             limits:
-              cpu: "3"
-              memory: 10Gi
+              cpu: "2"
+              memory: 7Gi
           readinessProbe:
             httpGet:
               path: /api/version
