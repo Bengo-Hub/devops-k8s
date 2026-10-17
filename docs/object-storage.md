@@ -38,7 +38,8 @@ of the tenant uses it, so storage only holds files in use.
 | inventory-api | done 2026-10-17: relinked, PVC `inventory-api-media` released, `MEDIA_ROOT=/app/media` (shipped icons and demo pictures inside the image) |
 | ordering-backend | done 2026-10-17: uploads require a signed-in tenant user (were anonymous), volume was empty so nothing moved, PVC `ordering-backend-media` released, no `MEDIA_*` env |
 | pos-api | done 2026-10-17: damage evidence and lost-and-found photos private (signed links), screensavers and job attachments public; volume held no files; PVC `pos-api-media` released |
-| others | pending |
+| auth-api | done 2026-10-17: tenant logos, service icons and profile pictures stored on the public bucket, rows keep the link; 7 tenants and 2 users with inline images moved at startup; no volume |
+| others (logistics, hospital, library, maskani, erp, marketflow) | pending |
 
 ## Setup
 
