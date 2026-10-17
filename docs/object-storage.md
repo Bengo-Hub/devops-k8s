@@ -42,7 +42,8 @@ of the tenant uses it, so storage only holds files in use.
 | logistics-api | done 2026-10-17: KYC and proof-of-delivery files private (presigned), uploads require sign-in (were anonymous); the volume held only test KYC files (user: hard delete), PVC `logistics-api-media` released; map volumes (tileserver, valhalla) untouched |
 | hospital-api | done 2026-10-17: patient photos private (presigned); production had no media volume (an upload would have been lost on restart), no patient had a photo |
 | library-api | done 2026-10-17: covers public with a thumbnail next to each, e-book files private and streamed through the API after the loan or purchase check (range requests passed to R2); all 579 covers were Open Library links and there were no e-books, so nothing moved; PVC `library-api-media` (no files) to be released |
-| others (maskani, erp, marketflow) | pending |
+| maskani-api | done 2026-10-17: keys `maskani/<tenant>/<kind>/...`; estate and unit photos public (market and maskani-commerce load them from the media domain), every other kind and issued PDFs private with presigned links; volume held no files; PVC `maskani-api-media` to be released |
+| others (erp, marketflow) | pending |
 
 Before dropping a volume, check the service's entrypoint and Dockerfile for media-directory setup: logistics' entrypoint ran `mkdir -p $MEDIA_ROOT/...` and crash-looped without the volume (fixed in `112f70d`).
 

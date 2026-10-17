@@ -3,8 +3,7 @@
 nameOverride: maskani-api
 fullnameOverride: maskani-api
 # HA baseline: 2 replicas (HPA 2 to 3) with a PDB. The migrate step takes advisory lock 727271007,
-# so two pods starting together run migrations once. Never set 0: the local-path media PVC
-# (WaitForFirstConsumer) then never binds and ArgoCD shows the app Progressing forever.
+# so two pods starting together run migrations once.
 replicaCount: 2
 image:
   repository: docker.io/codevertex/maskani-api
@@ -39,8 +38,11 @@ strategy:
   rollingUpdate:
     maxSurge: 1
     maxUnavailable: 0
-# The image's non-root "app" user is uid 100 / gid 101 (alpine adduser -S); the media PVC init
-# container and fsGroup follow it so uploads stay writable across restarts.
+# Shared object storage for uploads and issued documents: OBJECT_STORAGE_* from the
+# object-storage Secret (docs/object-storage.md).
+objectStorage:
+  enabled: true
+# The image's non-root "app" user is uid 100 / gid 101 (alpine adduser -S).
 securityContext:
   runAsUser: 100
   runAsGroup: 101
@@ -111,10 +113,6 @@ env:
       secretKeyRef:
         name: maskani-api-secrets
         key: FIELD_ENCRYPTION_KEY
-  - name: MEDIA_ROOT
-    value: "/data/media"
-  - name: MEDIA_URL_BASE
-    value: "https://maskaniapi.codevertexafrica.com"
 resources:
   requests:
     cpu: 50m
@@ -136,12 +134,10 @@ monitoring:
     enabled: true
     port: 9090
     path: /metrics
+# No media volume since 2026-10-17: uploads and issued documents live on the shared object
+# storage. The old volume held no files.
 persistence:
-  enabled: true
-  size: 5Gi
-  mountPath: /data/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+  enabled: false
 ingress:
   enabled: true
   ingressClassName: nginx
