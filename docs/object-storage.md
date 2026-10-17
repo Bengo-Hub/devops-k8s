@@ -35,7 +35,7 @@ of the tenant uses it, so storage only holds files in use.
 | Service | State |
 |---|---|
 | treasury-api | done (never had a media volume) |
-| inventory-api | done in code; relink run 2026-10-17; volume holds only shipped assets and 1 moved upload; PVC release pending sign-off |
+| inventory-api | done 2026-10-17: relinked, PVC `inventory-api-media` released, `MEDIA_ROOT=/app/media` (shipped icons and demo pictures inside the image) |
 | others | pending |
 
 ## Setup
