@@ -249,8 +249,9 @@ healthCheck:
 # 500m CPU limit caused throttling during concurrent checkouts. 1 CPU limit removes throttle.
 resources:
   requests:
-    cpu: 200m
-    memory: 384Mi
+    # 2026-10-17: was 200m/384Mi, uses 6m/14Mi per pod (VPA target 100m/128Mi).
+    cpu: 100m
+    memory: 192Mi
   limits:
     cpu: 1000m
     memory: 1Gi

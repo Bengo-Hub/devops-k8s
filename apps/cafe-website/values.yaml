@@ -74,10 +74,11 @@ envFromSecret: cafe-website-env
 resources:
   requests:
     cpu: 50m
-    memory: 128Mi
+    memory: 192Mi
   limits:
     cpu: 500m
-    memory: 256Mi
+    # 2026-10-17: was 256Mi, steady use is ~224Mi (87%), one traffic spike from OOMKill.
+    memory: 384Mi
 # Disable autoscaling for single instance
 autoscaling:
   enabled: false

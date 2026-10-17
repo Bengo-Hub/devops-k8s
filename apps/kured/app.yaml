@@ -17,6 +17,11 @@ spec:
         # of it sitting un-rebooted for weeks and eventually happening
         # uncontrolled. Does NOT protect against a hypervisor-forced
         # reboot (nothing can) — only against self-inflicted ones.
+        # 2026-10-17: no requests meant BestEffort scheduling class.
+        resources:
+          requests:
+            cpu: 10m
+            memory: 48Mi
         configuration:
           period: 1h
           rebootSentinel: /var/run/reboot-required

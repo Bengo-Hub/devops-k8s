@@ -54,13 +54,18 @@ spec:
             # ("nats: no response from stream"). 2.10.21..29 carry JS clustering/route fixes.
             image:
               tag: "2.10.29-alpine"
-            resources:
-              requests:
-                cpu: 100m
-                memory: 256Mi
-              limits:
-                cpu: 500m
-                memory: 1Gi
+            # 2026-10-17: chart 1.2.4 ignores container.resources, resources must go
+            # through container.merge. The old block here never applied, so all 3 pods ran
+            # BestEffort (no requests, lowest CPU weight, first to be evicted) while
+            # using 160-250m CPU each. No CPU limit on purpose: JetStream is bursty and a
+            # CFS quota would throttle raft heartbeats.
+            merge:
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  memory: 1Gi
             # Override readiness probe to fix "failed to be ready after 1ms" warnings.
             # The default nats-server check uses a 1ms timeout which fails under
             # momentary CPU/GC pressure. Increase to 5s.
