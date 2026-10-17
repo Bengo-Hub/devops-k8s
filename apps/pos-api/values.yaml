@@ -49,6 +49,9 @@ securityContext:
   runAsUser: 100
   runAsGroup: 101
   fsGroup: 101
+# Shared object storage: OBJECT_STORAGE_* from the object-storage Secret (docs/object-storage.md).
+objectStorage:
+  enabled: true
 env:
   # Standardized Go backend env vars — no service prefix (config.go namespace = "")
   - name: APP_ENV
@@ -97,10 +100,6 @@ env:
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
-  # Managed screensaver media (Settings → Display): uploads stored per-tenant on the
-  # media PVC, served publicly at /media/* (relative URLs stored in outlet settings).
-  - name: MEDIA_ROOT
-    value: "/data/media"
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,https://books.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
   # Shared S2S key — validates inbound requests from other services (X-API-Key header)
@@ -180,12 +179,10 @@ serviceMonitor:
 # Media PVC for managed screensavers (≤3 files × 8MB per tenant — 2Gi is ample).
 # local-path PVCs are NOT resizable (see provision-workflow-backup-pvc memory), so the
 # size is deliberately generous up front.
+# No media volume since 2026-10-17: screensavers, job attachments and hotel photos live on the
+# shared object storage (objectStorage below); the old volume held no files.
 persistence:
-  enabled: true
-  size: 2Gi
-  mountPath: /data/media
-  accessMode: ReadWriteOnce
-  storageClass: local-path
+  enabled: false
 ingress:
   enabled: true
   ingressClassName: nginx
