@@ -43,7 +43,7 @@ of the tenant uses it, so storage only holds files in use.
 | hospital-api | done 2026-10-17: patient photos private (presigned); production had no media volume (an upload would have been lost on restart), no patient had a photo |
 | library-api | done 2026-10-17: covers public with a thumbnail next to each, e-book files private and streamed through the API after the loan or purchase check (range requests passed to R2); all 579 covers were Open Library links and there were no e-books, so nothing moved; PVC `library-api-media` (no files) deleted with user approval |
 | maskani-api | done 2026-10-17: keys `maskani/<tenant>/<kind>/...`; estate and unit photos public (market and maskani-commerce load them from the media domain), every other kind and issued PDFs private with presigned links; volume held no files; PVC `maskani-api-media` deleted with user approval |
-| erp-api | done 2026-10-17: resumes, claim receipts and employee documents private (presigned links in responses; before, links pointed at a `/media` route erp-api never served); volume held no files; PVC `erp-api-media` to be released, plus the unmounted legacy `erp-api-app-media` |
+| erp-api | done 2026-10-17: resumes, claim receipts and employee documents private (presigned links in responses; before, links pointed at a `/media` route erp-api never served); volume held no files; PVC `erp-api-media` and the unmounted legacy `erp-api-app-media` (Django era) deleted with user approval |
 | others (marketflow) | pending |
 
 Before dropping a volume, check the service's entrypoint and Dockerfile for media-directory setup: logistics' entrypoint ran `mkdir -p $MEDIA_ROOT/...` and crash-looped without the volume (fixed in `112f70d`).
