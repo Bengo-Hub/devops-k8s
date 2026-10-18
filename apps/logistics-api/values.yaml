@@ -95,6 +95,12 @@ env:
     value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_AUDIENCE
     value: "codevertex"
+  # Internal rider onboarding: the account email (with the temporary password) goes straight to
+  # notifications-api, and links riders to the rider app. auth-api is reached at AUTH_SERVICE_URL.
+  - name: NOTIFICATIONS_SERVICE_URL
+    value: "http://notifications-api.notifications.svc.cluster.local:4000"
+  - name: RIDER_APP_URL
+    value: "https://riderapp.codevertexafrica.com"
   # Shared S2S key — required for the /api/v1/s2s/dispatch routes (pos-api creates + assigns
   # delivery tasks for POS-native orders). Without it cfg.Treasury.InternalServiceKey is empty and
   # those routes are not registered (→ 404 → pos-api assign-rider 502).

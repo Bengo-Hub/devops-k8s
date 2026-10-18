@@ -77,6 +77,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # logistics-api sends an internal rider's account email (NOTIFICATIONS_SERVICE_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logistics
       ports:
         - protocol: TCP
           port: 4000
