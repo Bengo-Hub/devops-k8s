@@ -29,6 +29,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
+        # auth-api collects /api/v1/s2s/tenant-export for SSO tenant backups (2026-10-18).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: erp

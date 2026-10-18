@@ -137,6 +137,9 @@ env:
     value: "true"
   - name: SUBSCRIPTION_BASE_URL
     value: "http://subscription-api.subscriptions.svc.cluster.local:4000"
+  # SSO tenant backups: services auth-api collects /api/v1/s2s/tenant-export from (name=base URL).
+  - name: BACKUP_TENANT_SERVICES
+    value: "erp=http://erp-api.erp.svc.cluster.local:80,hospital=http://hospital-api.hospital.svc.cluster.local:4200,inventory=http://inventory-api.inventory.svc.cluster.local:4000,library=http://library-api.library.svc.cluster.local:4010,logistics=http://logistics-api.logistics.svc.cluster.local:4000,marketflow=http://marketflow-api.marketflow.svc.cluster.local:4000,maskani=http://maskani-api.maskani.svc.cluster.local:4000,notifications=http://notifications-api.notifications.svc.cluster.local:4000,ordering=http://ordering-backend.ordering.svc.cluster.local:4000,pos=http://pos-api.pos.svc.cluster.local:4000,projects=http://projects-api.projects.svc.cluster.local:4000,subscriptions=http://subscription-api.subscriptions.svc.cluster.local:4000,treasury=http://treasury-api.treasury.svc.cluster.local:4000"
   - name: AUTH_SUBSCRIPTION_TIMEOUT
     value: "5s"
   # Shared S2S key — auth-api reads this to call subscriptions-api for JWT enrichment
