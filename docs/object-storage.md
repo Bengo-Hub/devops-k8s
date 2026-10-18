@@ -78,3 +78,15 @@ Create a new R2 API token in Cloudflare, update `CF_R2_ACCESS_KEY_ID` and
 
 `postgresql-backup-r2-secrets` (infra namespace, platform Postgres backups to
 `codevertex-platform-backups`) was created by hand and is not yet written by this workflow.
+
+## Platform database backup (disaster recovery)
+
+The CronJob `infra/postgresql-backup` (`manifests/backup/postgresql-backup-cronjob.yaml`) runs
+`pg_dumpall` of the whole Postgres cluster, which holds every service database, at 02:00 each day.
+It checks the dump, copies it to R2 `codevertex-platform-backups/postgresql/` and keeps the newest 3
+there and 1 on the local volume (since 2026-10-18; it kept a single copy before). Older copies are
+pruned only after the new dump is confirmed on R2. The manifest is applied by the `provision.yml`
+workflow, not by Argo CD: after editing it, run `kubectl diff -f` then `kubectl apply -f`.
+
+Tenant backups (download of one tenant's data from the SSO client area) are separate and on demand;
+see the object storage plan, Phase 5.
