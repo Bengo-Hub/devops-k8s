@@ -124,19 +124,22 @@ spec:
                     echo "WARN: R2 credentials not configured - this backup stays local-VPS-only"
                   fi
 
-                  # Retention: keep exactly ONE backup — the one just verified above — both
-                  # locally and on R2, per platform requirement (single most recent COMPLETE
-                  # backup, not a rolling window). Pruning only happens after a confirmed
+                  # Retention: the local volume keeps only the backup just verified; R2 keeps
+                  # the newest R2_KEEP (3) daily backups, so data corrupted or deleted by
+                  # mistake can still be recovered for three days after it happened (user
+                  # decision 2026-10-18; about 650 MB, inside the R2 free tier). Names sort by
+                  # time (bengobox_YYYYMMDD_HHMMSS). Pruning only happens after a confirmed
                   # successful R2 upload of the new file: if R2 is unreachable, misconfigured,
                   # or this run's dump/upload had any problem, every previous backup (local
                   # AND remote) is left exactly as-is, so there's always at least one
                   # known-good backup surviving a bad run.
+                  R2_KEEP=3
                   if [ "$R2_UPLOAD_OK" = true ]; then
-                    echo "New backup verified locally and confirmed on R2 - pruning older backups (keeping only ${FILENAME})"
+                    echo "New backup verified locally and confirmed on R2 - pruning local copies except ${FILENAME}, keeping the newest ${R2_KEEP} on R2"
 
                     find ${BACKUP_DIR} -name "bengobox_*.sql.gz" ! -name "${FILENAME}" -print -delete
 
-                    R2_OLD=$(r2 lsf "${R2_PATH}" 2>/dev/null || echo "")
+                    R2_OLD=$(r2 lsf "${R2_PATH}" 2>/dev/null | grep '^bengobox_.*\.sql\.gz$' | sort -r | tail -n +$((R2_KEEP + 1)) || echo "")
                     for f in $R2_OLD; do
                       if [ "$f" != "${FILENAME}" ]; then
                         if r2 deletefile "${R2_PATH}${f}"; then
