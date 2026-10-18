@@ -14,7 +14,7 @@ priorityClassName: auth-critical
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-api
-  tag: "0e232af6"
+  tag: "6be3aa01"
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
