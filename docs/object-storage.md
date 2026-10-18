@@ -38,13 +38,13 @@ of the tenant uses it, so storage only holds files in use.
 | inventory-api | done 2026-10-17: relinked, PVC `inventory-api-media` released, `MEDIA_ROOT=/app/media` (shipped icons and demo pictures inside the image) |
 | ordering-backend | done 2026-10-17: uploads require a signed-in tenant user (were anonymous), volume was empty so nothing moved, PVC `ordering-backend-media` released, no `MEDIA_*` env |
 | pos-api | done 2026-10-17: damage evidence and lost-and-found photos private (signed links), screensavers and job attachments public; volume held no files; PVC `pos-api-media` released |
-| auth-api | done 2026-10-17: tenant logos, service icons and profile pictures stored on the public bucket, rows keep the link; 7 tenants and 2 users with inline images moved at startup; no volume |
+| auth-api | done 2026-10-17: tenant logos, service icons and profile pictures stored on the public bucket, rows keep the link; 7 tenants and 2 users with inline images moved at startup; 2026-10-18 legal signature images moved from base64 in the row to the private bucket (no rows existed); no volume |
 | logistics-api | done 2026-10-17: KYC and proof-of-delivery files private (presigned), uploads require sign-in (were anonymous); the volume held only test KYC files (user: hard delete), PVC `logistics-api-media` released; map volumes (tileserver, valhalla) untouched |
 | hospital-api | done 2026-10-17: patient photos private (presigned); production had no media volume (an upload would have been lost on restart), no patient had a photo |
 | library-api | done 2026-10-17: covers public with a thumbnail next to each, e-book files private and streamed through the API after the loan or purchase check (range requests passed to R2); all 579 covers were Open Library links and there were no e-books, so nothing moved; PVC `library-api-media` (no files) deleted with user approval |
 | maskani-api | done 2026-10-17: keys `maskani/<tenant>/<kind>/...`; estate and unit photos public (market and maskani-commerce load them from the media domain), every other kind and issued PDFs private with presigned links; volume held no files; PVC `maskani-api-media` deleted with user approval |
 | erp-api | done 2026-10-17: resumes, claim receipts and employee documents private (presigned links in responses; before, links pointed at a `/media` route erp-api never served); volume held no files; PVC `erp-api-media` and the unmounted legacy `erp-api-app-media` (Django era) deleted with user approval |
-| others (marketflow) | pending |
+| marketflow-api | nothing to do (2026-10-18): stores no files, no volume |
 
 Before dropping a volume, check the service's entrypoint and Dockerfile for media-directory setup: logistics' entrypoint ran `mkdir -p $MEDIA_ROOT/...` and crash-looped without the volume (fixed in `112f70d`).
 
