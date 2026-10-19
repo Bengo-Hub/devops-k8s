@@ -6,7 +6,7 @@ fullnameOverride: notifications-ui
 # ============================================================================
 image:
   repository: docker.io/codevertex/notifications-ui
-  tag: "785f85f9"
+  tag: "0d38b3ff"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
