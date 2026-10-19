@@ -88,5 +88,20 @@ there and 1 on the local volume (since 2026-10-18; it kept a single copy before)
 pruned only after the new dump is confirmed on R2. The manifest is applied by the `provision.yml`
 workflow, not by Argo CD: after editing it, run `kubectl diff -f` then `kubectl apply -f`.
 
-Tenant backups (download of one tenant's data from the SSO client area) are separate and on demand;
-see the object storage plan, Phase 5.
+## Tenant backups
+
+Tenant admins back up their own data on demand from the SSO client area (accounts, My
+Organization, Backups). auth-api calls `GET /api/v1/s2s/tenant-export` on every service listed in
+`BACKUP_TENANT_SERVICES` (apps/auth-api/values.yaml), zips the exports to
+`codevertex-media-private/auth/<tenant>/backups/` and keeps only the newest. A new service with
+tenant data must serve that endpoint (httpware/tenantexport), be added to the list, and admit the
+`auth` namespace in its ingress NetworkPolicy if it has one. The old per-service backup modules,
+their BACKUP_* settings and tables were removed on 2026-10-19.
+
+## Release step: a dead GH_PAT only fails at push
+
+This repository is public, so a service's CI release step clones and fetches it without
+credentials; an expired `GH_PAT` in that service's repository only shows up when `update-values.sh`
+pushes the new image tag (`could not read Username`, reported as "check token permissions").
+Re-sync it with the `sync-secrets.yml` workflow (`target_repo=Bengo-Hub/<repo>`,
+`secrets=GH_PAT`). If the tag must ship meanwhile, set `image.tag` in `apps/<app>/values.yaml`.
