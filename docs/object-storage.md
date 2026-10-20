@@ -91,12 +91,35 @@ workflow, not by Argo CD: after editing it, run `kubectl diff -f` then `kubectl 
 ## Tenant backups
 
 Tenant admins back up their own data on demand from the SSO client area (accounts, My
-Organization, Backups). auth-api calls `GET /api/v1/s2s/tenant-export` on every service listed in
+Organization, Backups). auth-api calls `GET /api/v1/s2s/tenant-export` on the services listed in
 `BACKUP_TENANT_SERVICES` (apps/auth-api/values.yaml), zips the exports to
 `codevertex-media-private/auth/<tenant>/backups/` and keeps only the newest. A new service with
 tenant data must serve that endpoint (httpware/tenantexport), be added to the list, and admit the
 `auth` namespace in its ingress NetworkPolicy if it has one. The old per-service backup modules,
 their BACKUP_* settings and tables were removed on 2026-10-19.
+
+Which services a backup collects is decided per tenant (2026-10-20):
+
+- Entries are `name=url` or `name=url|tag`. The tag is the subscriptions service tag the data
+  belongs to and defaults to the service name; notifications and subscriptions have none.
+- auth-api reads the tenant's plan from subscriptions-api
+  `GET /api/v1/tenants/{id}/entitled-services` and skips every service the plan does not cover
+  (`not_in_plan`). If the plan cannot be read the backup does not start (503), it never guesses.
+- The organization picks services in the backup page (`POST .../backup` with
+  `{"services": [...]}`; no body means every service in the plan). `GET .../backup/services`
+  feeds the picker. A pick outside the plan is a 400.
+- Each service is probed first (`tenant-export?probe=1`, httpware v0.15.0) and skipped as `empty`
+  when the tenant has no rows, so a service the tenant never used no longer shows as included. A
+  service on an older httpware has no probe: it exports, and an export with a zero-row summary is
+  also `empty`. A stream without its summary line is `failed` (cut short).
+- Up to 3 services export in parallel, each with a 20 minute limit; a run is claimed with one
+  conditional UPDATE so two pods cannot both start it; the archive is capped at 2 GB.
+- The download link is issued by `GET .../backup/download` when the user presses Download (logged
+  with who asked), not on every status poll.
+
+Known gaps: every service still accepts the one shared S2S key for the export, so a leaked key can
+export any tenant (a per-caller or tenant-bound credential is not built yet); services below
+httpware v0.15.0 do not answer the probe and are only skipped after a full export.
 
 ## Release step: a dead GH_PAT only fails at push
 
@@ -105,3 +128,9 @@ credentials; an expired `GH_PAT` in that service's repository only shows up when
 pushes the new image tag (`could not read Username`, reported as "check token permissions").
 Re-sync it with the `sync-secrets.yml` workflow (`target_repo=Bengo-Hub/<repo>`,
 `secrets=GH_PAT`). If the tag must ship meanwhile, set `image.tag` in `apps/<app>/values.yaml`.
+
+2026-10-20: auth-api, auth-ui, erp-api, treasury-api, subscriptions-api and projects-api all failed
+this way on the same day (subscriptions-api again, 90 minutes after its re-sync at 12:04 UTC), so the
+re-sync alone may not hold. If a repository fails again after a re-sync, the token the workflow
+copies (`PROPAGATE_PAT`, else `GH_PAT`, in devops-k8s) is the one that is dying; replace that token
+at the source instead of syncing repositories one by one.
