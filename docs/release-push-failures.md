@@ -3,40 +3,51 @@
 Every service's release step ends by pushing the new image tag to `apps/<app>/values.yaml` in this
 repository (`scripts/helm/update-values.sh`). On 2026-10-20 several services failed that push with
 `warning: redirecting to ...` followed by `fatal: could not read Username`, reported as "check token
-permissions". This page records what was ruled out, so the next occurrence starts from facts.
+permissions". It looked like a dead `GH_PAT`, and re-syncing the secret was tried repeatedly. It was
+not the token.
 
-## What was checked
+## Root cause
 
-- **Timeline.** treasury-api: last good release 2026-10-19 07:29 UTC, first failure 2026-10-20 13:23
-  UTC. The only commit in that window in treasury-api was the fix being released. In this repository
-  nothing under `scripts/` or `.github/actions/` changed between those times, and treasury-api's
-  `deploy.yml` and `build.sh` were last touched in March.
-- **The tokens are valid.** A read-only probe workflow tested the `GH_PAT` and `PROPAGATE_PAT` held
-  here, and the `GH_PAT` held by treasury-api: each answered HTTP 200 with admin and push rights, a
-  classic token (`ghp_`, 40 characters, no expiry header, no stray whitespace), and a push dry run to
-  `main` succeeded. So the earlier "dead token" reading and the re-sync advice do not explain it; the
-  re-sync copies a token that works.
-- **The exact sequence replays cleanly.** On a fresh runner (git 2.55.0, image 20261018.339) the same
-  steps as the real release (clone with the `x-access-token` form in `build.sh`, swap the remote to
-  `https://TOKEN@...`, fetch, checkout, commit, push) succeeded. The `redirecting to ...git/` warning
-  appears on every step there, including the successful ones, so it is noise.
-- **Not the runner image alone.** The failing treasury-api and subscriptions-api runs used the newer
-  runner image, but erp-api and pos-ui passed on the same image.
-- **Intermittent.** auth-api failed at 12:58 and passed at 14:06; erp-api and projects-api passed after
-  failing; a failure came 3 seconds after another service's successful push. Re-running with a fresh
-  `GH_PAT` did not make failures stop, which fits a cause outside the secret.
+The script pushed to `https://TOKEN@github.com/Bengo-Hub/devops-k8s.git`: the token alone as the
+URL's username, with no password. GitHub now answers `.git` URLs with a redirect to `.git/`. After a
+redirect git has no password to resend, so it tries to prompt, finds no terminal and aborts with
+`could not read Username`. The same push worked while GitHub did not redirect, which is why this
+appeared suddenly and why it looked intermittent (the redirect did not reach every request at first).
+
+The proof, from a CI runner (git 2.55.0) pushing a throwaway branch to this repository with the same
+`GH_PAT`:
+
+| URL form | Result |
+|---|---|
+| `https://TOKEN@github.com/Bengo-Hub/devops-k8s.git` | fails: could not read Username |
+| the same with a trailing `/`, with no `.git`, or with `-c http.followRedirects=true` | fails the same way |
+| `https://x-access-token:TOKEN@github.com/Bengo-Hub/devops-k8s.git` | pushes |
+
+## What was ruled out, and why the first probes missed it
+
+- **The tokens.** `GH_PAT` and `PROPAGATE_PAT` here, and the `GH_PAT` held by treasury-api, all answer
+  HTTP 200 with admin and push rights (classic tokens, no expiry, no stray whitespace). GitHub answered
+  the push discovery request with HTTP 200 for the same token at the moment a push failed.
+- **Timeline.** treasury-api's last good release was 2026-10-19 07:29 UTC and the first failure
+  2026-10-20 13:23 UTC; nothing in `scripts/`, `.github/actions/` or treasury-api's workflow changed
+  in between. The only thing that changed was GitHub's behaviour.
+- **`git push --dry-run` is not a test.** It stops after the discovery request and never sends the
+  pack, so it passed while the real push failed. Probe with a real push of a throwaway branch.
+- The `warning: redirecting to ...git/` line also appears on pushes that succeed; it is the symptom
+  of the redirect, not the failure.
 
 ## What changed in the script
 
-A push that fails without a conflict (`could not read Username`, a 401/403/429/5xx, a dropped
-connection) was fatal on the first attempt. It is now retried up to 3 times with backoff, and each
-failure logs the HTTP status GitHub gives the receive-pack discovery request at that moment (status
-code only, never the token). A persistent failure therefore names its own cause (401 means the
-token is rejected, 403 or 429 means throttling, 000 means the network). Both copies of the loop in
-`update-values.sh` carry the change.
+- All six URLs in `update-values.sh` (clone, remote and push, in both `update_helm_values` and
+  `update_plain_manifest_image`) now use `https://x-access-token:TOKEN@github.com/...`, the form
+  `build.sh` already used for its own clone.
+- A push that fails without a conflict is retried up to 3 times with backoff, and each failure logs
+  the HTTP status GitHub gives the receive-pack discovery request (status code only, never the
+  token), so a persistent failure names its own cause.
 
 ## If it fails again
 
-Read the `GitHub answers receive-pack discovery with HTTP nnn` line in the release log first. Only a
-401 on every retry points at the token. Until the cause is known, setting `image.tag` by hand in
-`apps/<app>/values.yaml` ships the release.
+Read the `GitHub answers receive-pack discovery with HTTP nnn` line first: 401 on every retry points
+at the token, 403 or 429 at throttling. Otherwise suspect the URL form before the token. Until it is
+fixed, setting `image.tag` by hand in `apps/<app>/values.yaml` ships the release. Any other script
+that builds `https://${token}@github.com/` has the same defect and needs the same change.

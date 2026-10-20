@@ -149,7 +149,7 @@ update_helm_values() {
 
     # Build clone URL
     local clone_url="https://github.com/${devops_repo}.git"
-    [[ -n "$token" ]] && clone_url="https://${token}@github.com/${devops_repo}.git"
+    [[ -n "$token" ]] && clone_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
 
     # Clone or update devops-k8s repo
     if [[ ! -d "$devops_dir" ]]; then
@@ -171,7 +171,7 @@ update_helm_values() {
 
     # Set remote URL with token if token is available
     if [[ -n "$token" ]]; then
-        local auth_remote_url="https://${token}@github.com/${devops_repo}.git"
+        local auth_remote_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
         git remote set-url origin "$auth_remote_url" 2>/dev/null || {
             # If remote doesn't exist, add it
             git remote remove origin 2>/dev/null || true
@@ -251,7 +251,7 @@ update_helm_values() {
         log_success "Changes committed: $commit_msg"
 
         log_step "Pushing changes to origin/main..."
-        local push_url="https://${token}@github.com/${devops_repo}.git"
+        local push_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
         git remote set-url origin "$push_url" >/dev/null 2>&1 || {
             log_error "Failed to set remote URL with authentication"
             popd >/dev/null || true
@@ -357,7 +357,7 @@ update_plain_manifest_image() {
     log_info "Image: $image_ref"
 
     local clone_url="https://github.com/${devops_repo}.git"
-    [[ -n "$token" ]] && clone_url="https://${token}@github.com/${devops_repo}.git"
+    [[ -n "$token" ]] && clone_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
 
     if [[ ! -d "$devops_dir" ]]; then
         log_step "Cloning devops-k8s repository..."
@@ -372,7 +372,7 @@ update_plain_manifest_image() {
     git config user.email "$git_email"
     git config user.name "$git_user"
     if [[ -n "$token" ]]; then
-        local auth_remote_url="https://${token}@github.com/${devops_repo}.git"
+        local auth_remote_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
         git remote set-url origin "$auth_remote_url" 2>/dev/null || {
             git remote remove origin 2>/dev/null || true
             git remote add origin "$auth_remote_url"
@@ -431,7 +431,7 @@ update_plain_manifest_image() {
             log_warning "Commit failed (changes may already be committed)"
         }
 
-        local push_url="https://${token}@github.com/${devops_repo}.git"
+        local push_url="https://x-access-token:${token}@github.com/${devops_repo}.git"
         git remote set-url origin "$push_url" >/dev/null 2>&1 || {
             log_error "Failed to set remote URL with authentication"
             popd >/dev/null || true
