@@ -283,11 +283,13 @@ if [[ -n "${APP_ENC_KEY_VAR}" ]]; then
     fi
 fi
 
-# TERMINAL_JWT_SECRET — library-api desk/kiosk PIN (terminal) JWT HMAC secret. These tokens are
-# signed AND verified by library-api itself (not shared across services), so generate-or-preserve
-# a per-service value. Read-existing-first so it never rotates (would invalidate live PIN sessions).
+# TERMINAL_JWT_SECRET — library-api and pos-api desk/kiosk PIN (terminal) JWT HMAC secret. These
+# tokens are signed AND verified by the service itself (not shared across services), so
+# generate-or-preserve a per-service value. Read-existing-first so it never rotates (would
+# invalidate live PIN sessions). pos-api used to sign them with the shared INTERNAL_SERVICE_KEY,
+# which let any holder of that key mint terminal tokens for any tenant (fixed 2026-10-20).
 APP_TERMINAL_JWT_SECRET=""
-if [[ "${SERVICE_NAME}" == "library-api" ]]; then
+if [[ "${SERVICE_NAME}" == "library-api" || "${SERVICE_NAME}" == "pos-api" ]]; then
     EXISTING_TJS=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.TERMINAL_JWT_SECRET}" 2>/dev/null | base64 -d || echo "")
     if [[ -n "${TERMINAL_JWT_SECRET:-}" ]]; then
         APP_TERMINAL_JWT_SECRET="$TERMINAL_JWT_SECRET"

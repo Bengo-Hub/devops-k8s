@@ -109,6 +109,14 @@ env:
         name: pos-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
+  # HMAC secret for PIN-terminal JWTs, generated once by create-service-secrets.sh and preserved.
+  # Without it pos-api signs terminal tokens with INTERNAL_SERVICE_KEY, so any holder of the shared
+  # key could mint tokens for any tenant. Not optional: a missing key must stop the pod, not fall back.
+  - name: TERMINAL_JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: pos-api-secrets
+        key: TERMINAL_JWT_SECRET
   # Auth/JWKS — override dev defaults (auth.codevertex.local) with production SSO
   # S2S service URLs — use INTERNAL cluster DNS (ClusterIP:4000) for intra-cluster S2S so
   # calls never leave the cluster: no Cloudflare/ingress hop, no ~15s gateway 502 on a slow
