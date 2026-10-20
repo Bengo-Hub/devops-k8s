@@ -108,6 +108,11 @@ def desired_records():
     recs.append({"type": "TXT", "name": "_dmarc",
                  "content": '"v=DMARC1; p=quarantine; sp=quarantine; adkim=r; aspf=r; pct=100; fo=1; '
                             'ri=86400; rua=mailto:dmarc@codevertexafrica.com"'})
+    # MTA-STS (2026-10-20): Stalwart already serves the policy at
+    # mta-sts.<apex>/.well-known/mta-sts.txt in testing mode (x:MtaSts). This record is what
+    # tells sending servers to fetch it. Change the id whenever the policy changes, and move
+    # the policy to enforce only after TLS-RPT reports show clean TLS delivery.
+    recs.append({"type": "TXT", "name": "_mta-sts", "content": '"v=STSv1; id=20261020"'})
     # TLS-RPT (Part 5) — read-only reporting, safe to add anytime, no
     # dependency on Stalwart or MTA-STS enforcement being live.
     recs.append({"type": "TXT", "name": "_smtp._tls",
