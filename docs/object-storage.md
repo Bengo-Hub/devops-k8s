@@ -129,11 +129,10 @@ pushes the new image tag (`could not read Username`, reported as "check token pe
 Re-sync it with the `sync-secrets.yml` workflow (`target_repo=Bengo-Hub/<repo>`,
 `secrets=GH_PAT`). If the tag must ship meanwhile, set `image.tag` in `apps/<app>/values.yaml`.
 
-2026-10-20: auth-api, auth-ui, erp-api, treasury-api, subscriptions-api and projects-api all failed
-this way on the same day (subscriptions-api again, 90 minutes after its re-sync at 12:04 UTC), so the
-re-sync alone may not hold. If a repository fails again after a re-sync, the token the workflow
-copies (`PROPAGATE_PAT`, else `GH_PAT`, in devops-k8s) is the one that is dying; replace that token
-at the source instead of syncing repositories one by one. It repeated the same afternoon: auth-ui
-(re-synced at 13:48, deployed at 13:54, failed again at 16:55 UTC) and marketflow-ui failed with the
-same push error, so tags were set by hand for auth-api, subscriptions-api, auth-ui and marketflow-ui.
-treasury-api (another session's commit) was left failing for its owner.
+2026-10-20: auth-api, auth-ui, erp-api, treasury-api, subscriptions-api, projects-api and marketflow-ui
+failed this way, and a re-sync only held for a few hours. Cause: `sync-secrets.yml` copied
+`PROPAGATE_PAT` into each repository's `GH_PAT` (and `GIT_TOKEN`), so CI pushed to devops-k8s with
+the sync token, not with `GH_PAT`. Rule (user): CI always pushes with `GH_PAT`; `PROPAGATE_PAT` only
+authenticates the sync itself, and `GH_PAT` is what gets synced, with `PROPAGATE_PAT` as the fallback.
+Fixed in devops-k8s `0d208fa`; after re-syncing, treasury-api's stuck deploy went through. Tags for
+auth-api, subscriptions-api, auth-ui and marketflow-ui had been set by hand meanwhile.
