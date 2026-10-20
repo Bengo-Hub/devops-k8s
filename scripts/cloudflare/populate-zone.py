@@ -77,7 +77,10 @@ def desired_records():
     # separate from the generic ORIGIN_HOSTS A-record shape above.
     recs.append({"type": "CNAME", "name": "smtp", "content": f"mx1.{APEX}", "proxied": False})
     recs.append({"type": "CNAME", "name": "imap", "content": f"mx1.{APEX}", "proxied": False})
-    recs.append({"type": "MX", "name": "@", "content": "smtp.google.com", "priority": 1})
+    # Inbound mail goes straight to Stalwart (decided 2026-10-20). The apex used to point at
+    # Google Workspace, which has no mailbox for info@ or the Reply-To addresses, so replies
+    # from Gmail, Zoho and Microsoft bounced. mx1 is DNS-only and must never be proxied.
+    recs.append({"type": "MX", "name": "@", "content": f"mx1.{APEX}", "priority": 10})
     # Day-0 deliverability fix (2026-08-10, plan Part 0): the previous SPF had
     # no Google include (Google Workspace's real sending IPs were never
     # authorized -> outbound mail failed SPF) and `+a` also authorized
