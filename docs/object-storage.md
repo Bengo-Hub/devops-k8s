@@ -133,4 +133,7 @@ Re-sync it with the `sync-secrets.yml` workflow (`target_repo=Bengo-Hub/<repo>`,
 this way on the same day (subscriptions-api again, 90 minutes after its re-sync at 12:04 UTC), so the
 re-sync alone may not hold. If a repository fails again after a re-sync, the token the workflow
 copies (`PROPAGATE_PAT`, else `GH_PAT`, in devops-k8s) is the one that is dying; replace that token
-at the source instead of syncing repositories one by one.
+at the source instead of syncing repositories one by one. It repeated the same afternoon: auth-ui
+(re-synced at 13:48, deployed at 13:54, failed again at 16:55 UTC) and marketflow-ui failed with the
+same push error, so tags were set by hand for auth-api, subscriptions-api, auth-ui and marketflow-ui.
+treasury-api (another session's commit) was left failing for its owner.
