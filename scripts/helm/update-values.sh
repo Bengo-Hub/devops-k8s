@@ -202,6 +202,7 @@ update_helm_values() {
     local max_attempts=6
     local attempt=1
     local backoff=3
+    local auth_retries=0
     while (( attempt <= max_attempts )); do
         [[ $attempt -gt 1 ]] && log_warning "Retry $attempt/$max_attempts after push conflict..."
 
@@ -275,6 +276,27 @@ update_helm_values() {
             sleep "$backoff"
             (( backoff = backoff * 2 > 30 ? 30 : backoff * 2 ))
             continue
+        fi
+
+        # A push that fails with no conflict (the "could not read Username" family, a dropped
+        # connection, a 4xx/5xx from GitHub) was fatal on the first attempt and reported only as a
+        # token problem, although the same token pushes fine moments later (2026-10-20: tokens
+        # verified valid with push rights, the identical clone and push sequence replayed cleanly).
+        # Retry a few times with backoff, and record what GitHub answers to the receive-pack
+        # discovery request right now (status code only, never the token) so a persistent failure
+        # names its own cause.
+        if echo "$push_output" | grep -qiE "could not read Username|Authentication failed|returned error: (401|403|429|5[0-9][0-9])|unexpected disconnect|Could not resolve host|Connection (reset|timed out)"; then
+            local probe_code
+            probe_code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' -u "x-access-token:${token}" \
+                "https://github.com/${devops_repo}.git/info/refs?service=git-receive-pack" 2>/dev/null) || probe_code="curl-failed"
+            log_warning "Push failed without a conflict; GitHub answers receive-pack discovery with HTTP ${probe_code}"
+            if (( auth_retries < 3 )); then
+                auth_retries=$((auth_retries + 1))
+                log_warning "Retrying push (${auth_retries}/3) after ${backoff}s"
+                sleep "$backoff"
+                (( backoff = backoff * 2 > 30 ? 30 : backoff * 2 ))
+                continue
+            fi
         fi
 
         log_error "Failed to push changes - check token permissions"
@@ -370,6 +392,7 @@ update_plain_manifest_image() {
     local max_attempts=6
     local attempt=1
     local backoff=3
+    local auth_retries=0
     while (( attempt <= max_attempts )); do
         [[ $attempt -gt 1 ]] && log_warning "Retry $attempt/$max_attempts after push conflict..."
 
@@ -430,6 +453,27 @@ update_plain_manifest_image() {
             sleep "$backoff"
             (( backoff = backoff * 2 > 30 ? 30 : backoff * 2 ))
             continue
+        fi
+
+        # A push that fails with no conflict (the "could not read Username" family, a dropped
+        # connection, a 4xx/5xx from GitHub) was fatal on the first attempt and reported only as a
+        # token problem, although the same token pushes fine moments later (2026-10-20: tokens
+        # verified valid with push rights, the identical clone and push sequence replayed cleanly).
+        # Retry a few times with backoff, and record what GitHub answers to the receive-pack
+        # discovery request right now (status code only, never the token) so a persistent failure
+        # names its own cause.
+        if echo "$push_output" | grep -qiE "could not read Username|Authentication failed|returned error: (401|403|429|5[0-9][0-9])|unexpected disconnect|Could not resolve host|Connection (reset|timed out)"; then
+            local probe_code
+            probe_code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' -u "x-access-token:${token}" \
+                "https://github.com/${devops_repo}.git/info/refs?service=git-receive-pack" 2>/dev/null) || probe_code="curl-failed"
+            log_warning "Push failed without a conflict; GitHub answers receive-pack discovery with HTTP ${probe_code}"
+            if (( auth_retries < 3 )); then
+                auth_retries=$((auth_retries + 1))
+                log_warning "Retrying push (${auth_retries}/3) after ${backoff}s"
+                sleep "$backoff"
+                (( backoff = backoff * 2 > 30 ? 30 : backoff * 2 ))
+                continue
+            fi
         fi
 
         log_error "Failed to push changes - check token permissions"
