@@ -45,6 +45,9 @@ minReadySeconds: 15
 #   DATABASE_URL        — pgbouncer URL (?pgbouncer=true) for Next.js runtime
 #   DIRECT_DATABASE_URL — direct postgres URL for Prisma migrations (entrypoint.sh)
 #   ANTHROPIC_API_KEY   — Vera AI chatbot
+#   SESSION_SECRET      — HMAC key for cv_session and the parent portal session/codes; generated once
+#                         and preserved by scripts/infrastructure/create-service-secrets.sh
+#   INTERNAL_SERVICE_KEY — platform S2S key (auth-api portal accounts, treasury)
 # NEXT_PUBLIC_* are baked at Docker build time — listed here for documentation only.
 # ============================================================================
 envFromSecret: codevertex-website-secrets

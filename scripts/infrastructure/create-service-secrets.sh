@@ -301,6 +301,25 @@ if [[ "${SERVICE_NAME}" == "library-api" ]]; then
     fi
 fi
 
+# SESSION_SECRET — codevertex-website HMAC key for the cv_session cookie, the Digitika parent
+# portal session and the one-time code hashes. The site refuses to sign anything in production
+# without it (parent portal "Could not send a code", website SSO session 500). Read-existing-first
+# so it never rotates (that would sign every parent and admin out and burn pending codes).
+APP_SESSION_SECRET=""
+if [[ "${SERVICE_NAME}" == "codevertex-website" ]]; then
+    EXISTING_SESSION_SECRET=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.SESSION_SECRET}" 2>/dev/null | base64 -d || echo "")
+    if [[ -n "${SESSION_SECRET:-}" ]]; then
+        APP_SESSION_SECRET="$SESSION_SECRET"
+        log_info "Using provided SESSION_SECRET from environment"
+    elif [[ -n "${EXISTING_SESSION_SECRET:-}" ]]; then
+        APP_SESSION_SECRET="$EXISTING_SESSION_SECRET"
+        log_info "Retrieved existing SESSION_SECRET from cluster (preserved)"
+    else
+        APP_SESSION_SECRET=$(openssl rand -base64 48)
+        log_info "Generated new SESSION_SECRET for codevertex-website"
+    fi
+fi
+
 # INTERNAL_SERVICE_KEY — the SHARED platform service-to-service key (all services use the SAME
 # value; treasury/auth/subscriptions validate it). library-api needs it to call treasury for
 # membership-fee / fine / e-book payment intents. mail-ui needs it to call auth-api's S2S MFA
@@ -426,6 +445,10 @@ fi
 if [[ -n "${APP_INTERNAL_SERVICE_KEY}" ]]; then
     secret_literals+=("--from-literal=INTERNAL_SERVICE_KEY=${APP_INTERNAL_SERVICE_KEY}")
 fi
+# codevertex-website: include the stable session signing key (see above).
+if [[ -n "${APP_SESSION_SECRET}" ]]; then
+    secret_literals+=("--from-literal=SESSION_SECRET=${APP_SESSION_SECRET}")
+fi
 
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Secret exists — patch to merge standardized keys without losing existing keys
@@ -454,6 +477,9 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     fi
     if [[ -n "${APP_INTERNAL_SERVICE_KEY}" ]]; then
         PATCH_JSON+=",\"INTERNAL_SERVICE_KEY\":\"$(echo -n "${APP_INTERNAL_SERVICE_KEY}" | base64 -w0)\""
+    fi
+    if [[ -n "${APP_SESSION_SECRET}" ]]; then
+        PATCH_JSON+=",\"SESSION_SECRET\":\"$(echo -n "${APP_SESSION_SECRET}" | base64 -w0)\""
     fi
     PATCH_JSON+='}}'
 
