@@ -1,0 +1,166 @@
+# ClamAV malware scanner for inbound and outbound mail. Stalwart calls it as a milter
+# (MtaMilter object, data stage) on the Service below; see
+# shared-docs/internal/operations/email-hosting-stalwart-setup.md for the live JMAP object.
+#
+# Stalwart has no quarantine store: a milter "quarantine" verdict only adds a header and the
+# message is still delivered. So the milter is set to reject an infected message at SMTP time
+# and to defer (temporary failure, the sender retries) when the scanner is down, so nothing is
+# ever accepted unscanned.
+#
+# One replica: the signature database lives on a PVC and clamd needs about 1.5 GB of memory.
+# freshclam runs inside the same container and refreshes signatures through the day.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stalwart-clamav-config
+  namespace: email
+data:
+  clamav-milter.conf: |
+    MilterSocket inet:7357@0.0.0.0
+    User clamav
+    ClamdSocket unix:/tmp/clamd.sock
+    OnClean Accept
+    OnInfected Reject
+    OnFail Defer
+    RejectMsg "Message rejected: %v was found by the Codevertex mail scanner"
+    AddHeader Add
+    LogTime yes
+    LogInfected Basic
+    LogClean Off
+    MaxFileSize 100M
+  clamd.conf: |
+    LocalSocket /tmp/clamd.sock
+    LocalSocketMode 660
+    TCPSocket 3310
+    TCPAddr 127.0.0.1
+    User clamav
+    Foreground yes
+    MaxThreads 6
+    MaxFileSize 100M
+    MaxScanSize 200M
+    StreamMaxLength 100M
+    SelfCheck 3600
+    HeuristicAlerts yes
+    DetectPUA no
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-clamav-db
+  namespace: email
+  labels:
+    app: stalwart-clamav
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart-clamav
+  namespace: email
+  labels:
+    app: stalwart-clamav
+spec:
+  type: ClusterIP
+  ports:
+    - name: milter
+      port: 7357
+      protocol: TCP
+      targetPort: 7357
+  selector:
+    app: stalwart-clamav
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stalwart-clamav
+  namespace: email
+  labels:
+    app: stalwart-clamav
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stalwart-clamav
+  template:
+    metadata:
+      labels:
+        app: stalwart-clamav
+    spec:
+      containers:
+        - name: clamav
+          image: clamav/clamav:1.4
+          ports:
+            - name: milter
+              containerPort: 7357
+              protocol: TCP
+          env:
+            # The first start downloads the full signature set (about 300 MB), later starts reuse the PVC.
+            - name: CLAMAV_NO_FRESHCLAMD
+              value: "false"
+            - name: FRESHCLAM_CHECKS
+              value: "6"
+            - name: CLAMAV_NO_MILTERD
+              value: "false"
+          volumeMounts:
+            - name: db
+              mountPath: /var/lib/clamav
+            - name: config
+              mountPath: /etc/clamav/clamav-milter.conf
+              subPath: clamav-milter.conf
+            - name: config
+              mountPath: /etc/clamav/clamd.conf
+              subPath: clamd.conf
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1536Mi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+          startupProbe:
+            tcpSocket:
+              port: 7357
+            periodSeconds: 10
+            failureThreshold: 90
+          readinessProbe:
+            tcpSocket:
+              port: 7357
+            periodSeconds: 15
+          livenessProbe:
+            tcpSocket:
+              port: 7357
+            periodSeconds: 30
+            failureThreshold: 6
+      volumes:
+        - name: db
+          persistentVolumeClaim:
+            claimName: stalwart-clamav-db
+        - name: config
+          configMap:
+            name: stalwart-clamav-config
+---
+# Only the Stalwart pod may reach the scanner.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stalwart-clamav
+  namespace: email
+spec:
+  podSelector:
+    matchLabels:
+      app: stalwart-clamav
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: stalwart-mail
+      ports:
+        - protocol: TCP
+          port: 7357
