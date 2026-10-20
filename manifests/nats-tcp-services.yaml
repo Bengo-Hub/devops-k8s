@@ -20,11 +20,19 @@ kind: ConfigMap
 metadata:
   name: tcp-services
   namespace: ingress-nginx
+#
+# Mail ports use the "::PROXY" suffix: ingress-nginx sends a PROXY protocol v2 header to
+# Stalwart so it sees the real sender address instead of this node's IP. Without it SPF,
+# DNSBL checks and rate limits are meaningless and Stalwart's port-scan detector bans the
+# node IP, which blocks the admin UI (the 502 incidents of 2026-08-11, 08-18 and 08-20).
+# Stalwart must trust the node address first (NetworkListener overrideProxyTrustedNetworks on
+# the smtp, submissions, imaps, pop3s and sieve listeners), then this file is applied.
+# Rollback: remove the suffix and apply again.
 data:
   "4222": "messaging/nats:4222"
-  "25": "email/stalwart-mail:25"
-  "465": "email/stalwart-mail:465"
-  "587": "email/stalwart-mail:587"
-  "993": "email/stalwart-mail:993"
-  "995": "email/stalwart-mail:995"
-  "4190": "email/stalwart-mail:4190"
+  "25": "email/stalwart-mail:25::PROXY"
+  "465": "email/stalwart-mail:465::PROXY"
+  "587": "email/stalwart-mail:587::PROXY"
+  "993": "email/stalwart-mail:993::PROXY"
+  "995": "email/stalwart-mail:995::PROXY"
+  "4190": "email/stalwart-mail:4190::PROXY"
