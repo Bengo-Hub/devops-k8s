@@ -41,7 +41,7 @@ of the tenant uses it, so storage only holds files in use.
 | auth-api | done 2026-10-17: tenant logos, service icons and profile pictures stored on the public bucket, rows keep the link; 7 tenants and 2 users with inline images moved at startup; 2026-10-18 legal signature images moved from base64 in the row to the private bucket (no rows existed); no volume |
 | logistics-api | done 2026-10-17: KYC and proof-of-delivery files private (presigned), uploads require sign-in (were anonymous); the volume held only test KYC files (user: hard delete), PVC `logistics-api-media` released; map volumes (tileserver, valhalla) untouched |
 | hospital-api | done 2026-10-17: patient photos private (presigned); production had no media volume (an upload would have been lost on restart), no patient had a photo |
-| library-api | done 2026-10-17: covers public with a thumbnail next to each, e-book files private and streamed through the API after the loan or purchase check (range requests passed to R2); all 579 covers were Open Library links and there were no e-books, so nothing moved; PVC `library-api-media` (no files) deleted with user approval |
+| library-api | done 2026-10-17: covers public (smaller sizes from edge Image Transformations since 2026-10-21; the server-written `_thumb` copies were retired in library-api `1694d72`), e-book files private and streamed through the API after the loan or purchase check (range requests passed to R2); all 579 covers were Open Library links and there were no e-books, so nothing moved; PVC `library-api-media` (no files) deleted with user approval |
 | maskani-api | done 2026-10-17: keys `maskani/<tenant>/<kind>/...`; estate and unit photos public (market and maskani-commerce load them from the media domain), every other kind and issued PDFs private with presigned links; volume held no files; PVC `maskani-api-media` deleted with user approval |
 | erp-api | done 2026-10-17: resumes, claim receipts and employee documents private (presigned links in responses; before, links pointed at a `/media` route erp-api never served); volume held no files; PVC `erp-api-media` and the unmounted legacy `erp-api-app-media` (Django era) deleted with user approval |
 | marketflow-api | nothing to do (2026-10-18): stores no files, no volume |
@@ -87,8 +87,8 @@ Rules that keep this free and safe:
 Where it is used (2026-10-21): ordering-frontend (item galleries, ImageWithFallback, TenantLogo,
 avatar, brand logos), pos-ui (terminal product grid, brand chips, splash and settings logos, hotel
 photos), inventory-ui, maskani-ui, maskani-commerce, treasury-ui, hospital-ui, library-ui,
-logistics-ui, marketflow-ui, erp-ui, auth-ui. Library covers still use library-api's own
-`_thumb` files (open item below).
+logistics-ui, marketflow-ui, erp-ui, auth-ui, and library-ui covers (`07fe462`; library-api no
+longer writes `_thumb` copies, `1694d72`).
 
 The PWA media cache (`shared-ui-lib/pwa/sw-media.js`, copied into each app's `public/`) caches
 `media.codevertexafrica.com` and `/cdn-cgi/image/` variants as well as the API hosts' `/media/`
@@ -127,10 +127,6 @@ Create a new R2 API token in Cloudflare, update `CF_R2_ACCESS_KEY_ID` and
 
 `postgresql-backup-r2-secrets` (infra namespace, platform Postgres backups to
 `codevertex-platform-backups`) was created by hand and is not yet written by this workflow.
-
-Library covers: library-api writes a `<uuid>_thumb.<ext>` next to every uploaded cover and
-library-ui's CoverThumb asks for it first. Edge transformations now do the same job, so the
-thumbnail write (and its storage) can be retired once CoverThumb uses `MediaImage`; not done yet.
 
 The httpware Relinker keeps an old file's extension even when its bytes are another format (it
 stores the sniffed Content-Type, so browsers are unaffected). auth-api's own logo move sniffs the
