@@ -15,9 +15,9 @@ Keys: `<service>/<tenant_id>/<media_type>/<yyyy>/<mm>/<uuid>.<ext>` (uploads) or
 `<service>/users/<user_id>/<media_type>/...` for personal media. Rows store the key.
 
 Free tiers only (no paid Cloudflare feature without sign-off): R2 10 GB-month storage, 1M Class A
-and 10M Class B operations a month, no egress fees. Image Transformations, if enabled later, give
-5,000 unique transformations a month; beyond that new variants fail (no charge), so pages must fall
-back to the original image.
+and 10M Class B operations a month, no egress fees. Image Transformations (enabled on the zone
+2026-10-21, see Image delivery) give 5,000 unique transformations a month; beyond that new variants
+fail (no charge), so pages fall back to the original image.
 
 ## Moving a service off its media volume
 
@@ -47,6 +47,55 @@ of the tenant uses it, so storage only holds files in use.
 | marketflow-api | nothing to do (2026-10-18): stores no files, no volume |
 
 Before dropping a volume, check the service's entrypoint and Dockerfile for media-directory setup: logistics' entrypoint ran `mkdir -p $MEDIA_ROOT/...` and crash-looped without the volume (fixed in `112f70d`).
+
+## Image delivery
+
+Images are resized at the edge by Cloudflare Image Transformations, switched on for the
+`codevertexafrica.com` zone in the dashboard (Images, Transformations) on 2026-10-21. A variant is
+the original's path behind `/cdn-cgi/image/<options>/` on the same host:
+
+    https://media.codevertexafrica.com/cdn-cgi/image/width=256,quality=75,format=auto,fit=scale-down,onerror=redirect/<key>
+
+Measured: a 170 KB tenant logo is 5.6 KB as a 256 px JPEG and 3.5 KB as AVIF; a 94 KB shipped
+inventory menu image is 8 KB as WebP. `format=auto` serves AVIF or WebP to browsers that accept
+them.
+
+The UIs never build these links by hand. They use shared-ui-lib's `media` entry (v0.1.117+):
+
+| Export | Use |
+|---|---|
+| `MediaImage` | drop-in `<img>` for stored media: srcset, sizes, lazy loading, async decoding; on error it retries the original, then `fallbackSrc` |
+| `mediaImageLoaderFor(src)` | `loader` for next/image: Cloudflare for zone images, undefined (Next's own optimizer) for local assets and other hosts; zone images then need no `images.remotePatterns` entry |
+| `transformImageUrl`, `imageSrcSet`, `isTransformableImage` | the rules underneath |
+
+Rules that keep this free and safe:
+
+- Only public https files on the zone are transformed: the media host and the API hosts' shipped
+  `/media/` trees. SVG and GIF, presigned links (private bucket) and other hosts (Open Library
+  covers) are used as they are. A presigned link must never be transformed, because the variant
+  would be cached at the edge without the signature check.
+- Widths snap to 64, 128, 256, 512, 1024 and 1600 and quality is fixed per screen, so one image
+  has at most six variants. The count of unique variants is what the free allowance measures.
+- `onerror=redirect` sends the browser to the original when a variant fails, including after the
+  monthly allowance is used up.
+- `NEXT_PUBLIC_IMAGE_TRANSFORMS=off` at build time turns the helpers into pass-throughs.
+- shared-ui-lib's dist carries no `'use client'`. Server components use a one-line client boundary
+  (marketflow-ui `src/components/media-image.tsx`) or a small client wrapper around next/image
+  (maskani-commerce `MediaPhoto`), because a loader function cannot cross from a server component.
+- Print layouts (POS receipts) keep the original files, which must be loaded before printing.
+
+Where it is used (2026-10-21): ordering-frontend (item galleries, ImageWithFallback, TenantLogo,
+avatar, brand logos), pos-ui (terminal product grid, brand chips, splash and settings logos, hotel
+photos), inventory-ui, maskani-ui, maskani-commerce, treasury-ui, hospital-ui, library-ui,
+logistics-ui, marketflow-ui, erp-ui, auth-ui. Library covers still use library-api's own
+`_thumb` files (open item below).
+
+The PWA media cache (`shared-ui-lib/pwa/sw-media.js`, copied into each app's `public/`) caches
+`media.codevertexafrica.com` and `/cdn-cgi/image/` variants as well as the API hosts' `/media/`
+trees, so offline terminals keep their images.
+
+Usage is on the Cloudflare dashboard under Images. If it nears 5,000 a month, check which screens
+request widths that are not needed before considering a paid plan (needs sign-off).
 
 ## Setup
 
@@ -78,6 +127,15 @@ Create a new R2 API token in Cloudflare, update `CF_R2_ACCESS_KEY_ID` and
 
 `postgresql-backup-r2-secrets` (infra namespace, platform Postgres backups to
 `codevertex-platform-backups`) was created by hand and is not yet written by this workflow.
+
+Library covers: library-api writes a `<uuid>_thumb.<ext>` next to every uploaded cover and
+library-ui's CoverThumb asks for it first. Edge transformations now do the same job, so the
+thumbnail write (and its storage) can be retired once CoverThumb uses `MediaImage`; not done yet.
+
+The httpware Relinker keeps an old file's extension even when its bytes are another format (it
+stores the sniffed Content-Type, so browsers are unaffected). auth-api's own logo move sniffs the
+bytes since `92b05a4`; the one mislabelled logo (alpha-china-market, a JPEG stored as `.png`) was
+copied to a `.jpg` key and repointed on 2026-10-21, and every stored auth image was checked.
 
 ## Platform database backup (disaster recovery)
 
