@@ -97,6 +97,54 @@ trees, so offline terminals keep their images.
 Usage is on the Cloudflare dashboard under Images. If it nears 5,000 a month, check which screens
 request widths that are not needed before considering a paid plan (needs sign-off).
 
+## Video ads (planned, 2026-10-22)
+
+Status: **planned, not built.** It belongs to the MarketFlow ads autopilot, whose plan is kept in the
+private workspace. Nothing below is deployed yet.
+
+The cluster runs on one node, so the rule for video is that bytes never pass through it in volume. No
+video encoding runs on the cluster. Generation and rendering happen at external providers, and so do
+the WhatsApp rendition and thumbnails.
+
+Where a finished video lives, decided per file by the worker in this order:
+
+1. **The provider's own hosted link**, when it is public and lives long enough for review and
+   publishing (for example a render provider's 30-day download link). Nothing is copied.
+2. **The provider's share or public option**, switched on when the default link needs a login.
+3. **A copy in the public bucket** when the provider has no public option or its link expires too
+   soon. Key: `marketflow/<tenant_id>/previews/<random 128-bit id>/<file>.mp4`, unguessable and never
+   listed. These objects are written with a short cache header (`Cache-Control: public, max-age=300`),
+   not the bucket's usual long-lived caching, so a deletion takes effect at the edge within minutes.
+4. **The private bucket** with presigned links, only for tenants that switch on private previews.
+
+Preview links are viewable by anyone who has them. Approving or publishing needs sign-in. Viewers
+stream from the provider CDN or the R2 edge through a short redirect link, so only a few hundred
+bytes reach the cluster. Preview videos are never sent through Image Transformations.
+
+A copy under `media.codevertexafrica.com` sits on our own domain, so that URL prefix can be verified
+with TikTok, and TikTok pulls the file itself. YouTube resumable uploads and TikTok chunked uploads
+are the only places video bytes cross the cluster: streamed in 8 MB chunks, once per platform per ad.
+
+Free tier safety:
+
+- R2 lifecycle rules expire `marketflow/*/creative/` (private) and `marketflow/*/previews/` (public)
+  objects after 10 days, as a backstop behind the service's own hourly purge.
+- A live-bytes gauge across both buckets: above 8 GB, new renders wait with a clear message. Each
+  tenant can hold at most 5 live drafts.
+- Customer footage is uploaded from the browser straight to R2 with presigned PUT or multipart
+  links, never through ingress, so the ingress body limit (10m for marketflow) and Cloudflare's
+  100 MB request limit stay as they are.
+
+Deployment changes:
+
+- `objectStorage.enabled: true` for marketflow-api, the new worker and marketflow-ai.
+- A new `marketflow-worker` app (same image, `cmd/worker`), split out of the API pod. Requests 100m
+  CPU and 256Mi, limits 1 CPU and 768Mi, 1 replica. Jobs are lock-guarded and idempotent, so a
+  second replica only adds availability. It gets a new lowest-priority PriorityClass, `batch-low`
+  (value -100), so the scheduler gives way to the business apps first.
+- NATS subjects `marketflow.creative.>`, `marketflow.publish.>` and `conversion.>` on the
+  `marketflow` stream, with one durable consumer per publishing platform.
+
 ## Setup
 
 1. Repository secrets (already present): `CF_R2_ACCOUNT_ID`, `CF_R2_API_TOKEN`,
