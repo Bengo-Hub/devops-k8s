@@ -112,9 +112,10 @@ Where a finished video lives, decided per file by the worker in this order:
    publishing (for example a render provider's 30-day download link). Nothing is copied.
 2. **The provider's share or public option**, switched on when the default link needs a login.
 3. **A copy in the public bucket** when the provider has no public option or its link expires too
-   soon. Key: `marketflow/<tenant_id>/previews/<random 128-bit id>/<file>.mp4`, unguessable and never
-   listed. These objects are written with a short cache header (`Cache-Control: public, max-age=300`),
-   not the bucket's usual long-lived caching, so a deletion takes effect at the edge within minutes.
+   soon. Media type `video-drafts` (httpware v0.17.0), key
+   `marketflow/<tenant_id>/video-drafts/<yyyy>/<mm>/<uuid>.mp4`, unguessable and never listed. The
+   media type writes a short cache header (`Cache-Control: public, max-age=300`), not the bucket's
+   usual long-lived caching, so a deletion takes effect at the edge within minutes.
 4. **The private bucket** with presigned links, only for tenants that switch on private previews.
 
 Preview links are viewable by anyone who has them. Approving or publishing needs sign-in. Viewers
@@ -127,12 +128,19 @@ are the only places video bytes cross the cluster: streamed in 8 MB chunks, once
 
 Free tier safety:
 
-- R2 lifecycle rules expire `marketflow/*/creative/` (private) and `marketflow/*/previews/` (public)
-  objects after 10 days, as a backstop behind the service's own hourly purge.
+- The service's own hourly purge deletes drafts after review. R2 lifecycle rules match a fixed
+  prefix only (no wildcard for the tenant segment), so a 10-day backstop on
+  `marketflow/<tenant>/video-drafts/` and `marketflow/<tenant>/video-sources/` would need one rule
+  per tenant. Until that is automated, the live-bytes alert below is the backstop.
+- An abort-incomplete-multipart-uploads rule (1 day) on both buckets, so abandoned footage
+  uploads do not keep their parts.
+- Bucket CORS for the marketflow UI origins: allow `PUT`, expose `ETag` (the browser reads each
+  part's ETag during a multipart upload).
 - A live-bytes gauge across both buckets: above 8 GB, new renders wait with a clear message. Each
   tenant can hold at most 5 live drafts.
-- Customer footage is uploaded from the browser straight to R2 with presigned PUT or multipart
-  links, never through ingress, so the ingress body limit (10m for marketflow) and Cloudflare's
+- Customer footage (media type `video-sources`, private, up to 1 GB) is uploaded from the browser
+  straight to R2 with presigned PUT or multipart links (`UploadURL`, `CreateMultipart`, `PartURL`,
+  then `VerifyUpload`), never through ingress, so the ingress body limit (10m for marketflow) and Cloudflare's
   100 MB request limit stay as they are.
 
 Deployment changes:
