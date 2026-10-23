@@ -41,6 +41,11 @@ on:
         required: true
         type: string
         default: 'codevertexafrica.com'
+      upload_origins:
+        description: 'Origins allowed to upload straight to the buckets (presigned PUT and multipart), space separated'
+        required: true
+        type: string
+        default: 'https://marketflow.codevertexafrica.com'
 
 permissions:
   contents: read
@@ -63,6 +68,7 @@ jobs:
       PRIVATE_BUCKET: ${{ inputs.private_bucket }}
       PUBLIC_DOMAIN: ${{ inputs.public_domain }}
       ZONE_NAME: ${{ inputs.zone_name }}
+      UPLOAD_ORIGINS: ${{ inputs.upload_origins }}
     steps:
       - name: Check secrets
         run: |
@@ -87,18 +93,54 @@ jobs:
             fi
           done
 
-      - name: CORS on the public bucket
+      - name: CORS on both buckets
         run: |
           set -euo pipefail
-          # Browsers and the UIs' service workers read public media cross-origin.
-          code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${PUBLIC_BUCKET}/cors" \
-            -H "Authorization: Bearer ${CF_R2_TOKEN}" -H "Content-Type: application/json" \
-            --data '{"rules":[{"allowed":{"origins":["*"],"methods":["GET","HEAD"]},"maxAgeSeconds":86400}]}')
-          if [ "$code" != "200" ]; then
-            echo "::error::setting CORS failed (HTTP $code)"; jq -c '.errors' /tmp/resp.json || true; exit 1
-          fi
-          echo "CORS set on $PUBLIC_BUCKET"
+          # Public bucket: browsers and the UIs' service workers read public media cross-origin.
+          # Both buckets: the upload origins send files straight to the bucket with presigned PUT
+          # and multipart links (httpware objectstore UploadURL and PartURL). The browser must read
+          # each part's ETag to complete a multipart upload, so ETag is exposed.
+          origins=$(jq -cn --arg o "$UPLOAD_ORIGINS" '$o | split(" ") | map(select(length > 0))')
+          upload=$(jq -cn --argjson o "$origins" \
+            '{"allowed":{"origins":$o,"methods":["PUT","GET","HEAD"],"headers":["content-type","cache-control"]},"exposeHeaders":["ETag"],"maxAgeSeconds":3600}')
+          public_rules=$(jq -cn --argjson u "$upload" \
+            '{"rules":[{"allowed":{"origins":["*"],"methods":["GET","HEAD"]},"maxAgeSeconds":86400}, $u]}')
+          private_rules=$(jq -cn --argjson u "$upload" '{"rules":[$u]}')
+          for pair in "$PUBLIC_BUCKET|$public_rules" "$PRIVATE_BUCKET|$private_rules"; do
+            b="${pair%%|*}"; rules="${pair#*|}"
+            code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X PUT \
+              "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${b}/cors" \
+              -H "Authorization: Bearer ${CF_R2_TOKEN}" -H "Content-Type: application/json" \
+              --data "$rules")
+            if [ "$code" != "200" ]; then
+              echo "::error::setting CORS on $b failed (HTTP $code)"; jq -c '.errors' /tmp/resp.json || true; exit 1
+            fi
+            echo "CORS set on $b"
+          done
+
+      - name: Abort abandoned multipart uploads
+        run: |
+          set -euo pipefail
+          # An unfinished multipart upload keeps its parts (and their storage) until aborted. The
+          # service aborts the uploads it gives up on; this rule is the backstop after one day.
+          # The lifecycle PUT replaces every rule, so the bucket's other rules are read and kept.
+          rule='{"id":"abort-incomplete-multipart-1d","enabled":true,"conditions":{"prefix":""},"abortMultipartUploadsTransition":{"condition":{"type":"Age","maxAge":86400}}}'
+          for b in "$PUBLIC_BUCKET" "$PRIVATE_BUCKET"; do
+            url="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${b}/lifecycle"
+            code=$(curl -sS -o /tmp/current.json -w '%{http_code}' "$url" -H "Authorization: Bearer ${CF_R2_TOKEN}")
+            if [ "$code" != "200" ]; then
+              echo "::error::reading lifecycle of $b failed (HTTP $code)"; jq -c '.errors' /tmp/current.json || true; exit 1
+            fi
+            body=$(jq -c --argjson r "$rule" \
+              '{"rules": (((.result.rules // []) | map(select(.id != $r.id))) + [$r])}' /tmp/current.json)
+            echo "$b keeps $(echo "$body" | jq '.rules | length - 1') other lifecycle rule(s)"
+            code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X PUT "$url" \
+              -H "Authorization: Bearer ${CF_R2_TOKEN}" -H "Content-Type: application/json" --data "$body")
+            if [ "$code" != "200" ]; then
+              echo "::error::setting lifecycle on $b failed (HTTP $code)"; jq -c '.errors' /tmp/resp.json || true; exit 1
+            fi
+            echo "lifecycle set on $b"
+          done
 
       - name: Bind the public domain
         run: |
