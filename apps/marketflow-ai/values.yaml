@@ -212,3 +212,9 @@ securityContext:
 pdb:
   enabled: true
   minAvailable: 1
+# Shared object storage (OBJECT_STORAGE_*, the object-storage Secret written by the
+# object-storage workflow; G11). marketflow-ai stores Creative Studio posters and
+# video drafts there (Sprint 15, marketflow-ai 5e2cb54). Optional Secret ref, so
+# the pod starts without it; posters answer 503 until the Secret is present.
+objectStorage:
+  enabled: true
