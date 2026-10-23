@@ -30,3 +30,12 @@ metadata:
 value: 500000000
 globalDefault: false
 description: "Platform services (argocd, prometheus, cert-manager) — above app workloads."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: batch-low
+value: -100
+globalDefault: false
+preemptionPolicy: Never
+description: "Background workers (marketflow-worker): below every app workload (default 0), so under pressure they wait or are evicted first, and they never preempt anything."

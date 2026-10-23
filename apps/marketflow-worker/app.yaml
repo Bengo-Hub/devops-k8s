@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: marketflow-worker
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests
+    directory:
+      include: marketflow-worker-deployment.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: marketflow
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false  # marketflow namespace already exists
+      - ServerSideApply=true
