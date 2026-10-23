@@ -146,10 +146,11 @@ Free tier safety:
 Deployment changes:
 
 - `objectStorage.enabled: true` for marketflow-api, the new worker and marketflow-ai.
-- A new `marketflow-worker` app (same image, `cmd/worker`), split out of the API pod. Requests 100m
-  CPU and 256Mi, limits 1 CPU and 768Mi, 1 replica. Jobs are lock-guarded and idempotent, so a
-  second replica only adds availability. It gets a new lowest-priority PriorityClass, `batch-low`
-  (value -100), so the scheduler gives way to the business apps first.
+- `marketflow-worker` (built 2026-10-23): a plain Deployment, `manifests/marketflow-worker-deployment.yaml`,
+  running the marketflow-api image with `MF_ROLE=worker` (see `apps/marketflow-worker/README.md`).
+  Requests 100m CPU and 256Mi, limits 1 CPU and 768Mi, 1 replica, PriorityClass `batch-low` (value
+  -100, never preempts), so the scheduler gives way to the business apps first. It has the shared
+  `object-storage` Secret for video copies and platform uploads.
 - NATS subjects `marketflow.creative.>`, `marketflow.publish.>` and `conversion.>` on the
   `marketflow` stream, with one durable consumer per publishing platform.
 
