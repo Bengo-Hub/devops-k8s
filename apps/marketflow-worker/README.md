@@ -11,7 +11,7 @@ token health, cron agents, SLA and meeting prep).
   foreground. Each marketflow-api release moves the manifest's image through
   `update_plain_manifest_image` in marketflow-api's `build.sh`, the same pattern as
   `auth-session-cleanup`.
-- **Env:** mirrors `apps/marketflow-api/values.yaml`. Add a worker setting to both files.
+- **Env:** mirrors `apps/marketflow-api/values.yaml`, except `MF_ROLE` (`api` there, `worker` here). Add a worker setting to both files.
 - **Scheduling:** PriorityClass `batch-low` (value -100, never preempts), so on the single node the
   business apps are scheduled first and this pod waits or is evicted first.
 - **Health:** `/healthz` on port 4002 drives the startup, readiness and liveness probes, so a

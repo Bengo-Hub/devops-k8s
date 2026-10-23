@@ -40,6 +40,10 @@ progressDeadlineSeconds: 900
 # ENVIRONMENT VARIABLES
 # ============================================================================
 env:
+  # The worker runs in its own Deployment (manifests/marketflow-worker-deployment.yaml), so these
+  # pods run migrations, seed and the API only. Unset, the image also starts the worker inline.
+  - name: MF_ROLE
+    value: api
   - name: APP_ENV
     value: production
   - name: HTTP_PORT
@@ -183,6 +187,10 @@ env:
         name: marketflow-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
+# Shared object storage (OBJECT_STORAGE_*, the object-storage Secret written by the
+# object-storage workflow; G11). Optional Secret ref, so the pod starts without it.
+objectStorage:
+  enabled: true
 # ============================================================================
 # MIGRATIONS
 # ============================================================================
