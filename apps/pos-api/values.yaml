@@ -204,7 +204,9 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://theurbanloftcafe.com, https://books.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key"
+    # X-Client-Id / X-Device-Name identify the browser for pos-api's audit trail (clientinfo);
+    # pos-ui sends them on every request, so they must be allowed here or every preflight fails.
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key, Idempotency-Key, X-Client-Id, X-Device-Name"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
     # SSE: the notifications stream needs nginx to stop buffering and not cut the long-lived
