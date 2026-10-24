@@ -40,6 +40,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: treasury
+        # marketflow-api's creative studio offering picker reads sellable items (2026-10-24).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
       ports:
         - protocol: TCP
           port: 4000
