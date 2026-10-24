@@ -69,12 +69,13 @@ env:
         optional: true
   - name: MF_AI_GROQ_BASE_URL
     value: "https://api.groq.com/openai/v1"
+  # Groq's Llama ids are enterprise-only since 2026-08-16; gpt-oss is pay as you go.
   - name: MF_AI_GROQ_ROUTER_MODEL
-    value: "llama-3.1-8b-instant"
+    value: "openai/gpt-oss-20b"
   - name: MF_AI_GROQ_MAIN_MODEL
-    value: "llama-3.3-70b-versatile"
+    value: "openai/gpt-oss-120b"
   - name: MF_AI_GROQ_FALLBACK_MODEL
-    value: "gemma2-9b-it"
+    value: "openai/gpt-oss-20b"
   # Ollama (shared pod: embeddings + tool-calling LLM fallback)
   - name: MF_AI_OLLAMA_URL
     value: "http://ollama.shared-infra.svc.cluster.local:11434"
