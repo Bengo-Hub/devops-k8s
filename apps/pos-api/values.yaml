@@ -101,7 +101,7 @@ env:
   - name: OTLP_ENDPOINT
     value: http://otel-collector.infra.svc.cluster.local:4317
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,https://books.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
+    value: "https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,https://books.codevertexafrica.com,http://localhost:3000,http://localhost:3001,https://alphachinamarket.co.ke,https://www.alphachinamarket.co.ke,https://urbaneats.theurbanloftcafe.com"
   # Shared S2S key — validates inbound requests from other services (X-API-Key header)
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
@@ -202,7 +202,7 @@ ingress:
     # books.codevertexafrica.com = the embedded treasury/Paystack ("Books") payment iframe origin
     # that POSTs to /pos/payments/initiate — without it the gateway init is CORS-blocked.
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://theurbanloftcafe.com, https://books.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, https://theurbanloftcafe.com, https://books.codevertexafrica.com, http://localhost:3000, http://localhost:3001, https://alphachinamarket.co.ke, https://www.alphachinamarket.co.ke, https://urbaneats.theurbanloftcafe.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     # X-Client-Id / X-Device-Name identify the browser for pos-api's audit trail (clientinfo);
     # pos-ui sends them on every request, so they must be allowed here or every preflight fails.

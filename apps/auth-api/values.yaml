@@ -132,6 +132,10 @@ env:
     value: "Codevertex Platform"
   - name: AUTH_WEBAUTHN_RP_ORIGINS
     value: "https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://pos.codevertexafrica.com,https://inventory.codevertexafrica.com,https://ordering.codevertexafrica.com,https://logistics.codevertexafrica.com,https://riderapp.codevertexafrica.com,https://marketflow.codevertexafrica.com,https://ticketing.codevertexafrica.com"
+  # Tenants' own storefront domains served by ordering-frontend: OAuth redirect URIs (seed),
+  # sign-in return, logout and CORS. Keep in step with ordering-frontend's ingress hosts.
+  - name: AUTH_SECURITY_TENANT_APP_HOSTS
+    value: "alphachinamarket.co.ke,www.alphachinamarket.co.ke,urbaneats.theurbanloftcafe.com"
   # Subscription Service Integration — JWT enrichment with plan/features/limits
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"

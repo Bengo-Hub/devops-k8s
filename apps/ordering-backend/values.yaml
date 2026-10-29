@@ -51,7 +51,7 @@ env:
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://ordering.codevertexafrica.com,https://orderingapi.codevertexafrica.com,https://theurbanloftcafe.com,https://pos.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001"
+    value: "https://ordering.codevertexafrica.com,https://orderingapi.codevertexafrica.com,https://theurbanloftcafe.com,https://pos.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001,https://alphachinamarket.co.ke,https://www.alphachinamarket.co.ke,https://urbaneats.theurbanloftcafe.com"
   # Database Configuration - uses standard keys from devops-k8s create-service-secrets.sh
   - name: POSTGRES_URL
     valueFrom:

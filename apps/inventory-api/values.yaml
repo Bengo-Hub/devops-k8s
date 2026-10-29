@@ -122,7 +122,7 @@ env:
         key: INTERNAL_SERVICE_KEY
         optional: true
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://inventory.codevertexafrica.com,https://inventoryapi.codevertexafrica.com,https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com"
+    value: "https://inventory.codevertexafrica.com,https://inventoryapi.codevertexafrica.com,https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com,https://alphachinamarket.co.ke,https://www.alphachinamarket.co.ke,https://urbaneats.theurbanloftcafe.com"
 resources:
   requests:
     # Lowered 100m→50m: the single k3s node sits at ~99% CPU requests, so with maxSurge=0 the
@@ -179,7 +179,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     # CORS: allow frontend origins (see shared-docs/devops-k8s-ingress-cors.md)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexafrica.com, https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://inventory.codevertexafrica.com, https://pos.codevertexafrica.com, https://ordering.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001, https://theurbanloftcafe.com, https://alphachinamarket.co.ke, https://www.alphachinamarket.co.ke, https://urbaneats.theurbanloftcafe.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-Outlet-ID, X-API-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
