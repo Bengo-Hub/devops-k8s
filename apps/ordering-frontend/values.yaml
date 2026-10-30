@@ -133,7 +133,9 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    # Tenant storefront domains (same pattern as truload-frontend's kuraweigh.kura.go.ke): the app's
+    # Fixed tenant domains (same pattern as truload-frontend's kuraweigh.kura.go.ke). New tenant
+    # domains are connected from the SSO Domains screen instead: auth-api creates their Ingress
+    # (td-* objects, manifests/auth-api-domains-rbac.yaml). The app's
     # src/proxy.ts maps each host to its tenant slug. Keep in step with HOSTNAME_SLUG_MAP in
     # ordering-frontend src/lib/tenant-domains.ts and auth-api TENANT_APP_HOSTS.
     # alpha-china-market
@@ -142,11 +144,6 @@ ingress:
         - path: /
           pathType: Prefix
     - host: www.alphachinamarket.co.ke
-      paths:
-        - path: /
-          pathType: Prefix
-    # urban-loft (theurbanloftcafe.com itself is the cafe website, apps/cafe-website)
-    - host: urbaneats.theurbanloftcafe.com
       paths:
         - path: /
           pathType: Prefix
@@ -159,9 +156,6 @@ ingress:
         - alphachinamarket.co.ke
         - www.alphachinamarket.co.ke
       secretName: alphachinamarket-storefront-tls
-    - hosts:
-        - urbaneats.theurbanloftcafe.com
-      secretName: urbaneats-storefront-tls
 # ============================================================================
 # MONITORING AND OBSERVABILITY
 # ============================================================================
