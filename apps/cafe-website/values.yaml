@@ -43,17 +43,21 @@ strategy:
     maxSurge: 1
     maxUnavailable: 0
 # Environment variables - secrets are optional
+# NEXT_PUBLIC_* values are baked into the bundle at build time (Dockerfile ARGs / build.sh); the
+# ones below only document the deployed addresses and must use the names src/config/env.ts reads.
 env:
   - name: NODE_ENV
     value: "production"
-  - name: NEXT_PUBLIC_ORDERING_API_URL
+  - name: NEXT_PUBLIC_ORDERING_SERVICE_URL
     value: https://orderingapi.codevertexafrica.com
-  - name: NEXT_PUBLIC_AUTH_URL
+  - name: NEXT_PUBLIC_ORDERING_STORE_URL
+    value: https://urbaneats.theurbanloftcafe.com
+  - name: NEXT_PUBLIC_AUTH_SERVICE_URL
     value: https://sso.codevertexafrica.com
   - name: NEXT_PUBLIC_AUTH_UI_URL
     value: https://accounts.codevertexafrica.com
-  - name: NEXT_PUBLIC_NOTIFICATIONS_URL
-    value: https://notifications.codevertexafrica.com
+  - name: NEXT_PUBLIC_NOTIFICATIONS_SERVICE_URL
+    value: https://notificationsapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_API_URL
     value: https://pricingapi.codevertexafrica.com
   - name: NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL
