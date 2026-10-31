@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/inventory-ui
-  tag: "ccceed64"
+  tag: "c9f1e278"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
