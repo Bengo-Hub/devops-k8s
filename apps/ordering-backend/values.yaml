@@ -65,6 +65,23 @@ env:
         name: ordering-backend-secrets
         key: GOOGLE_TOKEN_ENCRYPTION_KEY
         optional: true
+  # Google Business Profile OAuth client (staff integrations page: connect, reviews, replies).
+  # Add both keys to ordering-backend-secrets; until then only the pasted review link works.
+  - name: GOOGLE_OAUTH_CLIENT_ID
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: GOOGLE_OAUTH_CLIENT_ID
+        optional: true
+  - name: GOOGLE_OAUTH_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: ordering-backend-secrets
+        key: GOOGLE_OAUTH_CLIENT_SECRET
+        optional: true
+  # Must match the redirect URI registered on the Google OAuth client exactly.
+  - name: GOOGLE_OAUTH_REDIRECT_URL
+    value: "https://orderingapi.codevertexafrica.com/api/v1/integrations/google/callback"
   # Direct PostgreSQL URL for migrate/seed (bypasses PgBouncer transaction mode)
   - name: POSTGRES_MIGRATE_URL
     valueFrom:
