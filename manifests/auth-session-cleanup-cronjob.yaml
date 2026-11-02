@@ -41,7 +41,7 @@ spec:
               # (apps/auth-api/values.yaml) so the cleanup binary matches what
               # auth-api itself runs; bump this alongside any future
               # auth-api release that changes session-cleanup behavior.
-              image: docker.io/codevertex/auth-api:9b5ba39b
+              image: docker.io/codevertex/auth-api:cb74b927
               imagePullPolicy: IfNotPresent
               command: ["/usr/local/bin/auth-session-cleanup"]
               env:
