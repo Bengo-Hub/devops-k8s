@@ -53,8 +53,6 @@ data:
            ttl 30
         }
         hosts {
-           77.237.232.66 tiles.codevertexitsolutions.com
-           77.237.232.66 routing.codevertexitsolutions.com
            10.99.204.236 mx1.codevertexafrica.com
            fallthrough
         }

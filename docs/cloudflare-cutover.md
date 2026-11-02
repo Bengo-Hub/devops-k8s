@@ -33,7 +33,7 @@ RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
    `CF_API_TOKEN=<TOKEN> ./scripts/cloudflare/populate-zone.py <ZONE_ID>`
    Zone ID: dbbf1a40cb82ffd43dbc1405d3d8a4b1 (corrected 2026-07-31 — the
    previously-recorded ID `729e99d9d6b41f0ec021e9fbe7c7695d` is actually the
-   zone for the unrelated `codevertexitsolutions.com` domain, not
+   zone of the retired old domain, not
    `codevertexafrica.com`; every DNS sync attempt against the old ID failed
    with an opaque Cloudflare "Authentication error" regardless of token
    validity — verify via `GET /zones?name=codevertexafrica.com` if this ever

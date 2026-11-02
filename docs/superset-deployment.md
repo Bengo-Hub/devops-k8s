@@ -215,7 +215,7 @@ Once deployed, access Superset:
 kubectl get ingress -n default superset
 
 # Access via browser
-# URL: https://superset.codevertexitsolutions.co.ke
+# URL: https://superset.codevertexafrica.com
 ```
 
 **Default Credentials:**
@@ -719,8 +719,8 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
   tls:
     - hosts:
-        - superset.codevertexitsolutions.co.ke
-      secretName: superset-codevertexitsolutions-tls
+        - superset.codevertexafrica.com
+      secretName: superset-codevertexafrica-tls
 ```
 
 ### 5. Security Context
