@@ -80,4 +80,6 @@ def update_record(token, zone, record_id, body):
 
 
 def norm_txt(s):
-    return s.strip().strip('"').replace(" ", "")
+    """Comparable TXT content. Cloudflare returns long values (DKIM keys) split into quoted
+    255-character chunks ("..." "..."), so the chunk boundaries are joined before comparing."""
+    return s.strip().replace('" "', "").replace('""', "").strip('"').replace(" ", "")
