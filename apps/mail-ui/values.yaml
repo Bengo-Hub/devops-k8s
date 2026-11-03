@@ -121,7 +121,7 @@ healthCheck:
 # INGRESS CONFIGURATION
 # ============================================================================
 # webmail.codevertexafrica.com currently still points at a legacy Truehost
-# mirror at the DNS layer (devops-k8s/scripts/cloudflare/populate-zone.py) —
+# mirror at the DNS layer (devops-k8s/scripts/cloudflare/zones/codevertexafrica.py) —
 # this Ingress object doesn't receive any traffic until that record is
 # repointed. Safe to deploy ahead of the DNS change.
 ingress:

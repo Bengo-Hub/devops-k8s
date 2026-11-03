@@ -22,8 +22,8 @@ SAFE TO RE-RUN, staged rollout by design:
   - Re-running in the same mode is a no-op if the ruleset is already deployed
     with that override state (the script checks before writing).
 
-Does NOT touch DNS records, page rules, or anything set-proxied.py/
-populate-zone.py manage — this only touches the WAF entry point ruleset.
+Does NOT touch DNS records, page rules, or anything sync-zone.py manages
+(scripts/cloudflare/zones/) — this only touches the WAF entry point ruleset.
 
 Usage:
     CF_API_TOKEN=<token> ./manage-waf.py <ZONE_ID> --mode log

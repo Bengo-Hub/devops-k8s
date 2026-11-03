@@ -3,34 +3,35 @@ name: Sync Cloudflare DNS
 on:
   workflow_dispatch:
     inputs:
-      zone_id:
-        description: 'Cloudflare zone ID (codevertexafrica.com = dbbf1a40cb82ffd43dbc1405d3d8a4b1); for hadia-zone.py pass hadiafrica.com'
+      domain:
+        description: 'Zone to sync (each has its own module in scripts/cloudflare/zones/)'
         required: true
-        type: string
-      script:
-        description: 'Script to run'
+        type: choice
+        options:
+          - codevertexafrica.com
+          - hadiafrica.com
+      action:
+        description: 'records: create missing and correct owned records; proxied: flip listed hosts to proxied'
         required: false
         type: choice
-        default: populate-zone.py
+        default: records
         options:
-          - populate-zone.py
-          - set-proxied.py
-          - hadia-zone.py
+          - records
+          - proxied
       mode:
-        description: 'hadia-zone.py only: list, plan (no changes) or apply'
+        description: 'plan prints the changes without making them; list prints every record; apply makes the changes'
         required: false
         type: choice
         default: plan
         options:
-          - list
           - plan
+          - list
           - apply
 
-# populate-zone.py and set-proxied.py are written for codevertexafrica.com only: never run them
-# against another zone. populate-zone.py only creates missing records and corrects mismatched
-# content on records it owns (A/CNAME/MX/TXT for its host list); it never deletes anything.
-# hadia-zone.py manages hadiafrica.com's web records only: it checks the zone name, never deletes
-# or modifies a record, and never touches MX or TXT (the mail setup stays as it is).
+# scripts/cloudflare/sync-zone.py resolves the zone from the chosen domain's own module by NAME and
+# checks it against Cloudflare, so one domain's records can never be written into another zone.
+# Nothing is ever deleted; existing records' proxied state is only changed by action=proxied.
+# Run mode=plan first and review the output before mode=apply.
 
 jobs:
   sync:
@@ -38,8 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run script
+      - name: Run sync-zone.py
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CF_MODE: ${{ inputs.mode }}
-        run: python3 "scripts/cloudflare/${{ inputs.script }}" "${{ inputs.zone_id }}"
+        run: python3 scripts/cloudflare/sync-zone.py "${{ inputs.domain }}" --action "${{ inputs.action }}" --mode "${{ inputs.mode }}"

@@ -30,7 +30,9 @@ RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
 4. Populate/verify the zone records (safe pre-flip; grey-cloud mirror of the
    cloudoon DNS audited 2026-07-13, incl. MX smtp.google.com + SPF/DMARC/
    site-verification TXT):
-   `CF_API_TOKEN=<TOKEN> ./scripts/cloudflare/populate-zone.py <ZONE_ID>`
+   `CF_API_TOKEN=<TOKEN> ./scripts/cloudflare/sync-zone.py codevertexafrica.com --mode plan`, then
+   `--mode apply` (or the "Sync Cloudflare DNS" workflow with domain codevertexafrica.com).
+   The records live in `scripts/cloudflare/zones/codevertexafrica.py`; the zone is resolved by name.
    Zone ID: dbbf1a40cb82ffd43dbc1405d3d8a4b1 (corrected 2026-07-31 — the
    previously-recorded ID `729e99d9d6b41f0ec021e9fbe7c7695d` is actually the
    zone of the retired old domain, not

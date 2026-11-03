@@ -9,7 +9,7 @@
 #
 # Requires a DNS A record: r.codevertexafrica.com -> the cluster's public origin IP
 # (same host/proxied=false convention as the other codevertexafrica.com records — see
-# scripts/cloudflare/populate-zone.py). cert-manager auto-issues its own cert via the existing
+# scripts/cloudflare/zones/codevertexafrica.py). cert-manager auto-issues its own cert via the existing
 # letsencrypt-prod ClusterIssuer (DNS-01 already covers the whole zone) — no manual cert step.
 #
 # Not synced by the ArgoCD root app (which only watches path: apps) — apply manually:
