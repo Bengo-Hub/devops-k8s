@@ -98,8 +98,8 @@ env:
     value: "https://projects.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3005"
 resources:
   requests:
-    cpu: 50m
-    memory: 256Mi
+    cpu: 25m
+    memory: 128Mi
   limits:
     cpu: 500m
     memory: 512Mi

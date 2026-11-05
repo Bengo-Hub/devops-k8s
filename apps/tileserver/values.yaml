@@ -171,8 +171,11 @@ initContainers:
         # initContainer (one-time tile generation). K8s reserves max(init, main) for the pod's
         # whole life, so a 1-core/3Gi init request idly held ~1 core + 3Gi. Right-sized down;
         # it still bursts to the 4-core / 6Gi limit during the actual build.
-        cpu: "150m"
-        memory: 1Gi
+        # 2026-11-06: 150m/1Gi still made each pod reserve 3x its CPU and 4x its memory
+        # (main is 50m/256Mi) for a step that normally exits at once because the tiles
+        # exist on the PVC. Now below the main container so it no longer sets the floor.
+        cpu: "25m"
+        memory: 128Mi
       limits:
         cpu: "4"
         memory: 6Gi

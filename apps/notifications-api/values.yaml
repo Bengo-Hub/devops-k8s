@@ -191,8 +191,8 @@ env:
     value: "codevertex"
 resources:
   requests:
-    cpu: 50m
-    memory: 256Mi
+    cpu: 25m
+    memory: 128Mi
   limits:
     cpu: 500m
     memory: 512Mi

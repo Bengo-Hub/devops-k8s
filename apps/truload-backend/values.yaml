@@ -50,7 +50,10 @@ resources:
     # 1Gi request the 2-replica baseline sits well under the 75% target, so the service idles at
     # min 2 during low traffic and scales to 4 only under real load. Baseline reservation is
     # unchanged (2×1Gi == the old 4×512Mi), freeing two pod slots + headroom at idle.
-    memory: 1Gi
+    # 2026-11-06: 1Gi to 768Mi. Sticky working set still ~310-350Mi/pod, about 46% of this
+    # request, and the 75% memory HPA threshold (576Mi) stays well clear of it. Do not go near
+    # 512Mi: that is the value that pinned the service at 4 replicas.
+    memory: 768Mi
   limits:
     cpu: 2000m
     memory: 2Gi
@@ -190,6 +193,13 @@ persistence:
   mountPath: /app/uploads
   accessMode: ReadWriteOnce
   storageClass: local-path
+  initResources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
 # Extra PVCs to create via the Helm chart (auto-synced by ArgoCD)
 extraPersistentVolumeClaims:
   - name: truload-backups
@@ -227,6 +237,17 @@ initContainers:
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001
+    # 2026-11-06: stated explicitly. The live Deployment carried 300m/512Mi from an old
+    # manual patch that ArgoCD's three-way diff never removes, and since a pod reserves
+    # max(containers, largest init) each pod held 300m for a mkdir. Same for init-media
+    # via persistence.initResources.
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 500m
+        memory: 128Mi
 # Rollout strategy: surge-first (maxUnavailable:0, maxSurge:1) — a NEW pod must be Ready
 # before any OLD pod is terminated, so rollouts never drop below the desired count and
 # never serve 503s. Requires node headroom (provided by fleet-wide CPU-request right-sizing).
