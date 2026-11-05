@@ -196,7 +196,9 @@ spec:
         resources:
           requests:
             # Right-sized 1000m->300m: actual CPU usage is ~150m; bursts to the 4000m limit.
-            cpu: 300m
+            # 2026-11-06: 300m->200m, still above that ~150m daytime use because every
+            # service depends on this pod. Night use ~50m.
+            cpu: 200m
             memory: 3Gi
           limits:
             cpu: 4000m
@@ -251,7 +253,7 @@ spec:
               key: password
         resources:
           requests:
-            cpu: 100m
+            cpu: 25m  # metrics sidecar, 2026-11-06: was 100m
             memory: 128Mi
           limits:
             cpu: 200m
