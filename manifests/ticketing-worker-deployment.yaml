@@ -1,0 +1,57 @@
+# Ticketing worker: the SLA breach job, every 5 minutes. Same image as ticketing-api, running
+# /app/ticketing-worker. It publishes ticketing.sla.<kind> and exits on a signal; it serves no HTTP,
+# so it has no probes. The image is moved to each ticketing-api release by ticketing-api's build.sh
+# (update_plain_manifest_image). The env mirrors apps/ticketing-api/values.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticketing-worker
+  namespace: ticketing
+  labels:
+    app: ticketing-worker
+    component: worker
+spec:
+  # One replica is enough: a breach is marked once, whichever replica finds it.
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ticketing-worker
+  template:
+    metadata:
+      labels:
+        app: ticketing-worker
+        component: worker
+    spec:
+      priorityClassName: batch-low
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      imagePullSecrets:
+        - name: registry-credentials
+      containers:
+        - name: worker
+          image: docker.io/codevertex/ticketing-api:aa408560
+          imagePullPolicy: IfNotPresent
+          command: ["/app/ticketing-worker"]
+          env:
+            - name: APP_ENV
+              value: production
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ticketing-api-secrets
+                  key: POSTGRES_URL
+            - name: EVENTS_NATS_URL
+              value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 48Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
