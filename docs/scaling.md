@@ -382,6 +382,52 @@ spec:
    - Include buffer for spikes
    - Monitor for over/under-provisioning
 
+## Resource Sizing Policy (single production node)
+
+Production runs on one node (12 vCPU, 48 GiB). Requests decide what can be scheduled and each pod's share of CPU under contention. Limits only cap bursts. The target is CPU and memory requests near 60% of the node, leaving room for surge rollouts and HPA scale-out.
+
+### Measuring
+
+`scripts/cluster/capacity-report.sh` is read-only and prints requests against live use per pod, throttling per container, HPA status, ingress traffic per upstream and JetStream consumer state. There is no Prometheus on this cluster, so this report and the VPA recommendations are the sizing signals.
+
+```powershell
+Get-Content scripts/cluster/capacity-report.sh -Raw | ssh mss-prod "sed '1s/^\xEF\xBB\xBF//' | tr -d '\r' | bash -s -- pods"
+```
+
+Sections: `node`, `pods`, `throttle`, `hpa`, `traffic`, `nats`. Measure during the daily peak (around 17:00 UTC) as well as off peak, because night readings understate daytime CPU.
+
+### Tiers
+
+| Tier | Services | CPU request | Notes |
+|---|---|---|---|
+| Hot | pos-api, auth-api, inventory-api | 100m to 150m | Largest share under contention, HPA room to 4 or 6 pods |
+| Hot UI | pos-ui, inventory-ui | 50m | CPU limit 1000m |
+| Normal | treasury-api, erp-api, maskani-api, ordering-backend, ordering-frontend, truload | 50m and up | Scalable HPAs, so requests stay above the scale-out point |
+| Idle | Other UIs and fixed size APIs | 25m | Limits unchanged, so bursts are unaffected |
+| Platform | postgres, redis, nats, ingress, stalwart | Set per workload | Changed off peak only |
+
+### Rules
+
+- **HPA targets are a percentage of the request.** Lowering a request on an app whose HPA can scale makes it scale earlier. Memory requests only drop to 128Mi where min and max replicas are equal. truload-backend must stay well above 512Mi: its working set of about 350Mi per pod pinned it at 4 replicas at that value.
+- **Init containers count.** A pod reserves the larger of its containers' total and its largest init container, so check both when a cut does not change the node totals.
+- **Git must state a value to change it.** ArgoCD's client-side three-way diff never removes a live field that git does not set. Stale values from old manual patches stay until git names the field.
+- **Low limits throttle more than low requests.** A workload that bursts briefly needs a limit that fits the burst, even when its average use is tiny.
+- **Host port workloads cannot surge.** metrics-server and ingress-nginx use `maxSurge: 0`, and wireguard uses `Recreate`. Any change to the ingress-nginx pod spec has previously caused a deadlock on its host ports, so it needs a planned window and the recovery steps at hand.
+
+### VPA
+
+All VPAs run in `Off` mode with floors of 10m and 32Mi, so recommendations show real use over about 8 days and no pods are changed. Recommendations are input for a decision, not a value to apply directly: they do not know about HPA targets.
+
+### JetStream consumers
+
+Streams stay R3. Consumers run R1, because all three nats pods share the node and R3 consumer raft traffic cost about a quarter of real node CPU. The `nats-consumer-replicas` CronJob in `manifests/nats-stream-retention-job.yaml` enforces this for every client language and for consumers created later. An R1 consumer pauses while its nats pod restarts and resumes from disk afterwards. Do not set `nats.ConsumerReplicas` in service code: nats.go rejects a bind when the value differs from the existing durable.
+
+### Applying changes
+
+- `apps/*/values.yaml` and manifests under an Application sync through ArgoCD.
+- `apps/**/app.yaml` and `manifests/**` also trigger `.github/workflows/provision.yml`, which applies Application changes and `manifests/argocd-cm.yaml`.
+- `scripts/cluster/set-system-resource-requests.sh` covers components outside ArgoCD (ArgoCD itself, coredns, kube-proxy, cert-manager, calico) and must be re-run after `kubeadm upgrade`.
+
 ## Cost Optimization Strategies
 
 ### Right-Sizing with VPA

@@ -114,13 +114,13 @@ celeryWorker:
   concurrency: 2
   # Recycling (max tasks / max memory per child) comes from the app's own
   # app/core/celery.py; the chart passes no override (see charts/app values).
-  # Sized 2026-11-06 from live use (~174m, ~234Mi, throttled in 39% of CFS
-  # periods at the old 50m/500m). The recycling churn behind most of that CPU
-  # is fixed in the app; the request covers the steady beat load and the limit
+  # Sized 2026-11-06. Use was ~174m and throttled in 39% of CFS periods at the old
+  # 50m/500m, nearly all of it re-forking pool children every ~7 minutes. With that
+  # fixed it runs at ~25m on the same two children, so the request is 50m. The limit
   # covers two children at their 244MiB memory cap plus the parent.
   resources:
     requests:
-      cpu: 150m
+      cpu: 50m
       memory: 384Mi
     limits:
       cpu: 1000m
