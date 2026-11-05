@@ -109,3 +109,89 @@ spec:
                 limits:
                   cpu: 200m
                   memory: 128Mi
+---
+# NATS JetStream consumer replica enforcement (2026-11-06)
+#
+# All 3 nats pods run on the one node, so an R3 consumer gives no node-level
+# protection, only cover for one nats pod crashing. It does cost raft traffic:
+# ~460 route messages a second and ~800m of CPU across the pods with almost no
+# client traffic, about a quarter of all real CPU on the node. Streams stay R3 so
+# message data remains replicated; consumers run R1. An R1 consumer whose nats pod
+# restarts resumes from its on-disk state when the pod is back.
+#
+# Enforced here rather than in shared/events: it covers every client (Go, .NET,
+# nats.js, Python) and consumers created later. nats.go only compares replicas when
+# the client sets them, so services re-binding to an R1 durable keep working, and
+# setting nats.ConsumerReplicas(1) in the library would make binds to existing R3
+# durables fail.
+#
+# Limits-retention streams only: the server requires consumer replicas to match the
+# stream on interest and work-queue streams, so those are skipped. Idempotent.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nats-consumer-replicas
+  namespace: messaging
+  labels:
+    app: nats-consumer-replicas
+    component: maintenance
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 7200
+      activeDeadlineSeconds: 1200
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app: nats-consumer-replicas
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: nats-cli
+              image: natsio/nats-box:0.14.5
+              env:
+                # Rollout stage: only these streams. Empty means every stream.
+                - name: ONLY_STREAMS
+                  value: "library"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  NATS="nats --server=nats://nats.messaging.svc.cluster.local:4222"
+                  STREAMS="${ONLY_STREAMS:-$($NATS stream ls -n 2>/dev/null)}"
+                  [ -n "$STREAMS" ] || { echo "ERROR: could not list streams"; exit 1; }
+                  EDITED=0; ALREADY=0; SKIPPED=0; FAILED=0
+                  for S in $STREAMS; do
+                    case "$($NATS stream info "$S" --json 2>/dev/null)" in
+                      *'"retention": "limits"'*) ;;
+                      *) echo "skip stream $S: not limits retention or info failed"; SKIPPED=$((SKIPPED + 1)); continue ;;
+                    esac
+                    for C in $($NATS consumer ls "$S" -n 2>/dev/null); do
+                      INFO=$($NATS consumer info "$S" "$C" --json 2>/dev/null) || { echo "WARN: info failed $S/$C"; FAILED=$((FAILED + 1)); continue; }
+                      case "$INFO" in
+                        *'"num_replicas": 1'*) ALREADY=$((ALREADY + 1)) ;;
+                        *)
+                          if $NATS consumer edit "$S" "$C" --replicas 1 -f >/dev/null 2>&1; then
+                            echo "edited $S/$C"; EDITED=$((EDITED + 1))
+                          else
+                            echo "WARN: edit failed $S/$C"; FAILED=$((FAILED + 1))
+                          fi
+                          ;;
+                      esac
+                    done
+                  done
+                  echo "consumers: edited=$EDITED already_r1=$ALREADY failed=$FAILED streams_skipped=$SKIPPED"
+                  [ "$FAILED" -eq 0 ]
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
