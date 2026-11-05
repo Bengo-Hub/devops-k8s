@@ -102,7 +102,8 @@ spec:
               cpu: 50m
               memory: 64Mi
             limits:
-              cpu: 300m
+              # 2026-11-06: 14% of CFS periods throttled at 300m (reconcile bursts).
+              cpu: 500m
               memory: 256Mi
           readinessProbe:
             exec:

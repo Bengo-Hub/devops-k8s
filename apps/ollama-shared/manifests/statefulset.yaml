@@ -44,8 +44,8 @@ spec:
           resources:
             # Init requests count toward scheduling (max of init and app), kept low.
             requests:
-              cpu: 100m
-              memory: 512Mi
+              cpu: 25m
+              memory: 256Mi
             limits:
               cpu: 2000m
               memory: 4Gi
@@ -79,8 +79,9 @@ spec:
               # is not critical: usage is ~0 while the model is unloaded (24Mi, 1m).
               # Reserve almost nothing, the limit alone bounds it. 7Gi still fits the 8B
               # model (~5Gi) plus context.
-              cpu: 100m
-              memory: 1Gi
+              # 2026-11-06: still ~1m/13Mi unloaded, lowered again from 100m/1Gi.
+              cpu: 25m
+              memory: 256Mi
             limits:
               cpu: "2"
               memory: 7Gi

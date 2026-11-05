@@ -205,7 +205,8 @@ spec:
                   optional: true
           resources:
             requests:
-              cpu: 100m
+              # 2026-11-06: ~2m live, limit below still allows full bursts.
+              cpu: 50m
               memory: 256Mi
             limits:
               cpu: "1"
