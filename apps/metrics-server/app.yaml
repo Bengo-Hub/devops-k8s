@@ -15,6 +15,14 @@ spec:
         # 10250, and both ports are named https, so the patch can never merge them
         # (Duplicate value: https). Pin to the live port instead of recreating it.
         containerPort: 4443
+        # Runs hostNetwork on this port, so a surge pod can never schedule beside the old one
+        # and a default rollout sits Pending forever (seen 2026-11-06). Replace in place; the
+        # HPAs hold their last state for the few seconds of the swap.
+        updateStrategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 0
+            maxUnavailable: 1
         # 2026-11-06: chart default 100m/200Mi, measured ~17m/48Mi. Serves all 25 HPAs,
         # so the request keeps a real margin above live use and no CPU limit is set.
         resources:
