@@ -16,6 +16,11 @@ image:
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
 replicaCount: 1
+# Held at one pod on purpose (2026-11-06): ~1k requests a day. The app is already
+# multi-pod aware (Redis pub/sub fans provisioning WebSocket logs across pods),
+# but two fresh pods running the startup seeds (run_startup_seeds) at the same
+# time has not been verified. Prove that first, then move to minReplicas 2 plus a
+# PDB per the HA baseline (ha-min-2-pods-and-pdb).
 autoscaling:
   enabled: true
   minReplicas: 1
@@ -107,13 +112,19 @@ celeryWorker:
   app: app.core.celery
   logLevel: info
   concurrency: 2
+  # Recycling (max tasks / max memory per child) comes from the app's own
+  # app/core/celery.py; the chart passes no override (see charts/app values).
+  # Sized 2026-11-06 from live use (~174m, ~234Mi, throttled in 39% of CFS
+  # periods at the old 50m/500m). The recycling churn behind most of that CPU
+  # is fixed in the app; the request covers the steady beat load and the limit
+  # covers two children at their 244MiB memory cap plus the parent.
   resources:
     requests:
-      cpu: 50m
-      memory: 256Mi
+      cpu: 150m
+      memory: 384Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 1000m
+      memory: 768Mi
   livenessProbe:
     enabled: true
     initialDelaySeconds: 90
@@ -164,12 +175,15 @@ eventWorkers:
     enabled: true
     command: ["python", "-m", "app.events.consumer"]
     replicaCount: 1
+    # 2026-11-06: throttled in 64% of CFS periods at a 200m limit (startup and
+    # message bursts). Average use is ~0m, so the request stays small and the
+    # limit fits the burst. Memory ~217Mi live.
     resources:
       requests:
-        cpu: 50m
+        cpu: 25m
         memory: 256Mi
       limits:
-        cpu: 200m
+        cpu: 500m
         memory: 512Mi
 # ============================================================================
 # ENVIRONMENT VARIABLES — bulk secret injection
@@ -448,16 +462,17 @@ env:
     #  delivery + treasury payments are now unconditional in the service.)
 # ============================================================================
 # RESOURCE LIMITS AND REQUESTS
-# Lowered 2026-07-13: isp-billing is not actively used; single backend pod with
-# a smaller footprint. Bump back up if tenant load returns.
+# Lowered 2026-07-13 when isp-billing was idle. Re-measured 2026-11-06: the API
+# pod now holds ~284Mi steady (the HPA read 148% of the old 192Mi request), so
+# memory is sized to real use plus headroom. CPU stays lean (~10m live).
 # ============================================================================
 resources:
   requests:
     cpu: 25m
-    memory: 192Mi
+    memory: 320Mi
   limits:
-    cpu: 300m
-    memory: 384Mi
+    cpu: 500m
+    memory: 640Mi
 # ============================================================================
 # HEALTH CHECKS (FastAPI serves /health, NOT /healthz)
 # ============================================================================

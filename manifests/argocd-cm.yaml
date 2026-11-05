@@ -61,6 +61,14 @@ data:
     end
     hs.status = 'Healthy'
     return hs
+  # 2026-11-06: periodic refresh of every Application from git, default 120s in
+  # ArgoCD v3. With 76 apps that kept the application controller at ~196m (each
+  # app re-compared every ~3 minutes). Deploys do not wait on this timer: each
+  # service's deploy.yml hard-refreshes its Application right after the tag
+  # bump (argocd.argoproj.io/refresh=hard), so 5 minutes only bounds how fast
+  # a hand edit to git or live drift is noticed. Read at controller start, so
+  # restart argocd-application-controller after changing it.
+  timeout.reconciliation: 300s
   resource.exclusions: |
     - apiGroups:
       - ''

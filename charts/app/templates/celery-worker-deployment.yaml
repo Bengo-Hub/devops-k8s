@@ -44,7 +44,20 @@ spec:
             - "worker"
             - "--loglevel={{ .Values.celeryWorker.logLevel | default "info" }}"
             - "--concurrency={{ .Values.celeryWorker.concurrency | default "4" }}"
-            - "--max-tasks-per-child={{ .Values.celeryWorker.maxTasksPerChild | default "100" }}"
+            {{- /*
+              Only passed when set. The app's own celery config
+              (worker_max_tasks_per_child) is the source of truth otherwise. A
+              hidden chart default of 100 used to override it: isp-billing's
+              5-second outbox poller then re-forked a pool child every ~7 minutes,
+              each one re-importing the whole app (3900+ forks in 18 days, the
+              worker throttled in 39% of its CPU periods).
+            */}}
+            {{- with .Values.celeryWorker.maxTasksPerChild }}
+            - "--max-tasks-per-child={{ . }}"
+            {{- end }}
+            {{- with .Values.celeryWorker.maxMemoryPerChildKiB }}
+            - "--max-memory-per-child={{ . }}"
+            {{- end }}
           {{- if .Values.envFromSecret }}
           envFrom:
             - secretRef:

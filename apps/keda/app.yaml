@@ -9,6 +9,23 @@ spec:
     repoURL: https://kedacore.github.io/charts
     chart: keda
     targetRevision: 2.14.0
+    helm:
+      # 2026-11-06: the chart default reserved 100m/100Mi per component (300m in
+      # total) for pods using ~10m together. No ScaledObject exists yet (every
+      # autoscaler is a plain HPA); KEDA stays installed because charts/app
+      # supports keda.enabled. Requests sized to live use plus headroom, chart
+      # limits kept so a future ScaledObject load can still burst.
+      values: |
+        resources:
+          operator:
+            requests: {cpu: 25m, memory: 128Mi}
+            limits: {cpu: "1", memory: 1000Mi}
+          metricServer:
+            requests: {cpu: 25m, memory: 96Mi}
+            limits: {cpu: "1", memory: 1000Mi}
+          webhooks:
+            requests: {cpu: 10m, memory: 48Mi}
+            limits: {cpu: "1", memory: 1000Mi}
   destination:
     server: https://kubernetes.default.svc
     namespace: infra

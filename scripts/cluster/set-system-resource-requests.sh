@@ -25,7 +25,11 @@ set_req() { # namespace kind name container cpu mem
 }
 
 # ArgoCD (usage at time of writing: controller 252Mi, repo-server 116Mi, rest under 50Mi)
-set_req argocd statefulset argocd-application-controller argocd-application-controller 100m 384Mi
+# 2026-11-06: controller measured ~196m on a 100m request (76 apps, 120s refresh). Request
+# raised to its real use; timeout.reconciliation 300s in manifests/argocd-cm.yaml cuts the load.
+set_req argocd statefulset argocd-application-controller argocd-application-controller 200m 384Mi
+# argocd-server: 2026-11-06, ~3m/48Mi live (install default 100m/256Mi, git values unset)
+set_req argocd deployment  argocd-server                 argocd-server                 50m  128Mi
 set_req argocd deployment  argocd-repo-server            argocd-repo-server            50m  160Mi
 set_req argocd deployment  argocd-applicationset-controller argocd-applicationset-controller 10m 48Mi
 set_req argocd deployment  argocd-dex-server             dex                           10m  48Mi
@@ -39,6 +43,8 @@ set_req cert-manager deployment cert-manager-webhook    cert-manager-webhook    
 
 # kube-proxy (kubeadm DaemonSet), local-path provisioner, tigera operator
 set_req kube-system         daemonset  kube-proxy               kube-proxy             50m 96Mi
+# coredns: kubeadm default 100m each, ~9m live on two pods (2026-11-06). Keeps its 170Mi limit.
+set_req kube-system         deployment coredns                  coredns                50m 70Mi
 set_req local-path-storage  deployment local-path-provisioner   local-path-provisioner 10m 64Mi
 set_req tigera-operator     deployment tigera-operator          tigera-operator        25m 128Mi
 

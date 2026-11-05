@@ -367,10 +367,18 @@ spec:
                   name: fleet-health-watcher-secrets
                   key: INTERNAL_SERVICE_KEY
                   optional: true
+          # 2026-11-06 sizing, measured in this pod: one cycle costs about 0.9 CPU
+          # seconds, almost all of it kubectl decoding the ~2MB all-pods JSON
+          # (the jq passes cost ~0.03s). That averages ~7.5m over the 120s loop,
+          # so the request is 25m. The old 200m limit stretched each burst to ~9s
+          # of wall time and throttled the container in 84% of its CFS periods
+          # (99k throttled seconds over 18 days), eating into the 20s
+          # --request-timeout on every kubectl call during exactly the slow-API
+          # incidents this watcher exists for. The limit now fits the burst.
           resources:
             requests:
-              cpu: 50m
+              cpu: 25m
               memory: 64Mi
             limits:
-              cpu: 200m
+              cpu: 1000m
               memory: 128Mi

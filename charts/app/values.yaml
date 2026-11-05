@@ -190,6 +190,11 @@ serviceMonitor:
 # Celery components are disabled by default for generic apps (e.g., UI)
 celeryWorker:
   enabled: false
+  # Pool child recycling. Leave both unset so the app's own celery config
+  # (worker_max_tasks_per_child / worker_max_memory_per_child) decides; set
+  # them here only to override that for one deployment.
+  # maxTasksPerChild: 1000
+  # maxMemoryPerChildKiB: 307200
   livenessProbe:
     enabled: false
     initialDelaySeconds: 60

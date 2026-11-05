@@ -15,6 +15,12 @@ spec:
         # 10250, and both ports are named https, so the patch can never merge them
         # (Duplicate value: https). Pin to the live port instead of recreating it.
         containerPort: 4443
+        # 2026-11-06: chart default 100m/200Mi, measured ~17m/48Mi. Serves all 25 HPAs,
+        # so the request keeps a real margin above live use and no CPU limit is set.
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
         args:
           - --kubelet-insecure-tls
           - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname

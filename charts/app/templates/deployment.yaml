@@ -109,6 +109,16 @@ spec:
           volumeMounts:
             - name: media
               mountPath: {{ .Values.persistence.mountPath }}
+          {{- /*
+            A pod reserves max(sum of containers, largest init container) for its whole
+            life, so an init request can silently outweigh the app. Optional: state this
+            when a Deployment carries stale live values, because ArgoCD's client-side
+            three-way diff never removes a field git does not set.
+          */}}
+          {{- with .Values.persistence.initResources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           securityContext:
             runAsUser: {{ if .Values.securityContext }}{{ .Values.securityContext.runAsUser | default 1000 }}{{ else }}1000{{ end }}
             runAsGroup: {{ if .Values.securityContext }}{{ .Values.securityContext.runAsGroup | default 1000 }}{{ else }}1000{{ end }}

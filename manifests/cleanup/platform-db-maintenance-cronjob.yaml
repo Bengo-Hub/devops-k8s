@@ -104,20 +104,48 @@ spec:
                   }
 
                   # ─────────────────────────────────────────────────────────
-                  # OUTBOX EVENT CLEANUP (all service databases)
+                  # OUTBOX EVENT CLEANUP (every database that has the table)
                   # Delete published events older than 7 days
                   # Delete failed events older than 7 days (exhausted retries)
+                  #
+                  # 2026-11-06: databases are discovered from pg_database instead
+                  # of a hand-kept list. The old list had drifted: bengo_erp,
+                  # hospital, library, maskani and isp_billing all have an
+                  # outbox_events table and were never pruned. Two schemas exist:
+                  #   shared-events (Go):  status + published_at + last_attempt_at
+                  #   isp-billing (Python): published_at + attempts, no status
+                  #                         (poison rows stop at attempts >= 10,
+                  #                         MAX_PUBLISH_ATTEMPTS in app/events/outbox.py)
+                  # The SQL is picked from the columns the table really has, so a
+                  # schema the job does not know is skipped with a note, never
+                  # half-matched. Deletes run in batches of 10000 so a large
+                  # backlog never becomes one long transaction.
                   # ─────────────────────────────────────────────────────────
-                  OUTBOX_SQL_PUBLISHED="WITH deleted AS (DELETE FROM outbox_events WHERE UPPER(status) = 'PUBLISHED' AND published_at < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
-                  OUTBOX_SQL_FAILED="WITH deleted AS (DELETE FROM outbox_events WHERE UPPER(status) = 'FAILED' AND COALESCE(last_attempt_at, created_at) < NOW() - INTERVAL '7 days' RETURNING id) SELECT COUNT(*) FROM deleted;"
+                  prune_batched() { # DB LABEL WHERE
+                    local DB="$1" LABEL="$2" WHERE="$3" TOTAL=0 N=0 I=0
+                    while [ $I -lt 100 ]; do
+                      N=$(psql $CONN_OPTS -d "$DB" -At -c "WITH deleted AS (DELETE FROM outbox_events WHERE id IN (SELECT id FROM outbox_events WHERE $WHERE LIMIT 10000) RETURNING id) SELECT COUNT(*) FROM deleted;" 2>&1) || { echo ""; echo "[$DB] $LABEL"; echo "  -> WARN: $N"; return; }
+                      TOTAL=$((TOTAL + N)); I=$((I + 1))
+                      [ "$N" -lt 10000 ] && break
+                    done
+                    echo ""; echo "[$DB] $LABEL"; echo "  -> $TOTAL rows affected"
+                  }
 
-                  for DB in auth ordering logistics inventory treasury pos notifications subscriptions projects marketflow ticketing; do
-                    # Check if outbox_events table exists before running
-                    HAS_TABLE=$(psql $CONN_OPTS -d "$DB" -At -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'outbox_events'" 2>/dev/null)
-                    if [ "$HAS_TABLE" = "1" ]; then
-                      run_sql "$DB" "outbox: delete published >7d" "$OUTBOX_SQL_PUBLISHED"
-                      run_sql "$DB" "outbox: delete failed >7d"    "$OUTBOX_SQL_FAILED"
-                    fi
+                  DBS=$(psql $CONN_OPTS -d postgres -At -c "SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn AND datname <> 'postgres' ORDER BY 1")
+                  for DB in $DBS; do
+                    COLS=$(psql $CONN_OPTS -d "$DB" -At -c "SELECT string_agg(column_name, ',' ORDER BY column_name) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'outbox_events' AND column_name IN ('status','published_at','attempts','last_attempt_at')" 2>/dev/null)
+                    case "$COLS" in
+                      "") ;;  # no outbox_events table in this database
+                      *status*)
+                        prune_batched "$DB" "outbox: delete published >7d" "UPPER(status) = 'PUBLISHED' AND published_at < NOW() - INTERVAL '7 days'"
+                        prune_batched "$DB" "outbox: delete failed >7d" "UPPER(status) = 'FAILED' AND COALESCE(last_attempt_at, created_at) < NOW() - INTERVAL '7 days'"
+                        ;;
+                      attempts,published_at)
+                        prune_batched "$DB" "outbox: delete published >7d" "published_at IS NOT NULL AND published_at < NOW() - INTERVAL '7 days'"
+                        prune_batched "$DB" "outbox: delete poison >7d" "published_at IS NULL AND attempts >= 10 AND created_at < NOW() - INTERVAL '7 days'"
+                        ;;
+                      *) echo ""; echo "[$DB] outbox: unknown schema ($COLS), skipped" ;;
+                    esac
                   done
 
                   # ─────────────────────────────────────────────────────────
