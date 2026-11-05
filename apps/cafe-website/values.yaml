@@ -77,7 +77,7 @@ envFromSecret: cafe-website-env
 # Resource constraints optimized for Next.js app
 resources:
   requests:
-    cpu: 50m
+    cpu: 25m
     memory: 192Mi
   limits:
     cpu: 500m

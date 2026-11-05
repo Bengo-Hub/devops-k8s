@@ -44,7 +44,7 @@ env:
     value: hospital-ui
 resources:
   requests:
-    cpu: 50m
+    cpu: 25m
     memory: 128Mi
   limits:
     cpu: 500m
