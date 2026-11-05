@@ -321,7 +321,7 @@ spec:
                   key: recovery-admin
           resources:
             requests:
-              cpu: 250m
+              cpu: 100m  # 2026-11-06: ~4m live, limit below covers mail bursts
               memory: 512Mi
             limits:
               cpu: 1000m
