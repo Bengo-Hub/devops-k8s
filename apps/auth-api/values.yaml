@@ -25,7 +25,7 @@ replicaCount: 1
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 2 # Critical service - reduced to prevent pod limit overflow
+  maxReplicas: 4 # Hot tier; node pod cap is 250 (139 used, 2026-11-06), the old pod-limit concern no longer applies
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 75
 # Recommendation-only (updateMode Off) — captures a VPA object that was already live in-cluster
@@ -286,7 +286,11 @@ volumes:
 # ============================================================================
 resources:
   requests:
-    cpu: 50m
+    # Hot tier (2026-11-06 audit): POS, inventory and auth carry most ingress traffic.
+    # CPU requests set the pod's share of the node under contention, so the hot services hold
+    # more than the idle floor (25m) the low-traffic services use. HPA scale point is
+    # target% x request.
+    cpu: 100m
     memory: 256Mi
   limits:
     cpu: 500m

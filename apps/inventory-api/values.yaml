@@ -125,10 +125,11 @@ env:
     value: "https://inventory.codevertexafrica.com,https://inventoryapi.codevertexafrica.com,https://pos.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,http://localhost:3000,http://localhost:3001,https://theurbanloftcafe.com,https://alphachinamarket.co.ke,https://www.alphachinamarket.co.ke,https://urbaneats.theurbanloftcafe.com"
 resources:
   requests:
-    # Lowered 100m→50m: the single k3s node sits at ~99% CPU requests, so with maxSurge=0 the
-    # new pod could not schedule into the headroom and the rollout stalled (Pending). A 50m
-    # request fits and is ample for this light Go API (limit stays 500m).
-    cpu: 50m
+    # Hot tier (2026-11-06 audit): POS, inventory and auth carry most ingress traffic.
+    # CPU requests set the pod's share of the node under contention, so the hot services hold
+    # more than the idle floor (25m) the low-traffic services use. HPA scale point is
+    # target% x request.
+    cpu: 100m
     memory: 256Mi
   limits:
     # Raised for the transaction-heavy inventory API: 750m CPU burst + 768Mi headroom

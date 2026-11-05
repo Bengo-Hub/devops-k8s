@@ -145,7 +145,11 @@ env:
     value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
 resources:
   requests:
-    cpu: 50m
+    # Hot tier (2026-11-06 audit): POS, inventory and auth carry most ingress traffic.
+    # CPU requests set the pod's share of the node under contention, so the hot services hold
+    # more than the idle floor (25m) the low-traffic services use. HPA scale point is
+    # target% x request. 60% x 150m = 90m per pod.
+    cpu: 150m
     memory: 256Mi
   limits:
     # Raised 500m->750m / 512Mi->768Mi: pos-api is transaction-heavy and the new
@@ -160,7 +164,7 @@ resources:
 autoscaling:
   enabled: true
   minReplicas: 2
-  maxReplicas: 4
+  maxReplicas: 6
   targetCPUUtilizationPercentage: 60
   targetMemoryUtilizationPercentage: 70
 # Recommendation-only (updateMode Off) — captures a VPA object that was already live in-cluster
