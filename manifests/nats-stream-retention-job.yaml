@@ -158,7 +158,7 @@ spec:
               env:
                 # Rollout stage: only these streams. Empty means every stream.
                 - name: ONLY_STREAMS
-                  value: "library"
+                  value: "library auth notifications"
               command:
                 - /bin/sh
                 - -c
