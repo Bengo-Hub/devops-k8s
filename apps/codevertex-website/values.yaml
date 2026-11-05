@@ -148,9 +148,9 @@ serviceMonitor:
 verticalPodAutoscaling:
   enabled: true
   updateMode: "Off"
-  minCPU: 50m
+  minCPU: 10m
   maxCPU: 500m
-  minMemory: 128Mi
+  minMemory: 32Mi
   maxMemory: 1Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits

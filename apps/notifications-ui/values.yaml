@@ -23,9 +23,9 @@ serviceMonitor:
 # VPA Configuration (Vertical Pod Autoscaler)
 verticalPodAutoscaling:
   enabled: false
-  minCPU: 50m
+  minCPU: 10m
   maxCPU: 750m
-  minMemory: 128Mi
+  minMemory: 32Mi
   maxMemory: 1Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits

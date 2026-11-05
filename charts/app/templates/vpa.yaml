@@ -21,8 +21,8 @@ spec:
     containerPolicies:
       - containerName: {{ include "app.name" . }}
         minAllowed:
-          cpu: {{ .Values.verticalPodAutoscaling.minCPU | default "100m" }}
-          memory: {{ .Values.verticalPodAutoscaling.minMemory | default "128Mi" }}
+          cpu: {{ .Values.verticalPodAutoscaling.minCPU | default "10m" }}
+          memory: {{ .Values.verticalPodAutoscaling.minMemory | default "32Mi" }}
         maxAllowed:
           cpu: {{ .Values.verticalPodAutoscaling.maxCPU | default "2000m" }}
           memory: {{ .Values.verticalPodAutoscaling.maxMemory | default "4096Mi" }}

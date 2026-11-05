@@ -128,9 +128,9 @@ ingress:
 verticalPodAutoscaling:
   enabled: true
   updateMode: "Recreate"
-  minCPU: 500m
+  minCPU: 10m
   maxCPU: 4000m
-  minMemory: 2Gi
+  minMemory: 32Mi
   maxMemory: 6Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits

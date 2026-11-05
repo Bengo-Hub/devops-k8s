@@ -266,9 +266,9 @@ pdb:
 verticalPodAutoscaling:
   enabled: false
   updateMode: "Off"
-  minCPU: 200m
+  minCPU: 10m
   maxCPU: 1000m
-  minMemory: 256Mi
+  minMemory: 32Mi
   maxMemory: 2Gi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits

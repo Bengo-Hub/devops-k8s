@@ -108,9 +108,9 @@ persistence:
 verticalPodAutoscaling:
   enabled: true
   updateMode: "Off"
-  minCPU: 50m
+  minCPU: 10m
   maxCPU: 500m
-  minMemory: 96Mi
+  minMemory: 32Mi
   maxMemory: 512Mi
   controlledResources: ["cpu", "memory"]
   controlledValues: RequestsAndLimits
