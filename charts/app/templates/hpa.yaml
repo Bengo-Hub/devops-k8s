@@ -27,36 +27,6 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
-    {{- range .Values.autoscaling.customMetrics }}
-    - type: {{ .type }}
-      {{- if eq .type "Pods" }}
-      pods:
-        metric:
-          name: {{ .metricName }}
-        target:
-          type: {{ .targetType }}
-          {{ if eq .targetType "Value" }}
-          value: {{ .targetValue }}
-          {{- else if eq .targetType "AverageValue" }}
-          averageValue: {{ .targetAverageValue }}
-          {{- end }}
-      {{- else if eq .type "Object" }}
-      object:
-        metric:
-          name: {{ .metricName }}
-        describedObject:
-          apiVersion: {{ .describedObject.apiVersion }}
-          kind: {{ .describedObject.kind }}
-          name: {{ .describedObject.name }}
-        target:
-          type: {{ .targetType }}
-          {{ if eq .targetType "Value" }}
-          value: {{ .targetValue }}
-          {{- else if eq .targetType "AverageValue" }}
-          averageValue: {{ .targetAverageValue }}
-          {{- end }}
-      {{- end }}
-    {{- end }}
   behavior:
     {{- if .Values.autoscaling.scaleDown }}
     scaleDown:

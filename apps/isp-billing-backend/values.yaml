@@ -450,11 +450,10 @@ env:
     value: "https://sso.codevertexafrica.com"
   - name: SSO_AUDIENCE
     value: "isp-billing-ui"
-  # Treasury S2S base — use the public ingress (matches notifications-api,
-  # ordering-backend, pos-api, subscriptions-api). The direct ClusterIP
-  # (treasury-api.treasury.svc:4000) bypasses the ingress + KEDA http-interceptor,
-  # so it returns "All connection attempts failed" whenever treasury-api is
-  # scaled-to-zero / mid-restart — which broke hotspot purchase intent creation.
+  # Treasury S2S base over its in-cluster Service. treasury-api runs at least 2
+  # replicas with surge-first rollouts, so the direct ClusterIP has no gap during
+  # restarts. (An older note here blamed a KEDA HTTP interceptor and scale-to-zero;
+  # neither ever existed in this cluster, and KEDA was removed on 2026-11-06.)
   - name: TREASURY_API_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: TREASURY_PAY_PAGE_URL

@@ -286,20 +286,21 @@ Apply: `kubectl apply -f apps/root-app.yaml`
 
 The following cluster-wide components are managed as Argo CD Applications under `apps/`:
 
-- `apps/monitoring/app.yaml`: kube-prometheus-stack (Prometheus, Grafana, Alertmanager)
-- `apps/metrics-server/app.yaml`: metrics-server (required for HPA)
-- `apps/keda/app.yaml`: KEDA (event/queue-driven autoscaling)
-- `apps/postgresql/app.yaml`: Bitnami PostgreSQL (shared infra)
-- `apps/redis/app.yaml`: Bitnami Redis (shared infra)
-- `apps/rabbitmq/app.yaml`: Bitnami RabbitMQ (shared infra)
+- `apps/metrics-server/app.yaml`: metrics-server (required for HPA, VPA and the platform monitor page)
+- `apps/vpa/app.yaml`: VPA recommender stack (all VPAs run in `Off` mode, see `docs/scaling.md`)
+- `apps/postgresql/app.yaml`, `apps/postgresql-replica/app.yaml`, `apps/pgbouncer/app.yaml`: shared PostgreSQL
+- `apps/redis/app.yaml`, `apps/redis-replica/app.yaml`: shared Redis
+- `apps/nats/app.yaml`: NATS JetStream (with `apps/nats-stream-retention/app.yaml` for stream and consumer policy)
 
-These appear in the Argo CD UI when `apps/root-app.yaml` is applied (App-of-Apps). Ensure these are Healthy/Synced for autoscaling and monitoring to function.
+These appear in the Argo CD UI when `apps/root-app.yaml` is applied (App-of-Apps). Ensure these are Healthy/Synced for autoscaling to function.
 
-### Argo CD Metrics in Grafana/Prometheus
+### Observability
 
-- ServiceMonitors for Argo CD server and repo-server are provided at:
-  - `manifests/monitoring/argocd-servicemonitor.yaml`
-- After monitoring stack is synced, check Prometheus targets and import an Argo CD dashboard in Grafana if desired.
+kube-prometheus-stack (Prometheus, Grafana, Alertmanager) was decommissioned on 2026-07-13, RabbitMQ was removed on 2026-04-15 and KEDA on 2026-11-06 (it was never used). What exists now:
+
+- auth-api's platform monitor page reads metrics-server and the Kubernetes API directly.
+- `apps/fleet-health-watcher` pushes Slack and email alerts for unhealthy pods, cordoned nodes and failing public endpoints.
+- `scripts/cluster/capacity-report.sh` gives requests against real use, throttling, HPA state, ingress traffic and NATS consumer state.
 
 ### Monitoring Deployments
 
@@ -366,19 +367,16 @@ kubectl create secret docker-registry regcred \
 ## Centralized Infra & Autoscaling Reuse
 
 - Core infra is managed via Argo CD apps and deployed to the `infra` namespace:
-  - Monitoring: `apps/monitoring/app.yaml` (deployed to `infra` namespace)
   - Metrics: `apps/metrics-server/app.yaml` (deployed to `kube-system` namespace)
-  - Event autoscaling: `apps/keda/app.yaml` (deployed to `infra` namespace)
-  - Databases: `apps/postgresql/app.yaml`, `apps/redis/app.yaml`, `apps/rabbitmq/app.yaml` (all deployed to `infra` namespace)
-- Ensure these are Healthy/Synced so HPA/VPA/KEDA and monitoring function across all apps.
-- All shared infrastructure services (databases, monitoring, autoscaling) are accessible from any app namespace via service DNS in the `infra` namespace.
+  - Databases: `apps/postgresql/app.yaml`, `apps/redis/app.yaml` (deployed to `infra` namespace)
+- Ensure these are Healthy/Synced so HPA and VPA work across all apps.
+- All shared infrastructure services are accessible from any app namespace via service DNS in the `infra` namespace.
 
 ### Using the Shared Helm Chart Features
 
 All apps using `charts/app` inherit:
 - HPA: `templates/hpa.yaml` driven by `autoscaling.*` in values.
 - VPA: `templates/vpa.yaml` toggled by `verticalPodAutoscaling.*`.
-- KEDA: `templates/keda-scaledobject.yaml` toggled by `keda.*`.
 
 Example values override:
 ```yaml
@@ -394,18 +392,6 @@ verticalPodAutoscaling:
   updateMode: "Recreate"
   recommendationMode: false
 
-keda:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 20
-  triggers:
-    - type: redis
-      metadata:
-        address: "redis-master.infra.svc:6379"
-        listName: "celery"
-        listLength: "100"
-      authenticationRef:
-        name: redis-auth
 ```
 
 Create a corresponding `TriggerAuthentication` in the app namespace pointing to broker credentials.
