@@ -10,6 +10,13 @@ metadata:
     app.kubernetes.io/part-of: ingress-nginx
 data:
   allow-snippet-annotations: "true"
+  # Shutdown drain, 2026-11-07. The default (240s) suits a multi-node cluster where a
+  # load balancer moves traffic to another pod while this one drains. Here the single
+  # controller holds host ports, so its replacement cannot start until it exits, and
+  # every rollout was a full outage for the whole drain (51s with a manual kill on
+  # 2026-11-07, up to 5 minutes without one). Must stay below the Deployment's
+  # terminationGracePeriodSeconds (30).
+  worker-shutdown-timeout: "25s"
   # Auth-API JWTs with 247 permissions produce ~8.5KB tokens.
   # Default 4k/8k buffers cause 502 on cookie-bearing requests (OAuth /authorize)
   # and large response bodies (login/token endpoints).

@@ -201,7 +201,13 @@ spec:
       schedulerName: default-scheduler
       serviceAccount: ingress-nginx
       serviceAccountName: ingress-nginx
-      terminationGracePeriodSeconds: 300
+      # 30s, not the upstream 300s (2026-11-07). preStop /wait-shutdown drains for
+      # as long as the grace allows, but nginx stops listening at once and the new pod
+      # cannot bind the host ports until this one exits, so a long drain only lengthens
+      # the outage. This is the root cause of the "orphaned process" deadlock in memory
+      # ingress-nginx-hostport-rollout-deadlock-2026-09-04: the old process was still
+      # draining, not stuck. Pairs with worker-shutdown-timeout 25s in the ConfigMap.
+      terminationGracePeriodSeconds: 30
       volumes:
       - name: webhook-cert
         secret:
