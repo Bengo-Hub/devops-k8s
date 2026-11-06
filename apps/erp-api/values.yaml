@@ -167,8 +167,9 @@ env:
   # ── S2S owner-service URLs. INTERNAL_SERVICE_KEY from erp-api-env. ──
   # Treasury over its in-cluster Service. treasury-api runs at least 2 replicas with
   # surge-first rollouts, so the direct ClusterIP has no gap during restarts.
-  # (An older note here referred to a KEDA HTTP interceptor and scale-to-zero;
-  # neither ever existed in this cluster, and KEDA was removed on 2026-11-06.)
+  # (An older note here referred to the KEDA HTTP interceptor and scale-to-zero:
+  # that rollout was reverted in April, 1603262c6, and its leftovers and KEDA itself
+  # were removed on 2026-11-06.)
   - name: TREASURY_SERVICE_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: NOTIFICATIONS_SERVICE_URL

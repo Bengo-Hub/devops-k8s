@@ -296,7 +296,7 @@ These appear in the Argo CD UI when `apps/root-app.yaml` is applied (App-of-Apps
 
 ### Observability
 
-kube-prometheus-stack (Prometheus, Grafana, Alertmanager) was decommissioned on 2026-07-13, RabbitMQ was removed on 2026-04-15 and KEDA on 2026-11-06 (it was never used). What exists now:
+kube-prometheus-stack (Prometheus, Grafana, Alertmanager) was decommissioned on 2026-07-13, RabbitMQ was removed on 2026-04-15 and KEDA on 2026-11-06 (unused since its April scale-to-zero rollout was reverted). What exists now:
 
 - auth-api's platform monitor page reads metrics-server and the Kubernetes API directly.
 - `apps/fleet-health-watcher` pushes Slack and email alerts for unhealthy pods, cordoned nodes and failing public endpoints.

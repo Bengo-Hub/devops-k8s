@@ -399,4 +399,4 @@ This comprehensive scaling documentation ensures optimal resource utilization an
 
 ## Autoscaler scope
 
-Only CPU and memory (`Resource`) HPAs are supported. There is no Prometheus or metrics adapter, so custom, object and external metrics cannot be served, and KEDA was removed on 2026-11-06 because nothing used it. Queue-driven scaling would need one of those reinstalled first.
+Only CPU and memory (`Resource`) HPAs are supported. There is no Prometheus or metrics adapter, so custom, object and external metrics cannot be served, and KEDA was removed on 2026-11-06 because nothing used it after its April scale-to-zero rollout was reverted. Queue-driven scaling would need one of those reinstalled first.
