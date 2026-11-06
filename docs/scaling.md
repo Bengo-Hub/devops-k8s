@@ -412,15 +412,22 @@ Sections: `node`, `pods`, `throttle`, `hpa`, `traffic`, `nats`. Measure during t
 - **Init containers count.** A pod reserves the larger of its containers' total and its largest init container, so check both when a cut does not change the node totals.
 - **Git must state a value to change it.** ArgoCD's client-side three-way diff never removes a live field that git does not set. Stale values from old manual patches stay until git names the field.
 - **Low limits throttle more than low requests.** A workload that bursts briefly needs a limit that fits the burst, even when its average use is tiny.
+- **Count exec probes.** An exec probe that starts the app (for example `celery inspect ping`) costs a full interpreter start each time. isp-billing's two celery probes cost ~70m of constant CPU until readiness was dropped (the worker has no Service) and liveness moved to 5 minutes.
 - **Host port workloads cannot surge.** metrics-server and ingress-nginx use `maxSurge: 0`, and wireguard uses `Recreate`. Any change to the ingress-nginx pod spec has previously caused a deadlock on its host ports, so it needs a planned window and the recovery steps at hand.
 
 ### VPA
 
 All VPAs run in `Off` mode with floors of 10m and 32Mi, so recommendations show real use over about 8 days and no pods are changed. Recommendations are input for a decision, not a value to apply directly: they do not know about HPA targets.
 
-### JetStream consumers
+### JetStream streams and consumers
 
-Streams stay R3. Consumers run R1, because all three nats pods share the node and R3 consumer raft traffic cost about a quarter of real node CPU. The `nats-consumer-replicas` CronJob in `manifests/nats-stream-retention-job.yaml` enforces this for every client language and for consumers created later. An R1 consumer pauses while its nats pod restarts and resumes from disk afterwards. Do not set `nats.ConsumerReplicas` in service code: nats.go rejects a bind when the value differs from the existing durable.
+Both CronJobs live in `manifests/nats-stream-retention-job.yaml` and apply to every stream they find on the server, so a new service needs no entry anywhere.
+
+- **Streams** (`nats-stream-retention`, every 6 hours): at most 7 days and 512MiB each, 14 days and 256MiB for `*-dlq`. Limits only tighten, so an app that keeps a stream for 3 days keeps 3 days. JetStream allows 10GiB per server and every R3 stream sits on every server, which is why the byte cap is 512MiB. Streams stay R3.
+- **Consumers** (`nats-consumer-replicas`, every 10 minutes): R1, because all three nats pods share the node and R3 consumer raft traffic cost about a quarter of real node CPU (NATS fell from ~830m to ~80m). An R1 consumer pauses while its nats pod restarts and resumes from disk afterwards.
+- **Orphaned durables expire on their own.** Every durable gets a 7 day InactiveThreshold, so one whose subscriber is gone (feature switched off, durable renamed, code removed) is deleted by the server after 7 days without a subscriber. Nothing is lost: the stream has already dropped anything older. A service that is down longer gets a fresh durable with its own deliver policy.
+- Do not set `nats.ConsumerReplicas` in service code: nats.go rejects a bind when the value differs from the existing durable.
+- To find a subscriber that should be running but is not, run the `nats` section of `capacity-report.sh` and check any unbound durable against its owning service's code and against the other consumers on the same subject.
 
 ### Applying changes
 
