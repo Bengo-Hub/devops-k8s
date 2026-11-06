@@ -521,12 +521,12 @@ echo "Secret Name: ${SECRET_NAME}"
 echo "Database: ${DB_NAME}"
 echo "Database User: ${DB_USER}"
 echo ""
-log_warning "IMPORTANT: Save these credentials securely!"
-echo "Database Password: ${DATABASE_PASSWORD}"
-echo ""
-echo "PostgreSQL URL: ${POSTGRES_URL}"
-echo "Redis URL: ${REDIS_URL}"
-echo "SECRET_KEY: ${APP_SECRET_KEY}"
+# Values are never printed: CI logs are kept, and on a public repo anyone can read them. They live
+# in the Kubernetes secret above (and the local backup file below, which is gitignored).
+echo "Database Password: [stored in ${SECRET_NAME}]"
+echo "PostgreSQL URL: [stored in ${SECRET_NAME}]"
+echo "Redis URL: [stored in ${SECRET_NAME}]"
+echo "SECRET_KEY: [stored in ${SECRET_NAME}]"
 echo ""
 
 # Create backup file

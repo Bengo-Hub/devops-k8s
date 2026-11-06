@@ -25,6 +25,9 @@ charts/**/tmpcharts/
 
 # Local secrets
 KubeSecrets/
+*.key
+# Credential backups written by scripts/infrastructure/create-service-secrets.sh
+backups/
 
 # OS
 .DS_Store
