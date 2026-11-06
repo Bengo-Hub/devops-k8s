@@ -16,11 +16,11 @@ image:
 # REPLICA AND SCALING CONFIGURATION
 # ============================================================================
 replicaCount: 1
-# Held at one pod on purpose (2026-11-06): ~1k requests a day. The app is already
-# multi-pod aware (Redis pub/sub fans provisioning WebSocket logs across pods),
-# but two fresh pods running the startup seeds (run_startup_seeds) at the same
-# time has not been verified. Prove that first, then move to minReplicas 2 plus a
-# PDB per the HA baseline (ha-min-2-pods-and-pdb).
+# One pod by owner decision (2026-11-06): isp-billing is not in active use. A
+# deliberate exception to the 2-pod HA baseline (ha-min-2-pods-and-pdb), so no PDB.
+# If it returns to service: the app is multi-pod aware (Redis pub/sub fans
+# provisioning WebSocket logs across pods), but two fresh pods running
+# run_startup_seeds at once must be verified before raising minReplicas to 2.
 autoscaling:
   enabled: true
   minReplicas: 1
