@@ -25,9 +25,10 @@ set_req() { # namespace kind name container cpu mem
 }
 
 # ArgoCD (usage at time of writing: controller 252Mi, repo-server 116Mi, rest under 50Mi)
-# 2026-11-06: controller measured ~196m on a 100m request (76 apps, 120s refresh). Request
-# raised to its real use; timeout.reconciliation 300s in manifests/argocd-cm.yaml cuts the load.
-set_req argocd statefulset argocd-application-controller argocd-application-controller 200m 384Mi
+# 2026-11-06: controller used ~196m on 76 apps at the default 120s refresh. With
+# timeout.reconciliation 300s (manifests/argocd-cm.yaml, read live, no restart) it fell to ~36m,
+# so the request stays 100m.
+set_req argocd statefulset argocd-application-controller argocd-application-controller 100m 384Mi
 # argocd-server: 2026-11-06, ~3m/48Mi live (install default 100m/256Mi, git values unset)
 set_req argocd deployment  argocd-server                 argocd-server                 50m  128Mi
 set_req argocd deployment  argocd-repo-server            argocd-repo-server            50m  160Mi
