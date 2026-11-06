@@ -1,19 +1,21 @@
-# NATS JetStream Stream Retention Enforcement
+# NATS JetStream stream retention enforcement
 #
-# Runs every 6 hours to ensure all application streams have consistent
-# retention policies. Prevents JetStream PVC (10Gi) from filling up.
+# Runs every 6 hours. Caps every stream at MaxAge 7 days and MaxBytes 512MiB, and
+# streams named *-dlq at 14 days and 256MiB. JetStream allows 10GiB per server and
+# every R3 stream is stored on every server, so 18 streams x 512MiB (9GiB) keeps the
+# store from filling. Largest stream on 2026-11-06: inventory, 11MB.
 #
-# Policy: MaxAge=7 days, MaxBytes=2GiB per stream.
-# DLQ streams: MaxAge=14 days (longer retention for failed-event investigation).
+# Rewritten 2026-11-06. The old version kept a hand-written list of streams, called
+# "nats stream edit" without -f (it needs a confirm prompt that a Job cannot answer)
+# and swallowed the error with "|| echo WARN", so for months it changed nothing while
+# reporting success. Every stream that did have a limit got it from its own app.
+# hospital, projects and ticketing create their streams with no MaxAge and had grown
+# without limit; the list also named six DLQ streams and an iot stream that do not
+# exist and missed hospital, digitika, erp, isp, library, maskani and tenant.
 #
-# Streams managed:
-#   auth, ordering, logistics, inventory, treasury, pos, notifications,
-#   subscriptions, projects, iot, ticketing, marketflow
-#   + DLQ variants: logistics-dlq, treasury-dlq, inventory-dlq, pos-dlq,
-#                   projects-dlq, iot-dlq
-#
-# NOTE: This job uses "nats stream update" which only changes retention settings,
-# it does NOT delete or recreate streams. Safe to run on a live cluster.
+# Now: streams are discovered from the server, limits only ever tighten (a stream an
+# app keeps for 3 days is never lengthened to 7), the edit is forced, and any failure
+# fails the Job. Only retention fields change; nothing is deleted or recreated.
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -31,15 +33,15 @@ spec:
   startingDeadlineSeconds: 300
   jobTemplate:
     spec:
-      ttlSecondsAfterFinished: 3600
+      ttlSecondsAfterFinished: 86400
       activeDeadlineSeconds: 300
-      backoffLimit: 2
+      backoffLimit: 0
       template:
         metadata:
           labels:
             app: nats-stream-retention
         spec:
-          restartPolicy: OnFailure
+          restartPolicy: Never
           containers:
             - name: nats-cli
               image: natsio/nats-box:0.14.5
@@ -47,61 +49,33 @@ spec:
                 - /bin/sh
                 - -c
                 - |
-                  set -e
-                  NATS_URL="nats://nats.messaging.svc.cluster.local:4222"
-                  MAX_AGE="7d"
-                  MAX_BYTES="2147483648"   # 2GiB
-                  DLQ_MAX_AGE="14d"
-                  DLQ_MAX_BYTES="536870912"  # 512MiB — DLQ should be small
-
-                  echo "=== NATS Stream Retention Enforcement ($(date -u)) ==="
-                  echo "Policy: MaxAge=${MAX_AGE}, MaxBytes=${MAX_BYTES} bytes"
-                  echo ""
-
-                  # Update or create stream with retention policy
-                  apply_retention() {
-                    local STREAM="$1"
-                    local SUBJECTS="$2"
-                    local AGE="$3"
-                    local BYTES="$4"
-
-                    echo "Processing stream: ${STREAM} (subjects: ${SUBJECTS})"
-                    if nats --server="${NATS_URL}" stream info "${STREAM}" > /dev/null 2>&1; then
-                      nats --server="${NATS_URL}" stream edit "${STREAM}" \
-                        --max-age="${AGE}" \
-                        --max-bytes="${BYTES}" \
-                        --ack \
-                        2>&1 || echo "  WARN: Could not update ${STREAM} — may need manual review"
-                      echo "  Updated: ${STREAM}"
+                  NATS="nats --server=nats://nats.messaging.svc.cluster.local:4222"
+                  DAY_NS=86400000000000
+                  STREAMS=$($NATS stream ls -n 2>/dev/null)
+                  [ -n "$STREAMS" ] || { echo "ERROR: could not list streams"; exit 1; }
+                  echo "=== NATS stream retention ($(date -u)) ==="
+                  CHANGED=0; OK=0; FAILED=0
+                  for S in $STREAMS; do
+                    case "$S" in
+                      *-dlq) AGE_D=14; MAX_BYTES=268435456 ;;
+                      *)     AGE_D=7;  MAX_BYTES=536870912 ;;
+                    esac
+                    J=$($NATS stream info "$S" --json 2>/dev/null) || { echo "WARN: info failed $S"; FAILED=$((FAILED + 1)); continue; }
+                    AGE=$(echo "$J" | jq -r '.config.max_age')
+                    BYTES=$(echo "$J" | jq -r '.config.max_bytes')
+                    ARGS=""
+                    # 0 means unlimited; tighten only, never lengthen a shorter app setting
+                    if [ "$AGE" -eq 0 ] || [ "$AGE" -gt $((AGE_D * DAY_NS)) ]; then ARGS="$ARGS --max-age=${AGE_D}d"; fi
+                    if [ "$BYTES" -lt 0 ] || [ "$BYTES" -gt "$MAX_BYTES" ]; then ARGS="$ARGS --max-bytes=$MAX_BYTES"; fi
+                    if [ -z "$ARGS" ]; then OK=$((OK + 1)); continue; fi
+                    if $NATS stream edit "$S" $ARGS -f >/dev/null 2>&1; then
+                      echo "set $S:$ARGS"; CHANGED=$((CHANGED + 1))
                     else
-                      echo "  Stream ${STREAM} does not exist yet — will be created by the application on next startup"
+                      echo "WARN: edit failed $S:$ARGS"; FAILED=$((FAILED + 1))
                     fi
-                  }
-
-                  # Application streams (7d retention, 2GiB max)
-                  apply_retention "auth"           "auth.>"                   "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "ordering"        "ordering.>"              "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "logistics"       "logistics.>"             "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "inventory"       "inventory.>"             "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "treasury"        "treasury.>"              "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "pos"             "pos.>"                   "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "notifications"   "notifications.>"         "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "subscription"    "subscription.>"          "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "projects"        "projects.>"              "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "ticketing"       "ticketing.>"             "${MAX_AGE}" "${MAX_BYTES}"
-                  apply_retention "marketflow"      "marketflow.>"            "${MAX_AGE}" "${MAX_BYTES}"
-
-                  # DLQ streams (14d retention, 512MiB — less frequent, kept longer for debugging)
-                  apply_retention "logistics-dlq"   "logistics.dlq.>"         "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
-                  apply_retention "treasury-dlq"    "treasury.dlq.>"          "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
-                  apply_retention "inventory-dlq"   "inventory.dlq.>"         "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
-                  apply_retention "pos-dlq"         "pos.dlq.>"               "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
-                  apply_retention "projects-dlq"    "projects.dlq.>"          "${DLQ_MAX_AGE}" "${DLQ_MAX_BYTES}"
-
-                  echo ""
-                  echo "=== Stream Status After Update ==="
-                  nats --server="${NATS_URL}" stream ls 2>/dev/null || true
-                  echo "=== Done ==="
+                  done
+                  echo "streams: changed=$CHANGED within_policy=$OK failed=$FAILED"
+                  [ "$FAILED" -eq 0 ]
               resources:
                 requests:
                   cpu: 50m
@@ -110,20 +84,27 @@ spec:
                   cpu: 200m
                   memory: 128Mi
 ---
-# NATS JetStream consumer replica enforcement (2026-11-06)
+# NATS JetStream consumer policy enforcement (2026-11-06)
 #
-# All 3 nats pods run on the one node, so an R3 consumer gives no node-level
-# protection, only cover for one nats pod crashing. It does cost raft traffic:
-# ~460 route messages a second and ~800m of CPU across the pods with almost no
-# client traffic, about a quarter of all real CPU on the node. Streams stay R3 so
-# message data remains replicated; consumers run R1. An R1 consumer whose nats pod
-# restarts resumes from its on-disk state when the pod is back.
+# 1. Replicas 1. All 3 nats pods run on the one node, so an R3 consumer gives no
+#    node-level protection, only cover for one nats pod crashing, while its raft
+#    traffic cost ~460 route messages a second and ~800m CPU (a quarter of real node
+#    CPU). Streams stay R3 so message data remains replicated. An R1 consumer whose
+#    nats pod restarts resumes from its on-disk state when the pod is back. Moving all
+#    297 consumers cut NATS to ~80m and route traffic to ~25 messages a second.
+# 2. InactiveThreshold 7 days. A durable whose subscriber is gone (feature turned
+#    off, durable renamed, code removed) otherwise collects messages forever; 21 such
+#    durables were found, some silent since June. With the threshold the server
+#    deletes a durable that has had no subscriber for 7 days. Nothing is lost by that:
+#    every stream is capped at 7 days or less (nats-stream-retention above), so any
+#    message the durable had not taken has already aged out. A service that comes
+#    back after a longer outage gets a fresh durable with its own deliver policy.
 #
-# Enforced here rather than in shared/events: it covers every client (Go, .NET,
-# nats.js, Python) and consumers created later. nats.go only compares replicas when
-# the client sets them, so services re-binding to an R1 durable keep working, and
-# setting nats.ConsumerReplicas(1) in the library would make binds to existing R3
-# durables fail.
+# Enforced server side rather than in shared/events so it covers every client (Go,
+# .NET, nats.js, Python) and consumers created later. nats.go only compares replicas
+# when the client sets them, so services re-binding to an R1 durable keep working,
+# and setting nats.ConsumerReplicas(1) in the library would make binds to existing
+# R3 durables fail.
 #
 # Limits-retention streams only: the server requires consumer replicas to match the
 # stream on interest and work-queue streams, so those are skipped. Idempotent.
@@ -168,27 +149,29 @@ spec:
                   NATS="nats --server=nats://nats.messaging.svc.cluster.local:4222"
                   STREAMS="${ONLY_STREAMS:-$($NATS stream ls -n 2>/dev/null)}"
                   [ -n "$STREAMS" ] || { echo "ERROR: could not list streams"; exit 1; }
+                  THRESHOLD_NS=604800000000000   # 7 days
                   EDITED=0; ALREADY=0; SKIPPED=0; FAILED=0
                   for S in $STREAMS; do
-                    case "$($NATS stream info "$S" --json 2>/dev/null)" in
-                      *'"retention": "limits"'*) ;;
+                    case "$($NATS stream info "$S" --json 2>/dev/null | jq -r '.config.retention')" in
+                      limits) ;;
                       *) echo "skip stream $S: not limits retention or info failed"; SKIPPED=$((SKIPPED + 1)); continue ;;
                     esac
                     for C in $($NATS consumer ls "$S" -n 2>/dev/null); do
                       INFO=$($NATS consumer info "$S" "$C" --json 2>/dev/null) || { echo "WARN: info failed $S/$C"; FAILED=$((FAILED + 1)); continue; }
-                      case "$INFO" in
-                        *'"num_replicas": 1'*) ALREADY=$((ALREADY + 1)) ;;
-                        *)
-                          if $NATS consumer edit "$S" "$C" --replicas 1 -f >/dev/null 2>&1; then
-                            echo "edited $S/$C"; EDITED=$((EDITED + 1))
-                          else
-                            echo "WARN: edit failed $S/$C"; FAILED=$((FAILED + 1))
-                          fi
-                          ;;
-                      esac
+                      REP=$(echo "$INFO" | jq -r '.config.num_replicas // 0')
+                      INACT=$(echo "$INFO" | jq -r '.config.inactive_threshold // 0')
+                      ARGS=""
+                      [ "$REP" = 1 ] || ARGS="$ARGS --replicas 1"
+                      [ "$INACT" -gt 0 ] && [ "$INACT" -le "$THRESHOLD_NS" ] || ARGS="$ARGS --inactive-threshold 168h"
+                      if [ -z "$ARGS" ]; then ALREADY=$((ALREADY + 1)); continue; fi
+                      if $NATS consumer edit "$S" "$C" $ARGS -f >/dev/null 2>&1; then
+                        echo "edited $S/$C:$ARGS"; EDITED=$((EDITED + 1))
+                      else
+                        echo "WARN: edit failed $S/$C:$ARGS"; FAILED=$((FAILED + 1))
+                      fi
                     done
                   done
-                  echo "consumers: edited=$EDITED already_r1=$ALREADY failed=$FAILED streams_skipped=$SKIPPED"
+                  echo "consumers: edited=$EDITED within_policy=$ALREADY failed=$FAILED streams_skipped=$SKIPPED"
                   [ "$FAILED" -eq 0 ]
               resources:
                 requests:
