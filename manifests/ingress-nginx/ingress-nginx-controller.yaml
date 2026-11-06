@@ -167,9 +167,15 @@ spec:
           # workers, and a reload runs a second set of 12 workers while the old ones drain,
           # so the peak is roughly double. 512Mi left no headroom for that; 1.5Gi does, and
           # the node has ample free memory.
+          #
+          # Request raised 384Mi to 512Mi on 2026-11-06: measured steady use ~440Mi, so the
+          # old request sat below real use and the pod was an early eviction candidate under
+          # memory pressure. cgroup peak over 3 weeks was 795Mi (reloads), which the 1536Mi
+          # limit covers. Applied off peak: any pod spec change here can hit the hostPort
+          # deadlock in memory ingress-nginx-hostport-rollout-deadlock-2026-09-04.
           requests:
             cpu: 250m
-            memory: 384Mi
+            memory: 512Mi
           limits:
             memory: 1536Mi
         securityContext:
