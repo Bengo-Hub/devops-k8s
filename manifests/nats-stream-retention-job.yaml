@@ -156,11 +156,9 @@ spec:
             - name: nats-cli
               image: natsio/nats-box:0.14.5
               env:
-                # Staged 2026-11-06: library, then auth and notifications, each verified
-                # (bindings intact, real deliveries, nothing pending) before widening.
-                # Empty means every stream, which is the steady state.
+                # Rollout stage: only these streams. Empty means every stream.
                 - name: ONLY_STREAMS
-                  value: ""
+                  value: "library auth notifications"
               command:
                 - /bin/sh
                 - -c
