@@ -128,9 +128,12 @@ celeryWorker:
   # Each probe runs `celery inspect ping`, a new Python process that imports the
   # whole app: 1.33 CPU seconds per run, measured 2026-11-06. At readiness 30s plus
   # liveness 60s that was ~70m of constant CPU for two health checks, more than the
-  # tasks themselves. The worker has no Service, so readiness gates no traffic
-  # (same reasoning as celeryBeat below); liveness every 5 minutes still restarts a
-  # hung worker within ~25 minutes at failureThreshold 5.
+  # tasks themselves. Both now run every 5 minutes (~9m): liveness still restarts a
+  # hung worker within ~25 minutes at failureThreshold 5, and readiness gates no
+  # traffic (the worker has no Service). Readiness stays declared on purpose: turning
+  # it off failed the sync ("readinessProbe: must specify a handler type") because a
+  # pre-server-side-apply field manager (argocd-application-controller, Update) still
+  # co-owns the probe, so ArgoCD can drop only its own half of it.
   livenessProbe:
     enabled: true
     initialDelaySeconds: 90
@@ -138,7 +141,11 @@ celeryWorker:
     timeoutSeconds: 30
     failureThreshold: 5
   readinessProbe:
-    enabled: false
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 300
+    timeoutSeconds: 30
+    failureThreshold: 5
 celeryBeat:
   enabled: true
   persistence:
