@@ -8,7 +8,7 @@ replicaCount: 2
 minReadySeconds: 20
 image:
   repository: docker.io/codevertex/hadia-ui
-  tag: "552daa50" # replaced by CI on the first build
+  tag: "f16eb41f" # replaced by CI on the first build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
