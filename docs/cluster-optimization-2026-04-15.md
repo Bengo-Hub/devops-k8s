@@ -20,7 +20,7 @@ Single-node k3s on Contabo (12 vCPU / 47Gi / 484Gi). Changes below rebalance res
 - erp-api: req 200m/512Mi → **300m/768Mi**, lim 1000m/1Gi → **1500m/1.5Gi**.
 - truload-backend: req 100m/256Mi → **200m/512Mi**, lim 500m/512Mi → **1000m/1Gi**.
 
-**HPA enabled (min=1, max=2, CPU 70%)** on: inventory-api, logistics-api, iot-api, pos-api, projects-api, subscriptions-api, ticketing-api, treasury-api, notifications-api, isp-billing-backend, marketflow-api, truload-backend.
+**HPA enabled (min=1, max=2, CPU 70%)** on: inventory-api, logistics-api, iot-api (service since retired and deleted), pos-api, projects-api, subscriptions-api, ticketing-api, treasury-api, notifications-api, isp-billing-backend, marketflow-api, truload-backend.
 
 ## Cluster-side actions you need to run (SSH)
 

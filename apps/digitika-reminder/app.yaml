@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: digitika-reminder
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"  # After codevertex-website, whose endpoint it calls
+# 2026-11-06: the CronJob ran daily for months from a one-off kubectl apply, with no
+# Application managing it, so git changes never reached it and drift went unseen.
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests
+    directory:
+      include: digitika-reminder-cronjob.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: codevertex
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

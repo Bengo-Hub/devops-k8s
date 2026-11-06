@@ -8,12 +8,12 @@
 # separate Ingress resource keeps the rewrite fully isolated to this one host.
 #
 # Requires a DNS A record: r.codevertexafrica.com -> the cluster's public origin IP
-# (same host/proxied=false convention as the other codevertexafrica.com records — see
+# (same host/proxied=false convention as the other codevertexafrica.com records: see
 # scripts/cloudflare/zones/codevertexafrica.py). cert-manager auto-issues its own cert via the existing
-# letsencrypt-prod ClusterIssuer (DNS-01 already covers the whole zone) — no manual cert step.
+# letsencrypt-prod ClusterIssuer (DNS-01 already covers the whole zone): no manual cert step.
 #
-# Not synced by the ArgoCD root app (which only watches path: apps) — apply manually:
-#   kubectl apply -f manifests/pos-receipt-shortlink-ingress.yaml
+# Synced by the pos-receipt-shortlink Application (apps/pos-receipt-shortlink/app.yaml)
+# since 2026-11-06; before that it was a one-off manual apply that nothing managed.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -25,7 +25,7 @@ metadata:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/use-regex: "true"
     # /{code} -> pos-api's existing /api/v1/r/{code} route. No pos-api code depends on this
-    # rewrite existing — the long-form host still works unchanged if this Ingress/DNS record is
+    # rewrite existing: the long-form host still works unchanged if this Ingress/DNS record is
     # ever removed, since pos-api's own /api/v1/r/{code} route is unaffected either way.
     nginx.ingress.kubernetes.io/rewrite-target: /api/v1/r/$1
 spec:

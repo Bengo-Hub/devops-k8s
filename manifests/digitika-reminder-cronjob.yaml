@@ -34,7 +34,7 @@ spec:
             - sh
             - -c
             - |
-              echo "=== Digitika Installment Reminders — $(date -u '+%Y-%m-%d %H:%M UTC') ==="
+              echo "=== Digitika Installment Reminders: $(date -u '+%Y-%m-%d %H:%M UTC') ==="
               RESPONSE=$(curl -sf -w "\n%{http_code}" \
                 -X POST \
                 -H "Content-Type: application/json" \

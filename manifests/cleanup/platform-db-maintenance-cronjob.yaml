@@ -15,7 +15,6 @@
 #                               now prunes on publish, but cleans any legacy rows)
 #   outbox_events (FAILED):     DELETE after 7 days (kept briefly for troubleshooting)
 #   Logistics telemetry_points: DELETE after 90 days
-#   IoT telemetry_data, device_heartbeats, command_history: DELETE after 90 days
 #   MarketFlow chat_sessions:   DELETE after 90 days
 #   audit_logs (all services):  DELETE after 30 days (1-month retention policy)
 #

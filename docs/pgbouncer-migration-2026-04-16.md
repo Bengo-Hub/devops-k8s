@@ -33,7 +33,7 @@ Credentials and database name stay identical. PgBouncer uses `auth_query` agains
 | ticketing-api | ticketing | ticketing-api-secrets | Go |
 | notifications-api | notifications | notifications-api-env | Go |
 | pos-api | pos | pos-api-secrets | Go (blocked — see below) |
-| iot-api | iot | iot-api-secrets | Go (HPA-scaled to 0) |
+| iot-api | iot | iot-api-secrets | Retired and deleted since; no namespace, database or stream remains |
 | inventory-api | inventory | inventory-api-secrets | Go |
 | logistics-api | logistics | logistics-api-secrets | Go |
 | ordering-backend | ordering | ordering-backend-secrets | Go |

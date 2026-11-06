@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pos-receipt-shortlink
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"  # After pos-api, the backend this Ingress routes to
+# 2026-11-06: the r.codevertexafrica.com Ingress was live from a one-off kubectl apply,
+# with no Application managing it, so git changes never reached it and drift went unseen.
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests
+    directory:
+      include: pos-receipt-shortlink-ingress.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pos
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
