@@ -20,7 +20,7 @@ on:
         description: 'Namespaces that get the object-storage Secret'
         required: true
         type: string
-        default: 'auth treasury inventory ordering pos logistics hospital library maskani erp marketflow'
+        default: 'auth treasury inventory ordering pos logistics hospital library maskani erp marketflow hadia'
       public_bucket:
         description: 'Public bucket'
         required: true
