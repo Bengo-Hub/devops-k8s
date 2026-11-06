@@ -125,18 +125,20 @@ celeryWorker:
     limits:
       cpu: 1000m
       memory: 768Mi
+  # Each probe runs `celery inspect ping`, a new Python process that imports the
+  # whole app: 1.33 CPU seconds per run, measured 2026-11-06. At readiness 30s plus
+  # liveness 60s that was ~70m of constant CPU for two health checks, more than the
+  # tasks themselves. The worker has no Service, so readiness gates no traffic
+  # (same reasoning as celeryBeat below); liveness every 5 minutes still restarts a
+  # hung worker within ~25 minutes at failureThreshold 5.
   livenessProbe:
     enabled: true
     initialDelaySeconds: 90
-    periodSeconds: 60
+    periodSeconds: 300
     timeoutSeconds: 30
     failureThreshold: 5
   readinessProbe:
-    enabled: true
-    initialDelaySeconds: 60
-    periodSeconds: 30
-    timeoutSeconds: 30
-    failureThreshold: 5
+    enabled: false
 celeryBeat:
   enabled: true
   persistence:
