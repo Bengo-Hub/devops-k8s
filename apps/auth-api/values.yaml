@@ -151,8 +151,14 @@ env:
         optional: true
   - name: DOMAINS_CLUSTER_ISSUER
     value: "letsencrypt-prod"
+  # Tenants' own hosts that call SSO from the browser (CORS). Hadia: the UI calls the phone code,
+  # token and refresh routes from staging.hadiafrica.com now and the apex at launch.
   - name: AUTH_SECURITY_TENANT_APP_HOSTS
-    value: "alphachinamarket.co.ke,www.alphachinamarket.co.ke,urbaneats.theurbanloftcafe.com"
+    value: "alphachinamarket.co.ke,www.alphachinamarket.co.ke,urbaneats.theurbanloftcafe.com,staging.hadiafrica.com,hadiafrica.com,www.hadiafrica.com"
+  # Seeds the hadia tenant (phone self-signup, staff MFA policy) on the next start. One tenant serves
+  # testing now and launch later; its test data is deleted at go-live (user decision 2026-11-06).
+  - name: SEED_HADIA_TENANT
+    value: "true"
   # Subscription Service Integration — JWT enrichment with plan/features/limits
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"

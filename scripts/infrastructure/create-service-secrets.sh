@@ -266,6 +266,9 @@ case "${SERVICE_NAME}" in
     notifications-api) APP_ENC_KEY_VAR="SECURITY_ENCRYPTION_KEY" ;;
     # maskani-api: AES-GCM field encryption of identity numbers and KRA PINs. Must never rotate.
     maskani-api)       APP_ENC_KEY_VAR="FIELD_ENCRYPTION_KEY" ;;
+    # hadia-api: AES-GCM field encryption of phones, guest contacts and payout numbers (key ring root;
+    # rotation adds keys through FIELD_ENCRYPTION_KEYS, never by replacing this one). Must never rotate.
+    hadia-api)         APP_ENC_KEY_VAR="FIELD_ENCRYPTION_KEY" ;;
 esac
 APP_ENC_KEY_VALUE=""
 if [[ -n "${APP_ENC_KEY_VAR}" ]]; then

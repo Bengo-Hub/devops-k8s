@@ -1,0 +1,78 @@
+# hadia-ui: Hadia public site, guest registry pages, owner app and staff console (namespace hadia).
+# One deployment for testing now and launch later (user decision 2026-11-06, the truload pattern):
+# until launch it answers only staging.hadiafrica.com; at go-live the apex and www are added here
+# and NEXT_PUBLIC_SITE_URL changes in hadia-ui's deploy.yml. CI owns image.tag; never edit it by hand.
+nameOverride: hadia-ui
+fullnameOverride: hadia-ui
+replicaCount: 2
+minReadySeconds: 20
+image:
+  repository: docker.io/codevertex/hadia-ui
+  tag: "latest" # replaced by CI on the first build
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+healthCheck:
+  enabled: true
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+env:
+  # Server-side rendering reads hadia-api in-cluster, never through Cloudflare. hadia-ui calls no
+  # other service from the server, so it needs no INTERNAL_SERVICE_KEY or SUBSCRIPTION_BASE_URL.
+  - name: API_INTERNAL_URL
+    value: "http://hadia-api.hadia.svc.cluster.local:4000"
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+autoscaling:
+  enabled: false
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: staging.hadiafrica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - staging.hadiafrica.com
+      secretName: hadia-staging-tls
+monitoring:
+  enabled: false
+verticalPodAutoscaling:
+  enabled: false
+pdb:
+  enabled: true
+  minAvailable: 1

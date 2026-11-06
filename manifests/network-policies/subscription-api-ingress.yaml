@@ -92,6 +92,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # hadia-api entitlement check for the hadia tenant (plan tag treasury) and hadia-ui's
+        # server-side subscription proxy (SUBSCRIPTION_BASE_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hadia
       ports:
         - protocol: TCP
           port: 4000

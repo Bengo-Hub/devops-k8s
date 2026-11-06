@@ -74,6 +74,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # hadia-api: S2S escrow pots, contributions, releases, refunds, cancels, quotes and statements
+        # (/api/v1/s2s/{tenant}/escrow/..., TREASURY_SERVICE_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hadia
         # logistics-api settles rider earnings statements through treasury payouts. Added
         # 2026-10-10 together with the fix of its default treasury port (4005 -> 4000).
         - namespaceSelector:

@@ -1,0 +1,30 @@
+# hadia-api ingress policy. Consumers mapped from values.yaml and config.go defaults
+# (feedback_network_policy_consumer_mapping): public traffic arrives through ingress-nginx;
+# hadia-ui's server components call it in-cluster from the hadia namespace; auth-api collects
+# /api/v1/s2s/tenant-export for SSO tenant backups. No other service calls hadia-api today; add a
+# namespace here when one does.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hadia-api-ingress
+  namespace: hadia
+spec:
+  podSelector:
+    matchLabels:
+      app: hadia-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hadia
+      ports:
+        - protocol: TCP
+          port: 4000

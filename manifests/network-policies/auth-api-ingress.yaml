@@ -60,6 +60,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: maskani
+        # hadia-api: JWKS, tenant by slug, staff role push (/api/v1/s2s/roles/sync), owner profile
+        # reads and name push (AUTH_API_URL, AUTH_JWKS_URL).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hadia
       ports:
         - protocol: TCP
           port: 4000
