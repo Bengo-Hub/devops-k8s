@@ -328,12 +328,13 @@ fi
 # INTERNAL_SERVICE_KEY — the SHARED platform service-to-service key (all services use the SAME
 # value; treasury/auth/subscriptions validate it). library-api needs it to call treasury for
 # membership-fee / fine / e-book payment intents. mail-ui needs it to call auth-api's S2S MFA
-# federation endpoints (POST /api/v1/s2s/mfa/status|verify) during webmail login. NEVER generate
+# federation endpoints (POST /api/v1/s2s/mfa/status|verify) during webmail login. hadia-api calls
+# treasury, notifications and subscriptions with it. NEVER generate
 # a fresh one here (a new value would not match the platform key) — preserve the existing cluster
 # value, or accept it from env.
 APP_INTERNAL_SERVICE_KEY=""
 case "${SERVICE_NAME}" in
-    library-api|mail-ui|maskani-api|maskani-ui|maskani-commerce) NEEDS_ISK=true ;;
+    library-api|mail-ui|maskani-api|maskani-ui|maskani-commerce|hadia-api) NEEDS_ISK=true ;;
     *) NEEDS_ISK=false ;;
 esac
 if [[ "${NEEDS_ISK}" == "true" ]]; then
