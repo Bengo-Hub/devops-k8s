@@ -642,7 +642,22 @@ for 4+ hours. It now also checks `kubectl get nodes` for
 
 - Automated pod-cleanup CronJob runs periodic cleanup of Failed/Terminating pods and scales down repeatedly-failing Deployments. See `manifests/cleanup-cronjob.yaml` and `scripts/tools/cleanup-failed-pods.sh`.
 - Pre-deploy health check script: `scripts/tools/pre-deploy-health-check.sh` — validates namespace capacity, pod limits, DB connectivity and required secrets before a release.
-- Default replica/auto-scale strategy: conservative HPA/VPA settings for infra and app tiers (find defaults in `apps/*/values.yaml`).
+- Default replica/auto-scale strategy: conservative HPA/VPA settings for infra and app tiers (find defaults in `apps/*/values.yaml`). Sizing policy and the capacity report: `docs/scaling.md`.
+
+### Data retention (all automated, all discover their targets)
+
+| What | Kept | Job |
+|---|---|---|
+| Audit log tables in every database (`audit_logs`, `*_audit_logs`, erp `payslip_audits`) | 30 days | `manifests/cleanup/platform-db-maintenance-cronjob.yaml`, nightly 01:00 UTC |
+| Outbox events, published or failed | 7 days | same |
+| Logistics `telemetry_points` | 90 days | same |
+| MarketFlow `chat_sessions` | 90 days after last activity | same |
+| auth `sessions` | until expired or revoked | same, plus the auth-session-cleanup CronJob |
+| PostgreSQL full dump (`pg_dumpall`, includes Stalwart mail) | 7 days | `manifests/backup/postgresql-backup-cronjob.yaml`, nightly 02:00 UTC |
+| NATS JetStream streams | 7 days and 512MiB each (DLQ 14 days) | `nats-stream-retention` in `manifests/nats-stream-retention-job.yaml` |
+| NATS durables with no subscriber | deleted after 7 days | `nats-consumer-replicas`, same file |
+
+Each job picks its targets from what exists (databases, tables, columns, streams), so a new service is covered without editing a list, and each job fails visibly if a step fails. Check a run with `kubectl -n infra logs job/<name> -c db-maintenance` or `kubectl -n messaging logs job/<name>`.
 
 Quick remediation commands:
 
