@@ -301,7 +301,7 @@ Sections: `node`, `pods`, `throttle`, `hpa`, `traffic`, `nats`. Measure during t
 - **Low limits throttle more than low requests.** A workload that bursts briefly needs a limit that fits the burst, even when its average use is tiny.
 - **Count exec probes.** An exec probe that starts the app (for example `celery inspect ping`) costs a full interpreter start each time. isp-billing's two celery probes cost ~70m of constant CPU at 30s and 60s; both now run every 5 minutes.
 - **Removing a field can fail even under server-side apply.** Workloads first created before an Application used server-side apply still carry an old `argocd-application-controller` Update entry in managedFields. That stale owner keeps part of a field when git drops it (a probe lost its handler and the sync failed). Change such fields' values in git rather than removing them, or clear the stale managedFields entry first.
-- **Host port workloads cannot surge.** metrics-server and ingress-nginx use `maxSurge: 0`, and wireguard uses `Recreate`. Any change to the ingress-nginx pod spec has previously caused a deadlock on its host ports, so it needs a planned window and the recovery steps at hand.
+- **Host port workloads cannot surge.** metrics-server and ingress-nginx use `maxSurge: 0`, and wireguard uses `Recreate`. A host port pod's replacement waits for the old pod to exit, so keep its shutdown drain short: ingress-nginx uses a 30s grace and a 25s `worker-shutdown-timeout` (the upstream 300s and 240s turned every rollout into a long outage). An ingress rollout still drops all public traffic for about 36s, so do it off peak.
 
 ### VPA
 
