@@ -27,7 +27,7 @@ metadata:
   name: valhalla-data-refresh
   namespace: logistics
   labels:
-    app: valhalla
+    app: map-data-refresh
     component: data-refresh
 spec:
   schedule: "0 20 * * 0"
@@ -43,7 +43,9 @@ spec:
       template:
         metadata:
           labels:
-            app: valhalla
+            # Never app: valhalla or app: tileserver here: those are the Service selectors,
+            # so a Ready job pod would join the Service endpoints and receive live traffic.
+            app: map-data-refresh
             component: data-refresh
         spec:
           serviceAccountName: map-data-refresh

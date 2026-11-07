@@ -30,7 +30,7 @@ metadata:
   name: planetiler-tile-refresh
   namespace: logistics
   labels:
-    app: tileserver
+    app: map-data-refresh
     component: tile-generation
 spec:
   schedule: "15 20 * * 0"
@@ -46,7 +46,9 @@ spec:
       template:
         metadata:
           labels:
-            app: tileserver
+            # Never app: valhalla or app: tileserver here: those are the Service selectors,
+            # so a Ready job pod would join the Service endpoints and receive live traffic.
+            app: map-data-refresh
             component: tile-generation
         spec:
           serviceAccountName: map-data-refresh
