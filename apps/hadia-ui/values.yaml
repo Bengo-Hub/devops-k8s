@@ -44,15 +44,22 @@ env:
   # other service from the server, so it needs no INTERNAL_SERVICE_KEY or SUBSCRIPTION_BASE_URL.
   - name: API_INTERNAL_URL
     value: "http://hadia-api.hadia.svc.cluster.local:4000"
+# 2026-11-08 (owner go-ahead): every page renders per request (the CSP nonce), and two pods
+# capped at half a core throttled under load: 20 concurrent visitors gave the home page a 2.2 s
+# median and 5.6 s worst. One core per pod and an autoscaler like hadia-api's.
 resources:
   requests:
-    cpu: 50m
-    memory: 128Mi
+    cpu: 100m
+    memory: 160Mi
   limits:
-    cpu: 500m
-    memory: 256Mi
+    cpu: 1000m
+    memory: 384Mi
 autoscaling:
-  enabled: false
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
 ingress:
   enabled: true
   ingressClassName: nginx
