@@ -112,8 +112,9 @@ spec:
               value: "https://sso.codevertexafrica.com"
             - name: MF_SECURITY_JWT_AUDIENCE
               value: "codevertex"
+            # In-cluster for service-to-service calls (2026-11-07); the JWT issuer stays public.
             - name: MF_SECURITY_AUTH_SERVICE_URL
-              value: "https://sso.codevertexafrica.com"
+              value: "http://auth-api.auth.svc.cluster.local:4000"
             # 32-byte base64 key used to encrypt ProviderSetting secrets at rest.
             # Must be populated before any provider_configure call with secret_keys;
             # rotation requires re-encrypting existing rows.
