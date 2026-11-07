@@ -82,6 +82,11 @@ env:
   # API key validation — validates X-API-Key headers against auth-api (used for S2S calls from auth-api)
   - name: API_KEY_DB_URL
     value: "http://auth-api.auth.svc.cluster.local:4000"
+  # Tenant syncer base URL. Was unset, so it fell back to the code default (the public sso
+  # hostname) and every tenant lookup went out through ingress and back (2026-11-07).
+  # JWT_ISSUER and JWT_JWKS_URL stay public.
+  - name: AUTH_API_URL
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: TREASURY_API_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: INTERNAL_SERVICE_KEY
