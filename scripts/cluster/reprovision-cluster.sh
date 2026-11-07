@@ -94,27 +94,27 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     # 4. RabbitMQ — decommissioned on 2026-04-15. NATS/JetStream (apps/nats/)
     # handles all messaging. Step left as a numbered slot so the progress
     # counter stays aligned with older docs.
-    echo -e "${BLUE}[4/10] RabbitMQ — removed (NATS handles messaging)${NC}"
+    echo -e "${BLUE}[4/9] RabbitMQ: removed (NATS handles messaging)${NC}"
     echo ""
 
     # 5. Ingress Controller
-    echo -e "${BLUE}[5/10] Configuring ingress controller...${NC}"
+    echo -e "${BLUE}[5/9] Configuring ingress controller...${NC}"
     "${INFRA_DIR}/configure-ingress-controller.sh"
     echo ""
     
     # 5. cert-manager
-    echo -e "${BLUE}[6/10] Installing cert-manager...${NC}"
+    echo -e "${BLUE}[6/9] Installing cert-manager...${NC}"
     "${INFRA_DIR}/install-cert-manager.sh"
     echo ""
     
     # 6. Argo CD
-    echo -e "${BLUE}[7/10] Installing Argo CD...${NC}"
+    echo -e "${BLUE}[7/9] Installing Argo CD...${NC}"
     export ARGOCD_DOMAIN=${ARGOCD_DOMAIN:-argocd.masterspace.co.ke}
     "${INFRA_DIR}/install-argocd.sh"
     echo ""
     
     # 7. Bootstrap ArgoCD applications
-    echo -e "${BLUE}[8/10] Bootstrapping ArgoCD applications...${NC}"
+    echo -e "${BLUE}[8/9] Bootstrapping ArgoCD applications...${NC}"
     if [ -f "${SCRIPT_DIR}/../apps/root-app.yaml" ]; then
         kubectl apply -f "${SCRIPT_DIR}/../apps/root-app.yaml" || true
     fi
@@ -128,16 +128,14 @@ if [ "$SKIP_PROVISION" != "true" ]; then
     echo ""
     
     # 8. Monitoring
-    echo -e "${BLUE}[9/10] Installing monitoring stack...${NC}"
+    echo -e "${BLUE}[9/9] Installing monitoring stack...${NC}"
     export GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.masterspace.co.ke}
     export MONITORING_NAMESPACE=${DB_NAMESPACE:-infra}
     "${MONITORING_DIR}/install-monitoring.sh"
     echo ""
     
-    # 9. VPA
-    echo -e "${BLUE}[10/10] Installing Vertical Pod Autoscaler...${NC}"
-    "${INFRA_DIR}/install-vpa.sh"
-    echo ""
+    # VPA is not installed here: it is the ArgoCD Application apps/vpa (namespace vpa),
+    # applied with the other Applications in step 8.
     
     echo -e "${GREEN}✓ Reprovisioning complete${NC}"
     echo ""

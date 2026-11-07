@@ -196,8 +196,8 @@ Ensure these domains point to **77.237.232.66**:
 - Triggers: CPU > 70% OR Memory > 80%
 
 ### Vertical Pod Autoscaling (VPA)
-- Optional VPA manifests available: `manifests/vpa/vpa-setup.yaml`
-- Recommendation mode (safe for production)
+- Installed by the ArgoCD Application `apps/vpa` (Fairwinds chart, namespace `vpa`); each app turns its VPA on with `verticalPodAutoscaling` in its values
+- Recommendation mode only (`updateMode: Off`, floors 10m/32Mi)
 
 ### Cluster Capacity (48GB VPS)
 - Available: ~42GB RAM, ~10 CPU cores

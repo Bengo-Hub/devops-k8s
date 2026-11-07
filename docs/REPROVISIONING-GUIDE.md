@@ -247,7 +247,7 @@ kubectl get applications -A
    - Install Argo CD
    - Bootstrap ArgoCD applications
    - Install Monitoring stack in `infra` namespace
-   - Install VPA
+   - VPA arrives with the ArgoCD applications (`apps/vpa`)
    - Setup Git SSH access
 
 ### Option B: Manual Script Execution
@@ -291,9 +291,7 @@ export MONITORING_NAMESPACE=infra
 export PATH="$PATH:/snap/bin"
 ./scripts/monitoring/install-monitoring.sh
 
-# 8. VPA
-# Note: This script automatically creates TLS secret placeholder if missing
-./scripts/infrastructure/install-vpa.sh
+# VPA needs no step of its own: the ArgoCD Application apps/vpa installs it in namespace vpa.
 ```
 
 ---
@@ -365,23 +363,6 @@ kubectl get pods -n local-path-storage
 
 # Reinstall if needed
 ./scripts/infrastructure/install-storage-provisioner.sh
-```
-
-### VPA Admission Controller TLS Secret Missing
-
-If VPA admission controller is stuck in ContainerCreating:
-
-```bash
-# Run the automated fix script
-./scripts/tools/fix-cluster-issues.sh
-
-# Or manually create placeholder secret
-kubectl create secret generic vpa-tls-certs \
-  --from-literal=ca.crt="dummy" \
-  --from-literal=tls.crt="dummy" \
-  --from-literal=tls.key="dummy" \
-  -n kube-system
-kubectl delete pod -n kube-system -l app=vpa-admission-controller
 ```
 
 ### Monitoring Installation Stuck

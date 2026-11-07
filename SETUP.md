@@ -110,7 +110,6 @@ The workflow will automatically:
 - Install cert-manager
 - Install Argo CD
 - Install monitoring stack (Prometheus + Grafana)
-- Install Vertical Pod Autoscaler (VPA)
 
 **Note:** All installation scripts are idempotent (safe to run multiple times).
 

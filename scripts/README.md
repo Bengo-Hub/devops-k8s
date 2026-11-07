@@ -36,7 +36,6 @@ Scripts for installing and configuring infrastructure components.
 - **`configure-ingress-controller.sh`** - NGINX Ingress Controller
 - **`install-cert-manager.sh`** - cert-manager for TLS certificates
 - **`install-argocd.sh`** - ArgoCD GitOps tool
-- **`install-vpa.sh`** - Vertical Pod Autoscaler
 - **`create-service-database.sh`** - Create per-service databases
 - **`verify-db-credentials.sh`** - Verify database credentials
 
@@ -222,7 +221,6 @@ The `.github/workflows/provision.yml` workflow orchestrates all these scripts in
    - `infrastructure/install-cert-manager.sh`
    - `infrastructure/install-argocd.sh`
    - `monitoring/install-monitoring.sh`
-   - `infrastructure/install-vpa.sh`
 
 ## Environment Variables
 

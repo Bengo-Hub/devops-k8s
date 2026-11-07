@@ -66,14 +66,11 @@ VPA automatically adjusts CPU and memory requests/limits based on usage patterns
 
 ### Installation
 
-Install VPA using the provided script:
+VPA is the ArgoCD Application `apps/vpa` (Fairwinds chart, namespace `vpa`). Do not install a second copy in kube-system; the old `install-vpa.sh` provision step did that and was removed on 2026-11-08.
 
 ```bash
-# Install VPA components
-./scripts/install-vpa.sh
-
 # Verify installation
-kubectl get pods -n kube-system | grep vpa
+kubectl -n vpa get pods
 ```
 
 ### Enable VPA in Applications

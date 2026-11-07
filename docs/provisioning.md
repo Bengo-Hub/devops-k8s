@@ -19,7 +19,6 @@ What This Installs
 - trivy 0.45.x (security scanning)
 - yq v4.x (YAML processing)
 - kubeconform (Kubernetes manifest validation)
-- Vertical Pod Autoscaler (VPA) manifests v1.2.x (optional apply)
 - k9s (Kubernetes TUI)
 - stern (multi-pod log tailing)
 - Docker Engine and Buildx plugins
@@ -47,16 +46,10 @@ ssh root@YOUR_VPS_IP \
   "kubectl version --client && helm version && argocd version && trivy --version && yq --version && kubeconform -v"
 ```
 
-VPA Installation Behavior
--------------------------
+VPA
+---
 
-- The playbook downloads VPA manifests to `/opt/deployment-tools/vpa-manifests`.
-- If kubeconfig is configured on the VPS, it applies VPA automatically.
-- Otherwise, you can apply later:
-
-```bash
-kubectl apply -f /opt/deployment-tools/vpa-manifests/vpa-v1.2.0.yaml
-```
+VPA is not installed by provisioning. It is the ArgoCD Application `apps/vpa` (Fairwinds chart, namespace `vpa`), synced like any other app. The kube-system copy that the old `install-vpa.sh` step created was removed on 2026-11-08 because it ran beside the managed stack.
 
 Tool Version Pins
 -----------------
@@ -69,7 +62,6 @@ helm_version: "v3.15.0"
 argocd_version: "v2.13.0"
 trivy_version: "0.45.0"
 yq_version: "v4.35.2"
-vpa_version: "1.2.0"
 ```
 
 ## Hosting Environments
@@ -161,8 +153,7 @@ Relationship to CI/CD Workflows
 7. cert-manager (TLS certificates)
 8. Argo CD (GitOps)
 9. Monitoring Stack (Prometheus/Grafana in infra namespace)
-10. Vertical Pod Autoscaler (VPA)
-11. Git SSH Access Setup (requires manual GitHub deploy key configuration)
+10. Git SSH Access Setup (requires manual GitHub deploy key configuration)
 
 **VPS Management via Contabo API:**
 - The workflow automatically retrieves VPS IP from Contabo API (if credentials configured)
