@@ -48,7 +48,7 @@ metadata:
   name: mx1-cert-renewal
   namespace: email
 spec:
-  schedule: "0 4 * * *"  # Daily at 4am UTC — cheap to check, only acts when the cert actually changed
+  schedule: "10 21 * * *"  # 00:10 EAT. Cheap to check, only acts when the cert actually changed
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 5

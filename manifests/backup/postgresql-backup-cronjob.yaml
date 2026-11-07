@@ -4,7 +4,7 @@ metadata:
   name: postgresql-backup
   namespace: infra
 spec:
-  schedule: "0 2 * * *"  # Daily at 2am UTC
+  schedule: "30 20 * * *"  # 23:30 EAT, first in the nightly order so a fresh copy exists before the deletes at 23:45
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

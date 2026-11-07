@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-daily-cleanup
+  namespace: argocd
+# 2026-11-07: this CronJob ran from a one-off kubectl apply with nothing managing it,
+# so git changes never reached it.
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests
+    directory:
+      include: cleanup-cronjob.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

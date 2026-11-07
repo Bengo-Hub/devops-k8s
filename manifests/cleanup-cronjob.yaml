@@ -1,8 +1,15 @@
-# Daily cluster maintenance CronJob - runs at 3:00 AM UTC
-# Cleans up: failed/stuck pods, stale ReplicaSets, completed Jobs,
-# old Completed pods, unused container images on the node, and
-# Evicted pods across all namespaces. Also reports (list-only,
-# no deletion) orphan PVCs that are not mounted by any Pod.
+# Daily cluster maintenance CronJob - runs 21:50 UTC (00:50 EAT)
+# Removes what upgrades and deploys leave behind: unused container images (containerd
+# and host Docker), old OS packages and config, apt cache, old snap revisions,
+# failed/stuck pods, stale ReplicaSets, completed Jobs, old Completed pods and Evicted
+# pods across all namespaces. Also reports (list-only, no deletion) orphan PVCs that
+# are not mounted by any Pod.
+#
+# Runs after the nightly OS upgrade (00:30 EAT) so that night's leftovers go the same
+# night, and before the kured reboot window (01:00 to 02:00 EAT). See the nightly
+# order in docs/OPERATIONS-RUNBOOK.md. This is the only image prune: the copy that was
+# in platform-db-maintenance was removed on 2026-11-07. A node step that fails no
+# longer disappears into `|| true`: it is recorded and fails the Job at the end.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -11,7 +18,7 @@ metadata:
   labels:
     app: cluster-maintenance
 spec:
-  schedule: "0 3 * * *"  # Daily at 3:00 AM UTC
+  schedule: "50 21 * * *"  # 00:50 EAT, after the OS upgrade, before the reboot window
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -28,7 +35,10 @@ spec:
         spec:
           serviceAccountName: cluster-daily-cleanup
           restartPolicy: Never
-          # Init container: prune unused container images on the node
+          # Required: without it PID 1 is this container, nsenter stays inside it and every
+          # node step silently did nothing (crictl and docker "not found"). Found 2026-11-07.
+          hostPID: true
+          # Init container: node-level cleanup (images, OS packages, snaps)
           # Requires privileged access to the host via nsenter
           initContainers:
           - name: image-cleanup
@@ -37,27 +47,48 @@ spec:
             - /bin/sh
             - -c
             - |
-              echo "=== Pruning unused container images on node ==="
-              BEFORE=$(nsenter --target 1 --mount --uts --ipc --net -- crictl images -q 2>/dev/null | wc -l)
-              echo "Images before prune: $BEFORE"
-              nsenter --target 1 --mount --uts --ipc --net -- crictl rmi --prune 2>/dev/null || true
-              AFTER=$(nsenter --target 1 --mount --uts --ipc --net -- crictl images -q 2>/dev/null | wc -l)
-              echo "Images after prune: $AFTER"
-              echo "Removed $((BEFORE - AFTER)) unused images"
+              HOST="nsenter --target 1 --mount --uts --ipc --net --"
+              fail(){ echo "FAILED: $1"; echo "$1" >> /status/failed; }
 
-              # Host-level Docker Engine (the standalone n8n docker-compose stack —
-              # entirely separate image store from containerd/k3s above, never
-              # touches any k8s-managed image). Left unmanaged before this: exited
-              # containers, dangling/unused images, and build cache accumulate
-              # forever with no other cleanup path.
+              echo "=== Pruning unused container images on node ==="
+              BEFORE=$($HOST crictl images -q 2>/dev/null | wc -l)
+              $HOST crictl rmi --prune 2>&1 | tail -3 || fail "crictl rmi --prune"
+              AFTER=$($HOST crictl images -q 2>/dev/null | wc -l)
+              echo "Images: $BEFORE before, $AFTER after, $((BEFORE - AFTER)) removed"
+
+              # Host-level Docker Engine (the standalone n8n docker-compose stack,
+              # a separate image store from containerd above, never touches any
+              # k8s-managed image). Exited containers, unused images and build
+              # cache accumulate with no other cleanup path.
               echo "=== Pruning unused host Docker resources ==="
-              if nsenter --target 1 --mount --uts --ipc --net -- which docker >/dev/null 2>&1; then
-                nsenter --target 1 --mount --uts --ipc --net -- docker container prune -f 2>/dev/null || true
-                nsenter --target 1 --mount --uts --ipc --net -- docker image prune -af 2>/dev/null || true
-                nsenter --target 1 --mount --uts --ipc --net -- docker builder prune -af 2>/dev/null || true
+              if $HOST which docker >/dev/null 2>&1; then
+                $HOST docker container prune -f >/dev/null 2>&1 || fail "docker container prune"
+                $HOST docker image prune -af 2>&1 | tail -1 || fail "docker image prune"
+                $HOST docker builder prune -af >/dev/null 2>&1 || fail "docker builder prune"
               else
                 echo "  docker not present on host, skipping"
               fi
+
+              # OS leftovers after upgrades. apt autoremove keeps the running kernel
+              # plus one fallback, and only removes packages nothing depends on.
+              echo "=== Removing OS package leftovers ==="
+              APT="env DEBIAN_FRONTEND=noninteractive apt-get -y -o DPkg::Lock::Timeout=300"
+              $HOST $APT autoremove --purge 2>&1 | tail -2 || fail "apt autoremove"
+              $HOST $APT autoclean >/dev/null 2>&1 || fail "apt autoclean"
+              RC=$($HOST dpkg -l 2>/dev/null | awk '/^rc/{print $2}')
+              if [ -n "$RC" ]; then
+                echo "Purging config of $(echo "$RC" | wc -l) removed packages"
+                $HOST env DEBIAN_FRONTEND=noninteractive dpkg --purge $RC >/dev/null 2>&1 || fail "dpkg --purge"
+              fi
+
+              # snapd keeps old revisions after every refresh
+              echo "=== Removing old snap revisions ==="
+              $HOST snap list --all 2>/dev/null | awk '/disabled/{print $1, $3}' | while read NAME REV; do
+                echo "  $NAME revision $REV"
+                $HOST snap remove "$NAME" --revision="$REV" >/dev/null 2>&1 || fail "snap remove $NAME $REV"
+              done
+            volumeMounts:
+              - {name: status, mountPath: /status}
             securityContext:
               privileged: true
             resources:
@@ -274,6 +305,7 @@ spec:
               # -------------------------------------------------------
               # SUMMARY
               # -------------------------------------------------------
+              NODE_FAILED=$(cat /status/failed 2>/dev/null || true)
               echo ""
               echo "======================================"
               TOTAL_PODS=$(kubectl get pods --all-namespaces --no-headers 2>/dev/null | wc -l)
@@ -286,6 +318,12 @@ spec:
               echo "  ReplicaSets: $TOTAL_RS"
               echo "  Jobs:        $TOTAL_JOBS"
               echo "======================================"
+              if [ -n "$NODE_FAILED" ]; then
+                echo "Node cleanup steps failed:"; echo "$NODE_FAILED"
+                exit 1
+              fi
+            volumeMounts:
+              - {name: status, mountPath: /status}
             resources:
               requests:
                 cpu: 100m
@@ -293,6 +331,9 @@ spec:
               limits:
                 cpu: 500m
                 memory: 256Mi
+          volumes:
+            - name: status
+              emptyDir: {}
 ---
 # ServiceAccount for cleanup job
 apiVersion: v1

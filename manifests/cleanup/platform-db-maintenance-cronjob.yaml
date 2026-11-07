@@ -1,6 +1,6 @@
 # Platform Maintenance CronJob
 #
-# Runs nightly at 01:00 AM UTC. Single Job, two independent containers:
+# Runs nightly at 20:45 UTC (23:45 EAT). Single Job, two independent containers:
 #   1. db-maintenance — purges old records across all service databases.
 #   2. image-prune     — removes stale containerd images from the node.
 # Kept as one CronJob rather than two so there's a single cleanup job to
@@ -60,7 +60,7 @@ metadata:
     app: platform-db-maintenance
     component: maintenance
 spec:
-  schedule: "0 1 * * *"  # Daily at 1:00 AM UTC (1 hour before backup at 2am)
+  schedule: "45 20 * * *"  # 23:45 EAT, right after the 23:30 backup so a fresh copy exists before anything is deleted
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

@@ -23,7 +23,8 @@ spec:
             cpu: 10m
             memory: 48Mi
         configuration:
-          period: 1h
+          # 30m so the one-hour window below gets two chances to act
+          period: 30m
           rebootSentinel: /var/run/reboot-required
           # 2026-08-19 incident: drainTimeout defaults to 0 (infinite), so when
           # redis-master's PDB permanently disallowed disruption, kured retried
@@ -42,11 +43,13 @@ spec:
           # security update. Keep this timeout as a general safety bound even
           # though nothing should permanently block drain anymore.
           drainTimeout: 5m
-          # 00:00-02:00 UTC = 03:00-05:00 EAT, the platform's lowest-traffic
-          # window. Single time zone chosen (not crossing midnight) to
-          # avoid kured's start/end-time window semantics getting tricky.
-          startTime: "00:00"
-          endTime: "02:00"
+          # 22:00-23:00 UTC = 01:00-02:00 EAT (owner decision 2026-11-07: all
+          # nightly work finished by 02:00 EAT, leaving hours to fix anything
+          # before the morning). Last in the nightly order, after the 00:30 EAT
+          # OS upgrade that creates the reboot sentinel. Does not cross
+          # midnight UTC, which keeps kured's window semantics simple.
+          startTime: "22:00"
+          endTime: "23:00"
           rebootDays:
             - su
             - mo

@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: email-scheduled-jobs
+  namespace: argocd
+# 2026-11-07: both CronJobs ran from one-off kubectl applies with nothing managing them
+# (apps/stalwart-mail only includes stalwart-*.yaml).
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests/email
+    directory:
+      include: '{mx1-cert-renewal-cronjob.yaml,ip-blacklist-check-cronjob.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: email
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
