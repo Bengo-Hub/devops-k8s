@@ -9,10 +9,11 @@
 # public hostname every lookup looped out via Cloudflare and back, adding seconds per page load),
 # pos, inventory, ordering, ticketing (AUTH_SERVICE_URL in-cluster 2026-09-28: tenant lookups,
 # API-key checks, user sync, JWKS; the issuer check uses AUTH_ISSUER, which stays public).
-# Per the S2S conventions doc, auth is the one deliberate exception where most services call the
-# PUBLIC hostname (sso.codevertexafrica.com) instead of internal DNS, specifically because the JWT
-# issuer must match what's embedded in tokens — that public-hostname traffic already routes
-# through ingress-nginx and needs no separate allow rule here.
+# Since 2026-11-07 every Go service calls auth in-cluster for service-to-service requests; only
+# the JWT issuer and JWKS URL stay on the public hostname (sso.codevertexafrica.com), because the
+# issuer must match what is embedded in tokens. That public traffic routes through ingress-nginx,
+# allowed above. A new in-cluster caller adds its namespace here first. Convention documented in
+# shared-docs/docs/architecture/microservice-architecture.md ("Calling auth-api from another service").
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
