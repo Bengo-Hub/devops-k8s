@@ -644,16 +644,47 @@ for 4+ hours. It now also checks `kubectl get nodes` for
 - Pre-deploy health check script: `scripts/tools/pre-deploy-health-check.sh` — validates namespace capacity, pod limits, DB connectivity and required secrets before a release.
 - Default replica/auto-scale strategy: conservative HPA/VPA settings for infra and app tiers (find defaults in `apps/*/values.yaml`). Sizing policy and the capacity report: `docs/scaling.md`.
 
+### Nightly order
+
+All nightly work finishes by 02:00 EAT (23:00 UTC), leaving hours to fix anything before the morning. The node runs on UTC and EAT is UTC+3. The order matters: backup before deletes, upgrades before the cleanup that removes their leftovers, and the reboot last.
+
+| EAT | UTC | Job | Notes |
+|---|---|---|---|
+| Sun 23:00 | Sun 20:00 | `valhalla-data-refresh` | Weekly. Restarts valhalla only if the data changed |
+| Sun 23:15 | Sun 20:15 | `planetiler-tile-refresh` | Weekly. Restarts the tileserver only if the data changed |
+| 23:30 | 20:30 | `postgresql-backup` | Runs first so a fresh copy exists before anything is deleted |
+| 23:45 | 20:45 | `platform-db-maintenance` | Retention deletes |
+| 00:10 | 21:10 | `mx1-cert-renewal` | Acts only when the certificate changed |
+| 00:15 | 21:15 | `apt-daily` (node) | Downloads package updates |
+| 00:30 | 21:30 | `apt-daily-upgrade` (node) | Installs them, may request a reboot |
+| Mon 00:20, Sun 00:40 | Sun 21:20, Sat 21:40 | `fstrim`, `e2scrub_all` (node) | Weekly disk maintenance |
+| 00:50 | 21:50 | `cluster-daily-cleanup` | Removes what upgrades and deploys left behind |
+| 01:00 to 02:00 | 22:00 to 23:00 | kured reboot window | Only if an upgrade requested a reboot |
+
+The node timers are set by `scripts/cluster/set-node-maintenance-schedule.sh` (re-run it on a rebuilt node). Running through the day by design: `nats-consumer-replicas` (10 minutes), `auth-session-cleanup` (hourly), `ip-blacklist-check` and `nats-stream-retention` (6 hours), and the customer-facing `digitika-installment-reminder` at 11:00 EAT.
+
+### What cleanup removes after upgrades and updates
+
+| Leftover | Removed by |
+|---|---|
+| Unused container images, containerd and host Docker | `cluster-daily-cleanup` |
+| Old kernels (the running one plus one fallback stay) and unused packages | `cluster-daily-cleanup`, unattended-upgrades |
+| Config of removed packages, apt cache, old snap revisions | `cluster-daily-cleanup` |
+| Failed, stuck, evicted and old completed pods, stale ReplicaSets, finished Jobs | `cluster-daily-cleanup` |
+| Previous map data and build directories | The map refresh jobs, after verifying the new version |
+| NATS durables with no subscriber | NATS server, after 7 days (InactiveThreshold) |
+| Orphan PVCs | Reported by `cluster-daily-cleanup`, never deleted automatically: a volume can hold data with no other copy |
+
 ### Data retention (all automated, all discover their targets)
 
 | What | Kept | Job |
 |---|---|---|
-| Audit log tables in every database (`audit_logs`, `*_audit_logs`, erp `payslip_audits`) | 30 days | `manifests/cleanup/platform-db-maintenance-cronjob.yaml`, nightly 01:00 UTC |
+| Audit log tables in every database (`audit_logs`, `*_audit_logs`, erp `payslip_audits`) | 30 days | `manifests/cleanup/platform-db-maintenance-cronjob.yaml`, nightly |
 | Outbox events, published or failed | 7 days | same |
 | Logistics `telemetry_points` | 90 days | same |
 | MarketFlow `chat_sessions` | 90 days after last activity | same |
 | auth `sessions` | until expired or revoked | same, plus the auth-session-cleanup CronJob |
-| PostgreSQL full dump (`pg_dumpall`, includes Stalwart mail) | 7 days | `manifests/backup/postgresql-backup-cronjob.yaml`, nightly 02:00 UTC |
+| PostgreSQL full dump (`pg_dumpall`, includes Stalwart mail) | 7 days | `manifests/backup/postgresql-backup-cronjob.yaml`, nightly |
 | NATS JetStream streams | 7 days and 512MiB each (DLQ 14 days) | `nats-stream-retention` in `manifests/nats-stream-retention-job.yaml` |
 | NATS durables with no subscriber | deleted after 7 days | `nats-consumer-replicas`, same file |
 
