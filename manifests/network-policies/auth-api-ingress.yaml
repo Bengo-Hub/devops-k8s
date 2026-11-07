@@ -65,6 +65,27 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: hadia
+        # 2026-11-07: erp, hospital, library, logistics and projects move AUTH_SERVICE_URL
+        # in-cluster like the services above (tenant sync and by-slug lookups, API-key checks,
+        # user sync, role registry pushes). Through the public hostname their calls went out
+        # through the node and back through ingress-nginx; ~15 services refreshing the same
+        # tenant at once met a one-second no-upstream window there (18:30:03 UTC, 15 x 503).
+        # AUTH_ISSUER and AUTH_JWKS_URL stay public. treasury was already listed.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: erp
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hospital
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: library
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logistics
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: projects
       ports:
         - protocol: TCP
           port: 4000
