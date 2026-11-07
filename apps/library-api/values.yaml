@@ -76,8 +76,9 @@ env:
         optional: true
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
+  # In-cluster for service-to-service calls (2026-11-07); AUTH_ISSUER stays public.
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexafrica.com"
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: TREASURY_SERVICE_URL
     value: "http://treasury-api.treasury.svc.cluster.local:4000"
   - name: NOTIFICATIONS_SERVICE_URL
