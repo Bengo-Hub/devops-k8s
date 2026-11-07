@@ -6,7 +6,8 @@
 # the 2026-08-18 cordon incident). No write verbs anywhere, and
 # deliberately narrower than auth-api-monitor's RBAC
 # (manifests/auth-api-monitor-rbac.yaml) since this job doesn't need
-# PVCs/ingresses/cronjobs — just pod and node health.
+# PVCs/ingresses: just pod, node and Job health. Jobs added 2026-11-07 for the
+# failed-scheduled-job check (read-only, same as the rest).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -23,6 +24,9 @@ rules:
   verbs: ["get", "list"]
 - apiGroups: [""]
   resources: ["nodes"]
+  verbs: ["get", "list"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
   verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

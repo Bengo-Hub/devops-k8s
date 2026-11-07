@@ -172,6 +172,33 @@ spec:
                 "
                 fi
 
+                # --- 2c. Scheduled jobs (2026-11-07). The nightly jobs (backup, DB
+                #         maintenance, cleanup, map refreshes, cert renewal) now fail
+                #         the Job when a step fails, but nothing told anyone: a failed
+                #         backup would sit unnoticed until someone looked. For each
+                #         CronJob, take its most recent run (scheduled or manual, both
+                #         carry the CronJob as owner); page if it failed and nothing is
+                #         running. A later successful run clears it on its own. A failed
+                #         Job is removed by its TTL after 1 to 24 hours, so this pages
+                #         once and repeats hourly until a run succeeds or the Job ages out.
+                FAILED_JOBS=$($KCTL get jobs --all-namespaces -o json | jq -r '
+                  [ .items[]
+                    | . as $j
+                    | ($j.metadata.ownerReferences // [] | map(select(.kind == "CronJob")) | .[0].name) as $cj
+                    | select($cj != null)
+                    | { cj: ($j.metadata.namespace + "/" + $cj), name: $j.metadata.name,
+                        t: $j.metadata.creationTimestamp, active: (($j.status.active // 0) > 0),
+                        failed: ((($j.status.failed // 0) > 0) or any($j.status.conditions[]?; .type == "Failed" and .status == "True")) } ]
+                  | group_by(.cj) | map(max_by(.t))
+                  | .[] | select(.failed and (.active | not))
+                  | "\(.cj): last run \(.name) failed (started \(.t))"')
+                if [ -n "$FAILED_JOBS" ]; then
+                  FAILURES="${FAILURES}Scheduled job failed (check its logs before the next run):
+                ${FAILED_JOBS}
+
+                "
+                fi
+
                 # --- 3. Blackbox checks on the endpoints this incident actually
                 #        touched. Expand this list as coverage grows — starter set,
                 #        not exhaustive.
