@@ -109,8 +109,9 @@ env:
     value: "https://books.codevertexafrica.com,https://ordering.codevertexafrica.com,https://accounts.codevertexafrica.com,https://sso.codevertexafrica.com,https://theurbanloftcafe.com,http://localhost:3000,http://localhost:3001,https://alphachinamarket.co.ke,https://www.alphachinamarket.co.ke,https://urbaneats.theurbanloftcafe.com"
   - name: MPESA_CALLBACK_URL
     value: "https://booksapi.codevertexafrica.com/api/v1/webhooks/mpesa/callback"
+  # In-cluster for service-to-service calls (2026-11-07); AUTH_ISSUER stays public.
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexafrica.com"
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   # Server-side tenant / outlet lookups (by-slug, outlets) go in-cluster; AUTH_SERVICE_URL stays
   # public because it also builds browser-facing links. Allowed by auth-api-ingress NetworkPolicy.
   - name: AUTH_API_URL
