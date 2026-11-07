@@ -7,6 +7,9 @@ fullnameOverride: valhalla
 image:
   repository: ghcr.io/gis-ops/docker-valhalla/valhalla
   tag: "latest"
+  # Pinned 2026-11-07, tested with the weekly refresh (valhalla 3.5.1). Must match the image
+  # in manifests/routing/valhalla-cronjob.yaml: tiles are built by that image.
+  digest: sha256:060da5b92e6024a67f65135c236d918b021d63e73d1808a0d55b7e7cbd17240c
   pullPolicy: Always
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION

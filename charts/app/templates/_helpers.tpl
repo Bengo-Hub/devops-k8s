@@ -24,3 +24,15 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/name: {{ include "app.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
+
+{{/*
+Container image for the main workload. image.digest (optional) pins an exact build for
+third-party images that only publish a moving tag; CI-built services keep using image.tag.
+*/}}
+{{- define "app.image" -}}
+{{- if .Values.image.digest -}}
+{{ .Values.image.repository }}@{{ .Values.image.digest }}
+{{- else -}}
+{{ .Values.image.repository }}:{{ .Values.image.tag }}
+{{- end -}}
+{{- end -}}

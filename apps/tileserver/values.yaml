@@ -7,6 +7,8 @@ fullnameOverride: tileserver
 image:
   repository: maptiler/tileserver-gl
   tag: "latest"
+  # Pinned 2026-11-07, the build that serves the current tiles.
+  digest: sha256:24d0364e1d40da0ae3fb3269f617c26e36a883ad4b7454e5c4064a8795bfc807
   pullPolicy: Always
 # ============================================================================
 # REPLICA AND SCALING CONFIGURATION
@@ -125,7 +127,8 @@ verticalPodAutoscaling:
 # ============================================================================
 initContainers:
   - name: generate-tiles
-    image: ghcr.io/onthegomap/planetiler:latest
+    # Same digest as manifests/routing/planetiler-cronjob.yaml. Only runs if the tiles are missing.
+    image: ghcr.io/onthegomap/planetiler@sha256:b3b48614759d8676739f341b3de028bf852bbc80a0ea70804a2c55681d235c90
     command:
       - /bin/sh
       - -c

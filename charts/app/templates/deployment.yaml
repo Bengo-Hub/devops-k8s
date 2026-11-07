@@ -125,7 +125,7 @@ spec:
         {{- end }}
         {{- if and .Values.migrations .Values.migrations.runOnStartup }}
         - name: wait-for-db
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ include "app.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           securityContext:
             runAsNonRoot: true
@@ -212,7 +212,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ include "app.name" . }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ include "app.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

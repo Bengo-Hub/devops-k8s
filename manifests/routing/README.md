@@ -39,7 +39,7 @@ Why it is built this way:
 - planetiler `--download` only downloads **missing** sources. `--refresh_osm` and friends are what fetch a newer version. Without them the April 2026 extract would have been reused forever.
 - docker-valhalla's `file_hashes.txt` hashes the download URL, not the data, so valhalla never rebuilds on its own when a new extract arrives. Its tiles also live in `valhalla_tiles.tar`, so deleting a `valhalla_tiles` directory does nothing.
 - The water polygons host (osmdata.openstreetmap.de) is sometimes unreachable. The planetiler job probes it first and keeps the cached copy rather than failing.
-- Both images are pinned by digest. planetiler `:latest` is a moving main-branch snapshot.
+- All map images are pinned by digest (`image.digest` in `apps/valhalla` and `apps/tileserver`, and in the two CronJobs). planetiler `:latest` is a moving main-branch snapshot. To upgrade valhalla, change the digest in `apps/valhalla/values.yaml` and `valhalla-cronjob.yaml` together: its tiles are built by that image.
 
 ### Checking freshness
 

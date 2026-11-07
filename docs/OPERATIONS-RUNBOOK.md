@@ -684,7 +684,7 @@ The node timers are set by `scripts/cluster/set-node-maintenance-schedule.sh` (r
 | Logistics `telemetry_points` | 90 days | same |
 | MarketFlow `chat_sessions` | 90 days after last activity | same |
 | auth `sessions` | until expired or revoked | same, plus the auth-session-cleanup CronJob |
-| PostgreSQL full dump (`pg_dumpall`, includes Stalwart mail) | 7 days | `manifests/backup/postgresql-backup-cronjob.yaml`, nightly |
+| PostgreSQL full dump (`pg_dumpall`, includes Stalwart mail) | Newest 3 on R2 (`R2_KEEP`), latest 1 on the local volume. Each run replaces the oldest, so a manual run shortens the window by a day | `manifests/backup/postgresql-backup-cronjob.yaml`, nightly |
 | NATS JetStream streams | 7 days and 512MiB each (DLQ 14 days) | `nats-stream-retention` in `manifests/nats-stream-retention-job.yaml` |
 | NATS durables with no subscriber | deleted after 7 days | `nats-consumer-replicas`, same file |
 
