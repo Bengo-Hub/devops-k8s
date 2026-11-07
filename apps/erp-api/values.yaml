@@ -156,8 +156,9 @@ env:
   - name: EVENTS_NATS_URL
     value: "nats://nats.messaging.svc.cluster.local:4222"
   # ── Auth (SSO) — JWKS/issuer/audience for JWT validation ──
+  # In-cluster for service-to-service calls (2026-11-07); AUTH_ISSUER stays public.
   - name: AUTH_SERVICE_URL
-    value: "https://sso.codevertexafrica.com"
+    value: "http://auth-api.auth.svc.cluster.local:4000"
   - name: AUTH_JWKS_URL
     value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: AUTH_ISSUER
