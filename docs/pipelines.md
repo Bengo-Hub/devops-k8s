@@ -299,7 +299,7 @@ These appear in the Argo CD UI when `apps/root-app.yaml` is applied (App-of-Apps
 kube-prometheus-stack (Prometheus, Grafana, Alertmanager) was decommissioned on 2026-07-13, RabbitMQ was removed on 2026-04-15 and KEDA on 2026-11-06 (unused since its April scale-to-zero rollout was reverted). What exists now:
 
 - auth-api's platform monitor page reads metrics-server and the Kubernetes API directly.
-- `apps/fleet-health-watcher` pushes Slack and email alerts for unhealthy pods, cordoned nodes and failing public endpoints.
+- `apps/fleet-health-watcher` pushes Slack and email alerts for unhealthy pods, cordoned nodes, failing public endpoints, and scheduled jobs whose last run failed.
 - `scripts/cluster/capacity-report.sh` gives requests against real use, throttling, HPA state, ingress traffic and NATS consumer state.
 
 ### Monitoring Deployments
