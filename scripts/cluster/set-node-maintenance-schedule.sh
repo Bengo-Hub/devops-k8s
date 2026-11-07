@@ -117,6 +117,9 @@ fi
 
 unattended-upgrade --dry-run 2>&1 | grep -iE 'packages that will be upgraded|No packages found' | head -1
 
+# daemon-reload alone re-arms the timers with the new OnCalendar. Do NOT restart them:
+# a restart makes systemd fire a catch-up run straight away (Persistent=true), which on
+# 2026-11-07 ran an upgrade at 01:02 UTC, and apt then skipped that night's planned run
+# because apt.systemd.daily allows one run per calendar date.
 systemctl daemon-reload
-systemctl restart apt-daily.timer apt-daily-upgrade.timer fstrim.timer e2scrub_all.timer
 systemctl list-timers --all --no-pager | grep -E 'NEXT|apt-daily|fstrim|e2scrub_all'
