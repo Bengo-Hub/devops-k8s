@@ -86,6 +86,11 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: projects
+        # marketflow-api and marketflow-worker: API-key checks, tenant members, the WhatsApp
+        # assistant's by-phone lookup (MF_SECURITY_AUTH_SERVICE_URL, in-cluster 2026-11-07).
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
       ports:
         - protocol: TCP
           port: 4000
