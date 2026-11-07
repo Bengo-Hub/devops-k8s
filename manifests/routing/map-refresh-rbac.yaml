@@ -17,7 +17,9 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames: ["tileserver", "valhalla"]
-    verbs: ["get", "patch"]
+    # list and watch are what kubectl rollout status uses; it filters by name, so
+    # resourceNames still limits them to these two deployments.
+    verbs: ["get", "patch", "list", "watch"]
   # kubectl rollout status follows the new ReplicaSet and its pods
   - apiGroups: ["apps"]
     resources: ["replicasets"]
