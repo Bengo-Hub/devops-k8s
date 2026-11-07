@@ -109,7 +109,8 @@ env:
         name: pos-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
-  # HMAC secret for PIN-terminal JWTs, generated once by create-service-secrets.sh and preserved.
+  # HMAC secret for PIN-terminal JWTs, sealed in manifests/sealed-secrets/pos-api.sealedsecret.yaml
+  # (since 2026-11-07; a script-written copy only in the live Secret was wiped by the reboot).
   # Without it pos-api signs terminal tokens with INTERNAL_SERVICE_KEY, so any holder of the shared
   # key could mint tokens for any tenant. Not optional: a missing key must stop the pod, not fall back.
   - name: TERMINAL_JWT_SECRET

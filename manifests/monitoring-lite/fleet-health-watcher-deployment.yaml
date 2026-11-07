@@ -119,6 +119,10 @@ spec:
                 # that window are exempted from the restart-count rule only while they are
                 # currently ready; CrashLoopBackOff/ImagePullBackOff/ErrImagePull still
                 # page, so a service that fails to come back after the reboot is caught.
+                # CreateContainerConfigError and CreateContainerError page too: a missing
+                # Secret key never restarts the container, so neither the restart rule nor
+                # CrashLoopBackOff saw pos-api down for 12 minutes after the 2026-11-07
+                # reboot (TERMINAL_JWT_SECRET wiped by the sealed-secrets controller).
                 BAD_RAW=$($KCTL get pods --all-namespaces -o json | jq -r '
                   def termAt: (.lastState.terminated.finishedAt // "");
                   def isRecent: termAt != "" and ((now - (termAt | fromdateiso8601)) <= 1800);
@@ -132,6 +136,8 @@ spec:
                     (.state.waiting.reason // "") == "CrashLoopBackOff" or
                     (.state.waiting.reason // "") == "ImagePullBackOff" or
                     (.state.waiting.reason // "") == "ErrImagePull" or
+                    (.state.waiting.reason // "") == "CreateContainerConfigError" or
+                    (.state.waiting.reason // "") == "CreateContainerError" or
                     ((.restartCount // 0) >= 5 and isRecent)
                   ) |
                   ((.state.waiting.reason // "") == "" and (.ready // false) and inReboot) as $rebootRestart |

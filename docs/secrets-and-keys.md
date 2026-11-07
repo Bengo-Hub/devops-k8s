@@ -9,6 +9,14 @@ This file lists names and process only. No value belongs here.
   during the service's deploy. Values that must never rotate are generated once and then preserved
   (read the existing key first): encryption keys, `TERMINAL_JWT_SECRET` (library-api and, since
   2026-10-20, pos-api), `SESSION_SECRET`.
+- Seven Secrets come from SealedSecrets in `manifests/sealed-secrets/` instead (auth, hospital,
+  inventory, library, pos, subscriptions, treasury). The sealed-secrets controller rewrites each of
+  them from git whenever it restarts, which is every node reboot, so a key that exists only in the
+  live Secret is wiped. That happened to pos-api's `TERMINAL_JWT_SECRET` on 2026-11-07 (down about
+  12 minutes after the kured reboot) until it was sealed. Since then the script writes nothing to a
+  SealedSecret-owned Secret, and it stops the deploy with the `kubeseal --raw --scope strict`
+  command when the SealedSecret lacks a key it would write. A new key for one of these services is
+  sealed and committed; it is never added with `kubectl patch`.
 - `INTERNAL_SERVICE_KEY` is the one shared service-to-service key. The script never generates it; it
   copies the platform value. A new service that calls others must be added to the script's
   `NEEDS_ISK` list.

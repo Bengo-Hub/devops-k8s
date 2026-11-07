@@ -456,6 +456,36 @@ if [[ -n "${APP_SESSION_SECRET}" ]]; then
     secret_literals+=("--from-literal=SESSION_SECRET=${APP_SESSION_SECRET}")
 fi
 
+# A Secret owned by a SealedSecret (manifests/sealed-secrets/) is rewritten from git whenever the
+# sealed-secrets controller restarts, which happens on every node reboot. A key patched in here but
+# absent from the SealedSecret disappears at that rewrite: on 2026-11-07 pos-api lost
+# TERMINAL_JWT_SECRET after the kured reboot and stayed down until the key was sealed into git.
+# So for such a Secret this script writes nothing. If the SealedSecret lacks a key the script would
+# write, it stops and prints the command to seal that key, instead of planting a key that vanishes.
+SEALED_OWNER=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
+    -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null || true)
+if [[ -n "${SEALED_OWNER}" ]]; then
+    SEALED_KEYS=$(kubectl get sealedsecret "${SEALED_OWNER}" -n "${NAMESPACE}" \
+        -o go-template='{{range $k, $v := .spec.encryptedData}}{{$k}}{{"\n"}}{{end}}')
+    declare -a unsealed_keys=()
+    for lit in "${secret_literals[@]}"; do
+        key="${lit#--from-literal=}"
+        key="${key%%=*}"
+        grep -qx "${key}" <<<"${SEALED_KEYS}" || unsealed_keys+=("${key}")
+    done
+    if (( ${#unsealed_keys[@]} > 0 )); then
+        log_error "${NAMESPACE}/${SECRET_NAME} comes from SealedSecret ${SEALED_OWNER}, which lacks: ${unsealed_keys[*]}"
+        echo "::error::Seal ${unsealed_keys[*]} into devops-k8s manifests/sealed-secrets/${SERVICE_NAME}.sealedsecret.yaml; a key written only to the live Secret is wiped at the next node reboot."
+        echo "Per key, on the node (the value goes to stdin and is never stored):"
+        echo "  <value source> | kubeseal --raw --scope strict --namespace ${NAMESPACE} --name ${SECRET_NAME} \\"
+        echo "    --controller-namespace kube-system --controller-name sealed-secrets-controller --from-file=/dev/stdin"
+        echo "Add the output under spec.encryptedData, commit, and rerun."
+        exit 1
+    fi
+    log_info "${NAMESPACE}/${SECRET_NAME} comes from SealedSecret ${SEALED_OWNER}, which holds every key; nothing to write."
+    exit 0
+fi
+
 if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     # Secret exists — patch to merge standardized keys without losing existing keys
     # Generate the new data as base64 and build a JSON patch
