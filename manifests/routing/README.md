@@ -1,104 +1,79 @@
-# Map & Routing Infrastructure
+# Map and Routing Infrastructure
 
-Self-hosted OpenStreetMap stack for the logistics platform. Replaces paid Google Maps APIs with free, open-source alternatives — zero per-request costs at any scale.
-
-## Architecture
+Self-hosted OpenStreetMap stack for the logistics platform: vector tiles from TileServer-GL and routing from Valhalla, both built from the free Geofabrik Kenya extract.
 
 ```
-Geofabrik (free OSM data)
+Geofabrik kenya-latest.osm.pbf (updated daily)
     │
-    ├─→ Planetiler ──→ kenya.mbtiles ──→ TileServer-GL ──→ tiles.codevertexafrica.com
-    │   (weekly CronJob)                  (vector tiles)     (MapLibre GL JS frontends)
+    ├─→ planetiler-tile-refresh (weekly) ──→ kenya.mbtiles ──→ tileserver ──→ tiles.codevertexafrica.com
     │
-    └─→ Valhalla ──→ routing graph ──→ logistics-api ──→ routing.codevertexafrica.com
-        (auto-rebuild)                  (ETA, directions)    (tenant-scoped, rate-limited)
+    └─→ valhalla-data-refresh   (weekly) ──→ valhalla_tiles.tar ──→ valhalla ──→ routing.codevertexafrica.com
 ```
 
-## Components
+## Where things are defined
 
-| Service | Purpose | Port | Domain |
-|---------|---------|------|--------|
-| **TileServer-GL** | Vector tile server for MapLibre frontends | 8080 | `tiles.codevertexafrica.com` |
-| **Planetiler** | Generates OpenMapTiles mbtiles from OSM data | — | CronJob (weekly) |
-| **Valhalla** | Routing engine (ETA, distance matrix, isochrones) | 8002 | `routing.codevertexafrica.com` |
+| What | Source | Managed by |
+|------|--------|------------|
+| tileserver Deployment, Service, Ingress, volume `tileserver-media` | `apps/tileserver/values.yaml` (chart `charts/app`) | Application `tileserver` |
+| valhalla Deployment, Service, Ingress, volume `valhalla-media` | `apps/valhalla/values.yaml` (chart `charts/app`) | Application `valhalla` |
+| `tileserver-config.yaml`, `planetiler-cronjob.yaml`, `valhalla-cronjob.yaml`, `map-refresh-rbac.yaml` | this directory | Application `map-data-refresh` |
 
-## Data Pipeline
+The kustomize Deployment, Service and PVC files that used to live here, and `scripts/deploy-routing.sh` which applied them, were removed on 2026-11-07: they duplicated the chart apps, and running them would have overwritten the live services.
 
-Both tile and routing data come from **Geofabrik Kenya OSM extract** (free, updated daily):
+## Weekly data refresh
 
-| Job | Schedule | Source | Output |
-|-----|----------|--------|--------|
-| `planetiler-tile-refresh` | Monday 3 AM UTC | `geofabrik.de/africa/kenya-latest.osm.pbf` | `/data/tiles/kenya.mbtiles` (~200MB) |
-| `valhalla-data-refresh` | Monday 2 AM UTC | `geofabrik.de/africa/kenya-latest.osm.pbf` | Valhalla routing graph (~300MB) |
+Both jobs run Sunday night (EAT) and follow the same pattern, every step tested against prod on 2026-11-07:
 
-## Manifests
+1. Build the new data away from the live files (a scratch or staging directory on the same volume).
+2. If upstream has not changed since the live data was built, discard the build. No restart, no outage.
+3. Otherwise swap the new data in, restart the server, and verify the server reports the new version (a tile and a route must also work). On failure the previous files are restored and the server restarted, and the Job fails.
+4. Delete the previous version and the build directory, so nothing old is left behind.
 
-```
-manifests/routing/
-├── kustomization.yaml
-├── README.md
-├── tileserver-pvc.yaml          # 5Gi PVC for mbtiles data
-├── tileserver-config.yaml       # TileServer-GL config (osm-bright style)
-├── tileserver-deployment.yaml   # TileServer-GL + Planetiler init container
-├── tileserver-service.yaml      # Service + Ingress (tiles.codevertexafrica.com)
-├── planetiler-cronjob.yaml      # Weekly tile regeneration
-├── valhalla-pvc.yaml            # 10Gi PVC for routing data
-├── valhalla-deployment.yaml     # Valhalla routing engine
-├── valhalla-service.yaml        # Service + Ingress (routing.codevertexafrica.com)
-└── valhalla-cronjob.yaml        # Weekly OSM data refresh
-```
+| Job | Schedule | Built from | Version check |
+|-----|----------|------------|---------------|
+| `valhalla-data-refresh` | Sunday 20:00 UTC (23:00 EAT) | Latest Geofabrik extract, built with the live valhalla image in `staging/` | `tileset_last_modified` in `/status?verbose=true` moves forward; marker `.tiles-source.sha256` records the extract the live tiles came from |
+| `planetiler-tile-refresh` | Sunday 20:15 UTC (23:15 EAT) | Sources refreshed in place in `/data/sources` (ETag check), built in `/data/tiles-build` | `planetiler:osm:osmosisreplicationseq` in `/data/v3.json` must equal the new archive's |
 
-## First Deployment
+Why it is built this way:
 
-On first deployment, the tileserver init container runs Planetiler to generate Kenya tiles (~5-10 min). Subsequent restarts skip this if tiles exist.
+- planetiler `--download` only downloads **missing** sources. `--refresh_osm` and friends are what fetch a newer version. Without them the April 2026 extract would have been reused forever.
+- docker-valhalla's `file_hashes.txt` hashes the download URL, not the data, so valhalla never rebuilds on its own when a new extract arrives. Its tiles also live in `valhalla_tiles.tar`, so deleting a `valhalla_tiles` directory does nothing.
+- The water polygons host (osmdata.openstreetmap.de) is sometimes unreachable. The planetiler job probes it first and keeps the cached copy rather than failing.
+- Both images are pinned by digest. planetiler `:latest` is a moving main-branch snapshot.
+
+### Checking freshness
 
 ```bash
-# Apply all manifests
-kubectl apply -k manifests/routing/
-
-# Watch tile generation progress on first run
-kubectl logs -f deployment/tileserver -n logistics -c init-tiles
+# OSM sequence and time the served tiles were built from
+curl -s https://tiles.codevertexafrica.com/data/v3.json | jq '."planetiler:osm:osmosisreplicationseq", ."planetiler:osm:osmosisreplicationtime"'
+# Current upstream sequence
+curl -s https://download.geofabrik.de/africa/kenya-updates/state.txt
+# Routing tiles build time (unix seconds)
+curl -s 'https://routing.codevertexafrica.com/status?verbose=true' | jq .tileset_last_modified
 ```
 
-## Operations
-
-### Manual tile refresh
+### Running a refresh by hand
 
 ```bash
-# Trigger Planetiler to regenerate tiles
-kubectl create job --from=cronjob/planetiler-tile-refresh tiles-manual -n logistics
-
-# After completion, restart tileserver to load new tiles
-kubectl rollout restart deployment/tileserver -n logistics
+kubectl -n logistics create job --from=cronjob/valhalla-data-refresh valhalla-refresh-manual-$(date +%s)
+kubectl -n logistics create job --from=cronjob/planetiler-tile-refresh tiles-refresh-manual-$(date +%s)
 ```
 
-### Manual Valhalla data refresh
-
-```bash
-kubectl create job --from=cronjob/valhalla-data-refresh valhalla-manual -n logistics
-kubectl rollout restart deployment/valhalla -n logistics
-```
-
-### Check status
-
-```bash
-kubectl get pods -n logistics -l part-of=map-services
-kubectl get cronjobs -n logistics
-```
+Run these off peak: a swap restarts the server (both use Recreate), so tiles or routing are briefly unavailable.
 
 ## Tile API
 
-Base URL: `https://tiles.codevertexafrica.com`
-Internal: `http://tileserver.logistics.svc.cluster.local:8080`
+Base URL: `https://tiles.codevertexafrica.com`, internal `http://tileserver.logistics.svc.cluster.local:8080`
 
 | Endpoint | Format | Usage |
 |----------|--------|-------|
 | `/styles/osm-bright/style.json` | Style JSON | MapLibre style URL |
 | `/data/v3/{z}/{x}/{y}.pbf` | Vector tiles | MapLibre GL JS |
+| `/data/v3.json` | TileJSON | Metadata, including the OSM sequence |
 | `/styles/osm-bright/{z}/{x}/{y}.png` | Raster tiles | Fallback / `<img>` |
 | `/health` | JSON | Health check |
 
-### MapLibre Integration
+### MapLibre integration
 
 ```tsx
 import { MapProvider, MapContainer } from '@bengo-hub/maps';
@@ -114,30 +89,21 @@ import { MapProvider, MapContainer } from '@bengo-hub/maps';
 
 ## Valhalla API
 
-Base URL: `https://routing.codevertexafrica.com`
-Internal: `http://valhalla.logistics.svc.cluster.local:8002`
+Base URL: `https://routing.codevertexafrica.com`, internal `http://valhalla.logistics.svc.cluster.local:8002`
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /route?json={...}` | Turn-by-turn routing |
-| `GET /sources_to_targets?json={...}` | Distance/time matrix |
-| `GET /isochrone?json={...}` | Reachability polygon |
-| `GET /locate?json={...}` | Snap to road |
-| `POST /optimized_route` | Multi-stop optimization (TSP) |
-| `GET /status` | Health / version check |
+| `POST /route` | Turn-by-turn routing |
+| `POST /sources_to_targets` | Distance/time matrix |
+| `POST /isochrone` | Reachability polygon |
+| `POST /locate` | Snap to road |
+| `POST /optimized_route` | Multi-stop optimization |
+| `GET /status?verbose=true` | Health, version, tileset build time |
 
-**Costing modes:** `auto`, `bicycle`, `pedestrian`, `motor_scooter`, `motorcycle`
+Costing modes: `auto`, `bicycle`, `pedestrian`, `motor_scooter`, `motorcycle`.
 
-## Adding Countries
+## Adding countries
 
-1. Update `planetiler-cronjob.yaml` — change `--area=kenya` to `--area=kenya,uganda`
-2. Update `valhalla-deployment.yaml` — add PBF URLs to `tile_urls`
-3. Increase PVC sizes and memory limits proportionally (~1-2GB per country)
-
-## Resource Requirements
-
-| Component | CPU Req | Mem Req | Mem Limit | Disk |
-|-----------|---------|---------|-----------|------|
-| TileServer | 250m | 512Mi | 1Gi | 5Gi (tiles) |
-| Planetiler (Job) | 1 | 3Gi | 6Gi | shared PVC |
-| Valhalla | 1 | 3Gi | 5Gi | 10Gi |
+1. `planetiler-cronjob.yaml`: change `--area=kenya` (planetiler accepts one Geofabrik area per run, so several countries need a combined extract via `--osm_url`).
+2. `valhalla-cronjob.yaml`: add the extra extract URLs to `tile_urls` (space separated), and the same in `apps/valhalla/values.yaml`.
+3. Raise the volume sizes and memory limits roughly in line with the extract sizes.

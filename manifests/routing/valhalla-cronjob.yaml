@@ -1,3 +1,26 @@
+# Weekly routing data refresh for routing.codevertexafrica.com (rewritten 2026-11-07).
+#
+# The previous version downloaded a new Kenya extract every Monday and ran
+# `rm -rf valhalla_tiles`, but the routing tiles live in valhalla_tiles.tar, so nothing
+# was ever rebuilt: routing served tiles from 2026-03-20 (tileset_last_modified
+# 1774049996) the whole time. docker-valhalla's own file_hashes.txt hashes the download
+# URL, not the data, so it never notices a new extract either.
+#
+# Flow, tested against prod data on 2026-11-07 (build ~3 minutes, 927 tiles):
+#   1. prep (init): fresh, empty staging dir on the valhalla volume.
+#   2. build (init): the same valhalla image digest as the live pod, build-only mode
+#      (serve_tiles=False, force_rebuild=True), downloads the latest Geofabrik extract
+#      into staging and builds tiles, admin and timezone data there. Live data is not
+#      touched.
+#   3. publish (main): if the staged extract is the one the live tiles were already
+#      built from (sha256 marker .tiles-source.sha256), discard staging, no restart.
+#      Else move the old files to .prev, move the new ones in, restart valhalla, and
+#      verify tileset_last_modified moved forward and a Nairobi to Thika route works.
+#      On failure the previous files are restored and valhalla restarted, and the Job
+#      fails. On success .prev and staging are deleted, so no old version remains.
+#
+# Sunday 20:00 UTC = 23:00 EAT. valhalla uses Recreate with a single replica, so a swap
+# means routing is unavailable while the pod restarts (it loads the tar, no rebuild).
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -7,55 +30,93 @@ metadata:
     app: valhalla
     component: data-refresh
 spec:
-  # Run every Monday at 2 AM UTC - updates Kenya OSM data
-  schedule: "0 2 * * 1"
+  schedule: "0 20 * * 0"
   concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  startingDeadlineSeconds: 1800
   jobTemplate:
     spec:
-      backoffLimit: 2
-      activeDeadlineSeconds: 3600 # 1 hour max
+      backoffLimit: 0
+      activeDeadlineSeconds: 5400
+      ttlSecondsAfterFinished: 86400
       template:
+        metadata:
+          labels:
+            app: valhalla
+            component: data-refresh
         spec:
-          restartPolicy: OnFailure
-          containers:
-            - name: valhalla-refresh
-              image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
-              securityContext:
-                runAsUser: 0
-              command:
-                - /bin/bash
-                - -c
-                - |
-                  set -e
-                  echo "=== Valhalla Data Refresh: $(date) ==="
-
-                  cd /custom_files
-
-                  # Download latest Kenya PBF
-                  echo "Downloading Kenya OSM data..."
-                  curl -fsSL -o kenya-latest.osm.pbf.tmp \
-                    https://download.geofabrik.de/africa/kenya-latest.osm.pbf
-
-                  # Replace old PBF
-                  mv kenya-latest.osm.pbf.tmp kenya-latest.osm.pbf
-
-                  # Remove old tiles to trigger rebuild on next pod restart
-                  rm -rf valhalla_tiles
-
-                  echo "=== Data refresh complete. Restart valhalla pod to rebuild tiles. ==="
+          serviceAccountName: map-data-refresh
+          restartPolicy: Never
+          initContainers:
+            - name: prep
+              image: busybox:1.36
+              command: [sh, -c, "rm -rf /m/staging && mkdir -p /m/staging && chown 59999:59999 /m/staging"]
+              volumeMounts: [{name: media, mountPath: /m}]
               resources:
-                requests:
-                  cpu: 500m
-                  memory: 2Gi
-                limits:
-                  cpu: "2"
-                  memory: 4Gi
-              volumeMounts:
-                - name: valhalla-data
-                  mountPath: /custom_files
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {cpu: 200m, memory: 64Mi}
+            - name: build
+              # Same digest as the live valhalla Deployment (3.5.1), tested 2026-11-07.
+              image: ghcr.io/gis-ops/docker-valhalla/valhalla@sha256:060da5b92e6024a67f65135c236d918b021d63e73d1808a0d55b7e7cbd17240c
+              env:
+                - {name: tile_urls, value: "https://download.geofabrik.de/africa/kenya-latest.osm.pbf"}
+                - {name: serve_tiles, value: "False"}
+                - {name: force_rebuild, value: "True"}
+                - {name: use_tiles_ignore_pbf, value: "False"}
+                - {name: build_admins, value: "True"}
+                - {name: build_time_zones, value: "True"}
+                - {name: build_elevation, value: "False"}
+                - {name: build_tar, value: "True"}
+              volumeMounts: [{name: media, mountPath: /custom_files, subPath: staging}]
+              resources:
+                requests: {cpu: "1", memory: 2Gi}
+                limits: {cpu: "4", memory: 5Gi}
+          containers:
+            - name: publish
+              image: alpine/k8s:1.30.0
+              command: [/bin/bash, -c]
+              args:
+                - |
+                  set -uo pipefail
+                  M=/m; S=$M/staging; P=$M/.prev; MARK=$M/.tiles-source.sha256
+                  SVC=http://valhalla.logistics.svc.cluster.local:8002
+                  FILES="valhalla_tiles.tar kenya-latest.osm.pbf file_hashes.txt duplicateways.txt admin_data timezone_data"
+                  log(){ echo "$(date -u +%T) $*"; }
+                  ts(){ curl -fsS --max-time 10 "$SVC/status?verbose=true" | jq -r '.tileset_last_modified // empty'; }
+                  route(){ curl -fsS -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$SVC/route" -H 'Content-Type: application/json' \
+                    -d '{"locations":[{"lat":-1.2864,"lon":36.8172},{"lat":-1.0333,"lon":37.0693}],"costing":"auto"}'; }
+                  cleanup(){ rm -rf "$S"; }
+                  [ "$(stat -c%s "$S/valhalla_tiles.tar" 2>/dev/null || echo 0)" -gt 52428800 ] || { log "staged tiles missing or too small"; cleanup; exit 1; }
+                  NEW_SHA=$(sha256sum "$S/kenya-latest.osm.pbf" | cut -d' ' -f1)
+                  if [ "$(cat "$MARK" 2>/dev/null)" = "$NEW_SHA" ]; then
+                    log "live tiles already built from this extract, nothing to publish"; cleanup; exit 0
+                  fi
+                  OLD_TS=$(ts) || { log "valhalla not answering before swap"; cleanup; exit 1; }
+                  log "live tileset_last_modified $OLD_TS, publishing tiles from extract $NEW_SHA"
+                  rm -rf "$P"; mkdir -p "$P"
+                  for f in $FILES; do [ -e "$M/$f" ] && mv "$M/$f" "$P/"; mv "$S/$f" "$M/"; done
+                  restart(){ kubectl -n logistics rollout restart deployment/valhalla && kubectl -n logistics rollout status deployment/valhalla --timeout=1200s; }
+                  restart
+                  OK=no
+                  for i in $(seq 1 60); do
+                    T=$(ts 2>/dev/null); R=$(route 2>/dev/null)
+                    [ -n "$T" ] && [ "$T" -gt "$OLD_TS" ] && [ "$R" = 200 ] && { OK=yes; break; }
+                    sleep 10
+                  done
+                  if [ $OK = yes ]; then
+                    echo "$NEW_SHA" > "$MARK"
+                    log "published: tileset_last_modified $T, route check $R"
+                    rm -rf "$P"; cleanup; exit 0
+                  fi
+                  log "verification failed (tileset=$T route=$R), restoring the previous files"
+                  for f in $FILES; do rm -rf "$M/$f"; [ -e "$P/$f" ] && mv "$P/$f" "$M/"; done
+                  restart; rm -rf "$P"; cleanup; exit 1
+              volumeMounts: [{name: media, mountPath: /m}]
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 500m, memory: 256Mi}
           volumes:
-            - name: valhalla-data
+            - name: media
               persistentVolumeClaim:
                 claimName: valhalla-media

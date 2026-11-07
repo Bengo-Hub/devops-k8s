@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: map-data-refresh
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"  # After the tileserver and valhalla apps
+# 2026-11-07: the weekly map data jobs, their RBAC, and the tileserver config. The
+# valhalla refresh CronJob and tileserver-config ran for months from one-off kubectl
+# applies with nothing managing them; the planetiler job was never deployed. The
+# tileserver and valhalla servers themselves are the chart apps apps/tileserver and
+# apps/valhalla.
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests/routing
+    directory:
+      include: '{map-refresh-rbac.yaml,planetiler-cronjob.yaml,valhalla-cronjob.yaml,tileserver-config.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logistics
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

@@ -1,0 +1,41 @@
+# Identity for the weekly map data refresh jobs (planetiler-cronjob.yaml and
+# valhalla-cronjob.yaml). After building new data they swap it in and restart the
+# server that reads it, then verify the server reports the new version. This Role
+# allows exactly that: restarting and watching the two map deployments, nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: map-data-refresh
+  namespace: logistics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: map-data-refresh
+  namespace: logistics
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["tileserver", "valhalla"]
+    verbs: ["get", "patch"]
+  # kubectl rollout status follows the new ReplicaSet and its pods
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: map-data-refresh
+  namespace: logistics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: map-data-refresh
+subjects:
+  - kind: ServiceAccount
+    name: map-data-refresh
+    namespace: logistics
