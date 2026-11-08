@@ -37,13 +37,15 @@ ORIGIN_HOSTS = [
     # incidents" (Stalwart's own week-long self-inflicted port-scan ban) has
     # been confirmed live and stable since; no longer worth deferring this.
     "webmail",
+    # Repointed from the legacy Truehost host on 2026-11-08 (owner decision). Truehost served only
+    # an empty directory listing for them, so projects-ui had no API in production. The cluster
+    # ingresses and certificates were already in place.
+    "projectsapi", "ticketing", "ticketingapi",
 ]
 
-# Mirrored as-is from cloudoon: these currently point at the Truehost shared
-# host, NOT the cluster (that's also why the k8s projects-api/ticketing-api
-# certs have been stuck since Dec). Repointing them to ORIGIN is a separate,
-# deliberate decision — flip the constant below when approved.
-TRUEHOST_HOSTS_LEGACY_APPS = ["projectsapi", "ticketing", "ticketingapi"]
+# Hosts still pointing at the legacy Truehost shared host. Empty since 2026-11-08; kept so a host
+# can be parked there again deliberately.
+TRUEHOST_HOSTS_LEGACY_APPS = []
 
 def desired_records():
     recs = []
