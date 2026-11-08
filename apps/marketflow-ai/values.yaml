@@ -185,7 +185,7 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexafrica.com,https://accounts.codevertexafrica.com,https://codevertexafrica.com,https://www.codevertexafrica.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key, X-Widget-Mode, X-Widget-Persona, X-OTP-Token"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-Slug, X-Tenant-ID, X-Outlet-ID, X-API-Key, X-Widget-Mode, X-Widget-Persona, X-OTP-Token"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
   hosts:
     - host: marketflowai.codevertexafrica.com
