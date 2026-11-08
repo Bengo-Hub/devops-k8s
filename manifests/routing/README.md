@@ -61,6 +61,8 @@ kubectl -n logistics create job --from=cronjob/planetiler-tile-refresh tiles-ref
 
 Run these off peak: a swap restarts the server (both use Recreate), so tiles or routing are briefly unavailable.
 
+Last proven run (2026-11-08 00:12-00:32 UTC, both started this way before their first scheduled Sunday run): valhalla found a newer extract, built 927 tiles in about 4 minutes and was serving them about 7 minutes after the start; planetiler moved OSM sequence 4398 to 4399 in about 5 minutes. Each restart took under a minute, and only the current extract and archive were left on the volumes.
+
 ## Tile API
 
 Base URL: `https://tiles.codevertexafrica.com`, internal `http://tileserver.logistics.svc.cluster.local:8080`
