@@ -3,7 +3,7 @@ fullnameOverride: ticketing-api
 replicaCount: 1
 image:
   repository: docker.io/codevertex/ticketing-api
-  tag: "ed76ba8c"
+  tag: "d83b4355"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
