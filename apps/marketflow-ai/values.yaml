@@ -182,11 +182,10 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://marketflow.codevertexafrica.com,https://accounts.codevertexafrica.com,https://codevertexafrica.com,https://www.codevertexafrica.com"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-API-Key, X-Widget-Mode, X-Widget-Persona, X-OTP-Token"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    # CORS is answered by the app (httpware StandardCORS): credentialed for *.codevertexafrica.com
+    # and HTTP_ALLOWED_ORIGINS, "*" without credentials for the chat widget on customer sites.
+    # The ingress used to answer platform preflights itself with GET and POST only, so the
+    # widget's DELETE routes failed from those origins (owner decision 2026-11-03).
   hosts:
     - host: marketflowai.codevertexafrica.com
       paths:
