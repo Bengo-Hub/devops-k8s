@@ -35,7 +35,7 @@ spec:
         - name: registry-credentials
       containers:
         - name: worker
-          image: docker.io/codevertex/ticketing-api:f53d8d2f
+          image: docker.io/codevertex/ticketing-api:b9e333a7
           imagePullPolicy: IfNotPresent
           command: ["/app/ticketing-worker"]
           env:
