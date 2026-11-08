@@ -72,10 +72,21 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # Static assets host (item 61, 8 November 2026): Cloudflare-cached copy of /_next/static only;
+    # hadia-ui uses it when built with NEXT_PUBLIC_ASSET_PREFIX. Nothing else is served here.
+    # /.well-known/acme-challenge reaches cert-manager's own solver ingress, not this path list.
+    - host: static-staging.hadiafrica.com
+      paths:
+        - path: /_next/static
+          pathType: Prefix
   tls:
     - hosts:
         - staging.hadiafrica.com
       secretName: hadia-staging-tls
+    # Its own certificate, so the staging one is never reissued for this host.
+    - hosts:
+        - static-staging.hadiafrica.com
+      secretName: hadia-static-staging-tls
 monitoring:
   enabled: false
 verticalPodAutoscaling:
