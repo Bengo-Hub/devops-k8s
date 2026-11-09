@@ -12,7 +12,7 @@ fullnameOverride: hadia-api
 replicaCount: 2
 image:
   repository: docker.io/codevertex/hadia-api
-  tag: "d122db16" # set by CI on the first successful build; never edited by hand
+  tag: "e967cf75" # set by CI on the first successful build; never edited by hand
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
