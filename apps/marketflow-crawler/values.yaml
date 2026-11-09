@@ -1,0 +1,101 @@
+# ============================================================================
+# MarketFlow Crawler - internal page reader for the AI services (Scrapling, HTTP mode)
+# Cluster internal only: no ingress. Callers send INTERNAL_SERVICE_KEY.
+# ============================================================================
+nameOverride: marketflow-crawler
+fullnameOverride: marketflow-crawler
+image:
+  repository: docker.io/codevertex/marketflow-crawler
+  # Set by the first CI run (build.sh update_helm_values).
+  tag: "latest"
+  pullPolicy: Always
+  pullSecrets:
+    - name: registry-credentials
+replicaCount: 1
+autoscaling:
+  enabled: false
+service:
+  type: ClusterIP
+  port: 4010
+  targetPort: 4010
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+minReadySeconds: 10
+progressDeadlineSeconds: 600
+env:
+  - name: INTERNAL_SERVICE_KEY
+    valueFrom:
+      secretKeyRef:
+        name: marketflow-ai-secrets
+        key: INTERNAL_SERVICE_KEY
+migrations:
+  enabled: false
+seed:
+  enabled: false
+resources:
+  requests:
+    cpu: 25m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+healthCheck:
+  enabled: true
+  startup:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 24
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 5
+ingress:
+  enabled: false
+monitoring:
+  enabled: false
+serviceMonitor:
+  enabled: false
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+pdb:
+  enabled: false
+# Callers only from this namespace; outbound only to public addresses (the chart blocks the
+# private ranges), with plain http added for sites without https. The app checks every resolved
+# address as well, so this is a second line.
+networkPolicy:
+  enabled: true
+  additionalEgress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - protocol: TCP
+          port: 80
