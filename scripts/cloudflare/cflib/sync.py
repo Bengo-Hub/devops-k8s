@@ -26,6 +26,11 @@ def sync_records(token, zone, existing, zmod, mode):
     """Brings the zone's owned records to zmod.desired_records(). Returns (created, updated, ok)."""
     apply = mode == "apply"
     apex, origin = zmod.APEX, zmod.ORIGIN
+    if not origin:
+        raise SystemExit("CF_ORIGIN_IP is not set; refusing to sync (records would point nowhere)")
+    blank = [w["name"] for w in zmod.desired_records() if w["type"] in ("A", "AAAA") and not w["content"]]
+    if blank:
+        raise SystemExit(f"address records with no content: {blank}; set the matching CF_*_IP variable")
     created = updated = ok = 0
     for want in zmod.desired_records():
         name = _fqdn(apex, want["name"])

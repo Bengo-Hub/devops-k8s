@@ -221,7 +221,7 @@ The setup scripts support these environment variables:
 
 **Example:**
 ```bash
-VPS_IP="77.237.232.66" CLUSTER_NAME="production" ./scripts/cluster/setup-cluster.sh
+VPS_IP="<ORIGIN_IP>" CLUSTER_NAME="production" ./scripts/cluster/setup-cluster.sh
 ```
 
 ---

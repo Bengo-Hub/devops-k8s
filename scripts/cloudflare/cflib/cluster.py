@@ -4,4 +4,8 @@ ORIGIN is the mss-prod ingress address that every cluster-hosted hostname points
 here once; zone modules import it.
 """
 
-ORIGIN = "77.237.232.66"        # mss-prod ingress
+import os
+
+# The address is kept out of this public repo: set CF_ORIGIN_IP (a repo secret in the
+# cloudflare-sync-dns workflow). sync_records refuses to run without it.
+ORIGIN = os.environ.get("CF_ORIGIN_IP", "").strip()        # mss-prod ingress

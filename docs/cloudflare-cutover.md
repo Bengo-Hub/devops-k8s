@@ -2,7 +2,12 @@
 
 Goal: put Cloudflare's edge (Nairobi PoP) in front of all
 `*.codevertexafrica.com` traffic to cut the ~150–200 ms Kenya↔Contabo
-RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
+RTT out of TLS handshakes and static-asset loads. Origin: `<ORIGIN_IP>`.
+
+Note: the origin IP is kept out of this public repo. It lives in the
+`CF_ORIGIN_IP` environment variable for `scripts/cloudflare`. It is still
+visible to anyone through the SPF record and mx1, so the origin must only
+accept ports 80 and 443 from Cloudflare's IP ranges.
 
 ## Cluster-side prep (done, 2026-07-13)
 
@@ -21,7 +26,7 @@ RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
 
 1. Cloudflare dashboard: add zone `codevertexafrica.com` (Free plan),
    import/verify all DNS records **DNS-only (grey cloud)**, including MX/TXT.
-   Every web host is A → 77.237.232.66.
+   Every web host is A → `<ORIGIN_IP>`.
 2. Registrar: switch nameservers from cloudoon → the two assigned Cloudflare
    nameservers. Grey-cloud records mean nothing changes for traffic. Wait for
    the zone to show **Active**.
@@ -41,7 +46,7 @@ RTT out of TLS handshakes and static-asset loads. Origin: `77.237.232.66`.
    validity — verify via `GET /zones?name=codevertexafrica.com` if this ever
    needs re-confirming). Note: projectsapi/ticketing/
    ticketingapi/webmail are mirrored to the legacy Truehost host
-   (102.212.247.163) — repointing them to the cluster is a separate decision
+   (`<LEGACY_HOST_IP>`) — repointing them to the cluster is a separate decision
    (it would also unstick the projects-api/ticketing-api certs pending since
    December).
 5. On the node: `./scripts/cloudflare/activate-dns01.sh <TOKEN>`

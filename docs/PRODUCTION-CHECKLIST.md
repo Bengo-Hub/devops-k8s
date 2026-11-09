@@ -4,7 +4,7 @@ Production Readiness Checklist
 ## ✅ Infrastructure Setup (Completed)
 
 ### Kubernetes Cluster
-- [x] Kubernetes installed on Contabo VPS (77.237.232.66)
+- [x] Kubernetes installed on Contabo VPS (<ORIGIN_IP>)
 - [x] kubectl configured with KUBE_CONFIG
 - [x] Storage provisioner (local-path) installed
 - [x] NGINX Ingress Controller with hostNetwork
@@ -131,7 +131,7 @@ kubectl get certificate -n erp
 ```
 
 ### 5. DNS Configuration
-Ensure these domains point to **77.237.232.66**:
+Ensure these domains point to **<ORIGIN_IP>**:
 - [ ] argocd.masterspace.co.ke
 - [ ] grafana.masterspace.co.ke
 - [ ] erpapi.masterspace.co.ke
@@ -243,8 +243,8 @@ git push
 
 **1. Ingress 404 Error**
 - Check: `kubectl describe ingress -n <namespace>`
-- Verify: DNS points to 77.237.232.66
-- Test: `curl -H "Host: domain.com" http://77.237.232.66/`
+- Verify: DNS points to <ORIGIN_IP>
+- Test: `curl -H "Host: domain.com" http://<ORIGIN_IP>/`
 - Fix: Run `scripts/debug-grafana-404.sh`
 
 **2. Certificate Not Ready**

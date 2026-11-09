@@ -70,7 +70,7 @@ The reusable pipeline supports multiple hosting strategies:
 
 ### Contabo VPS via API (Default)
 
-**Your VPS:** 77.237.232.66 (Cloud VPS 40 NVMe, 48GB RAM, 12 cores)
+**Your VPS:** <ORIGIN_IP> (Cloud VPS 40 NVMe, 48GB RAM, 12 cores)
 
 **Secrets (org-level recommended):**
 - `CONTABO_CLIENT_ID`, `CONTABO_CLIENT_SECRET`
@@ -82,7 +82,7 @@ The reusable pipeline supports multiple hosting strategies:
 - `provider`: contabo (default)
 - `contabo_api`: true (default)
 - `contabo_instance_id`: 202846760 (default)
-- `contabo_ip`: 77.237.232.66 (default)
+- `contabo_ip`: <ORIGIN_IP> (default)
 - `contabo_datacenter`: European Union 2 (default)
 - `contabo_region`: EU (default)
 
@@ -111,7 +111,7 @@ Provide `KUBE_CONFIG` (base64). ArgoCD syncs deployments when values.yaml is upd
 ### Current Production Setup
 
 **Bengo-Hub Organization:**
-- VPS IP: 77.237.232.66
+- VPS IP: <ORIGIN_IP>
 - K8s: Full Kubernetes (kubeadm recommended for 48GB VPS)
 - Registry: Docker Hub (docker.io/codevertex)
 - Domains: *.masterspace.co.ke

@@ -42,4 +42,6 @@ jobs:
       - name: Run sync-zone.py
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ORIGIN_IP: ${{ secrets.CF_ORIGIN_IP }}
+          CF_TRUEHOST_IP: ${{ secrets.CF_TRUEHOST_IP }}
         run: python3 scripts/cloudflare/sync-zone.py "${{ inputs.domain }}" --action "${{ inputs.action }}" --mode "${{ inputs.mode }}"

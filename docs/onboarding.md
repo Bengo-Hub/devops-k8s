@@ -220,7 +220,7 @@ Complete Onboarding Checklist
 - [ ] `apps/my-app/values.yaml` created in devops-k8s
 - [ ] `apps/my-app/app.yaml` created in devops-k8s
 - [ ] Argo CD application applied to cluster
-- [ ] DNS pointed to VPS IP (77.237.232.66)
+- [ ] DNS pointed to VPS IP (<ORIGIN_IP>)
 - [ ] First deployment tested
 
 GitHub Secrets Required

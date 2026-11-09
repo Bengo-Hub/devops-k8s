@@ -97,20 +97,20 @@ kubectl get challenges --all-namespaces
 
 Point all domains to your ingress controller load balancer IP:
 
-**VPS IP:** `77.237.232.66`
+**VPS IP:** `<ORIGIN_IP>`
 
 **DNS Records:**
 ```
-A Record: erpapi.masterspace.co.ke → 77.237.232.66
-A Record: erp.masterspace.co.ke → 77.237.232.66
-A Record: argocd.masterspace.co.ke → 77.237.232.66
-A Record: grafana.masterspace.co.ke → 77.237.232.66
+A Record: erpapi.masterspace.co.ke → <ORIGIN_IP>
+A Record: erp.masterspace.co.ke → <ORIGIN_IP>
+A Record: argocd.masterspace.co.ke → <ORIGIN_IP>
+A Record: grafana.masterspace.co.ke → <ORIGIN_IP>
 ```
 
 ### Adding a New Domain
 
 1. **Create DNS Record:**
-   - Add A record pointing to VPS IP: `77.237.232.66`
+   - Add A record pointing to VPS IP: `<ORIGIN_IP>`
 
 2. **Update Ingress Configuration:**
    ```yaml
@@ -247,7 +247,7 @@ kubectl logs -n ingress-nginx deployment/ingress-nginx-controller
    kubectl get ingress my-app-ingress -n my-namespace -o yaml
    
    # Test connectivity
-   curl -H "Host: myapp.masterspace.co.ke" http://77.237.232.66
+   curl -H "Host: myapp.masterspace.co.ke" http://<ORIGIN_IP>
    ```
 
 ---

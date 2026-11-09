@@ -21,7 +21,7 @@ the admin UI and produced the recurring 502 on `mail-admin.codevertexafrica.com`
 
 - The six mail entries carry the `::PROXY` suffix, for example `"25": "email/stalwart-mail:25::PROXY"`.
   ingress-nginx then sends a PROXY protocol header with the real client address.
-- Stalwart trusts the node address `77.237.232.66/32` for PROXY headers on the `smtp`,
+- Stalwart trusts the node address `<ORIGIN_IP>/32` for PROXY headers on the `smtp`,
   `submissions`, `imaps`, `pop3s` and `sieve` listeners (NetworkListener
   `overrideProxyTrustedNetworks`). The `http` and `https` listeners are not set up for it.
 - Stalwart's allowed-IP list (`x:AllowedIp`) exempts the node address, the pod network

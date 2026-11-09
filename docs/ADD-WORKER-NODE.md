@@ -6,7 +6,7 @@ Adds a second (or third, …) Contabo VPS as a Kubernetes worker, eliminating th
 
 ## Why this matters
 
-The current cluster is a single node (`mss-prod-master`, 48 GB / 12 cores, `77.237.232.66`).
+The current cluster is a single node (`mss-prod-master`, 48 GB / 12 cores, `<ORIGIN_IP>`).
 When that VPS reboots — planned maintenance, kernel update, or power cycle — every pod restarts simultaneously.
 Some pods (e.g. `argocd-repo-server`) hit edge-case bugs during restart (stale init-container symlinks) and require manual intervention.
 
@@ -26,7 +26,7 @@ Adding even one worker node means:
 |---|---|
 | New Contabo VPS | Ubuntu 24.04 LTS, minimum 8 GB RAM / 4 cores recommended |
 | Root SSH access | To the new worker VPS |
-| Root SSH access | To `mss-prod-master` (77.237.232.66) |
+| Root SSH access | To `mss-prod-master` (<ORIGIN_IP>) |
 | Network reachability | Worker VPS must reach master on port **6443** |
 | devops-k8s repo | Cloned on the new worker VPS (or copy the `scripts/cluster/` folder) |
 
@@ -47,7 +47,7 @@ Log in to the Contabo console and create a new VPS:
 SSH into `mss-prod-master` and run:
 
 ```bash
-ssh root@77.237.232.66
+ssh root@<ORIGIN_IP>
 cd /path/to/devops-k8s   # or wherever the repo is cloned
 bash scripts/cluster/generate-join-token.sh
 ```
@@ -55,7 +55,7 @@ bash scripts/cluster/generate-join-token.sh
 The script prints something like:
 
 ```
-MASTER_IP=77.237.232.66
+MASTER_IP=<ORIGIN_IP>
 JOIN_TOKEN=abcdef.0123456789abcdef
 CA_CERT_HASH=sha256:abc123...
 ```
@@ -73,7 +73,7 @@ cd devops-k8s
 Or, if you only want to copy the scripts folder:
 
 ```bash
-scp -r root@77.237.232.66:/path/to/devops-k8s/scripts/cluster/ /tmp/cluster-scripts/
+scp -r root@<ORIGIN_IP>:/path/to/devops-k8s/scripts/cluster/ /tmp/cluster-scripts/
 ```
 
 ### 4 — Run the worker setup script
@@ -81,7 +81,7 @@ scp -r root@77.237.232.66:/path/to/devops-k8s/scripts/cluster/ /tmp/cluster-scri
 ```bash
 export CLUSTER_NAME=mss-prod
 export WORKER_NUMBER=1          # use 2, 3, … for subsequent workers
-export MASTER_IP=77.237.232.66
+export MASTER_IP=<ORIGIN_IP>
 export JOIN_TOKEN=<token from step 2>
 export CA_CERT_HASH=sha256:<hash from step 2>
 

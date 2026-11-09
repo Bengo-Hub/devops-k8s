@@ -6,7 +6,7 @@
 #
 # 2026-09-04 fix: nodeAddressAutodetectionV4 was `firstFound: true`, which had
 # picked the admin WireGuard remote-access VPN interface (wg0, 10.8.0.1 -- see
-# apps/wireguard/) instead of the real public NIC (eth0, 77.237.232.66) as this
+# apps/wireguard/) instead of the real public NIC (eth0, the public address) as this
 # node's VXLAN tunnel endpoint. Confirmed live: `vxlan.calico`'s underlying
 # device was `dev wg0`, capping its usable MTU at 1370 (wg0's own MTU 1420 -
 # 50 bytes VXLAN overhead) while Felix's Installation-computed target MTU is

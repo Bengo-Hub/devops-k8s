@@ -23,7 +23,7 @@ outbound; each router keeps its **own** private key.
 
 ## First-time deploy
 
-1. **DNS** (already done): `vpn.codevertexafrica.com A -> 77.237.232.66`.
+1. **DNS** (already done): `vpn.codevertexafrica.com A -> <ORIGIN_IP>`.
 2. **Open UDP 51820** to the node at the host firewall / cloud SG.
 3. **Run setup** (idempotent — generates keys, syncs backend Secret):
    ```sh

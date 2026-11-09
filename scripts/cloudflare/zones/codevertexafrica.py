@@ -6,11 +6,15 @@ missing, correct mismatched content on records it owns, never delete, never touc
 cflib/sync.py.
 """
 
+import os
+
 from cflib.cluster import ORIGIN
 
 ZONE_NAME = "codevertexafrica.com"
 APEX = ZONE_NAME
-TRUEHOST = "102.212.247.163"    # das112b.superfasthost01.cloud (legacy shared host)
+# Legacy shared host (das112b.superfasthost01.cloud); only needed while TRUEHOST_HOSTS_LEGACY_APPS
+# lists hosts. Set CF_TRUEHOST_IP then; the address is kept out of this public repo.
+TRUEHOST = os.environ.get("CF_TRUEHOST_IP", "").strip()
 
 # Hosts served by the k8s ingress (A -> origin, DNS-only).
 ORIGIN_HOSTS = [

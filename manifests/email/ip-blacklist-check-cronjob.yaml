@@ -11,10 +11,11 @@
 # DNSBL checks were pointed there — public/shared forwarding resolvers get
 # rate-limited by Spamhaus for exactly this kind of automated lookup.
 #
-# MAIL_IP defaults to the current shared platform IP (77.237.232.66, plan
-# Part 5). Update once the second dedicated mail IP (Part 5's "before Phase 4,
-# before any paying tenant" item) is acquired — this check is only useful
-# against whatever IP mail is actually sent from.
+# The checked IP is whatever MAIL_HOST (mx1) resolves to on each run, the
+# shared platform IP today (plan Part 5). Point MAIL_HOST at the dedicated mail
+# host once the second mail IP (Part 5's "before Phase 4, before any paying
+# tenant" item) is acquired; this check is only useful against whatever IP mail
+# is actually sent from.
 #
 # Alerting: deliberately just a non-zero exit code on a listing, not a direct
 # webhook POST — `argocd-notifications-secret` (the only webhook credential
@@ -48,9 +49,14 @@ spec:
                 - -c
                 - |
                   set -e
-                  IP="${MAIL_IP}"
-                  REV=$(echo "$IP" | awk -F. '{print $4"."$3"."$2"."$1}')
                   RESOLVER="unbound-resolver.email.svc.cluster.local"
+                  # The sending IP is mx1's address, looked up each run so it never sits in this repo.
+                  IP=$(nslookup "${MAIL_HOST}" "$RESOLVER" 2>/dev/null | awk '/^Address/ {a=$NF} END {print a}')
+                  if ! echo "$IP" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+                    echo "ALERT: could not resolve ${MAIL_HOST} to an IPv4 address (got '${IP}')"
+                    exit 1
+                  fi
+                  REV=$(echo "$IP" | awk -F. '{print $4"."$3"."$2"."$1}')
                   LISTED=""
 
                   check_zone() {
@@ -76,8 +82,8 @@ spec:
                   fi
                   echo "All clear."
               env:
-                - name: MAIL_IP
-                  value: "77.237.232.66"
+                - name: MAIL_HOST
+                  value: "mx1.codevertexafrica.com"
               resources:
                 requests:
                   cpu: 25m

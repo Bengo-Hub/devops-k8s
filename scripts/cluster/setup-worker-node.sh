@@ -5,7 +5,7 @@ set -euo pipefail
 # Prepares a fresh Ubuntu 24.04 LTS VPS and joins it to the mss-prod cluster.
 #
 # Required env vars (get these from generate-join-token.sh on the master):
-#   MASTER_IP      - public IP of mss-prod-master (e.g. 77.237.232.66)
+#   MASTER_IP      - public IP of mss-prod-master (kept out of this repo)
 #   JOIN_TOKEN     - kubeadm bootstrap token
 #   CA_CERT_HASH   - sha256:<hash> of the cluster CA
 #

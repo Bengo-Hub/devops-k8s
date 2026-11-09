@@ -139,7 +139,7 @@ Go to GitHub → Settings → Secrets and variables → Actions (Organization or
 **Optional Secrets (with defaults):**
 
 2. **SSH_HOST** (Optional - Priority 1)
-   - Value: Your VPS IP address (e.g., `77.237.232.66`)
+   - Value: Your VPS IP address (e.g., `<ORIGIN_IP>`)
    - **Priority:** If set, this takes precedence over Contabo API lookup
 
 3. **SSH_PRIVATE_KEY** (Optional)
