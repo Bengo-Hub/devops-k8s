@@ -7,7 +7,7 @@ fullnameOverride: marketflow-crawler
 image:
   repository: docker.io/codevertex/marketflow-crawler
   # Set by the first CI run (build.sh update_helm_values).
-  tag: "56887241"
+  tag: "283cbac9"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
