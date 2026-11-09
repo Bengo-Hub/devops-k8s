@@ -90,6 +90,10 @@ env:
   # Security (JWT via auth-api JWKS)
   - name: MF_SECURITY_REQUIRE_JWT
     value: "true"
+  # Refuse a tenant header or path that names another tenant than the token (owner, 2026-11-10).
+  # Platform owners and platform service keys are exempt.
+  - name: MF_SECURITY_ENFORCE_TENANT_HEADER
+    value: "true"
   - name: MF_SECURITY_JWKS_URL
     value: "https://sso.codevertexafrica.com/api/v1/.well-known/jwks.json"
   - name: MF_SECURITY_JWT_ISSUER
