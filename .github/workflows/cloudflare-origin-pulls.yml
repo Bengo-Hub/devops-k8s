@@ -16,6 +16,14 @@ on:
           - show
           - "on"
           - "off"
+      token:
+        description: 'Which repo token to use (needs Zone Settings edit): waf = CF_WAF_API_TOKEN, dns = CF_API_TOKEN'
+        required: true
+        type: choice
+        default: waf
+        options:
+          - waf
+          - dns
 
 # Zone-level Authenticated Origin Pulls makes Cloudflare present its origin-pull client certificate
 # to the origin on every proxied host. It changes nothing on its own: a host only rejects non-Cloudflare
@@ -29,7 +37,7 @@ jobs:
     steps:
       - name: Read or set tls_client_auth
         env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_API_TOKEN: ${{ inputs.token == 'dns' && secrets.CF_API_TOKEN || secrets.CF_WAF_API_TOKEN }}
           ZONE: ${{ inputs.zone_id }}
           SETTING: ${{ inputs.setting }}
         run: |
