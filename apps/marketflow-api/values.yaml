@@ -250,6 +250,10 @@ ingress:
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Only Cloudflare may reach this host (Authenticated Origin Pulls, on for the zone).
+    nginx.ingress.kubernetes.io/auth-tls-secret: "marketflow/cloudflare-origin-pull-ca" # a Secret's name (public CA), secret-scan:allow
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+    nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
