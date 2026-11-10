@@ -10,7 +10,8 @@ spec:
     targetRevision: main
     path: manifests
     directory:
-      include: marketflow-worker-deployment.yaml
+      # The worker Deployment, plus Cloudflare's origin-pull CA for the marketflow ingresses.
+      include: "{marketflow-worker-deployment.yaml,marketflow-cloudflare-origin-pull-ca.yaml}"
   destination:
     server: https://kubernetes.default.svc
     namespace: marketflow
