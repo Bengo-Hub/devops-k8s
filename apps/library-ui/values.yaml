@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/library-ui
-  tag: "2244a46b"
+  tag: "8e3a6276"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
