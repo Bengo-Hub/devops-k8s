@@ -1,0 +1,42 @@
+name: Cloudflare authenticated origin pulls
+
+on:
+  workflow_dispatch:
+    inputs:
+      zone_id:
+        description: 'Cloudflare zone ID (codevertexafrica.com = dbbf1a40cb82ffd43dbc1405d3d8a4b1)'
+        required: true
+        type: string
+      setting:
+        description: 'show = read only; on/off = set zone-level Authenticated Origin Pulls (tls_client_auth)'
+        required: true
+        type: choice
+        default: show
+        options:
+          - show
+          - "on"
+          - "off"
+
+# Zone-level Authenticated Origin Pulls makes Cloudflare present its origin-pull client certificate
+# to the origin on every proxied host. It changes nothing on its own: a host only rejects non-Cloudflare
+# traffic once its ingress verifies that certificate (nginx.ingress.kubernetes.io/auth-tls-* with the
+# cloudflare-origin-pull-ca secret). Turn this on BEFORE annotating any ingress, and off only after
+# removing those annotations. Plan: .claude/plans/origin-firewall-cloudflare-lock-2026-11-10.md.
+
+jobs:
+  origin-pulls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read or set tls_client_auth
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ZONE: ${{ inputs.zone_id }}
+          SETTING: ${{ inputs.setting }}
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/zones/${ZONE}/settings/tls_client_auth"
+          if [ "$SETTING" != "show" ]; then
+            curl -sS -X PATCH "$api" -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" \
+              --data "{\"value\":\"${SETTING}\"}" | jq '{success, errors, value: .result.value}'
+          fi
+          curl -sS "$api" -H "Authorization: Bearer ${CF_API_TOKEN}" | jq '{success, errors, value: .result.value}'
