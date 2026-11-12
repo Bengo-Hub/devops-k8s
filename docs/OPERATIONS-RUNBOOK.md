@@ -480,6 +480,13 @@ kubectl exec deployment/argocd-repo-server -n argocd -- git ls-remote https://gi
    - Implement preventive measures
    - Update runbook with lessons learned
 
+#### Services crash-looping right after a node reboot
+
+After a kured reboot every pod starts at once. Services now start in layers (infrastructure,
+then auth-api, then the APIs that need it) through the chart's `wait-for-deps` init container,
+and the shared auth client no longer exits when auth-api is late. Layers, the mechanism, how to
+read the init container's log and how to add a dependency: `docs/STARTUP-ORDER.md`.
+
 #### Node Cordoned / Stuck Drain (single-node cluster)
 
 **Incident: 2026-08-18** — all `*.codevertexafrica.com` domains returned

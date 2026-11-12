@@ -1,5 +1,17 @@
 nameOverride: notifications-api
 fullnameOverride: notifications-api
+# Startup order after a node reboot (docs/STARTUP-ORDER.md): layer 2. Waits for its database
+# and for auth-api to serve the JWKS the auth validator loads at startup (2026-11-13: this pod
+# exited on "initial JWKS fetch: status 503" after the kured reboot and email OTPs stopped).
+startupDependencies:
+  - name: postgresql
+    tcp: postgresql.infra.svc.cluster.local:5432
+  - name: pgbouncer
+    tcp: pgbouncer.infra.svc.cluster.local:6432
+  - name: ingress-nginx
+    tcp: ingress-nginx-controller.ingress-nginx.svc.cluster.local:80
+  - name: auth-api
+    url: http://auth-api.auth.svc.cluster.local:4000/api/v1/.well-known/jwks.json
 replicaCount: 1
 image:
   # Note: image name is notifications-api (from build.sh APP_NAME)

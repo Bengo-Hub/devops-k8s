@@ -2,6 +2,15 @@
 # Migrations and seed run in the image entrypoint (advisory lock 727271007, POSTGRES_MIGRATE_URL).
 nameOverride: maskani-api
 fullnameOverride: maskani-api
+# Startup order after a node reboot (docs/STARTUP-ORDER.md): layer 2. Waits for its database
+# and auth-api's JWKS, which AUTH_JWKS_URL reads in-cluster.
+startupDependencies:
+  - name: postgresql
+    tcp: postgresql.infra.svc.cluster.local:5432
+  - name: pgbouncer
+    tcp: pgbouncer.infra.svc.cluster.local:6432
+  - name: auth-api
+    url: http://auth-api.auth.svc.cluster.local:4000/api/v1/.well-known/jwks.json
 # HA baseline: 2 replicas (HPA 2 to 3) with a PDB. The migrate step takes advisory lock 727271007,
 # so two pods starting together run migrations once.
 replicaCount: 2

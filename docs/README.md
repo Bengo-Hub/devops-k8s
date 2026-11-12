@@ -41,6 +41,7 @@ Documentation Index
 
 **Operations**
 - **operations runbook:** OPERATIONS-RUNBOOK.md 📋
+- **startup order after a node reboot (layers, wait-for-deps):** STARTUP-ORDER.md
 - **health checks & rolling updates:** health-checks-and-rolling-updates.md 🔄
 - **troubleshooting image tag drift:** troubleshooting-image-tag-drift.md 🔍
 - **VPS access testing:** See comprehensive-access-setup.md ✅

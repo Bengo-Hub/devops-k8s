@@ -49,6 +49,22 @@ strategy:
 env: []
 envFromSecret: ""
 
+# Startup ordering after a node reboot (docs/STARTUP-ORDER.md). Each entry adds a check to
+# the wait-for-deps init container: url for an HTTP GET that must return 2xx, tcp for a
+# plain connect. Empty means no init container. Use the cluster Service DNS, never a public
+# hostname, so the check does not depend on ingress being up.
+startupDependencies: []
+  # - name: auth-api
+  #   url: http://auth-api.auth.svc.cluster.local:4000/api/v1/.well-known/jwks.json
+  # - name: pgbouncer
+  #   tcp: pgbouncer.infra.svc.cluster.local:6432
+# One total budget shared by every entry above. When it runs out the init container exits
+# 0 and the app starts anyway, so a dependency that stays down never blocks a pod for good.
+startupWait:
+  timeoutSeconds: 600
+  intervalSeconds: 5
+  image: busybox:1.36
+
 # Shared object storage (Cloudflare R2): loads OBJECT_STORAGE_* from the namespace's
 # object-storage Secret, written by .github/workflows/object-storage.yml.
 objectStorage:

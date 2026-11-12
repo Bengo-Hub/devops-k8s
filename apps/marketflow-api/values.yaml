@@ -3,6 +3,22 @@
 # ============================================================================
 nameOverride: marketflow-api
 fullnameOverride: marketflow-api
+# Startup order after a node reboot (docs/STARTUP-ORDER.md): layer 2. Waits for its database,
+# Redis and NATS (both fatal init errors here) and for auth-api to serve the JWKS the auth
+# validator loads at startup.
+startupDependencies:
+  - name: postgresql
+    tcp: postgresql.infra.svc.cluster.local:5432
+  - name: pgbouncer
+    tcp: pgbouncer.infra.svc.cluster.local:6432
+  - name: redis
+    tcp: redis-master.infra.svc.cluster.local:6379
+  - name: nats
+    tcp: nats.messaging.svc.cluster.local:4222
+  - name: ingress-nginx
+    tcp: ingress-nginx-controller.ingress-nginx.svc.cluster.local:80
+  - name: auth-api
+    url: http://auth-api.auth.svc.cluster.local:4000/api/v1/.well-known/jwks.json
 image:
   repository: docker.io/codevertex/marketflow-api
   tag: "21756f30"

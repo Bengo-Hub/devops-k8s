@@ -9,6 +9,18 @@ fullnameOverride: auth-api
 # fetch failed: status 503" until auth-api happened to win a later retry.
 # See manifests/priorityclasses/db-critical.yaml (auth-critical tier).
 priorityClassName: auth-critical
+# Startup order after a node reboot (docs/STARTUP-ORDER.md): layer 1. Waits for the layer 0
+# infrastructure it cannot start without: the entrypoint migrates over the direct PostgreSQL
+# URL, the server then needs pgbouncer, Redis and NATS (each is a fatal init error).
+startupDependencies:
+  - name: postgresql
+    tcp: postgresql.infra.svc.cluster.local:5432
+  - name: pgbouncer
+    tcp: pgbouncer.infra.svc.cluster.local:6432
+  - name: redis
+    tcp: redis-master.infra.svc.cluster.local:6379
+  - name: nats
+    tcp: nats.messaging.svc.cluster.local:4222
 # ============================================================================
 # IMAGE CONFIGURATION
 # ============================================================================
