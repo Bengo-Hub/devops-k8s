@@ -9,6 +9,12 @@
 #
 # One replica: the signature database lives on a PVC and clamd needs about 1.5 GB of memory.
 # freshclam runs inside the same container and refreshes signatures through the day.
+#
+# The same clamd is the platform's upload scanner (owner decision, 12 November 2026): every
+# service's httpware objectstore.Prepare streams uploads to it with INSTREAM on port 3310
+# (Service port "clamd"), defaulting to stalwart-clamav.email.svc.cluster.local:3310 inside the
+# cluster. Private uploads (documents, attachments, KYC, signatures) are refused while it is down,
+# so keep it up before bumping services to the httpware tag that scans.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -32,10 +38,10 @@ data:
     LocalSocket /tmp/clamd.sock
     LocalSocketMode 660
     TCPSocket 3310
-    TCPAddr 127.0.0.1
+    TCPAddr 0.0.0.0
     User clamav
     Foreground yes
-    MaxThreads 6
+    MaxThreads 10
     MaxFileSize 100M
     MaxScanSize 200M
     StreamMaxLength 100M
@@ -70,6 +76,10 @@ spec:
       port: 7357
       protocol: TCP
       targetPort: 7357
+    - name: clamd
+      port: 3310
+      protocol: TCP
+      targetPort: 3310
   selector:
     app: stalwart-clamav
 ---
@@ -98,6 +108,9 @@ spec:
           ports:
             - name: milter
               containerPort: 7357
+              protocol: TCP
+            - name: clamd
+              containerPort: 3310
               protocol: TCP
           env:
             # The first start downloads the full signature set (about 300 MB), later starts reuse the PVC.
@@ -145,7 +158,10 @@ spec:
           configMap:
             name: stalwart-clamav-config
 ---
-# Only the Stalwart pod may reach the scanner.
+# Only the Stalwart pod may reach the milter. clamd (3310) is open to the namespaces of the
+# services that use httpware objectstore, and no others: clamd also answers commands such as
+# SHUTDOWN, so it is never opened to the whole cluster. Add a namespace here when a new service
+# starts storing uploads.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -164,3 +180,55 @@ spec:
       ports:
         - protocol: TCP
           port: 7357
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: erp
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hadia
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hospital
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: inventory
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: library
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: logistics
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: marketflow
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maskani
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: notifications
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ordering
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: projects
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: subscriptions
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ticketing
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: treasury
+      ports:
+        - protocol: TCP
+          port: 3310
