@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1
 image:
   repository: docker.io/codevertex/projects-api
-  tag: "a1535085"
+  tag: "24ec866a"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
