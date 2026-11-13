@@ -26,7 +26,7 @@ startupDependencies:
 # ============================================================================
 image:
   repository: docker.io/codevertex/auth-api
-  tag: "dc9eaf06"
+  tag: "06c8409b"
   pullPolicy: Always # Force pull to get latest changes
   pullSecrets:
     - name: registry-credentials
