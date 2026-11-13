@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/inventory-api
-  tag: "c2855cf1"
+  tag: "21fe672a"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
