@@ -21,7 +21,7 @@ startupDependencies:
     url: http://auth-api.auth.svc.cluster.local:4000/api/v1/.well-known/jwks.json
 image:
   repository: docker.io/codevertex/marketflow-api
-  tag: "a49bb3b2"
+  tag: "c9aac1c8"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
