@@ -407,6 +407,15 @@ else
     POSTGRES_MIGRATE_URL="postgresql://${DB_USER}:CHANGE_ME@${POSTGRES_MIGRATE_HOST}:${POSTGRES_MIGRATE_PORT}/${DB_NAME}?sslmode=disable"
 fi
 
+# Read-replica URL: when pgbouncer has a "<db>_ro" alias (manifests/databases/pgbouncer.yaml routes it
+# to postgresql-replica), the service gets POSTGRES_READONLY_URL for its heavy read-only queries.
+# treasury_ro existed since 2026-08-21 but treasury-api-secrets never got the key, so treasury read
+# everything from the primary (added by hand 2026-11-14; this keeps it on every re-sync).
+POSTGRES_READONLY_URL=""
+if [[ -n "$DATABASE_PASSWORD" ]] && kubectl -n infra get configmap pgbouncer-config -o jsonpath='{.data.pgbouncer\.ini}' 2>/dev/null | grep -qE "^[[:space:]]*${DB_NAME}_ro[[:space:]]*="; then
+    POSTGRES_READONLY_URL="postgresql://${DB_USER}:${ENCODED_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${DB_NAME}_ro?sslmode=disable"
+fi
+
 # Construct Redis URL (password is percent-encoded)
 if [[ -n "$REDIS_PASSWORD" ]]; then
     ENCODED_REDIS_PASSWORD=$(url_encode_password "$REDIS_PASSWORD")
@@ -435,6 +444,9 @@ declare -a secret_literals=(
     "--from-literal=REDIS_PORT=${REDIS_PORT}"
     "--from-literal=REDIS_PASSWORD=${REDIS_PASSWORD}"
 )
+if [[ -n "${POSTGRES_READONLY_URL}" ]]; then
+    secret_literals+=("--from-literal=POSTGRES_READONLY_URL=${POSTGRES_READONLY_URL}")
+fi
 # isp-billing-backend: include the stable ENCRYPTION_SALT (see above).
 if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
     secret_literals+=("--from-literal=ENCRYPTION_SALT=${APP_ENCRYPTION_SALT}")
@@ -502,6 +514,9 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     PATCH_JSON+="\"REDIS_HOST\":\"$(echo -n "${REDIS_HOST}" | base64 -w0)\","
     PATCH_JSON+="\"REDIS_PORT\":\"$(echo -n "${REDIS_PORT}" | base64 -w0)\","
     PATCH_JSON+="\"REDIS_PASSWORD\":\"$(echo -n "${REDIS_PASSWORD}" | base64 -w0)\""
+    if [[ -n "${POSTGRES_READONLY_URL}" ]]; then
+        PATCH_JSON+=",\"POSTGRES_READONLY_URL\":\"$(echo -n "${POSTGRES_READONLY_URL}" | base64 -w0)\""
+    fi
     if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
         PATCH_JSON+=",\"ENCRYPTION_SALT\":\"$(echo -n "${APP_ENCRYPTION_SALT}" | base64 -w0)\""
     fi
