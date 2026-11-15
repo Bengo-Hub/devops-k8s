@@ -24,7 +24,7 @@ startupDependencies:
 replicaCount: 2
 image:
   repository: docker.io/codevertex/hadia-api
-  tag: "f66e8565" # set by CI on the first successful build; never edited by hand
+  tag: "606364cf" # set by CI on the first successful build; never edited by hand
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
