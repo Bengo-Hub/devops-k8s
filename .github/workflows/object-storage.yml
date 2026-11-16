@@ -45,7 +45,7 @@ on:
         description: 'Origins allowed to upload straight to the buckets (presigned PUT and multipart), space separated'
         required: true
         type: string
-        default: 'https://marketflow.codevertexafrica.com'
+        default: 'https://marketflow.codevertexafrica.com https://projects.codevertexafrica.com'
 
 permissions:
   contents: read
