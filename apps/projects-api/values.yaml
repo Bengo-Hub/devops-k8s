@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1
 image:
   repository: docker.io/codevertex/projects-api
-  tag: "dcaf2bcb"
+  tag: "aa103610"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
