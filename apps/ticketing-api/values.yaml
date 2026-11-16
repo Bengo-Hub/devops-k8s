@@ -27,6 +27,10 @@ migrations:
 seed:
   enabled: false
 envFromSecret: ticketing-api-secrets
+# OBJECT_STORAGE_* from the object-storage Secret (docs/object-storage.md): ticket attachments
+# (Sprint 9) live in the private bucket and are served through short-lived signed links.
+objectStorage:
+  enabled: true
 healthCheck:
   enabled: true
   readiness:
