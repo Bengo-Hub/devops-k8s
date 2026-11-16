@@ -4,7 +4,7 @@ replicaCount: 2
 minReadySeconds: 30
 image:
   repository: docker.io/codevertex/ticketing-ui
-  tag: "eaa4ddf8"
+  tag: "d813107a"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
