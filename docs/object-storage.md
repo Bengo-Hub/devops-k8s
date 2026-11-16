@@ -45,6 +45,7 @@ of the tenant uses it, so storage only holds files in use.
 | maskani-api | done 2026-10-17: keys `maskani/<tenant>/<kind>/...`; estate and unit photos public (market and maskani-commerce load them from the media domain), every other kind and issued PDFs private with presigned links; volume held no files; PVC `maskani-api-media` deleted with user approval |
 | erp-api | done 2026-10-17: resumes, claim receipts and employee documents private (presigned links in responses; before, links pointed at a `/media` route erp-api never served); volume held no files; PVC `erp-api-media` and the unmounted legacy `erp-api-app-media` (Django era) deleted with user approval |
 | marketflow-api | nothing to do (2026-10-18): stores no files, no volume |
+| projects-api | added 2026-11-16 (sprint 12): task and project attachments are private, uploaded by presigned link and confirmed with a byte check (25 MB; PDF, text, CSV, images, Word, Excel by default); keys from `objectstore.Key` with the attachments media type, then the project and the task (or `project`); it never had a media volume |
 
 Before dropping a volume, check the service's entrypoint and Dockerfile for media-directory setup: logistics' entrypoint ran `mkdir -p $MEDIA_ROOT/...` and crash-looped without the volume (fixed in `112f70d`).
 

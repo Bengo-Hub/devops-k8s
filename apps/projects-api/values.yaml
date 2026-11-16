@@ -27,6 +27,10 @@ migrations:
 seed:
   enabled: false
 envFromSecret: projects-api-secrets
+# Shared object storage for task and project attachments (private bucket, presigned links):
+# OBJECT_STORAGE_* from the object-storage Secret (docs/object-storage.md).
+objectStorage:
+  enabled: true
 healthCheck:
   enabled: true
   readiness:
