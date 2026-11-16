@@ -143,6 +143,14 @@ env:
     value: "http://logistics-api.logistics.svc.cluster.local:4000"
   - name: MARKETFLOW_API_URL
     value: "http://marketflow-api.marketflow.svc.cluster.local:4000"
+  # Tax source watch (weekly): pages through marketflow-crawler, rate statements from
+  # marketflow-ai's free model, proposals only until the platform owner approves (2026-11-17).
+  - name: TAX_WATCH_ENABLED
+    value: "true"
+  - name: TAX_WATCH_CRAWLER_URL
+    value: "http://marketflow-crawler.marketflow.svc.cluster.local:4010"
+  - name: TAX_WATCH_AI_URL
+    value: "http://marketflow-ai.marketflow.svc.cluster.local:4001"
   # Pre-shared key for trusted backend-to-backend calls (all services use INTERNAL_SERVICE_KEY).
   - name: INTERNAL_SERVICE_KEY
     valueFrom:

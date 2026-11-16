@@ -81,11 +81,19 @@ securityContext:
   runAsNonRoot: true
 pdb:
   enabled: false
-# Callers only from this namespace; outbound only to public addresses (the chart blocks the
-# private ranges), with plain http added for sites without https. The app checks every resolved
-# address as well, so this is a second line.
+# Callers from this namespace and from treasury (its weekly tax source watch, 2026-11-17); outbound
+# only to public addresses (the chart blocks the private ranges), with plain http added for sites
+# without https. The app checks every resolved address as well, so this is a second line.
 networkPolicy:
   enabled: true
+  additionalIngress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: treasury
+      ports:
+        - protocol: TCP
+          port: 4010
   additionalEgress:
     - to:
         - ipBlock:
