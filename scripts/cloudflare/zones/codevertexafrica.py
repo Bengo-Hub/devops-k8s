@@ -102,6 +102,14 @@ def desired_records():
     # dependency on Stalwart or MTA-STS enforcement being live.
     recs.append({"type": "TXT", "name": "_smtp._tls",
                  "content": '"v=TLSRPTv1; rua=mailto:tlsrpt@codevertexafrica.com"'})
+    # Support forwarding domain (ticketing Sprint 11, 2026-11-17). Tenants auto-forward their
+    # support mailbox to <slug>@support.codevertexafrica.com. Stalwart's catch-all on this domain
+    # delivers every address to ingest@, which email-provisioner reads and turns into tickets.
+    # It only receives mail, so it gets MX, a strict SPF and DMARC p=reject, and no DKIM.
+    recs.append({"type": "MX", "name": "support", "content": f"mx1.{APEX}", "priority": 10})
+    recs.append({"type": "TXT", "name": "support", "content": '"v=spf1 mx -all"'})
+    recs.append({"type": "TXT", "name": "_dmarc.support",
+                 "content": '"v=DMARC1; p=reject; adkim=r; aspf=r; rua=mailto:dmarc@codevertexafrica.com"'})
     # DKIM (added 2026-08-11, plan Part 13.1/saga log) — Stalwart's own
     # automatic DKIM management generates dated selectors (not the
     # originally-planned static `cvx2026a`) and rotates them over time;
