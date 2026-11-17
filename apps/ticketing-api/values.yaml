@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1
 image:
   repository: docker.io/codevertex/ticketing-api
-  tag: "2f0a5680"
+  tag: "a67e2e6f"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
