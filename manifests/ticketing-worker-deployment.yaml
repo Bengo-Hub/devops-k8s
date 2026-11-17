@@ -48,6 +48,16 @@ spec:
                   key: POSTGRES_URL
             - name: EVENTS_NATS_URL
               value: "nats://nats.messaging.svc.cluster.local:4222,nats://nats.codevertexafrica.com:4222"
+            # The SLA scans run under a Redis lock (cache.RunOnce). Without these the worker dialled
+            # localhost:6379 and skipped every scan (found 2026-11-17).
+            - name: REDIS_ADDR
+              value: redis-master.infra.svc.cluster.local:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ticketing-api-secrets
+                  key: REDIS_PASSWORD
+                  optional: true
           resources:
             requests:
               cpu: 20m
