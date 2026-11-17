@@ -16,7 +16,7 @@ startupDependencies:
 replicaCount: 2
 image:
   repository: docker.io/codevertex/maskani-api
-  tag: "825c0ed1" # set by CI on first successful build
+  tag: "8d9191b2" # set by CI on first successful build
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
