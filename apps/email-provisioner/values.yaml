@@ -75,6 +75,11 @@ env:
         key: admin-password
   - name: SUBSCRIPTION_BASE_URL
     value: "http://subscriptions-api.subscriptions.svc.cluster.local:4000"
+  # Support inbound reader (ticketing Sprint 11, 2026-11-17). ingest@ receives every
+  # <slug>@support.codevertexafrica.com through the domain catch-all; support@ is the platform
+  # tenant's own mailbox. Each unseen mail becomes a ticket event and is then marked seen.
+  - name: SUPPORT_INBOUND_ACCOUNTS
+    value: "ingest@support.codevertexafrica.com,support@codevertexafrica.com"
   - name: INTERNAL_SERVICE_KEY
     valueFrom:
       secretKeyRef:
@@ -121,3 +126,7 @@ securityContext:
   runAsNonRoot: true
 pdb:
   enabled: false
+# OBJECT_STORAGE_* from the object-storage Secret (docs/object-storage.md): inbound support mail
+# attachments go to the private bucket under support-inbound/.
+objectStorage:
+  enabled: true
