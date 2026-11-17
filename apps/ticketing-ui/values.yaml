@@ -52,6 +52,15 @@ env:
         name: ticketing-ui-secrets
         key: sentryDsn
         optional: true
+  # Server-only (never NEXT_PUBLIC_): the help center's server-side article read forwards the
+  # visitor IP under this key, so ticketing-api gives each visitor their own rate bucket. It must
+  # equal VISITOR_IP_FORWARD_KEY in ticketing-api-secrets (set 2026-11-17).
+  - name: VISITOR_IP_FORWARD_KEY
+    valueFrom:
+      secretKeyRef:
+        name: ticketing-ui-secrets
+        key: VISITOR_IP_FORWARD_KEY
+        optional: true
 resources:
   requests:
     cpu: 25m
