@@ -144,7 +144,10 @@ ingress:
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://ticketing.codevertexafrica.com, https://accounts.codevertexafrica.com, https://sso.codevertexafrica.com, http://localhost:3000, http://localhost:3001"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Tenant-ID, X-API-Key, X-OTP-Token"
+    # Every header ticketing-ui sends from the browser: X-Tenant-Slug on signed-in calls,
+    # X-Ticket-Access-Token on the public ticket read and reply, Idempotency-Key on the AI routes.
+    # nginx answers preflights itself, so a header missing here is refused before the app sees it.
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Request-ID, X-Tenant-ID, X-Tenant-Slug, X-API-Key, X-OTP-Token, X-Ticket-Access-Token, Idempotency-Key"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
