@@ -383,11 +383,22 @@ jobs:
           # These are application namespaces that pull images from Docker Hub
           NAMESPACES="infra erp truload cafe treasury notifications auth inventory logistics pos argocd isp-billing ordering projects ticketing"
           
+          # A registry-credentials Secret owned by a SealedSecret comes from git; writing it here
+          # would be reverted at the next controller restart.
+          sealed_owned() {
+            [ -n "$(kubectl get secret registry-credentials -n "$1" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null || true)" ]
+          }
+
           for ns in $NAMESPACES; do
             # Namespace should already exist from previous step
             if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
               echo "⚠️  Warning: namespace $ns does not exist (should have been created earlier)"
               kubectl create namespace "$ns" >/dev/null 2>&1 || true
+            fi
+            if sealed_owned "$ns"; then
+              echo "::notice::registry-credentials in $ns comes from a SealedSecret; not written here"
+              patch_default_sa "$ns"
+              continue
             fi
             # Create or update secret
             if kubectl get secret registry-credentials -n "$ns" >/dev/null 2>&1; then
@@ -677,7 +688,10 @@ jobs:
       # all messaging. See docs/cluster-optimization-2026-04-15.md.
 
       - name: Create Superset Database and Secrets (Pre-ArgoCD Bootstrap)
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        # Superset is not deployed (no Application, no pods) and its Secrets were removed on
+        # 2026-11-18. Off unless SUPERSET_ENABLED is set, so a provision run no longer recreates
+        # an unused Secret holding the master database password.
+        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true' && vars.SUPERSET_ENABLED == 'true'
         timeout-minutes: 10
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -698,7 +712,9 @@ jobs:
           echo "::endgroup::"
       
       - name: Generate Service JWT/RSA Keys (Pre-ArgoCD Bootstrap)
-        if: steps.kubeconfig_setup.outputs.kubeconfig_ready == 'true'
+        # Off: it created "auth-service-token-keys", which nothing mounts (auth-api reads
+        # auth-token-keys, a SealedSecret). Removed 2026-11-18 with that unused Secret.
+        if: false
         timeout-minutes: 5
         run: |
           echo "::group::Generating JWT/RSA Keys for Services"
@@ -767,6 +783,15 @@ jobs:
 
           NAMESPACE="auth"
           SECRET_NAME="auth-api-secrets"
+
+          # auth-api-secrets is a SealedSecret: git is its only writer. An apply here would be
+          # reverted at the next controller restart (every node reboot). To change an OAuth or
+          # seeding value, seal it with scripts/sealing/seal-keys.sh instead.
+          if [ -n "$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null || true)" ]; then
+            echo "::notice::$NAMESPACE/$SECRET_NAME comes from a SealedSecret; not written here (use scripts/sealing/seal-keys.sh)"
+            echo "::endgroup::"
+            exit 0
+          fi
 
           # Create namespace if it doesn't exist
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
@@ -879,6 +904,13 @@ jobs:
 
           NAMESPACE="ordering"
           SECRET_NAME="ordering-backend-secrets"
+
+          # Skip a SealedSecret-owned Secret: git is its only writer (see the auth step above).
+          if [ -n "$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null || true)" ]; then
+            echo "::notice::$NAMESPACE/$SECRET_NAME comes from a SealedSecret; not written here (use scripts/sealing/seal-keys.sh)"
+            echo "::endgroup::"
+            exit 0
+          fi
 
           # Create namespace if it doesn't exist
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
