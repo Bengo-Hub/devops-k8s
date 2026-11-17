@@ -101,7 +101,9 @@ resources:
     memory: 64Mi
   limits:
     cpu: 200m
-    memory: 128Mi
+    # 256Mi since 2026-11-17: the support inbound reader holds a batch of mails and their
+    # attachments in memory while it stores them.
+    memory: 256Mi
 autoscaling:
   enabled: false
 monitoring:
