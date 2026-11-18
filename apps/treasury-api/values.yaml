@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/treasury-api
-  tag: "deaa14b6"
+  tag: "9131d07a"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
@@ -158,9 +158,9 @@ env:
         name: treasury-api-secrets
         key: INTERNAL_SERVICE_KEY
         optional: true
-  # KRA eTIMS and GavaConnect settings and credentials are not env: treasury-api reads them
-  # only from its platform service_configs rows (etims.*, gavaconnect.*), set on the platform
-  # KRA integration screen.
+        # KRA eTIMS and GavaConnect settings and credentials are not env: treasury-api reads them
+        # only from its platform service_configs rows (etims.*, gavaconnect.*), set on the platform
+        # KRA integration screen.
 resources:
   requests:
     cpu: 50m
