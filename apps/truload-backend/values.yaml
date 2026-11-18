@@ -185,74 +185,29 @@ migrations:
   enabled: false
 seed:
   enabled: false
-# Pod securityContext so media and backup PVCs are writable by app (uid 1001 in Dockerfile)
+# Pod securityContext: fsGroup makes the backup staging emptyDir writable by the app (uid 1001 in Dockerfile)
 securityContext:
   runAsUser: 1001
   runAsGroup: 1001
   fsGroup: 1001
   runAsNonRoot: true
-# Persistent storage for file uploads (media, backups)
+# No persistent volumes (2026-11-18). Media lives in the private R2 bucket (truload/media/...) and
+# pg_dump backups are uploaded to R2 (truload/backups/<database>/...) then deleted locally, so the
+# old PVCs truload-backend-media and truload-backups were archived to R2
+# (truload/pvc-archive/2026-11-18/) and deleted. See truload-backend docs/BACKUP_STORAGE.md and
+# docs/MEDIA_STORAGE.md.
 persistence:
-  enabled: true
-  size: 10Gi
-  mountPath: /app/uploads
-  accessMode: ReadWriteOnce
-  storageClass: local-path
-  initResources:
-    requests:
-      cpu: 10m
-      memory: 32Mi
-    limits:
-      cpu: 500m
-      memory: 128Mi
-# Extra PVCs to create via the Helm chart (auto-synced by ArgoCD)
-extraPersistentVolumeClaims:
-  - name: truload-backups
-    size: 20Gi
-    accessMode: ReadWriteOnce
-    storageClass: local-path
-    component: backup
-# Additional volume mounts for backup storage
+  enabled: false
+# Backup staging: pg_dump writes here, the file is uploaded and removed. Sized for a staged dump
+# plus a restore download (a full dump was about 77 MB in November 2026); exceeding the limit
+# evicts the pod, and the app keeps at most one staged dump when uploads fail.
 volumeMounts:
-  - name: backup-storage
+  - name: backup-staging
     mountPath: /app/backups/truload
 volumes:
-  - name: backup-storage
-    persistentVolumeClaim:
-      claimName: truload-backups
-# Init containers for backup directory permissions
-initContainers:
-  - name: init-backup-dir
-    image: busybox:1.36
-    command: ['sh', '-c']
-    args:
-      - |
-        echo "Initializing backup directory: /app/backups/truload"
-        mkdir -p /app/backups/truload
-        chmod -R 775 /app/backups/truload 2>/dev/null || true
-        if [ -w "/app/backups/truload" ]; then
-          echo "Backup directory is writable"
-        else
-          echo "Warning: Backup directory may not be writable"
-          ls -la /app/backups/truload || true
-        fi
-    volumeMounts:
-      - name: backup-storage
-        mountPath: /app/backups/truload
-    securityContext:
-      runAsUser: 1001
-      runAsGroup: 1001
-    # 2026-11-06: stated explicitly. The live Deployment carried 300m/512Mi from an old
-    # manual patch that ArgoCD's three-way diff never removes, and since a pod reserves
-    # max(containers, largest init) each pod held 300m for a mkdir. Same for init-media
-    # via persistence.initResources.
-    resources:
-      requests:
-        cpu: 10m
-        memory: 32Mi
-      limits:
-        cpu: 500m
-        memory: 128Mi
+  - name: backup-staging
+    emptyDir:
+      sizeLimit: 2Gi
 # Rollout strategy: surge-first (maxUnavailable:0, maxSurge:1) — a NEW pod must be Ready
 # before any OLD pod is terminated, so rollouts never drop below the desired count and
 # never serve 503s. Requires node headroom (provided by fleet-wide CPU-request right-sizing).
