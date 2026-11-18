@@ -42,64 +42,19 @@ if [[ "$DEPLOY" == "true" ]]; then
   echo "[INFO] Pushing image"
   docker push "$IMAGE_REPO:$GIT_COMMIT_ID"
 
-  if [[ -n ${KUBE_CONFIG:-} ]]; then
-    echo "[INFO] Applying kube secrets"
-    mkdir -p ~/.kube
-    echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
-    kubectl apply -f kubeSecrets/devENV.yaml || true
-  fi
 fi
 
 echo "[SUCCESS] Completed. Tag: $GIT_COMMIT_ID"
 ```
 
-2) **Create `kubeSecrets/devENV.yaml`** Secret manifest with your app's environment variables:
-
-Each app should provide `kubeSecrets/devENV.yaml` in its repo with a namespaced Secret manifest containing all required environment variables for that environment.
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: my-app-env
-  namespace: my-namespace
-type: Opaque
-stringData:
-  # Database (if using automated setup, these will be auto-populated)
-  # Note: Shared databases (PostgreSQL, Redis) are in the 'infra' namespace.
-  # Runtime connections go through PgBouncer (transaction pooler, port 6432).
-  # Messaging is NATS/JetStream — RabbitMQ was removed on 2026-04-15.
-  DATABASE_URL: "postgresql://postgres:PASSWORD@pgbouncer.infra.svc.cluster.local:6432/mydb"
-  REDIS_URL: "redis://:PASSWORD@redis-master.infra.svc.cluster.local:6379/0"
-  
-  # App-specific variables
-  JWT_SECRET: ""  # Auto-generated if empty
-  DEBUG: "False"
-  ALLOWED_HOSTS: "myapp.domain.com"
-```
-
-**Required Environment Variables:**
-
-Common (per service; adjust to your stack):
-- `DATABASE_URL`: e.g., `postgresql://user:pass@host:5432/db`
-- `REDIS_URL`: e.g., `redis://:pass@host:6379/0`
-- `CELERY_BROKER_URL`: typically same as REDIS_URL
-- `CELERY_RESULT_BACKEND`: typically same as REDIS_URL
-- `JWT_SECRET`: random 32-64 chars
-- `DJANGO_SECRET_KEY` (Django apps): random 50 chars
-- `DEBUG`: "False"
-- `ALLOWED_HOSTS`: e.g., `api.domain.tld,localhost,127.0.0.1`
-- `NEXT_PUBLIC_API_URL` (for UI): e.g., `https://api.domain.tld`
-
-Optional (based on DB type):
-- PostgreSQL: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-- MySQL: `MYSQL_URL` or `MYSQL_*` variants
-- MongoDB: `MONGO_URL`
-
-**Defaults and Auto-generation:**
-- If `KUBE_CONFIG` is missing, cluster operations (kubectl, secret apply) are skipped.
-- If `JWT_SECRET` is missing in the target Kubernetes Secret (`env_secret_name`), the workflow will generate a 64-hex random value and create/patch the secret with `JWT_SECRET`.
-- Database passwords (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MONGO_PASSWORD`, `MYSQL_PASSWORD`) are auto-generated when `setup_databases: true` and the corresponding secrets are not provided.
+2) **Secrets: no Secret manifest in the service repo.** The service's Secret
+   (`<service>-secrets` or the name in its values) is produced by
+   `scripts/infrastructure/create-service-secrets.sh` on the first deploy: it generates the standard
+   keys (database and Redis URLs through PgBouncer, `POSTGRES_MIGRATE_URL`, `SECRET_KEY`, the
+   service's encryption key and `INTERNAL_SERVICE_KEY` where listed), seals the Secret into
+   `manifests/sealed-secrets/<namespace>/` in this repo and waits for it to sync. Extra keys are
+   added with `scripts/sealing/seal-keys.sh` (see [secrets-and-keys.md](secrets-and-keys.md));
+   never with `kubectl patch` and never as a plain `kind: Secret` in git.
 
 3) **Add `.github/workflows/deploy.yml`** that calls the reusable workflow:
 
@@ -215,7 +170,7 @@ Complete Onboarding Checklist
 -----------------------------
 
 - [ ] `build.sh` added to app repo
-- [ ] `kubeSecrets/devENV.yaml` created with environment variables
+- [ ] Secret created by `create-service-secrets.sh` on the first deploy (sealed, never a plain manifest)
 - [ ] `.github/workflows/deploy.yml` added
 - [ ] `apps/my-app/values.yaml` created in devops-k8s
 - [ ] `apps/my-app/app.yaml` created in devops-k8s
