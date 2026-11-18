@@ -1,0 +1,199 @@
+# Shared values and every Secret that carries a copy (plain map, no values).
+# scripts/sealing/reseal-shared-key.sh <KEY> reseals the key into every "secrets" entry in one
+# commit; "restart" lists the workloads (namespace/kind/name) that read it and must be restarted
+# afterwards. Values are read at container start only.
+#
+# Regenerate the lists after adding a service: every Secret that has the key, and every
+# Deployment, StatefulSet or CronJob that mounts one of them (envFrom, secretKeyRef or volume).
+# Last generated from the cluster on 2026-11-18.
+#
+# DATABASE_PASSWORD and REDIS_PASSWORD are also embedded in each service's URL keys
+# (POSTGRES_URL, POSTGRES_MIGRATE_URL, POSTGRES_READONLY_URL, REDIS_URL, DATABASE_URL). After a
+# password change, rerun create-service-secrets.sh per service so it reseals those URLs too.
+
+INTERNAL_SERVICE_KEY:
+  secrets:
+    - auth/auth-api-secrets
+    - auth/auth-ui-env
+    - cafe/cafe-website-env
+    - codevertex/codevertex-website-secrets
+    - email/email-provisioner-env
+    - email/mail-ui-secrets
+    - erp/erp-api-env
+    - erp/erp-ui-env
+    - hadia/hadia-api-secrets
+    - hospital/hospital-api-secrets
+    - infra/fleet-health-watcher-secrets
+    - inventory/inventory-api-secrets
+    - inventory/inventory-ui-secrets
+    - isp-billing/isp-billing-backend-secrets
+    - library/library-api-secrets
+    - logistics/logistics-api-secrets
+    - logistics/logistics-ui-secrets
+    - marketflow/marketflow-ai-secrets
+    - marketflow/marketflow-api-secrets
+    - marketflow/marketflow-ui-secrets
+    - maskani/maskani-api-secrets
+    - maskani/maskani-ui-secrets
+    - notifications/notifications-api-env
+    - notifications/notifications-ui-secrets
+    - ordering/ordering-backend-secrets
+    - ordering/ordering-frontend-secrets
+    - pos/pos-api-secrets
+    - pos/pos-ui-secrets
+    - projects/projects-api-secrets
+    - subscriptions/subscription-api-secrets
+    - subscriptions/subscriptions-api-secrets
+    - ticketing/ticketing-api-secrets
+    - treasury/treasury-api-secrets
+    - treasury/treasury-ui-secrets
+    - truload/truload-backend-env
+    - truload/truload-frontend-env
+  restart:
+    - auth/deployment/auth-api
+    - auth/deployment/auth-ui
+    - cafe/deployment/cafe-website
+    - codevertex/cronjob/digitika-installment-reminder
+    - codevertex/deployment/codevertex-website
+    - email/deployment/email-provisioner
+    - email/deployment/mail-ui
+    - erp/deployment/erp-api
+    - erp/deployment/erp-ui
+    - hadia/deployment/hadia-api
+    - hospital/deployment/hospital-api
+    - infra/deployment/fleet-health-watcher
+    - inventory/deployment/inventory-api
+    - isp-billing/deployment/isp-billing-backend
+    - isp-billing/deployment/isp-billing-backend-celery-beat
+    - isp-billing/deployment/isp-billing-backend-celery-worker
+    - isp-billing/deployment/isp-billing-backend-nats-consumer
+    - library/deployment/library-api
+    - logistics/deployment/logistics-api
+    - logistics/deployment/logistics-ui
+    - marketflow/deployment/marketflow-ai
+    - marketflow/deployment/marketflow-api
+    - marketflow/deployment/marketflow-crawler
+    - marketflow/deployment/marketflow-ui
+    - marketflow/deployment/marketflow-worker
+    - maskani/deployment/maskani-api
+    - maskani/deployment/maskani-ui
+    - notifications/deployment/notifications-api
+    - notifications/deployment/notifications-ui
+    - ordering/deployment/ordering-backend
+    - ordering/deployment/ordering-frontend
+    - pos/deployment/pos-api
+    - projects/deployment/projects-api
+    - subscriptions/deployment/subscription-api
+    - ticketing/deployment/ticketing-api
+    - treasury/deployment/treasury-api
+    - treasury/deployment/treasury-ui
+    - truload/deployment/truload-backend
+    - truload/deployment/truload-frontend-app
+DATABASE_PASSWORD:
+  secrets:
+    - auth/auth-api-secrets
+    - codevertex/codevertex-website-secrets
+    - email/email-provisioner-env
+    - erp/erp-api-env
+    - hadia/hadia-api-secrets
+    - hospital/hospital-api-secrets
+    - inventory/inventory-api-secrets
+    - isp-billing/isp-billing-backend-secrets
+    - library/library-api-secrets
+    - logistics/logistics-api-secrets
+    - marketflow/marketflow-ai-secrets
+    - marketflow/marketflow-api-secrets
+    - marketflow/marketflow-ui-secrets
+    - maskani/maskani-api-secrets
+    - notifications/notifications-api-env
+    - ordering/ordering-backend-secrets
+    - pos/pos-api-secrets
+    - projects/projects-api-secrets
+    - subscriptions/subscription-api-secrets
+    - subscriptions/subscriptions-api-secrets
+    - ticketing/ticketing-api-secrets
+    - treasury/treasury-api-secrets
+  restart:
+    - auth/cronjob/auth-session-cleanup
+    - auth/deployment/auth-api
+    - codevertex/cronjob/digitika-installment-reminder
+    - codevertex/deployment/codevertex-website
+    - email/deployment/email-provisioner
+    - erp/deployment/erp-api
+    - hadia/deployment/hadia-api
+    - hospital/deployment/hospital-api
+    - inventory/deployment/inventory-api
+    - isp-billing/deployment/isp-billing-backend
+    - isp-billing/deployment/isp-billing-backend-celery-beat
+    - isp-billing/deployment/isp-billing-backend-celery-worker
+    - isp-billing/deployment/isp-billing-backend-nats-consumer
+    - library/deployment/library-api
+    - logistics/deployment/logistics-api
+    - marketflow/deployment/marketflow-ai
+    - marketflow/deployment/marketflow-api
+    - marketflow/deployment/marketflow-crawler
+    - marketflow/deployment/marketflow-ui
+    - marketflow/deployment/marketflow-worker
+    - maskani/deployment/maskani-api
+    - notifications/deployment/notifications-api
+    - ordering/deployment/ordering-backend
+    - pos/deployment/pos-api
+    - projects/deployment/projects-api
+    - subscriptions/deployment/subscription-api
+    - ticketing/deployment/ticketing-api
+    - ticketing/deployment/ticketing-worker
+    - treasury/deployment/treasury-api
+REDIS_PASSWORD:
+  secrets:
+    - auth/auth-api-secrets
+    - codevertex/codevertex-website-secrets
+    - email/email-provisioner-env
+    - erp/erp-api-env
+    - hadia/hadia-api-secrets
+    - hospital/hospital-api-secrets
+    - inventory/inventory-api-secrets
+    - isp-billing/isp-billing-backend-secrets
+    - library/library-api-secrets
+    - logistics/logistics-api-secrets
+    - marketflow/marketflow-ai-secrets
+    - marketflow/marketflow-api-secrets
+    - marketflow/marketflow-ui-secrets
+    - maskani/maskani-api-secrets
+    - notifications/notifications-api-env
+    - ordering/ordering-backend-secrets
+    - pos/pos-api-secrets
+    - projects/projects-api-secrets
+    - subscriptions/subscription-api-secrets
+    - subscriptions/subscriptions-api-secrets
+    - ticketing/ticketing-api-secrets
+    - treasury/treasury-api-secrets
+  restart:
+    - auth/cronjob/auth-session-cleanup
+    - auth/deployment/auth-api
+    - codevertex/cronjob/digitika-installment-reminder
+    - codevertex/deployment/codevertex-website
+    - email/deployment/email-provisioner
+    - erp/deployment/erp-api
+    - hadia/deployment/hadia-api
+    - hospital/deployment/hospital-api
+    - inventory/deployment/inventory-api
+    - isp-billing/deployment/isp-billing-backend
+    - isp-billing/deployment/isp-billing-backend-celery-beat
+    - isp-billing/deployment/isp-billing-backend-celery-worker
+    - isp-billing/deployment/isp-billing-backend-nats-consumer
+    - library/deployment/library-api
+    - logistics/deployment/logistics-api
+    - marketflow/deployment/marketflow-ai
+    - marketflow/deployment/marketflow-api
+    - marketflow/deployment/marketflow-crawler
+    - marketflow/deployment/marketflow-ui
+    - marketflow/deployment/marketflow-worker
+    - maskani/deployment/maskani-api
+    - notifications/deployment/notifications-api
+    - ordering/deployment/ordering-backend
+    - pos/deployment/pos-api
+    - projects/deployment/projects-api
+    - subscriptions/deployment/subscription-api
+    - ticketing/deployment/ticketing-api
+    - ticketing/deployment/ticketing-worker
+    - treasury/deployment/treasury-api

@@ -981,7 +981,13 @@ jobs:
             echo "⚠️ A fresh keypair will be generated when the controller starts, and every existing"
             echo "⚠️ manifests/sealed-secrets/*.sealedsecret.yaml file will become permanently undecryptable."
           else
-            echo "$SEALED_SECRETS_MASTER_KEY" | kubectl apply -f -
+            # Since 2026-11-18 the secret is gzip+base64 (scripts/sealing/backup-sealing-keys.sh);
+            # older copies are plain YAML. The primary backup is the age-encrypted copy in R2.
+            if printf '%s' "$SEALED_SECRETS_MASTER_KEY" | base64 -d 2>/dev/null | gunzip -t 2>/dev/null; then
+              printf '%s' "$SEALED_SECRETS_MASTER_KEY" | base64 -d | gunzip | kubectl apply -f -
+            else
+              echo "$SEALED_SECRETS_MASTER_KEY" | kubectl apply -f -
+            fi
             echo "✅ Restored the backed-up sealed-secrets master key — the controller will use it instead of generating a new one"
           fi
           echo "::endgroup::"

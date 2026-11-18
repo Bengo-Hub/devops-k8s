@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script to create Kubernetes secrets for Go microservices
-# Creates only standardized keys: POSTGRES_URL, POSTGRES_MIGRATE_URL, REDIS_URL, REDIS_PASSWORD, SECRET_KEY, DATABASE_*
-# All Go backends must read these env keys (no postgresUrl or service-prefixed DB URL keys).
+# Provisions a service's Secret as a SealedSecret (manifests/sealed-secrets/<ns>/<secret>.sealedsecret.yaml).
+# Standardized keys: POSTGRES_URL, POSTGRES_MIGRATE_URL, REDIS_URL, REDIS_PASSWORD, SECRET_KEY, DATABASE_*
+# plus the per-service generate-or-preserve keys below. All Go backends read these env keys.
+# It never patches a live Secret: missing keys are sealed and committed to this repo (see the write
+# step at the end). Needs kubectl access and push rights on this checkout (build.sh clones it with GH_PAT).
 #
 # Usage:
 #   SERVICE_NAME=auth-api ./create-service-secrets.sh
@@ -177,7 +179,8 @@ if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
     log_info "Secret ${SECRET_NAME} already exists. Retrieving existing values to avoid rotation..."
     EXISTING_SECRET_KEY=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath="{.data.SECRET_KEY}" 2>/dev/null | base64 -d || echo "")
     
-    if [[ "${ENABLE_CLEANUP:-false}" == "true" ]]; then
+    # Never for a sealed Secret: deleting it would just be recreated from git by the controller.
+    if [[ "${ENABLE_CLEANUP:-false}" == "true" && -z "$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null)" ]]; then
         log_info "Cleanup mode active: Existing secret will be fully replaced."
         kubectl delete secret "${SECRET_NAME}" -n "${NAMESPACE}"
     fi
@@ -469,159 +472,111 @@ if [[ -n "${APP_SESSION_SECRET}" ]]; then
     secret_literals+=("--from-literal=SESSION_SECRET=${APP_SESSION_SECRET}")
 fi
 
-# A Secret owned by a SealedSecret (manifests/sealed-secrets/) is rewritten from git whenever the
-# sealed-secrets controller restarts, which happens on every node reboot. A key patched in here but
-# absent from the SealedSecret disappears at that rewrite: on 2026-11-07 pos-api lost
-# TERMINAL_JWT_SECRET after the kured reboot and stayed down until the key was sealed into git.
-# So for such a Secret this script writes nothing. If the SealedSecret lacks a key the script would
-# write, it stops and prints the command to seal that key, instead of planting a key that vanishes.
-SEALED_OWNER=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" \
-    -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null || true)
-if [[ -n "${SEALED_OWNER}" ]]; then
-    SEALED_KEYS=$(kubectl get sealedsecret "${SEALED_OWNER}" -n "${NAMESPACE}" \
-        -o go-template='{{range $k, $v := .spec.encryptedData}}{{$k}}{{"\n"}}{{end}}')
-    declare -a unsealed_keys=()
-    for lit in "${secret_literals[@]}"; do
-        key="${lit#--from-literal=}"
-        key="${key%%=*}"
-        grep -qx "${key}" <<<"${SEALED_KEYS}" || unsealed_keys+=("${key}")
-    done
-    if (( ${#unsealed_keys[@]} > 0 )); then
-        log_error "${NAMESPACE}/${SECRET_NAME} comes from SealedSecret ${SEALED_OWNER}, which lacks: ${unsealed_keys[*]}"
-        echo "::error::Seal ${unsealed_keys[*]} into devops-k8s manifests/sealed-secrets/${SERVICE_NAME}.sealedsecret.yaml; a key written only to the live Secret is wiped at the next node reboot."
-        echo "Per key, on the node (the value goes to stdin and is never stored):"
-        echo "  <value source> | kubeseal --raw --scope strict --namespace ${NAMESPACE} --name ${SECRET_NAME} \\"
-        echo "    --controller-namespace kube-system --controller-name sealed-secrets-controller --from-file=/dev/stdin"
-        echo "Add the output under spec.encryptedData, commit, and rerun."
-        exit 1
+# ---------------------------------------------------------------------------------------------
+# Write step: seal and commit, never patch.
+#
+# Every service Secret comes from a SealedSecret in manifests/sealed-secrets/<ns>/<name>.sealedsecret.yaml.
+# The controller rewrites each owned Secret from git whenever it restarts (every node reboot), so a
+# key written only to the live Secret is lost: pos-api lost TERMINAL_JWT_SECRET that way on
+# 2026-11-07. This script therefore never runs kubectl patch, create or apply on a Secret:
+#   1. the desired keys above are compared with the live Secret by value, in memory;
+#   2. nothing differs: exit 0 (the normal deploy path; no commit, no restart);
+#   3. something differs or the Secret does not exist yet: the whole Secret (live keys plus the
+#      new or changed ones) is sealed into this devops-k8s checkout, committed and pushed with the
+#      release-bot rebase loop, and the script waits for the controller to sync it.
+# No plaintext copy is written anywhere (the old backups/ credentials file is gone; git holds the
+# encrypted copy). DRY_RUN=1 prints the changed key names and stops.
+# ---------------------------------------------------------------------------------------------
+source "${SCRIPT_DIR}/../sealing/seal-lib.sh"
+
+desired_secret_json() {
+    kubectl create secret generic "${SECRET_NAME}" --namespace="${NAMESPACE}" \
+        "${secret_literals[@]}" --dry-run=client -o json
+}
+
+# stdin: desired Secret JSON. $1 is the mode:
+#   new     names of desired keys the live Secret lacks (one per line)
+#   differs names of keys the live Secret has with another value (one per line)
+#   merge   the full Secret to seal: live keys, plus the missing desired keys, plus the differing
+#           ones only when SEAL_OVERWRITE=1; labels kept plus app/managed-by
+# Generate-or-preserve: a value already in the Secret is never replaced by default, so a deploy
+# cannot silently repoint a service (for example another DATABASE_HOST). Values never leave the pipe.
+secret_merge() {
+    SEAL_OVERWRITE="${SEAL_OVERWRITE:-0}" seal_python -c '
+import json, os, subprocess, sys
+mode, ns, name, app = sys.argv[1:5]
+desired = json.load(sys.stdin).get("data") or {}
+p = subprocess.run(["kubectl", "get", "secret", name, "-n", ns, "-o", "json"], capture_output=True, text=True)
+live = json.loads(p.stdout) if p.returncode == 0 and p.stdout.strip() else {}
+live_data = live.get("data") or {}
+if mode == "new":
+    print("\n".join(k for k in sorted(desired) if k not in live_data)); sys.exit(0)
+if mode == "differs":
+    print("\n".join(k for k in sorted(desired) if k in live_data and live_data[k] != desired[k])); sys.exit(0)
+overwrite = os.environ.get("SEAL_OVERWRITE") == "1"
+data = dict(live_data)
+for k, v in desired.items():
+    if k not in data or overwrite:
+        data[k] = v
+labels = dict((live.get("metadata") or {}).get("labels") or {})
+labels.update({"app": app, "managed-by": "script"})
+json.dump({"apiVersion": "v1", "kind": "Secret", "type": live.get("type", "Opaque"),
+           "metadata": {"name": name, "namespace": ns, "labels": labels}, "data": data}, sys.stdout)
+' "$1" "${NAMESPACE}" "${SECRET_NAME}" "${SERVICE_NAME}"
+}
+
+NEW_KEYS=$(desired_secret_json | secret_merge new | tr -d '\r' | xargs)
+DIFF_KEYS=$(desired_secret_json | secret_merge differs | tr -d '\r' | xargs)
+if [[ -n "${DIFF_KEYS}" && "${SEAL_OVERWRITE:-0}" != "1" ]]; then
+    log_warning "${NAMESPACE}/${SECRET_NAME} keeps its current ${DIFF_KEYS} (differ from what this script would set; rerun with SEAL_OVERWRITE=1 to replace them)"
+    DIFF_KEYS=""
+fi
+CHANGED_KEYS=$(echo "${NEW_KEYS} ${DIFF_KEYS}" | xargs)
+SEALED_OWNER=$(sealed_owner "${NAMESPACE}" "${SECRET_NAME}")
+LIVE_EXISTS=false
+kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1 && LIVE_EXISTS=true
+
+if [[ -z "${CHANGED_KEYS}" && "${LIVE_EXISTS}" == "true" ]]; then
+    if [[ -n "${SEALED_OWNER}" ]]; then
+        log_success "${NAMESPACE}/${SECRET_NAME} (SealedSecret ${SEALED_OWNER}) already holds every standard key; nothing to write"
+    else
+        log_success "${NAMESPACE}/${SECRET_NAME} already holds every standard key; nothing to write (not sealed yet: scripts/sealing/seal-from-live.sh adopts it)"
     fi
-    log_info "${NAMESPACE}/${SECRET_NAME} comes from SealedSecret ${SEALED_OWNER}, which holds every key; nothing to write."
     exit 0
 fi
 
-if kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-    # Secret exists — patch to merge standardized keys without losing existing keys
-    # Generate the new data as base64 and build a JSON patch
-    PATCH_JSON='{"data":{'
-    PATCH_JSON+="\"POSTGRES_URL\":\"$(echo -n "${POSTGRES_URL}" | base64 -w0)\","
-    PATCH_JSON+="\"POSTGRES_MIGRATE_URL\":\"$(echo -n "${POSTGRES_MIGRATE_URL}" | base64 -w0)\","
-    PATCH_JSON+="\"SECRET_KEY\":\"$(echo -n "${APP_SECRET_KEY}" | base64 -w0)\","
-    PATCH_JSON+="\"DATABASE_HOST\":\"$(echo -n "${PG_HOST}" | base64 -w0)\","
-    PATCH_JSON+="\"DATABASE_PORT\":\"$(echo -n "${PG_PORT}" | base64 -w0)\","
-    PATCH_JSON+="\"DATABASE_NAME\":\"$(echo -n "${DB_NAME}" | base64 -w0)\","
-    PATCH_JSON+="\"DATABASE_USER\":\"$(echo -n "${DB_USER}" | base64 -w0)\","
-    PATCH_JSON+="\"DATABASE_PASSWORD\":\"$(echo -n "${DATABASE_PASSWORD}" | base64 -w0)\","
-    PATCH_JSON+="\"REDIS_URL\":\"$(echo -n "${REDIS_URL}" | base64 -w0)\","
-    PATCH_JSON+="\"REDIS_HOST\":\"$(echo -n "${REDIS_HOST}" | base64 -w0)\","
-    PATCH_JSON+="\"REDIS_PORT\":\"$(echo -n "${REDIS_PORT}" | base64 -w0)\","
-    PATCH_JSON+="\"REDIS_PASSWORD\":\"$(echo -n "${REDIS_PASSWORD}" | base64 -w0)\""
-    if [[ -n "${POSTGRES_READONLY_URL}" ]]; then
-        PATCH_JSON+=",\"POSTGRES_READONLY_URL\":\"$(echo -n "${POSTGRES_READONLY_URL}" | base64 -w0)\""
-    fi
-    if [[ -n "${APP_ENCRYPTION_SALT}" ]]; then
-        PATCH_JSON+=",\"ENCRYPTION_SALT\":\"$(echo -n "${APP_ENCRYPTION_SALT}" | base64 -w0)\""
-    fi
-    if [[ -n "${APP_ENC_KEY_VAR}" && -n "${APP_ENC_KEY_VALUE}" ]]; then
-        PATCH_JSON+=",\"${APP_ENC_KEY_VAR}\":\"$(echo -n "${APP_ENC_KEY_VALUE}" | base64 -w0)\""
-    fi
-    if [[ -n "${APP_TERMINAL_JWT_SECRET}" ]]; then
-        PATCH_JSON+=",\"TERMINAL_JWT_SECRET\":\"$(echo -n "${APP_TERMINAL_JWT_SECRET}" | base64 -w0)\""
-    fi
-    if [[ -n "${APP_INTERNAL_SERVICE_KEY}" ]]; then
-        PATCH_JSON+=",\"INTERNAL_SERVICE_KEY\":\"$(echo -n "${APP_INTERNAL_SERVICE_KEY}" | base64 -w0)\""
-    fi
-    if [[ -n "${APP_SESSION_SECRET}" ]]; then
-        PATCH_JSON+=",\"SESSION_SECRET\":\"$(echo -n "${APP_SESSION_SECRET}" | base64 -w0)\""
-    fi
-    PATCH_JSON+='}}'
-
-    kubectl patch secret "${SECRET_NAME}" -n "${NAMESPACE}" \
-        --type merge -p "${PATCH_JSON}"
-    RESULT=$?
-    log_info "Patched existing secret (merged standardized keys, preserved service-specific keys)"
-else
-    # Secret does not exist — create it fresh
-    kubectl create secret generic "${SECRET_NAME}" \
-        --namespace="${NAMESPACE}" \
-        "${secret_literals[@]}"
-    RESULT=$?
-    log_info "Created new secret"
+log_info "Keys to seal into ${NAMESPACE}/${SECRET_NAME}: ${CHANGED_KEYS:-<new Secret>}"
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    log_info "DRY_RUN=1: nothing sealed or committed"
+    exit 0
 fi
 
-if [ $RESULT -eq 0 ]; then
-    log_success "Secret ${SECRET_NAME} upserted successfully in namespace ${NAMESPACE}"
+ensure_kubeseal
+SEALED_FILE="$(sealed_file_path "${NAMESPACE}" "${SECRET_NAME}")"
+desired_secret_json | secret_merge merge | seal_secret_json "${SEALED_FILE}"
+log_info "Sealed ${SECRET_NAME} ($(sealed_key_count "${SEALED_FILE}") keys) into ${SEALED_FILE#"${SEAL_REPO_ROOT}/"}"
+
+# An existing Secret that no SealedSecret owns yet is adopted (data is replaced by the identical
+# or updated sealed data; the annotation itself changes no value).
+if [[ "${LIVE_EXISTS}" == "true" && -z "${SEALED_OWNER}" ]]; then
+    mark_adoptable "${NAMESPACE}" "${SECRET_NAME}"
+fi
+
+if ! git_commit_push "${SEAL_REPO_ROOT}" "secrets(${SERVICE_NAME}): seal ${CHANGED_KEYS:-new Secret}" "${SEALED_FILE}"; then
+    log_error "Could not push ${SEALED_FILE#"${SEAL_REPO_ROOT}/"}; nothing changed in the cluster"
+    exit 1
+fi
+refresh_sealed_app || true
+if wait_synced "${NAMESPACE}" "${SECRET_NAME}"; then
+    log_success "Secret ${NAMESPACE}/${SECRET_NAME} synced from git"
 else
-    log_error "Failed to create secret"
+    log_error "${NAMESPACE}/${SECRET_NAME} did not sync; check: kubectl get sealedsecret ${SECRET_NAME} -n ${NAMESPACE} -o yaml"
     exit 1
 fi
 
-# Label the secret for easier management
-kubectl label secret "${SECRET_NAME}" -n "${NAMESPACE}" \
-    app="${SERVICE_NAME}" \
-    managed-by=script \
-    --overwrite >/dev/null 2>&1 || true
-
-# Display summary
-log_section "Secret Creation Summary"
+log_section "Secret Summary"
 echo "Namespace: ${NAMESPACE}"
 echo "Secret Name: ${SECRET_NAME}"
 echo "Database: ${DB_NAME}"
 echo "Database User: ${DB_USER}"
-echo ""
-# Values are never printed: CI logs are kept, and on a public repo anyone can read them. They live
-# in the Kubernetes secret above (and the local backup file below, which is gitignored).
-echo "Database Password: [stored in ${SECRET_NAME}]"
-echo "PostgreSQL URL: [stored in ${SECRET_NAME}]"
-echo "Redis URL: [stored in ${SECRET_NAME}]"
-echo "SECRET_KEY: [stored in ${SECRET_NAME}]"
-echo ""
-
-# Create backup file
-BACKUP_DIR="${SCRIPT_DIR}/../../backups"
-mkdir -p "${BACKUP_DIR}"
-BACKUP_FILE="${BACKUP_DIR}/${SERVICE_NAME}-secrets-$(date +%Y%m%d-%H%M%S).txt"
-
-cat > "${BACKUP_FILE}" <<EOF
-# ${SERVICE_NAME} Secrets Backup
-# Created: $(date)
-# Namespace: ${NAMESPACE}
-# Secret Name: ${SECRET_NAME}
-
-SERVICE_NAME=${SERVICE_NAME}
-NAMESPACE=${NAMESPACE}
-DATABASE_NAME=${DB_NAME}
-DATABASE_USER=${DB_USER}
-DATABASE_PASSWORD=${DATABASE_PASSWORD}
-DATABASE_HOST=${PG_HOST}
-DATABASE_PORT=${PG_PORT}
-
-REDIS_HOST=${REDIS_HOST}
-REDIS_PORT=${REDIS_PORT}
-REDIS_PASSWORD=${REDIS_PASSWORD}
-
-POSTGRES_URL=${POSTGRES_URL}
-POSTGRES_MIGRATE_URL=${POSTGRES_MIGRATE_URL}
-REDIS_URL=${REDIS_URL}
-
-# DO NOT COMMIT THIS FILE TO VERSION CONTROL
-# Store it securely (e.g., encrypted vault, password manager)
-EOF
-
-chmod 600 "${BACKUP_FILE}"
-log_success "Credentials backed up to: ${BACKUP_FILE}"
-log_warning "Please store this file securely and delete it after backing up elsewhere!"
-
-echo ""
-log_info "Next Steps:"
-echo "1. Create the database:"
-echo "   SERVICE_DB_NAME=${DB_NAME} SERVICE_DB_USER=${DB_USER} ./create-service-database.sh"
-echo ""
-echo "2. Verify the secret:"
-echo "   kubectl get secret ${SECRET_NAME} -n ${NAMESPACE}"
-echo ""
-echo "3. Deploy your service via ArgoCD:"
-echo "   kubectl apply -f ../../apps/${SERVICE_NAME}/app.yaml"
-echo ""
-echo "4. Monitor deployment:"
-echo "   kubectl get pods -n ${NAMESPACE} -w"
-
+echo "Sealed file: ${SEALED_FILE#"${SEAL_REPO_ROOT}/"} (values are never printed)"

@@ -3,8 +3,10 @@ name: Object Storage (Cloudflare R2)
 # Sets up the platform's shared object storage (see shared/httpware objectstore):
 #   buckets  creates the public and private R2 buckets, CORS on the public one, and binds the
 #            public media domain to it (Cloudflare caches it at the edge).
-#   secrets  writes Secret "object-storage" (OBJECT_STORAGE_*) into each listed namespace from the
-#            CF_R2_* repository secrets. Values are never printed.
+#   secrets  seals Secret "object-storage" (OBJECT_STORAGE_*) for each listed namespace from the
+#            CF_R2_* repository secrets into manifests/sealed-secrets/<ns>/object-storage.sealedsecret.yaml,
+#            commits and pushes, then waits for the controller to sync. Values only pass through
+#            env vars and pipes and are never printed; nothing writes the live Secrets directly.
 # Both steps are idempotent. Run manually; it changes production.
 
 on:
@@ -185,6 +187,10 @@ jobs:
             if [ -z "${!v}" ]; then echo "::error::$v is not set"; exit 1; fi
           done
 
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PROPAGATE_PAT || secrets.GH_PAT }}
+
       - uses: azure/setup-kubectl@v4
 
       - name: Configure kubectl
@@ -194,24 +200,29 @@ jobs:
           chmod 600 ~/.kube/config
           kubectl version --request-timeout=20s >/dev/null
 
-      - name: Write object-storage Secrets
+      - name: Seal, commit and sync object-storage Secrets
+        env:
+          GIT_USER: object-storage-workflow
+          GIT_EMAIL: devops-bot@users.noreply.github.com
         run: |
           set -euo pipefail
+          source scripts/sealing/seal-lib.sh
+          ensure_kubeseal
+          targets=()
           for ns in $NAMESPACES; do
             if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
               echo "::warning::namespace $ns does not exist, skipped"; continue
             fi
-            kubectl create secret generic object-storage -n "$ns" \
-              --from-literal=OBJECT_STORAGE_ENDPOINT="$R2_ENDPOINT" \
-              --from-literal=OBJECT_STORAGE_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
-              --from-literal=OBJECT_STORAGE_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
-              --from-literal=OBJECT_STORAGE_REGION=auto \
-              --from-literal=OBJECT_STORAGE_PUBLIC_BUCKET="$PUBLIC_BUCKET" \
-              --from-literal=OBJECT_STORAGE_PRIVATE_BUCKET="$PRIVATE_BUCKET" \
-              --from-literal=OBJECT_STORAGE_PUBLIC_BASE_URL="https://${PUBLIC_DOMAIN}" \
-              --dry-run=client -o yaml \
-              | kubectl label --local -f - app.kubernetes.io/managed-by=object-storage-workflow -o yaml \
-              | kubectl apply -f - >/dev/null
-            echo "object-storage Secret written in $ns"
+            targets+=("$ns")
           done
+          kubectl create secret generic object-storage             --from-literal=OBJECT_STORAGE_ENDPOINT="$R2_ENDPOINT"             --from-literal=OBJECT_STORAGE_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"             --from-literal=OBJECT_STORAGE_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"             --from-literal=OBJECT_STORAGE_REGION=auto             --from-literal=OBJECT_STORAGE_PUBLIC_BUCKET="$PUBLIC_BUCKET"             --from-literal=OBJECT_STORAGE_PRIVATE_BUCKET="$PRIVATE_BUCKET"             --from-literal=OBJECT_STORAGE_PUBLIC_BASE_URL="https://${PUBLIC_DOMAIN}"             --dry-run=client -o json             | kubectl label --local -f - app.kubernetes.io/managed-by=object-storage-workflow -o json             | bash scripts/sealing/seal-from-github-secret.sh "${targets[@]}"
+          # Existing Secrets not yet owned by a SealedSecret are adopted (metadata only).
+          for ns in "${targets[@]}"; do
+            if kubectl get secret object-storage -n "$ns" >/dev/null 2>&1 && [ -z "$(sealed_owner "$ns" object-storage)" ]; then
+              mark_adoptable "$ns" object-storage
+            fi
+          done
+          git_commit_push . "secrets(object-storage): seal for ${targets[*]}" manifests/sealed-secrets
+          refresh_sealed_app
+          for ns in "${targets[@]}"; do wait_synced "$ns" object-storage; done
           rm -f ~/.kube/config

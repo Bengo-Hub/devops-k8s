@@ -66,6 +66,21 @@ runs:
         sudo curl -L --connect-timeout 10 --max-time 60 --retry 2 --retry-delay 3 "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" -o /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq
         yq --version
 
+    - name: Install kubeseal
+      shell: bash
+      run: |
+        # Pinned to the sealed-secrets controller version, checked against the release checksum.
+        # Keep in step with scripts/sealing/seal-lib.sh (KUBESEAL_VERSION, KUBESEAL_SHA256_LINUX_AMD64).
+        if command -v kubeseal &> /dev/null; then kubeseal --version; exit 0; fi
+        V=0.38.4
+        SHA=ab5ae808b0efcb167a825b6cf7f3a7c0034bd99a6301d78db2012da651a8c0b9
+        curl -fsSL --retry 3 -o /tmp/kubeseal.tgz "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${V}/kubeseal-${V}-linux-amd64.tar.gz"
+        echo "${SHA}  /tmp/kubeseal.tgz" | sha256sum -c -
+        tar -xzf /tmp/kubeseal.tgz -C /tmp kubeseal
+        sudo install -m 0755 /tmp/kubeseal /usr/local/bin/kubeseal
+        rm -f /tmp/kubeseal.tgz /tmp/kubeseal
+        kubeseal --version
+
     - name: Install Trivy (optional)
       shell: bash
       if: ${{ inputs.install_trivy == 'true' }}
