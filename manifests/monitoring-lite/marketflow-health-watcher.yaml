@@ -1,0 +1,272 @@
+# MarketFlow health watcher (2026-11-18). The fleet has no Prometheus (removed for good on
+# 2026-08-16, commit 0a8b3a9c8), so MarketFlow's service checks are pushed the same way as
+# fleet-health-watcher's: one long-running shell loop that pages through the platform alert
+# settings (Slack and email). Pod restarts and crash loops are already paged fleet-wide by
+# fleet-health-watcher; this adds what it cannot see:
+#
+#   - in-cluster /healthz of marketflow-api, marketflow-ai and marketflow-crawler;
+#   - JetStream lag of MarketFlow's consumers (num_pending, num_ack_pending) from the NATS
+#     monitoring endpoint, against thresholds from env.
+#
+# Each check pages after DEBOUNCE_POLLS failed polls in a row and then at most once per
+# COOLDOWN_SECONDS while it stays failing; a check that recovers clears its own state. The state
+# lives in files on an emptyDir in this one long-running pod: it survives container restarts and
+# is lost only when the pod is replaced (worst case one repeated page). That keeps this pod off
+# the Kubernetes API entirely: no Role, no service account token.
+#
+# The alert route and the secret values are fleet-health-watcher's (its Secret, read by the
+# kubelet for env; this pod has no Secret API access). Not checked here yet: a 5xx rate and p95
+# latency (the services export no HTTP metrics) and the worker's last successful job run (it
+# exports nothing); see the MarketFlow sprint-7 follow-up.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marketflow-health-watcher
+  namespace: infra
+  labels:
+    app: marketflow-health-watcher
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: marketflow-health-watcher
+  template:
+    metadata:
+      labels:
+        app: marketflow-health-watcher
+    spec:
+      # Nothing here talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: watcher
+          image: alpine/k8s:1.30.2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              set -o pipefail 2>/dev/null || true
+
+              # The same warm-up as fleet-health-watcher: a fresh pod's egress may not be
+              # programmed the instant it starts; one long-lived pod pays that once.
+              sleep 10
+
+              STATE_DIR=/state
+              mkdir -p "$STATE_DIR"
+
+              # One file set per check: <key>.fails (failed polls in a row), <key>.at (when it
+              # last paged, epoch seconds).
+              key_file() {
+                printf '%s/%s' "$STATE_DIR" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '_')"
+              }
+
+              # record KEY OK MESSAGE: a passing check clears its state; a failing one is added
+              # to this poll's page once it failed DEBOUNCE_POLLS times in a row and its last
+              # page is older than COOLDOWN_SECONDS.
+              record() {
+                key=$1; ok=$2; msg=$3
+                f=$(key_file "$key")
+                if [ "$ok" = "1" ]; then
+                  if [ -f "$f.fails" ] || [ -f "$f.at" ]; then
+                    echo "RECOVERED: $key"
+                  fi
+                  rm -f "$f.fails" "$f.at"
+                  return 0
+                fi
+                echo "PROBLEM: $msg"
+                n=$(cat "$f.fails" 2>/dev/null || echo 0)
+                n=$((n + 1))
+                echo "$n" > "$f.fails"
+                if [ "$n" -lt "$DEBOUNCE_POLLS" ]; then
+                  echo "  seen on $n/$DEBOUNCE_POLLS polls in a row - confirming next cycle"
+                  return 0
+                fi
+                now=$(date +%s)
+                last=$(cat "$f.at" 2>/dev/null || echo 0)
+                if [ $((now - last)) -lt "$COOLDOWN_SECONDS" ]; then
+                  echo "  paged $((now - last))s ago (cooldown ${COOLDOWN_SECONDS}s) - not paging again yet"
+                  return 0
+                fi
+                echo "$now" > "$f.at"
+                ALERTS="${ALERTS}${msg}
+              "
+              }
+
+              run_check() {
+                ALERTS=""
+
+                # --- 1. Alert channels: the admin-configured ones (auth-api, editable on the
+                #        platform monitor page), else the Secret defaults. Copied from
+                #        fleet-health-watcher so both page the same people.
+                SLACK_WEBHOOK_URL=""
+                ALERT_EMAIL_TO=""
+                CONFIGURED=$(curl -sf --max-time 5 \
+                  -H "X-API-Key: ${INTERNAL_SERVICE_KEY:-}" \
+                  "http://auth-api.auth.svc.cluster.local:4000/api/v1/s2s/platform-alert-settings" 2>/dev/null || echo '{}')
+                SLACK_WEBHOOK_URL=$(echo "$CONFIGURED" | jq -r '.slack_webhook_url // empty' 2>/dev/null || true)
+                ALERT_EMAIL_TO=$(echo "$CONFIGURED" | jq -r '.alert_email_to // empty' 2>/dev/null || true)
+                SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-${SLACK_WEBHOOK_URL_DEFAULT:-}}"
+                ALERT_EMAIL_TO="${ALERT_EMAIL_TO:-${ALERT_EMAIL_TO_DEFAULT:-}}"
+
+                # --- 2. In-cluster /healthz. Retries cover a pod-churn blip inside one poll
+                #        (the same budget as fleet-health-watcher's blackbox checks); the
+                #        debounce covers one that outlasts it.
+                for target in $HEALTH_TARGETS; do
+                  name=${target%%=*}
+                  url=${target#*=}
+                  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --retry 2 --retry-delay 3 --retry-all-errors "$url" || echo "000")
+                  case "$CODE" in
+                    2??) record "healthz-$name" 1 "" ;;
+                    *) record "healthz-$name" 0 "$name: /healthz returned $CODE ($url)" ;;
+                  esac
+                done
+
+                # --- 3. JetStream lag of MarketFlow's consumers: every consumer on the streams
+                #        in NATS_STREAMS (the worker's own stream) and every consumer whose
+                #        name starts with NATS_CONSUMER_PREFIX on other streams (the worker's
+                #        durables on ordering, pos, treasury and the rest). num_pending is
+                #        work not yet delivered, num_ack_pending work delivered and not yet
+                #        acknowledged; a stuck or stopped worker grows one or both.
+                JSZ=$(curl -sf --max-time 10 "${NATS_JSZ_URL}?accounts=true&streams=true&consumers=true" 2>/dev/null || echo "")
+                if [ -z "$JSZ" ]; then
+                  record "nats-jsz" 0 "NATS monitoring did not answer at ${NATS_JSZ_URL}, so MarketFlow's queue lag is unknown"
+                else
+                  record "nats-jsz" 1 ""
+                  echo "$JSZ" | jq -r \
+                    --arg streams "$NATS_STREAMS" --arg prefix "$NATS_CONSUMER_PREFIX" \
+                    --argjson maxp "$NATS_MAX_PENDING" --argjson maxa "$NATS_MAX_ACK_PENDING" '
+                    ($streams | split(",") | map(select(. != ""))) as $ss
+                    | .account_details[]? | .stream_detail[]? | . as $s
+                    | ($s.consumer_detail // [])[]
+                    | select(any($ss[]; . == $s.name) or ($prefix != "" and (.name | startswith($prefix))))
+                    | (.num_pending // 0) as $p | (.num_ack_pending // 0) as $a
+                    | "\($s.name)/\(.name)|\($p)|\($a)|\(if ($p > $maxp or $a > $maxa) then 1 else 0 end)"
+                  ' > /tmp/lags 2>/dev/null || : > /tmp/lags
+                  # Read from a file, not a pipe: a piped while loop runs in a subshell and
+                  # would lose ALERTS.
+                  while IFS='|' read -r consumer pending ackpending over; do
+                    [ -n "$consumer" ] || continue
+                    if [ "$over" = "1" ]; then
+                      record "nats-$consumer" 0 "NATS consumer $consumer is behind: $pending waiting (limit $NATS_MAX_PENDING), $ackpending unacknowledged (limit $NATS_MAX_ACK_PENDING)"
+                    else
+                      record "nats-$consumer" 1 ""
+                    fi
+                  done < /tmp/lags
+                fi
+
+                if [ -z "$ALERTS" ]; then
+                  echo "OK - nothing to page"
+                  return 0
+                fi
+
+                # --- 4. Page: Slack first (independent of every platform service), then email
+                #        through notifications-api with the fleet_health_alert template, as
+                #        fleet-health-watcher does.
+                echo "PAGING:"
+                echo "$ALERTS"
+                if [ -n "$SLACK_WEBHOOK_URL" ]; then
+                  SLACK_TEXT=$(printf '%s' "$ALERTS" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')
+                  curl -s --max-time 10 -X POST -H 'Content-Type: application/json' \
+                    -d "{\"text\":\":rotating_light: MarketFlow health check failed:\\n${SLACK_TEXT}\"}" \
+                    "$SLACK_WEBHOOK_URL" >/dev/null \
+                    || echo "WARN: slack alert failed to send"
+                else
+                  echo "WARN: no Slack webhook configured (admin UI or SLACK_WEBHOOK_URL_DEFAULT) - skipping"
+                fi
+                if [ -n "$ALERT_EMAIL_TO" ] && [ -n "${INTERNAL_SERVICE_KEY:-}" ]; then
+                  DETAILS_JSON=$(printf '%s' "$ALERTS" | jq -Rs .)
+                  curl -s --max-time 10 -X POST \
+                    -H "X-API-Key: ${INTERNAL_SERVICE_KEY}" \
+                    -H 'Content-Type: application/json' \
+                    -d "{\"channel\":\"email\",\"tenant\":\"codevertex\",\"template\":\"fleet_health_alert\",\"to\":[\"${ALERT_EMAIL_TO}\"],\"data\":{\"summary\":\"MarketFlow health check failed\",\"details\":${DETAILS_JSON},\"detected_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" \
+                    "http://notifications-api.notifications.svc.cluster.local:4000/api/v1/notifications/messages" >/dev/null \
+                    || echo "WARN: email alert failed to send"
+                else
+                  echo "WARN: no alert email configured, or INTERNAL_SERVICE_KEY unset - skipping email"
+                fi
+                return 0
+              }
+
+              while true; do
+                if ! run_check; then
+                  echo "WARN: watcher iteration hit an unexpected error; will retry next cycle"
+                fi
+                sleep "$CHECK_INTERVAL_SECONDS"
+              done
+          env:
+            # name=url pairs, space separated.
+            - name: HEALTH_TARGETS
+              value: >-
+                marketflow-api=http://marketflow-api.marketflow.svc.cluster.local:4000/healthz
+                marketflow-ai=http://marketflow-ai.marketflow.svc.cluster.local:4001/healthz
+                marketflow-crawler=http://marketflow-crawler.marketflow.svc.cluster.local:4010/healthz
+            - name: NATS_JSZ_URL
+              value: "http://nats-monitoring.messaging.svc.cluster.local:8222/jsz"
+            # The worker's own stream (MF NATS stream), comma separated.
+            - name: NATS_STREAMS
+              value: "marketflow"
+            # The worker's durables on other services' streams (marketflow-worker-*).
+            - name: NATS_CONSUMER_PREFIX
+              value: "marketflow-"
+            - name: NATS_MAX_PENDING
+              value: "1000"
+            - name: NATS_MAX_ACK_PENDING
+              value: "200"
+            - name: DEBOUNCE_POLLS
+              value: "2"
+            - name: COOLDOWN_SECONDS
+              value: "3600"
+            - name: CHECK_INTERVAL_SECONDS
+              value: "120"
+            # The alert route's fallbacks and the service key, from fleet-health-watcher's Secret.
+            - name: SLACK_WEBHOOK_URL_DEFAULT
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-health-watcher-secrets
+                  key: SLACK_WEBHOOK_URL_DEFAULT
+                  optional: true
+            - name: ALERT_EMAIL_TO_DEFAULT
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-health-watcher-secrets
+                  key: ALERT_EMAIL_TO_DEFAULT
+                  optional: true
+            - name: INTERNAL_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fleet-health-watcher-secrets
+                  key: INTERNAL_SERVICE_KEY
+                  optional: true
+          volumeMounts:
+            - name: state
+              mountPath: /state
+            - name: tmp
+              mountPath: /tmp
+          # A poll is a handful of curl calls and one jq pass over the JetStream report.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+      volumes:
+        - name: state
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 8Mi
