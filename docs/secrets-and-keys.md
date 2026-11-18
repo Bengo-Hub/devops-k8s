@@ -25,10 +25,9 @@ sealing keys themselves.
 
 Since 2026-11-18 the Secrets that deploys used to write on every run are sealed too:
 `registry-credentials` in each namespace, `truload/truload-frontend-env`, `cafe/cafe-website-env`
-and `codevertex/codevertex-website-secrets`. Their writers changed first (see below). Still unsealed:
-`treasury/registry-credentials` (held until the KRA certification run in treasury ends; adopt it
-with `seal-from-live.sh` like the others) and `food-delivery/registry-credentials` (an empty
-namespace that nothing deploys to any more; delete the namespace rather than seal it).
+and `codevertex/codevertex-website-secrets`. Their writers changed first (see below).
+`treasury/registry-credentials` followed once the KRA certification run in treasury ended, and the
+empty `food-delivery` namespace (nothing deploys there any more) was deleted rather than sealed.
 
 ### Deploy-time keys outside the standard set
 
