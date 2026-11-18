@@ -8,13 +8,16 @@ spec:
   source:
     repoURL: https://bitnami.github.io/sealed-secrets
     chart: sealed-secrets
-    targetRevision: 2.19.1
+    targetRevision: 2.22.0
     helm:
       # kubeseal defaults to --controller-namespace=kube-system
       # --controller-name=sealed-secrets-controller — matching those
       # here means every future `kubeseal` invocation needs no extra flags.
       values: |
         fullnameOverride: sealed-secrets-controller
+        # Explicit 30-day key renewal (the default). Old keys are kept, so older files stay
+        # readable; the daily backup workflow copies every key. Renewal is not secret rotation.
+        keyrenewperiod: "720h"
         resources:
           requests:
             cpu: 50m
