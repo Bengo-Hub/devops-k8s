@@ -1,0 +1,166 @@
+# App-level backup of the kuraweigh database (KURA's dedicated truload tenant DB).
+#
+# truload-backend's BackupService dumps only its DefaultConnection database (truload) to
+# R2 at codevertex-media-private/truload/backups/truload/. Tenants with a dedicated database
+# (TENANTDATABASES__KURA -> kuraweigh) had no app-level copy, only the nightly platform
+# pg_dumpall. This job writes the same kind of dump, with the same file name pattern
+# (truload_backup_full_YYYYMMDD_HHMMSS.sql), to codevertex-media-private/truload/backups/kuraweigh/,
+# so it sits next to the truload dumps and can be restored with the same steps.
+#
+# Configuration only, no secret in git:
+#   - the database connection comes from truload-backend-env TENANTDATABASES__KURA (the same
+#     value the app uses); the dump connects straight to postgresql (not PgBouncer) because
+#     pg_dump needs a session connection
+#   - R2 credentials and bucket come from the sealed object-storage Secret in truload
+#   - backup.enabled and backup.retention_days are read from the kuraweigh database's own
+#     application_settings, so the tenant's backup settings page still governs it
+# Runs at 02:20 UTC, after the app's own 02:00 truload backup.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: truload-kuraweigh-backup
+  namespace: truload
+  labels:
+    app: truload-kuraweigh-backup
+spec:
+  schedule: "20 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: truload-kuraweigh-backup
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
+            runAsNonRoot: true
+            fsGroup: 70
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # Static rclone binary copied onto a shared volume (the platform backup job does the same).
+            - name: fetch-rclone
+              image: rclone/rclone:1.67
+              command: ["sh", "-c", "cp $(command -v rclone) /rclone-bin/rclone && chmod +x /rclone-bin/rclone"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 10m, memory: 32Mi}
+                limits: {memory: 128Mi}
+              volumeMounts:
+                - name: rclone-bin
+                  mountPath: /rclone-bin
+          containers:
+            - name: dump
+              image: postgres:17-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  # Parse the Npgsql connection string without printing it.
+                  conn_get() {
+                    printf '%s' "$TENANT_CONN" | tr ';' '\n' | awk -F= -v k="$1" 'tolower($1)==tolower(k){sub(/^[^=]*=/,""); print; exit}'
+                  }
+                  export PGDATABASE="$(conn_get Database)"
+                  export PGUSER="$(conn_get Username)"
+                  [ -n "$PGUSER" ] || export PGUSER="$(conn_get 'User Id')"
+                  export PGPASSWORD="$(conn_get Password)"
+                  export PGHOST="${PG_DIRECT_HOST}" PGPORT="${PG_DIRECT_PORT}"
+                  unset TENANT_CONN
+                  [ -n "$PGDATABASE" ] && [ -n "$PGUSER" ] && [ -n "$PGPASSWORD" ] || { echo "ERROR: TENANTDATABASES__KURA is incomplete"; exit 1; }
+
+                  setting() {
+                    psql -Atq -v ON_ERROR_STOP=1 -c "select \"SettingValue\" from application_settings where \"SettingKey\" = '$1' limit 1" 2>/dev/null || true
+                  }
+                  ENABLED="$(setting backup.enabled)"
+                  RETENTION_DAYS="$(setting backup.retention_days)"
+                  case "$(echo "$ENABLED" | tr 'A-Z' 'a-z')" in
+                    false|0|no) echo "backup.enabled is off in ${PGDATABASE}; nothing to do"; exit 0 ;;
+                  esac
+                  case "$RETENTION_DAYS" in ''|*[!0-9]*) RETENTION_DAYS=7 ;; esac
+                  [ "$RETENTION_DAYS" -ge 1 ] || RETENTION_DAYS=1
+
+                  TS="$(date -u +%Y%m%d_%H%M%S)"
+                  FILE="truload_backup_full_${TS}.sql"
+                  echo "Dumping ${PGDATABASE} to ${FILE}"
+                  pg_dump -d "$PGDATABASE" -f "/staging/${FILE}"
+                  [ -s "/staging/${FILE}" ] || { echo "ERROR: dump is empty"; exit 1; }
+                  tail -n 5 "/staging/${FILE}" | grep -q "PostgreSQL database dump complete" \
+                    || { echo "ERROR: dump has no completion marker"; exit 1; }
+                  echo "Dump size: $(wc -c < "/staging/${FILE}") bytes"
+
+                  r2() {
+                    RCLONE_CONFIG_R2_TYPE=s3 \
+                    RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+                    RCLONE_CONFIG_R2_ACCESS_KEY_ID="${OBJECT_STORAGE_ACCESS_KEY_ID}" \
+                    RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${OBJECT_STORAGE_SECRET_ACCESS_KEY}" \
+                    RCLONE_CONFIG_R2_ENDPOINT="${OBJECT_STORAGE_ENDPOINT}" \
+                    RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true \
+                    /rclone-bin/rclone --config /dev/null "$@"
+                  }
+                  DEST="r2:${OBJECT_STORAGE_PRIVATE_BUCKET}/truload/backups/${PGDATABASE}/"
+                  r2 copy "/staging/${FILE}" "$DEST" --checksum
+                  r2 lsf "$DEST" | grep -qx "$FILE" || { echo "ERROR: ${FILE} not listed at the destination after upload"; exit 1; }
+                  rm -f "/staging/${FILE}"
+                  echo "Uploaded ${FILE} to the private bucket under truload/backups/${PGDATABASE}/"
+
+                  # Retention, only after this run's upload is confirmed.
+                  CUTOFF="$(date -u -d "@$(( $(date -u +%s) - RETENTION_DAYS * 86400 ))" +%Y%m%d_%H%M%S)"
+                  for f in $(r2 lsf "$DEST" | grep -E '^truload_backup_[a-z]+_[0-9]{8}_[0-9]{6}\.(sql|dump)$' || true); do
+                    stamp="$(echo "$f" | sed -E 's/^truload_backup_[a-z]+_([0-9]{8}_[0-9]{6})\..*$/\1/')"
+                    if [ "$f" != "$FILE" ] && [ "$stamp" \< "$CUTOFF" ]; then
+                      r2 deletefile "${DEST}${f}" && echo "Deleted expired ${f}" || echo "WARN: could not delete ${f}"
+                    fi
+                  done
+                  echo "Done (retention ${RETENTION_DAYS} days)"
+              env:
+                - name: TENANT_CONN
+                  valueFrom:
+                    secretKeyRef:
+                      name: truload-backend-env
+                      key: TENANTDATABASES__KURA
+                - name: PG_DIRECT_HOST
+                  value: postgresql.infra.svc.cluster.local
+                - name: PG_DIRECT_PORT
+                  value: "5432"
+                - name: OBJECT_STORAGE_ENDPOINT
+                  valueFrom:
+                    secretKeyRef: {name: object-storage, key: OBJECT_STORAGE_ENDPOINT}
+                - name: OBJECT_STORAGE_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: object-storage, key: OBJECT_STORAGE_ACCESS_KEY_ID}
+                - name: OBJECT_STORAGE_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: object-storage, key: OBJECT_STORAGE_SECRET_ACCESS_KEY}
+                - name: OBJECT_STORAGE_PRIVATE_BUCKET
+                  valueFrom:
+                    secretKeyRef: {name: object-storage, key: OBJECT_STORAGE_PRIVATE_BUCKET}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {memory: 512Mi}
+              volumeMounts:
+                - name: staging
+                  mountPath: /staging
+                - name: rclone-bin
+                  mountPath: /rclone-bin
+          volumes:
+            - name: staging
+              emptyDir:
+                sizeLimit: 2Gi
+            - name: rclone-bin
+              emptyDir: {}

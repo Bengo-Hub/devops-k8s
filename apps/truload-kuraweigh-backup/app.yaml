@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: truload-kuraweigh-backup
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"  # After truload-backend, whose Secrets it reads
+# Nightly dump of the kuraweigh tenant database to R2 (truload/backups/kuraweigh/).
+# See manifests/backup/truload-kuraweigh-backup-cronjob.yaml.
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bengo-Hub/devops-k8s.git
+    targetRevision: main
+    path: manifests/backup
+    directory:
+      include: truload-kuraweigh-backup-cronjob.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: truload
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
