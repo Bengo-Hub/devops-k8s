@@ -28,6 +28,11 @@ rules:
 - apiGroups: ["batch"]
   resources: ["jobs"]
   verbs: ["get", "list"]
+# SealedSecret status for the not-synced check (2026-11-18). The objects hold only ciphertext;
+# no access to Secrets is granted.
+- apiGroups: ["bitnami.com"]
+  resources: ["sealedsecrets"]
+  verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

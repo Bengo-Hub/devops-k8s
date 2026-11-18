@@ -113,6 +113,10 @@ the newest key.
 The nightly `sealed-secrets-drift.yml` workflow runs `scripts/sealing/check-sealed-drift.sh`. It fails
 when a sealed Secret's data was written by anything other than the controller after its last sync,
 or when a SealedSecret is not Synced, and lists Opaque Secrets that have no SealedSecret behind them.
+A failed scheduled run emails the account that owns the schedule. Between runs, fleet-health-watcher
+pages on Slack and email when any SealedSecret is not Synced for two polls in a row (about 4
+minutes). It reads SealedSecret objects only and has no access to Secrets, so the data-write check
+stays in the nightly workflow.
 The `no-plaintext-secrets.yml` workflow fails any push that adds a plain Secret with data under
 `manifests/` or `apps/`.
 

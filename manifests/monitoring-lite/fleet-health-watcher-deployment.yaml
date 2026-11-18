@@ -248,6 +248,21 @@ spec:
                   esac
                 done
 
+                # SealedSecrets the controller could not apply (2026-11-18). A Secret whose
+                # SealedSecret is not Synced keeps its old value, and the next controller
+                # restart can leave the app with a stale or missing key. Reads only the
+                # SealedSecret objects (ciphertext and status), never a Secret: the managedFields
+                # drift check that needs Secret metadata stays in the nightly GitHub workflow
+                # (sealed-secrets-drift.yml), because list on secrets would let this pod read
+                # every value. A brand-new SealedSecret not yet processed is covered by the
+                # two-poll debounce below.
+                SS_BAD=$($KCTL get sealedsecrets.bitnami.com -A -o json 2>/dev/null \
+                  | jq -r '.items[] | select(([.status.conditions[]? | select(.type=="Synced") | .status] | first) != "True") | "\(.metadata.namespace)/\(.metadata.name)"' 2>/dev/null || true)
+                for ss in $SS_BAD; do
+                  FAILURES="${FAILURES}SealedSecret not synced: ${ss}
+                "
+                done
+
                 STATE_CM="fleet-health-watcher-state"
                 STATE_NS="infra"
 
