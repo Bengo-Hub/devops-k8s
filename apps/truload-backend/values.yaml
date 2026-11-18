@@ -90,6 +90,11 @@ ingress:
         - truloadapi.codevertexafrica.com
       secretName: truload-api-tls
 envFromSecret: truload-backend-env
+# Shared platform object storage (R2): mounts the object-storage Secret (OBJECT_STORAGE_*), sealed in
+# manifests/sealed-secrets/truload/object-storage.sealedsecret.yaml. Media uploads and database
+# backups go to the private bucket (truload/media/..., truload/backups/<database>/...).
+objectStorage:
+  enabled: true
 # Additional environment variables (non-secret config)
 # Sensitive values (JWT secrets, service tokens) must go in truload-backend-env secret, not here.
 env:
