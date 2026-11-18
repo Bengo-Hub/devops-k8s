@@ -72,7 +72,8 @@ env:
   - name: ERP_BASE_URL
     value: http://erp-api.erp.svc.cluster.local:80
 # Use envFromSecret for all other environment variables (consistent with erp-ui)
-# POS_API_KEY is set via the cafe-website-env Secret (not sealed yet: cafe-website build.sh still applies it on every deploy)
+# POS_API_KEY is set via the cafe-website-env Secret, a SealedSecret since 2026-11-18
+# (manifests/sealed-secrets/cafe/cafe-website-env.sealedsecret.yaml; change keys with scripts/sealing/seal-keys.sh)
 envFromSecret: cafe-website-env
 # Resource constraints optimized for Next.js app
 resources:

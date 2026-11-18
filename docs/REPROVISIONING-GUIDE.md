@@ -385,19 +385,17 @@ kubectl get secrets -n infra -l owner=helm,status=pending-upgrade -o name | \
 
 If pods fail with ImagePullBackOff:
 
+`registry-credentials` is a SealedSecret in every namespace
+(`manifests/sealed-secrets/<ns>/registry-credentials.sealedsecret.yaml`), so a rebuilt cluster gets
+it back from git once the sealing keys are restored. Check that it synced:
+
 ```bash
-# Create registry credentials in all namespaces
-export REGISTRY_USERNAME=your-username
-export REGISTRY_PASSWORD=your-password
-for ns in infra erp truload cafe treasury notifications auth inventory logistics pos argocd; do
-  kubectl create secret docker-registry registry-credentials \
-    --docker-server=docker.io \
-    --docker-username=$REGISTRY_USERNAME \
-    --docker-password=$REGISTRY_PASSWORD \
-    --docker-email=your-email@example.com \
-    -n $ns --dry-run=client -o yaml | kubectl apply -f -
-done
+kubectl get sealedsecret registry-credentials -A
 ```
+
+If the Docker Hub token changed, update the `REGISTRY_PASSWORD` GitHub secret and run the
+`registry-credentials.yml` workflow, which reseals every namespace's copy and waits for the sync.
+Do not create the Secret with `kubectl`; the controller replaces it from git at its next restart.
 
 ## Troubleshooting
 

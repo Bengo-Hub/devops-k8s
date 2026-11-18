@@ -201,6 +201,19 @@ there and 1 on the local volume (since 2026-10-18; it kept a single copy before)
 pruned only after the new dump is confirmed on R2. The manifest is applied by the `provision.yml`
 workflow, not by Argo CD: after editing it, run `kubectl diff -f` then `kubectl apply -f`.
 
+## truload app backups
+
+truload-backend dumps its own `truload` database every night at 02:00 UTC to
+`codevertex-media-private/truload/backups/truload/` (Hangfire job, see the truload-backend
+`docs/BACKUP_STORAGE.md`). That job only dumps the app's default connection, so the dedicated KURA
+tenant database `kuraweigh` is dumped by the CronJob `truload/truload-kuraweigh-backup`
+(`manifests/backup/truload-kuraweigh-backup-cronjob.yaml`, Argo CD application
+`truload-kuraweigh-backup`) at 02:20 UTC to `truload/backups/kuraweigh/`, with the same file name
+pattern. It reads the connection from `truload-backend-env` (`TENANTDATABASES__KURA`, connecting
+straight to postgresql rather than PgBouncer), R2 access from the sealed `object-storage` Secret, and
+`backup.enabled` and `backup.retention_days` from the kuraweigh database's own settings. Run it by
+hand with `kubectl create job -n truload --from=cronjob/truload-kuraweigh-backup kuraweigh-backup-manual`.
+
 ## Tenant backups
 
 Tenant admins back up their own data on demand from the SSO client area (accounts, My

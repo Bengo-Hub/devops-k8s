@@ -23,10 +23,34 @@ certificates (ingress-nginx admission, VPA, Calico), Helm chart output (nats-box
 argocd-notifications application renders from git, the public Cloudflare origin-pull CA, and the
 sealing keys themselves.
 
-Not sealed yet, because a service deploy still writes them on every run (sealing them before that
-writer goes would give one Secret two writers): `registry-credentials` in each namespace (every
-service `build.sh`), `truload/truload-frontend-env`, `cafe/cafe-website-env` and
-`codevertex/codevertex-website-secrets`. Each needs its `build.sh` step removed first.
+Since 2026-11-18 the Secrets that deploys used to write on every run are sealed too:
+`registry-credentials` in each namespace, `truload/truload-frontend-env`, `cafe/cafe-website-env`
+and `codevertex/codevertex-website-secrets`. Their writers changed first (see below). Still unsealed:
+`treasury/registry-credentials` (held until the KRA certification run in treasury ends; adopt it
+with `seal-from-live.sh` like the others) and `food-delivery/registry-credentials` (an empty
+namespace that nothing deploys to any more; delete the namespace rather than seal it).
+
+### Deploy-time keys outside the standard set
+
+A service `build.sh` that needs keys the standard script does not build (a UI's env Secret,
+codevertex-website's Prisma URLs and AI key) pipes them into `scripts/sealing/seal-desired.sh`:
+
+    kubectl create secret generic <secret> -n <ns> --from-literal=K=v ... --dry-run=client -o json \
+      | bash "$DEVOPS_DIR/scripts/sealing/seal-desired.sh" <ns> <secret> <app>
+
+It follows the same generate-or-preserve rule as create-service-secrets.sh: a key the Secret lacks is
+sealed, committed and synced; an existing value is kept (named, and replaced only with
+`SEAL_OVERWRITE=1`); when nothing is missing it exits without a commit. It never patches or applies
+the live Secret.
+
+### Image pull secrets
+
+`registry-credentials` (one per namespace) has a single writer, the `registry-credentials.yml`
+workflow. It builds the dockerconfigjson from the `REGISTRY_*` GitHub secrets and seals it into
+every namespace that has a sealed copy (or the namespaces given), commits and waits for the sync. Run
+it after rotating the Docker Hub token; pull secrets are read at image pull time, so nothing needs a
+restart. provision.yml and every service `build.sh` skip a `registry-credentials` Secret that a
+SealedSecret owns, and only create one in a namespace that has none yet.
 
 ### Service secrets
 
