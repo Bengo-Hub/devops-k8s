@@ -140,9 +140,17 @@ spec:
                 #        durables on ordering, pos, treasury and the rest). num_pending is
                 #        work not yet delivered, num_ack_pending work delivered and not yet
                 #        acknowledged; a stuck or stopped worker grows one or both.
-                JSZ=$(curl -sf --max-time 10 "${NATS_JSZ_URL}?accounts=true&streams=true&consumers=true" 2>/dev/null || echo "")
+                # NATS_JSZ_URL is a space-separated list, tried in order; the first answer wins.
+                # The nats-monitoring Service also selects nats-box and finished job pods (they
+                # share the app.kubernetes.io/name=nats label and serve no 8222), so it fails at
+                # random; the servers are reached directly through the headless Service.
+                JSZ=""
+                for u in $NATS_JSZ_URL; do
+                  JSZ=$(curl -sf --max-time 10 "${u}?accounts=true&streams=true&consumers=true" 2>/dev/null || echo "")
+                  [ -n "$JSZ" ] && break
+                done
                 if [ -z "$JSZ" ]; then
-                  record "nats-jsz" 0 "NATS monitoring did not answer at ${NATS_JSZ_URL}, so MarketFlow's queue lag is unknown"
+                  record "nats-jsz" 0 "No NATS server answered its monitoring port (${NATS_JSZ_URL}), so MarketFlow's queue lag is unknown"
                 else
                   record "nats-jsz" 1 ""
                   echo "$JSZ" | jq -r \
@@ -213,8 +221,9 @@ spec:
                 marketflow-api=http://marketflow-api.marketflow.svc.cluster.local:4000/healthz
                 marketflow-ai=http://marketflow-ai.marketflow.svc.cluster.local:4001/healthz
                 marketflow-crawler=http://marketflow-crawler.marketflow.svc.cluster.local:4010/healthz
+            # Each NATS server directly (headless Service), tried in order.
             - name: NATS_JSZ_URL
-              value: "http://nats-monitoring.messaging.svc.cluster.local:8222/jsz"
+              value: "http://nats-0.nats-headless.messaging.svc.cluster.local:8222/jsz http://nats-1.nats-headless.messaging.svc.cluster.local:8222/jsz http://nats-2.nats-headless.messaging.svc.cluster.local:8222/jsz"
             # The worker's own stream (MF NATS stream), comma separated.
             - name: NATS_STREAMS
               value: "marketflow"
