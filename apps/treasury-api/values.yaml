@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/treasury-api
-  tag: "d732fd66"
+  tag: "7498c069"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
