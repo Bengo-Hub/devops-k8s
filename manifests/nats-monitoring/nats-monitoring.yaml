@@ -15,8 +15,11 @@ metadata:
     app.kubernetes.io/component: monitoring
 spec:
   type: ClusterIP
+  # component=nats is the StatefulSet's own pod label (2026-11-18). name=nats alone also matched the
+  # nats-box Deployment, which serves no 8222, so about one call in four failed.
   selector:
     app.kubernetes.io/name: nats
+    app.kubernetes.io/component: nats
   ports:
     - name: monitor
       port: 8222
