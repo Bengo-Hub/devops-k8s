@@ -10,7 +10,7 @@ podAnnotations:
   restartedAt: "2026-09-11T06-30-00Z"
 image:
   repository: docker.io/codevertex/cafe-website
-  tag: "c47d3961"
+  tag: "2d48812b"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
