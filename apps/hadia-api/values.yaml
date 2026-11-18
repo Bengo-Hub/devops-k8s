@@ -199,7 +199,8 @@ ingress:
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     # Hadia's own headers too (owner search, support ticket reads, data request tokens); the
     # router's CORS list in internal/http/router/router.go must stay in step with this one.
-    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-API-Key, X-Registry-Token, Idempotency-Key, X-Search-Phone, X-OTP-Challenge, X-Privacy-Token"
+    # X-Requested-With: the cookie session's CSRF header (/owner and /staff /api/v1/session/*).
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Accept, Authorization, Content-Type, X-Tenant-ID, X-Tenant-Slug, X-Request-ID, X-API-Key, X-Registry-Token, Idempotency-Key, X-Search-Phone, X-OTP-Challenge, X-Privacy-Token, X-Requested-With"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "300"
   hosts:
