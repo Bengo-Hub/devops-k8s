@@ -9,7 +9,7 @@
 #   21:15 UTC  00:15 EAT  apt-daily          download package lists and updates
 #   21:30 UTC  00:30 EAT  apt-daily-upgrade  install them (may request a reboot)
 #   21:50 UTC  00:50 EAT  cluster-daily-cleanup CronJob removes the leftovers
-#   22:00 UTC  01:00 EAT  kured reboot window opens, if a reboot was requested
+#   Sun 00:00 UTC  Sun 03:00 EAT  kured reboot window (weekly since 2026-11-20), if a reboot was requested
 #   Mon 00:20 EAT         fstrim             weekly, disk trim
 #   Sun 00:40 EAT         e2scrub_all        weekly, filesystem check
 #

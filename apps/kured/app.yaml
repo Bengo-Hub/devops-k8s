@@ -48,16 +48,14 @@ spec:
           # before the morning). Last in the nightly order, after the 00:30 EAT
           # OS upgrade that creates the reboot sentinel. Does not cross
           # midnight UTC, which keeps kured's window semantics simple.
-          startTime: "22:00"
-          endTime: "23:00"
+          # Owner 2026-11-20: weekly only, Sunday 03:00-04:00 Nairobi (00:00-01:00 UTC).
+          # On this one-node cluster every reboot drains every pod, so the nightly
+          # 22:00 UTC window (01:00 EAT) caused a 5-10 minute fleet outage
+          # whenever the OS asked for a reboot (2026-11-19 22:05 UTC).
+          startTime: "00:00"
+          endTime: "01:00"
           rebootDays:
             - su
-            - mo
-            - tu
-            - we
-            - th
-            - fr
-            - sa
           # 2026-09-08 incident: even with no unsatisfiable singleton PDB left
           # (previous comment below, still true), the drain failed AGAIN --
           # twice, 00:15 and 01:15 UTC, both nights' only reboot-window
