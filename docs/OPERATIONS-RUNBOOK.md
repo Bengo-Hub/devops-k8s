@@ -368,6 +368,14 @@ kubectl exec deployment/argocd-repo-server -n argocd -- git ls-remote https://gi
    kubectl get challenges -n erp
    ```
 
+#### Control-plane certificates (kubeadm)
+
+kubeadm signs the API server, etcd, controller-manager, scheduler and admin certificates for one year. They expired on 2026-11-19 23:46 UTC: the apps kept serving, but kubectl and every CI deploy failed with `x509: certificate has expired`.
+
+- **Automatic**: the `kubeadm-cert-renew.timer` node timer (installed by `scripts/cluster/set-node-maintenance-schedule.sh`) checks weekly and renews once any certificate has under 60 days left. It backs up `/etc/kubernetes` to `/root/k8s-pki-backup-<date>`, runs `kubeadm certs renew all`, restarts the static pods and waits for `/readyz`. Logs: `journalctl -u kubeadm-cert-renew`.
+- **After a renewal**, refresh the `KUBE_CONFIG` repository secrets (base64 of the new `/etc/kubernetes/admin.conf`) on every repo that deploys to this cluster. The old admin cert in those secrets stays valid until its own date, so there are about 60 days to do it. Never commit the kubeconfig. The Mosuon repos (`mosuon-devops-k8s`, `game-stats-*`) use a different cluster.
+- **Manual check**: `ssh mss-prod "kubeadm certs check-expiration"`. The CAs run to 2035.
+
 ### Resource Optimization
 
 #### Right-sizing Resources
@@ -666,7 +674,8 @@ All nightly work finishes by 02:00 EAT (23:00 UTC), leaving hours to fix anythin
 | 00:30 | 21:30 | `apt-daily-upgrade` (node) | Installs them, may request a reboot |
 | Mon 00:20, Sun 00:40 | Sun 21:20, Sat 21:40 | `fstrim`, `e2scrub_all` (node) | Weekly disk maintenance |
 | 00:50 | 21:50 | `cluster-daily-cleanup` | Removes what upgrades and deploys left behind |
-| 01:00 to 02:00 | 22:00 to 23:00 | kured reboot window | Only if an upgrade requested a reboot |
+| Sun 01:45 | Sat 22:45 | `kubeadm-cert-renew` (node) | Weekly. Renews the control-plane certificates once any has under 60 days left |
+| Sun 03:00 to 04:00 | Sun 00:00 to 01:00 | kured reboot window | Weekly since 2026-11-20. Only if an upgrade requested a reboot |
 
 The node timers are set by `scripts/cluster/set-node-maintenance-schedule.sh` (re-run it on a rebuilt node). Running through the day by design: `nats-consumer-replicas` (10 minutes), `auth-session-cleanup` (hourly), `ip-blacklist-check` and `nats-stream-retention` (6 hours), and the customer-facing `digitika-installment-reminder` at 11:00 EAT.
 

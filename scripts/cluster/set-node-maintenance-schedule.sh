@@ -12,6 +12,7 @@
 #   Sun 00:00 UTC  Sun 03:00 EAT  kured reboot window (weekly since 2026-11-20), if a reboot was requested
 #   Mon 00:20 EAT         fstrim             weekly, disk trim
 #   Sun 00:40 EAT         e2scrub_all        weekly, filesystem check
+#   Sun 01:45 EAT         kubeadm-cert-renew weekly, renews control-plane certs under 60 days
 #
 # Also sets unattended-upgrades to remove unused kernels and dependencies itself, and
 # snapd to keep two revisions (running plus one fallback).
@@ -110,16 +111,78 @@ done
 echo "-> snapd: refresh.retain=2"
 $DRY || snap set system refresh.retain=2
 
+# kubeadm certificate renewal (added 2026-11-20). kubeadm issues the control-plane
+# certificates for one year and only renews them on a kubeadm upgrade. On 2026-11-19
+# 23:46 UTC they all expired: kubectl and every CI deploy failed with "x509: certificate
+# has expired" while the apps kept serving. The weekly check below renews them once any
+# has fewer than CERT_RENEW_DAYS left, then restarts the control-plane static pods.
+# After a renewal the KUBE_CONFIG GitHub secrets still hold the previous admin cert,
+# which stays valid until its own date, so refresh them inside that window (runbook:
+# docs/OPERATIONS-RUNBOOK.md, "Control-plane certificates").
+CERT_RENEW_DAYS=60
+RENEW_BIN=/usr/local/sbin/kubeadm-cert-renew
+echo "-> $RENEW_BIN: weekly check, renew when under $CERT_RENEW_DAYS days"
+if ! $DRY; then
+  cat > "$RENEW_BIN" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+LEFT_DAYS=$CERT_RENEW_DAYS
+CERT=/etc/kubernetes/pki/apiserver.crt
+if openssl x509 -checkend \$((LEFT_DAYS*86400)) -noout -in "\$CERT" >/dev/null; then
+  echo "control-plane certs valid for more than \$LEFT_DAYS days: \$(openssl x509 -enddate -noout -in "\$CERT")"
+  exit 0
+fi
+B=/root/k8s-pki-backup-\$(date -u +%Y%m%d)
+mkdir -p "\$B" && cp -a /etc/kubernetes "\$B/"
+kubeadm certs renew all
+# Static pods only re-read certificates on restart: move the manifests out and back.
+T=\$(mktemp -d)
+mv /etc/kubernetes/manifests/*.yaml "\$T/"
+sleep 25
+mv "\$T"/*.yaml /etc/kubernetes/manifests/
+systemctl restart kubelet
+for i in \$(seq 1 30); do
+  KUBECONFIG=/etc/kubernetes/admin.conf kubectl get --raw=/readyz >/dev/null 2>&1 && break
+  sleep 10
+done
+KUBECONFIG=/etc/kubernetes/admin.conf kubectl get --raw=/readyz
+echo "renewed: \$(openssl x509 -enddate -noout -in "\$CERT"). Refresh the KUBE_CONFIG GitHub secrets."
+EOF
+  chmod 0750 "$RENEW_BIN"
+  cat > /etc/systemd/system/kubeadm-cert-renew.service <<EOF
+[Unit]
+Description=Renew kubeadm control-plane certificates when close to expiry
+[Service]
+Type=oneshot
+ExecStart=$RENEW_BIN
+EOF
+  # Sunday 01:45 EAT, after the 00:40 e2scrub and before kured's 03:00 window.
+  cat > /etc/systemd/system/kubeadm-cert-renew.timer <<'EOF'
+[Unit]
+Description=Weekly kubeadm certificate expiry check
+[Timer]
+OnCalendar=Sat *-*-* 22:45:00
+Persistent=true
+RandomizedDelaySec=0
+[Install]
+WantedBy=timers.target
+EOF
+fi
+
 if $DRY; then
   echo "done (dry run, nothing changed)"
   exit 0
 fi
 
-unattended-upgrade --dry-run 2>&1 | grep -iE 'packages that will be upgraded|No packages found' | head -1
+# Informational only: with pipefail a no-match grep would otherwise stop the script here
+# before the timers below are reloaded and enabled.
+unattended-upgrade --dry-run 2>&1 | grep -iE 'packages that will be upgraded|No packages found' | head -1 || true
 
 # daemon-reload alone re-arms the timers with the new OnCalendar. Do NOT restart them:
 # a restart makes systemd fire a catch-up run straight away (Persistent=true), which on
 # 2026-11-07 ran an upgrade at 01:02 UTC, and apt then skipped that night's planned run
 # because apt.systemd.daily allows one run per calendar date.
 systemctl daemon-reload
-systemctl list-timers --all --no-pager | grep -E 'NEXT|apt-daily|fstrim|e2scrub_all'
+systemctl enable kubeadm-cert-renew.timer >/dev/null
+systemctl start kubeadm-cert-renew.timer
+systemctl list-timers --all --no-pager | grep -E 'NEXT|apt-daily|fstrim|e2scrub_all|kubeadm-cert-renew'
