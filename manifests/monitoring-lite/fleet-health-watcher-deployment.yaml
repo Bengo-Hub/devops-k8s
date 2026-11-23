@@ -66,6 +66,8 @@ spec:
               # resetting on a pod restart is harmless (worst case: one issue
               # takes one extra 2min cycle to page after a watcher restart).
               CONSEC_FAILS=0
+              # Endpoints that failed on the previous poll (space-padded urls).
+              EP_FAILED_PREV=""
 
               run_check() {
                 FAILURES=""
@@ -235,6 +237,12 @@ spec:
                 # lived, already-warm pod (see the Deployment-conversion comment
                 # above) already closes the "fresh pod" class of false alarm this
                 # retry budget doesn't need to cover.
+                # 2026-11-24: an endpoint pages only when the SAME url failed on two
+                # consecutive polls. The run-level debounce below counts polls with ANY
+                # failure, so while another problem was already open (a failed job paging
+                # hourly) a single-poll sso blip skipped it and paged at once ("sso
+                # healthz returned 000000" next to the planetiler job, 2026-11-23).
+                EP_FAILED_NOW=""
                 for url in \
                   https://sso.codevertexafrica.com/healthz \
                   https://pos.codevertexafrica.com \
@@ -243,10 +251,17 @@ spec:
                   CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --retry 3 --retry-delay 3 --retry-all-errors "$url" || echo "000")
                   case "$CODE" in
                     2??|3??) ;;
-                    *) FAILURES="${FAILURES}Endpoint check failed: ${url} returned ${CODE}
+                    *)
+                      EP_FAILED_NOW="${EP_FAILED_NOW} ${url} "
+                      case "$EP_FAILED_PREV" in
+                        *" ${url} "*) FAILURES="${FAILURES}Endpoint check failed: ${url} returned ${CODE}
                 " ;;
+                        *) echo "Endpoint ${url} returned ${CODE} on this poll only - paging if it fails again next poll." ;;
+                      esac
+                      ;;
                   esac
                 done
+                EP_FAILED_PREV="$EP_FAILED_NOW"
 
                 # SealedSecrets the controller could not apply (2026-11-18). A Secret whose
                 # SealedSecret is not Synced keeps its old value, and the next controller

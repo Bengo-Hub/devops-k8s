@@ -42,7 +42,10 @@ spec:
     spec:
       backoffLimit: 0
       activeDeadlineSeconds: 5400
-      ttlSecondsAfterFinished: 86400
+      # 7 days: a weekly job's failed run (and its pod logs) must still exist when someone
+      # looks. At 24h the 2026-11-22 failure was gone before anyone could read why the build
+      # step failed. The watcher stops repeating once a later run succeeds.
+      ttlSecondsAfterFinished: 604800
       template:
         metadata:
           labels:
