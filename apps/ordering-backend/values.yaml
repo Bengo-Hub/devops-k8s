@@ -17,7 +17,7 @@ startupDependencies:
 # ============================================================================
 image:
   repository: docker.io/codevertex/ordering-backend
-  tag: "11b4e812"
+  tag: "4899affd"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
