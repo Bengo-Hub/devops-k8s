@@ -186,6 +186,10 @@ env:
     value: "http://ollama.shared-infra.svc.cluster.local:11434"
   - name: MF_WORKER_EMBEDDING_MODEL
     value: "nomic-embed-text"
+  # Weekly summary WhatsApp template: v1 was approved as MARKETING (2026-11-21); v2 is worded as an
+  # account statement. Sent only once Meta shows it APPROVED; email until then.
+  - name: MF_WA_TPL_WEEKLY_SUMMARY
+    value: "mf_weekly_summary_v2_btn"
   - name: NOTIFICATIONS_URL
     value: "http://notifications-api.notifications.svc.cluster.local:4000"
   # Cross-service CRM S2S URLs (Sprint 11)
