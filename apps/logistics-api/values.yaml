@@ -14,7 +14,7 @@ startupDependencies:
 replicaCount: 1 # Optimized for resource-constrained environment
 image:
   repository: docker.io/codevertex/logistics-api
-  tag: "08565a19"
+  tag: "d3e0eefe"
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
