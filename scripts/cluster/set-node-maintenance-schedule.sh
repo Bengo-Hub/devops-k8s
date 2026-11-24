@@ -146,6 +146,15 @@ for i in \$(seq 1 30); do
   sleep 10
 done
 KUBECONFIG=/etc/kubernetes/admin.conf kubectl get --raw=/readyz
+# Every local ~/.kube/config holds the old admin client certificate: refresh them, or plain
+# kubectl on the node answers "provide credentials" (found 2026-11-24).
+for H in /root /home/*; do
+  if [ -f "\$H/.kube/config" ]; then
+    cp /etc/kubernetes/admin.conf "\$H/.kube/config"
+    chown "\$(stat -c %u:%g "\$H")" "\$H/.kube/config"
+    chmod 0600 "\$H/.kube/config"
+  fi
+done
 echo "renewed: \$(openssl x509 -enddate -noout -in "\$CERT"). Refresh the KUBE_CONFIG GitHub secrets."
 EOF
   chmod 0750 "$RENEW_BIN"
