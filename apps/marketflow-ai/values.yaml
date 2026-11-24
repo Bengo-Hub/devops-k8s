@@ -153,6 +153,9 @@ migrations:
   enabled: false
 seed:
   enabled: false
+# A deploy lets running video jobs finish (marketflow-ai drains for up to 31 minutes on SIGTERM,
+# its 30-minute job budget) instead of killing an owner's render mid-way (2026-11-24).
+terminationGracePeriodSeconds: 1920
 resources:
   # Video renders run ffmpeg in the pod (up to 3 jobs each): 512Mi was OOM-killed mid-render on
   # 2026-11-24, so the limit leaves room for a 1080p compose.
