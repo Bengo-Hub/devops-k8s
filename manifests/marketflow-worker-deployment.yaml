@@ -47,7 +47,7 @@ spec:
         - name: registry-credentials
       containers:
         - name: worker
-          image: docker.io/codevertex/marketflow-api:69edba1a
+          image: docker.io/codevertex/marketflow-api:0fd08cb4
           imagePullPolicy: IfNotPresent
           ports:
             - name: health
