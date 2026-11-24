@@ -154,12 +154,14 @@ migrations:
 seed:
   enabled: false
 resources:
+  # Video renders run ffmpeg in the pod (up to 3 jobs each): 512Mi was OOM-killed mid-render on
+  # 2026-11-24, so the limit leaves room for a 1080p compose.
   requests:
     cpu: 25m
-    memory: 128Mi
+    memory: 256Mi
   limits:
     cpu: 500m
-    memory: 512Mi
+    memory: 1536Mi
 healthCheck:
   enabled: true
   startup:
