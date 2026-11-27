@@ -16,7 +16,9 @@ ZONE_NAME = "hadiafrica.com"
 APEX = ZONE_NAME
 
 # hadia-ui (apex, www), hadia-api (api) and the hadia-staging namespace (staging, api.staging).
-WEB_HOSTS = ["@", "www", "api", "staging", "api.staging"]
+# "static" (go-live, owner 2026-11-27): Cloudflare-cached /_next/static host for the live site, created
+# DNS only so cert-manager can issue its certificate; proxied after that (see PROXIED_HOSTS).
+WEB_HOSTS = ["@", "www", "api", "staging", "api.staging", "static"]
 
 # Guard read by sync-zone.py: this zone's records must never include MX or TXT.
 MANAGES_MAIL = False

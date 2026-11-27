@@ -1,9 +1,9 @@
 # hadia-api: Hadia Gifting Registry API (namespace hadia). Copied from apps/maskani-api.
 # One deployment and one tenant ("hadia") serve testing now and launch later, the same way truload
 # serves its test and live hosts (user decision 2026-11-06): no separate staging namespace or
-# database. Until launch APP_ENV is "staging" and the UI is reached at staging.hadiafrica.com; at
-# go-live the test data is deleted, APP_ENV becomes "production" and HADIA_APP_URL the apex
-# (hadia-api docs/devops.md, "Environments" and the go-live checklist).
+# database. Live since 27 November 2026: APP_ENV "production" and HADIA_APP_URL the apex; the UI
+# also still answers staging.hadiafrica.com until the owner retires it (hadia-api docs/devops.md,
+# "Environments" and the go-live checklist).
 # Migrations run in the image entrypoint (advisory lock 727271008, POSTGRES_MIGRATE_URL).
 nameOverride: hadia-api
 fullnameOverride: hadia-api
@@ -73,19 +73,19 @@ securityContext:
   runAsGroup: 101
   fsGroup: 101
 env:
-  # "staging" until launch: production-only guards stay on (FIELD_ENCRYPTION_KEY required, staff MFA),
-  # and the staging load-test key may be set. Becomes "production" at go-live.
+  # Live since 27 November 2026 (owner go-live). Production refuses a staging payout number and the
+  # load-test key; FIELD_ENCRYPTION_KEY and staff MFA stay required.
   - name: APP_ENV
-    value: staging
+    value: production
   - name: HADIA_TENANT_SLUG
     value: hadia
   - name: HTTP_PORT
     value: "4000"
   - name: HTTP_PUBLIC_BASE_URL
     value: "https://api.hadiafrica.com"
-  # Links in messages and QR codes open the UI host in use: staging.hadiafrica.com until launch.
+  # Links in messages and QR codes open the live site (apex since go-live, 27 November 2026).
   - name: HADIA_APP_URL
-    value: "https://staging.hadiafrica.com"
+    value: "https://hadiafrica.com"
   - name: HTTP_ALLOWED_ORIGINS
     value: "https://staging.hadiafrica.com,https://hadiafrica.com,https://www.hadiafrica.com"
   - name: POSTGRES_URL
