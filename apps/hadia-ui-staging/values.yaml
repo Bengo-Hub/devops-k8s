@@ -14,7 +14,7 @@ replicaCount: 1
 minReadySeconds: 10
 image:
   repository: docker.io/codevertex/hadia-ui
-  tag: "76b735f5-staging" # replaced by CI (deploy-staging)
+  tag: "885c222f-staging" # replaced by CI (deploy-staging)
   pullPolicy: Always
   pullSecrets:
     - name: registry-credentials
