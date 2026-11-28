@@ -171,10 +171,6 @@ env:
   # testing now and launch later; its test data is deleted at go-live (user decision 2026-11-06).
   - name: SEED_HADIA_TENANT
     value: "true"
-  # Seeds hadia-staging (the Hadia staging and training stack, owner 2026-11-27): same sign-up
-  # rules and staff MFA policy as live, app_url on staging.hadiafrica.com. Idempotent.
-  - name: SEED_HADIA_STAGING_TENANT
-    value: "true"
   # Subscription Service Integration — JWT enrichment with plan/features/limits
   - name: AUTH_SUBSCRIPTION_ENABLED
     value: "true"

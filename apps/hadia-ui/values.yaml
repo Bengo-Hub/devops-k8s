@@ -1,7 +1,8 @@
 # hadia-ui: Hadia public site, guest registry pages, owner app and staff console (namespace hadia).
 # One deployment for testing and live (user decision 2026-11-06, the truload pattern). Live on
-# hadiafrica.com since 27 November 2026 (www redirects to the apex); staging.hadiafrica.com stays
-# until the owner retires it. CI owns image.tag; never edit it by hand.
+# hadiafrica.com since 27 November 2026 (www redirects to the apex). The separate staging stack was
+# scrapped on 28 November 2026; staging.hadiafrica.com now redirects to the apex. CI owns image.tag;
+# never edit it by hand.
 nameOverride: hadia-ui
 fullnameOverride: hadia-ui
 replicaCount: 2
@@ -74,19 +75,15 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    # Retired staging host (owner, 28 November 2026): hadia-ui answers every request on it with a
+    # permanent redirect to the same path on hadiafrica.com, so old links and QR codes still work.
     - host: staging.hadiafrica.com
       paths:
         - path: /
           pathType: Prefix
-    # The live static assets host: same rule as static-staging, /_next/static only.
+    # Static assets host (item 61): Cloudflare-cached copy of /_next/static only, used through
+    # NEXT_PUBLIC_ASSET_PREFIX. /.well-known/acme-challenge reaches cert-manager's own solver.
     - host: static.hadiafrica.com
-      paths:
-        - path: /_next/static
-          pathType: Prefix
-    # Static assets host (item 61, 8 November 2026): Cloudflare-cached copy of /_next/static only;
-    # hadia-ui uses it when built with NEXT_PUBLIC_ASSET_PREFIX. Nothing else is served here.
-    # /.well-known/acme-challenge reaches cert-manager's own solver ingress, not this path list.
-    - host: static-staging.hadiafrica.com
       paths:
         - path: /_next/static
           pathType: Prefix
@@ -101,10 +98,6 @@ ingress:
     - hosts:
         - static.hadiafrica.com
       secretName: hadia-static-tls
-    # Its own certificate, so the staging one is never reissued for this host.
-    - hosts:
-        - static-staging.hadiafrica.com
-      secretName: hadia-static-staging-tls
 monitoring:
   enabled: false
 verticalPodAutoscaling:

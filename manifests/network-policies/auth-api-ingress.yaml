@@ -66,10 +66,6 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: hadia
-        # hadia-api-staging (namespace hadia-staging, tenant hadia-staging): the same calls.
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: hadia-staging
         # 2026-11-07: erp, hospital, library, logistics and projects move AUTH_SERVICE_URL
         # in-cluster like the services above (tenant sync and by-slug lookups, API-key checks,
         # user sync, role registry pushes). Through the public hostname their calls went out

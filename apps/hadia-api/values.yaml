@@ -1,9 +1,9 @@
 # hadia-api: Hadia Gifting Registry API (namespace hadia). Copied from apps/maskani-api.
 # One deployment and one tenant ("hadia") serve testing now and launch later, the same way truload
 # serves its test and live hosts (user decision 2026-11-06): no separate staging namespace or
-# database. Live since 27 November 2026: APP_ENV "production" and HADIA_APP_URL the apex; the UI
-# also still answers staging.hadiafrica.com until the owner retires it (hadia-api docs/devops.md,
-# "Environments" and the go-live checklist).
+# database. Live since 27 November 2026: APP_ENV "production" and HADIA_APP_URL the apex. The
+# separate staging stack was scrapped on 28 November 2026; staging.hadiafrica.com redirects to the
+# apex, so only the live origins are allowed here (hadia-api docs/devops.md, "Environments").
 # Migrations run in the image entrypoint (advisory lock 727271008, POSTGRES_MIGRATE_URL).
 nameOverride: hadia-api
 fullnameOverride: hadia-api
@@ -87,7 +87,7 @@ env:
   - name: HADIA_APP_URL
     value: "https://hadiafrica.com"
   - name: HTTP_ALLOWED_ORIGINS
-    value: "https://staging.hadiafrica.com,https://hadiafrica.com,https://www.hadiafrica.com"
+    value: "https://hadiafrica.com,https://www.hadiafrica.com"
   - name: POSTGRES_URL
     valueFrom:
       secretKeyRef:
@@ -195,7 +195,7 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://staging.hadiafrica.com, https://hadiafrica.com, https://www.hadiafrica.com"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://hadiafrica.com, https://www.hadiafrica.com"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     # Hadia's own headers too (owner search, support ticket reads, data request tokens); the
     # router's CORS list in internal/http/router/router.go must stay in step with this one.
