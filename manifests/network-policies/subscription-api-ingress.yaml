@@ -97,6 +97,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: hadia
+        # The Hadia staging stack (namespace hadia-staging, tenant hadia-staging): the same calls.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: hadia-staging
         # ticketing-api AI credit check and spend (Sprint 13, /api/v1/s2s/credits/ai_credits/*).
         - namespaceSelector:
             matchLabels:
